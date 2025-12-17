@@ -391,7 +391,9 @@ def _symbol_to_dict(symbol: Any) -> dict:
 
 def cmd_anchors(args: Namespace) -> int:
     """Find anchors (functions, classes, methods) in code."""
-    from moss.anchors import Anchor, AnchorType, find_anchors
+    import re
+
+    from moss.skeleton import extract_python_skeleton
 
     path = Path(args.path).resolve()
 
@@ -399,14 +401,9 @@ def cmd_anchors(args: Namespace) -> int:
         print(f"Error: Path {path} does not exist", file=sys.stderr)
         return 1
 
-    # Map type argument to AnchorType
-    type_map = {
-        "function": AnchorType.FUNCTION,
-        "class": AnchorType.CLASS,
-        "method": AnchorType.METHOD,
-        "all": None,
-    }
-    anchor_type = type_map.get(args.type)
+    # Filter types
+    type_filter = args.type if args.type != "all" else None
+    name_pattern = re.compile(args.name) if args.name else None
 
     results = []
 
@@ -416,35 +413,52 @@ def cmd_anchors(args: Namespace) -> int:
         pattern = args.pattern or "**/*.py"
         files = list(path.glob(pattern))
 
+    def collect_symbols(symbols: list, file_path: Path, parent: str | None = None) -> None:
+        """Recursively collect symbols from skeleton."""
+        for sym in symbols:
+            kind = sym.kind
+            # Map skeleton kinds to anchor types
+            if type_filter:
+                if type_filter == "function" and kind not in ("function",):
+                    if sym.children:
+                        collect_symbols(sym.children, file_path, sym.name)
+                    continue
+                if type_filter == "class" and kind != "class":
+                    if sym.children:
+                        collect_symbols(sym.children, file_path, sym.name)
+                    continue
+                if type_filter == "method" and kind != "method":
+                    if sym.children:
+                        collect_symbols(sym.children, file_path, sym.name)
+                    continue
+
+            # Apply name filter
+            if name_pattern and not name_pattern.search(sym.name):
+                if sym.children:
+                    collect_symbols(sym.children, file_path, sym.name)
+                continue
+
+            anchor_info = {
+                "file": str(file_path),
+                "name": sym.name,
+                "type": kind,
+                "line": sym.lineno,
+            }
+            if parent:
+                anchor_info["context"] = parent
+            if sym.signature:
+                anchor_info["signature"] = sym.signature
+            results.append(anchor_info)
+
+            # Recurse into children
+            if sym.children:
+                collect_symbols(sym.children, file_path, sym.name)
+
     for file_path in files:
         try:
             source = file_path.read_text()
-
-            if anchor_type:
-                # Find specific type
-                anchor = Anchor(type=anchor_type, name=args.name or ".*")
-                matches = find_anchors(source, anchor)
-            else:
-                # Find all types
-                matches = []
-                for atype in [AnchorType.FUNCTION, AnchorType.CLASS, AnchorType.METHOD]:
-                    anchor = Anchor(type=atype, name=args.name or ".*")
-                    matches.extend(find_anchors(source, anchor))
-
-            for match in matches:
-                anchor_info = {
-                    "file": str(file_path),
-                    "name": match.anchor.name,
-                    "type": match.anchor.type.value,
-                    "line": match.lineno,
-                    "end_line": match.end_lineno,
-                    "col": match.col_offset,
-                    "end_col": match.end_col_offset,
-                }
-                if match.anchor.context:
-                    anchor_info["context"] = match.anchor.context
-                results.append(anchor_info)
-
+            symbols = extract_python_skeleton(source)
+            collect_symbols(symbols, file_path)
         except SyntaxError as e:
             if not args.quiet:
                 print(f"Syntax error in {file_path}: {e}", file=sys.stderr)

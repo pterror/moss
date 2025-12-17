@@ -6,10 +6,15 @@ from pathlib import Path
 import pytest
 
 from moss.cli import (
+    cmd_anchors,
+    cmd_cfg,
     cmd_config,
+    cmd_context,
+    cmd_deps,
     cmd_distros,
     cmd_init,
     cmd_run,
+    cmd_skeleton,
     cmd_status,
     create_parser,
     main,
@@ -39,6 +44,12 @@ class TestCreateParser:
         assert "status" in subparsers_action.choices
         assert "config" in subparsers_action.choices
         assert "distros" in subparsers_action.choices
+        # New introspection commands
+        assert "skeleton" in subparsers_action.choices
+        assert "anchors" in subparsers_action.choices
+        assert "cfg" in subparsers_action.choices
+        assert "deps" in subparsers_action.choices
+        assert "context" in subparsers_action.choices
 
 
 class TestMain:
@@ -282,3 +293,278 @@ class TestCmdRun:
         result = cmd_run(args)
 
         assert result == 0
+
+
+class TestCmdSkeleton:
+    """Tests for skeleton command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file for testing."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text('''
+"""Module docstring."""
+
+class Foo:
+    """A class."""
+    def bar(self, x: int) -> str:
+        """A method."""
+        return str(x)
+
+def baz():
+    """A function."""
+    pass
+''')
+        return py_file
+
+    def test_extracts_skeleton(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["skeleton", str(python_file)])
+        result = cmd_skeleton(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "class Foo" in captured.out
+        assert "def bar" in captured.out
+        assert "def baz" in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["--json", "skeleton", str(python_file)])
+        result = cmd_skeleton(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        # Should be valid JSON
+        import json
+
+        data = json.loads(captured.out)
+        assert "file" in data
+        assert "symbols" in data
+        assert any(s["name"] == "Foo" for s in data["symbols"])
+
+    def test_handles_syntax_error(self, tmp_path: Path, capsys):
+        bad_file = tmp_path / "bad.py"
+        bad_file.write_text("def broken(")
+
+        args = create_parser().parse_args(["skeleton", str(bad_file)])
+        result = cmd_skeleton(args)
+
+        assert result == 0  # Continues despite error
+        captured = capsys.readouterr()
+        assert "Syntax error" in captured.err
+
+    def test_directory_with_pattern(self, tmp_path: Path, capsys):
+        (tmp_path / "a.py").write_text("def foo(): pass")
+        (tmp_path / "b.py").write_text("def bar(): pass")
+        (tmp_path / "c.txt").write_text("not python")
+
+        args = create_parser().parse_args(["skeleton", str(tmp_path), "-p", "*.py"])
+        result = cmd_skeleton(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "def foo" in captured.out
+        assert "def bar" in captured.out
+
+
+class TestCmdAnchors:
+    """Tests for anchors command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file for testing."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text("""
+class MyClass:
+    def method(self): pass
+
+def my_function():
+    pass
+""")
+        return py_file
+
+    def test_finds_all_anchors(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["anchors", str(python_file)])
+        result = cmd_anchors(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "MyClass" in captured.out
+        assert "method" in captured.out
+        assert "my_function" in captured.out
+
+    def test_filter_by_type(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["anchors", str(python_file), "-t", "class"])
+        result = cmd_anchors(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "MyClass" in captured.out
+        assert "my_function" not in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["--json", "anchors", str(python_file)])
+        result = cmd_anchors(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "name" in data[0]
+        assert "type" in data[0]
+
+
+class TestCmdCfg:
+    """Tests for cfg command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file with control flow."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text("""
+def check(x):
+    if x > 0:
+        return "positive"
+    else:
+        return "non-positive"
+""")
+        return py_file
+
+    def test_builds_cfg(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["cfg", str(python_file)])
+        result = cmd_cfg(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "CFG for check" in captured.out
+        assert "ENTRY" in captured.out
+        assert "EXIT" in captured.out
+
+    def test_specific_function(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["cfg", str(python_file), "check"])
+        result = cmd_cfg(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "CFG for check" in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["--json", "cfg", str(python_file)])
+        result = cmd_cfg(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "name" in data[0]
+        assert "nodes" in data[0]
+
+    def test_dot_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["cfg", str(python_file), "--dot"])
+        result = cmd_cfg(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "digraph" in captured.out
+        assert "->" in captured.out
+
+
+class TestCmdDeps:
+    """Tests for deps command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file with imports."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text("""
+import os
+from pathlib import Path
+
+def public_func():
+    pass
+
+class PublicClass:
+    pass
+""")
+        return py_file
+
+    def test_extracts_deps(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["deps", str(python_file)])
+        result = cmd_deps(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "os" in captured.out
+        assert "pathlib" in captured.out or "Path" in captured.out
+        assert "public_func" in captured.out
+        assert "PublicClass" in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["--json", "deps", str(python_file)])
+        result = cmd_deps(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        assert "file" in data
+        assert "imports" in data
+        assert "exports" in data
+
+
+class TestCmdContext:
+    """Tests for context command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file for testing."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text('''
+"""A sample module."""
+
+import os
+
+class Foo:
+    """A class."""
+    def bar(self): pass
+
+def baz():
+    """A function."""
+    pass
+''')
+        return py_file
+
+    def test_shows_context(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["context", str(python_file)])
+        result = cmd_context(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Lines:" in captured.out
+        assert "Classes:" in captured.out
+        assert "Imports:" in captured.out
+        assert "Skeleton" in captured.out
+        assert "Foo" in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["--json", "context", str(python_file)])
+        result = cmd_context(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        assert "file" in data
+        assert "summary" in data
+        assert "symbols" in data
+        assert "imports" in data
+        assert "exports" in data
+        assert data["summary"]["classes"] >= 1
+        assert data["summary"]["functions"] >= 1
