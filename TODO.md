@@ -1,28 +1,6 @@
 # Moss Roadmap
 
-## Current: Phase 18 — Plugin Architecture
-
-### Core
-- [ ] Plugin interface for view providers
-- [ ] Plugin discovery and loading
-- [ ] Registration and lifecycle management
-
-### Built-in Plugins
-- [ ] Refactor Python skeleton as plugin
-- [ ] Refactor CFG as plugin
-- [ ] Refactor deps as plugin
-
-### Language Support
-- [ ] TypeScript/JavaScript
-- [ ] Go
-- [ ] Rust
-
-### Non-Code Content
-- [ ] Markdown structure
-- [ ] JSON/YAML schema
-- [ ] Config files
-
-## Phase 19: Advanced Features
+## Current: Phase 19 — Advanced Features
 
 ### Embedding-based Search
 - [ ] Vector embeddings for semantic code search
@@ -40,6 +18,11 @@
 - [ ] LSP integration
 - [ ] Live CFG rendering
 
+### Non-Code Content Plugins
+- [ ] Markdown structure extraction
+- [ ] JSON/YAML schema analysis
+- [ ] Config file parsing
+
 ## Backlog
 
 - Visual CFG output (graphviz/mermaid)
@@ -52,6 +35,7 @@
 ## Completed
 
 See `docs/` for details on completed work:
+- **Phase 18**: Plugin Architecture — extensible view provider system, entry points discovery, multi-language support (tree-sitter)
 - **Phase 17**: Introspection Improvements — symbol metrics, reverse deps, DWIM tuning, output improvements
 - **Phase 15**: LLM Introspection Tooling (`docs/tools.md`, `docs/cli-architecture.md`)
 - **Phase 16**: DWIM semantic routing (`docs/dwim-architecture.md`)
