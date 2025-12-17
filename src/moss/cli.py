@@ -1262,6 +1262,43 @@ def cmd_hooks(args: Namespace) -> int:
         return 0
 
 
+def cmd_pr(args: Namespace) -> int:
+    """Generate PR review summary."""
+    from moss.pr_review import analyze_pr
+
+    output = setup_output(args)
+    repo_path = Path(getattr(args, "directory", ".")).resolve()
+
+    try:
+        review = analyze_pr(
+            repo_path,
+            from_ref=getattr(args, "base", "main"),
+            to_ref=getattr(args, "head", "HEAD"),
+            staged=getattr(args, "staged", False),
+        )
+    except Exception as e:
+        output.error(f"Failed to analyze: {e}")
+        return 1
+
+    if review.diff_analysis.files_changed == 0:
+        output.info("No changes found")
+        return 0
+
+    if getattr(args, "json", False):
+        output.data(review.to_dict())
+        return 0
+
+    # Show title suggestion
+    if getattr(args, "title", False):
+        output.print(review.title_suggestion)
+        return 0
+
+    # Show full summary
+    output.print(review.summary)
+
+    return 0
+
+
 def cmd_diff(args: Namespace) -> int:
     """Analyze git diff and show symbol changes."""
     from moss.diff_analysis import (
@@ -1670,6 +1707,38 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show only statistics summary",
     )
     diff_parser.set_defaults(func=cmd_diff)
+
+    # pr command
+    pr_parser = subparsers.add_parser("pr", help="Generate PR review summary")
+    pr_parser.add_argument(
+        "--base",
+        "-b",
+        default="main",
+        help="Base branch to compare against (default: main)",
+    )
+    pr_parser.add_argument(
+        "--head",
+        default="HEAD",
+        help="Head commit/branch (default: HEAD)",
+    )
+    pr_parser.add_argument(
+        "-C",
+        "--directory",
+        default=".",
+        help="Repository directory (default: current)",
+    )
+    pr_parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Analyze staged changes instead",
+    )
+    pr_parser.add_argument(
+        "--title",
+        "-t",
+        action="store_true",
+        help="Only output suggested PR title",
+    )
+    pr_parser.set_defaults(func=cmd_pr)
 
     return parser
 
