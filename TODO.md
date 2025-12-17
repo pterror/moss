@@ -9,7 +9,6 @@
 
 ## Backlog
 
-- Visual CFG output (graphviz/mermaid)
 - Multi-file refactoring support
 - Configurable output verbosity
 - Progress indicators for large scans
@@ -19,6 +18,7 @@
 ## Completed
 
 See `docs/` for details on completed work:
+- **Phase 19e**: Visual CFG Output — Mermaid/Graphviz rendering, HTML visualization, CLI integration
 - **Phase 19c**: Auto-fix System — safe/unsafe classification, preview/diff, conflict resolution, Shadow Git rollback
 - **Phase 19b**: Embedding-based Search — hybrid TF-IDF + embedding routing, code indexer, CLI command
 - **Phase 19a**: Non-Code Content Plugins — Markdown structure, JSON/YAML/TOML schema extraction
