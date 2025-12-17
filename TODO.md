@@ -57,11 +57,12 @@
 - [ ] Plugin development guide
 - [ ] Example plugin implementation
 
-## CI/CD Fixes (Priority)
-- [ ] Add ruff to CI workflow (currently missing)
-- [ ] Fix async test compatibility (pytest-asyncio mode configuration)
-- [ ] Fix async fixture warnings (pytest 9 deprecation)
-- [ ] Fix coverage reporting in CI
+## CI/CD Fixes ✅
+- [x] Add ruff to dev dependencies
+- [x] Fix CI to install dev extras (`uv sync --extra dev`)
+- [x] Remove Python 3.12 from CI (project requires 3.13+)
+- [x] Consolidate dev dependencies in pyproject.toml
+- [ ] Fix async fixture warnings (pytest 9 deprecation) - may need further work
 
 ## Future Ideas
 - Real-time file watching and incremental updates
