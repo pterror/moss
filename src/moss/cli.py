@@ -1175,6 +1175,40 @@ def cmd_shell(args: Namespace) -> int:
     return start_shell(directory)
 
 
+def cmd_watch(args: Namespace) -> int:
+    """Watch for file changes and re-run tests."""
+    import asyncio
+    import shlex
+
+    from moss.watch_tests import WatchRunner, WatchTestConfig
+
+    output = setup_output(args)
+    directory = Path(getattr(args, "directory", ".")).resolve()
+
+    # Parse test command
+    test_command = None
+    cmd_str = getattr(args, "command", None)
+    if cmd_str:
+        test_command = shlex.split(cmd_str)
+
+    # Build config
+    config = WatchTestConfig(
+        debounce_ms=getattr(args, "debounce", 500),
+        clear_screen=not getattr(args, "no_clear", False),
+        run_on_start=not getattr(args, "no_initial", False),
+    )
+    if test_command:
+        config.test_command = test_command
+
+    watcher = WatchRunner(directory, config, output)
+
+    try:
+        asyncio.run(watcher.run())
+        return 0
+    except KeyboardInterrupt:
+        return 0
+
+
 def cmd_hooks(args: Namespace) -> int:
     """Manage git pre-commit hooks."""
     from moss.hooks import (
@@ -1490,6 +1524,37 @@ def create_parser() -> argparse.ArgumentParser:
         help="Workspace directory (default: current)",
     )
     shell_parser.set_defaults(func=cmd_shell)
+
+    # watch command
+    watch_parser = subparsers.add_parser("watch", help="Watch files and re-run tests on changes")
+    watch_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to watch (default: current)",
+    )
+    watch_parser.add_argument(
+        "-c",
+        "--command",
+        help="Custom test command (default: pytest -v)",
+    )
+    watch_parser.add_argument(
+        "--debounce",
+        type=int,
+        default=500,
+        help="Debounce delay in milliseconds (default: 500)",
+    )
+    watch_parser.add_argument(
+        "--no-clear",
+        action="store_true",
+        help="Don't clear screen between runs",
+    )
+    watch_parser.add_argument(
+        "--no-initial",
+        action="store_true",
+        help="Don't run tests on start",
+    )
+    watch_parser.set_defaults(func=cmd_watch)
 
     # hooks command
     hooks_parser = subparsers.add_parser("hooks", help="Manage git pre-commit hooks")

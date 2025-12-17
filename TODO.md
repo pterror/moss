@@ -3,7 +3,7 @@
 ## Current: Phase 21 — Developer Experience
 
 ### Watch & Feedback
-- [ ] Watch mode for tests (auto-run on file changes)
+- [x] Watch mode for tests (auto-run on file changes)
 - [ ] Metrics dashboard (HTML report of codebase health)
 - [ ] Custom analysis rules (user-defined patterns)
 
