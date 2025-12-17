@@ -16,7 +16,7 @@
 
 ### Export & Integration
 - [x] SARIF output (for CI/CD integration)
-- [ ] GitHub Actions integration
+- [x] GitHub Actions integration
 - [ ] VS Code extension
 
 ---

@@ -1,0 +1,126 @@
+# Moss GitHub Action
+# Run moss analysis in your CI/CD pipeline
+#
+# Usage:
+#   - uses: your-org/moss-action@v1
+#     with:
+#       directory: '.'
+#       pattern: '**/*.py'
+
+name: 'Moss Analysis'
+description: 'Run moss static analysis on your Python codebase'
+author: 'Moss Contributors'
+
+branding:
+  icon: 'code'
+  color: 'green'
+
+inputs:
+  directory:
+    description: 'Directory to analyze'
+    required: false
+    default: '.'
+  pattern:
+    description: 'Glob pattern for files'
+    required: false
+    default: '**/*.py'
+  rules-check:
+    description: 'Run rules check'
+    required: false
+    default: 'true'
+  metrics:
+    description: 'Generate metrics'
+    required: false
+    default: 'true'
+  sarif-output:
+    description: 'Generate SARIF output'
+    required: false
+    default: 'true'
+  sarif-file:
+    description: 'SARIF output file path'
+    required: false
+    default: 'moss-results.sarif'
+  upload-sarif:
+    description: 'Upload SARIF to GitHub Code Scanning'
+    required: false
+    default: 'true'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+
+outputs:
+  violations:
+    description: 'Number of rule violations found'
+    value: ${{ steps.rules.outputs.violations }}
+  files-analyzed:
+    description: 'Number of files analyzed'
+    value: ${{ steps.metrics.outputs.files }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install moss
+      shell: bash
+      run: pip install moss
+
+    - name: Run rules check
+      id: rules
+      if: inputs.rules-check == 'true'
+      shell: bash
+      run: |
+        if [ "${{ inputs.sarif-output }}" == "true" ]; then
+          moss rules "${{ inputs.directory }}" \
+            --pattern "${{ inputs.pattern }}" \
+            --sarif "${{ inputs.sarif-file }}" \
+            --json > rules-result.json 2>&1 || true
+        else
+          moss rules "${{ inputs.directory }}" \
+            --pattern "${{ inputs.pattern }}" \
+            --json > rules-result.json 2>&1 || true
+        fi
+
+        # Extract violation count
+        if [ -f rules-result.json ]; then
+          VIOLATIONS=$(cat rules-result.json | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('total_violations', 0))" 2>/dev/null || echo "0")
+          echo "violations=$VIOLATIONS" >> $GITHUB_OUTPUT
+        else
+          echo "violations=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true' && inputs.sarif-output == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+      continue-on-error: true
+
+    - name: Generate metrics
+      id: metrics
+      if: inputs.metrics == 'true'
+      shell: bash
+      run: |
+        moss metrics "${{ inputs.directory }}" \
+          --pattern "${{ inputs.pattern }}" \
+          --json > moss-metrics.json 2>&1 || true
+
+        # Extract file count
+        if [ -f moss-metrics.json ]; then
+          FILES=$(cat moss-metrics.json | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('total_files', 0))" 2>/dev/null || echo "0")
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+        else
+          echo "files=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload metrics artifact
+      if: inputs.metrics == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: moss-metrics
+        path: moss-metrics.json
+      continue-on-error: true
