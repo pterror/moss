@@ -1,168 +1,81 @@
 # LLM Introspection Tools Evaluation
 
-This document captures findings from using Moss's introspection tools with Claude Code.
+Findings from using Moss's introspection tools.
 
-## Tools Evaluated
+## DWIM Effectiveness
 
-1. `moss skeleton` - Code structure extraction
-2. `moss anchors` - Symbol finding
-3. `moss query` - Pattern-based search
-4. `moss cfg` - Control flow graphs
-5. `moss deps` - Dependency extraction
-6. `moss context` - Combined view
+| Feature | Accuracy | Confidence | Notes |
+|---------|----------|------------|-------|
+| Typo correction | 100% | 0.80-0.93 | "skelton" → "skeleton" works |
+| Alias resolution | 100% | 1.00 | "imports" → "deps" perfect |
+| Natural language | 100% top-3 | 0.24-0.51 | Correct tool found, but confidence below threshold |
 
-## Real-World Usage Session
+**Issue**: Natural language queries have low confidence despite correct results. The TF-IDF approach works for ranking but confidence scores don't reflect accuracy.
 
-### What I Tried
+**Recommendation**: Lower `SUGGEST_THRESHOLD` from 0.5 to 0.3, or use top-k results regardless of threshold.
 
-1. **Module overview with context**:
-   ```bash
-   moss context src/moss/policy.py
-   ```
-   Result: Excellent summary - shows 476 lines, 10 classes, 35 methods, imports/exports at a glance.
+## Tool Effectiveness
 
-2. **Finding all exceptions**:
-   ```bash
-   moss query src/moss/ --inherits Exception --type class
-   ```
-   Result: Found 4 exception classes (GitError, AmbiguousAnchorError, AnchorNotFoundError, PatchError).
+### What Works Well
 
-3. **Finding async methods**:
-   ```bash
-   moss query src/moss/ --signature "async def" --type method
-   ```
-   Result: Great for understanding async patterns - found all async methods with their signatures.
+**context** — Best entry point for any file
+- Shows lines, symbol counts, imports at a glance
+- Good for deciding what to explore next
 
-4. **Analyzing internal dependencies** (JSON + Python post-processing):
-   ```bash
-   moss --json deps src/moss/ | python3 -c "..."
-   ```
-   Result: Built a dependency graph showing which modules import which. Identified core modules.
+**query --inherits** — Finding subclasses
+- `moss query src/ --inherits Exception --type class` found all 4 exception classes instantly
+- Much faster than grep for semantic queries
 
-5. **Finding largest modules**:
-   ```bash
-   moss --json skeleton src/moss/ | python3 -c "..."
-   ```
-   Result: memory.py (49 symbols), policy.py (46), api.py (42) are the largest.
+**JSON + Python** — Custom analysis
+- `moss --json deps src/ | python3 -c "..."` enables arbitrary analysis
+- Built dependency graph, found most-imported modules
 
-6. **Docstring coverage analysis**:
-   ```bash
-   moss --json query src/moss/ --type method | python3 -c "..."
-   ```
-   Result: 71% of methods have docstrings (291/405).
+**skeleton** — Code structure
+- 19 top-level symbols in dwim.py identified correctly
+- Signatures and docstrings preserved
 
-### Key Observations
+### Gaps
 
-1. **JSON output is the killer feature** - Allows piping to Python for custom analysis
-2. **Context command is the best starting point** - Gives just enough info to decide next steps
-3. **Query command is very flexible** - Regex + type + inheritance filters cover most needs
-4. **CFG is verbose** - Multiple functions with same name creates a lot of output
+1. **No line counts per function** — Can't filter by complexity
+2. **No reverse deps** — "What imports this module?" not directly available
+3. **No symbol sizes** — End line numbers would help estimate function length
+4. **CFG verbosity** — Full graph output overwhelming for large functions
 
-## What Works Well
+## Usage Patterns
 
-### JSON Output
-- The `--json` flag produces structured output that's easy to parse
-- Consistent schema across commands
-- Includes all relevant metadata (line numbers, signatures, docstrings)
-- **Key insight**: Enables building custom analysis on top
+**Understanding a file**: `moss context <file>`
 
-### Context Command
-- Provides a good "summary view" of a file
-- Combines symbol count, imports, exports, and skeleton
-- Useful for quick codebase orientation
-- **Key insight**: Best first command for any file
+**Finding implementations**: `moss query <dir> --inherits <base>` or `--signature <pattern>`
 
-### Query Command
-- Flexible filtering by name, type, signature, and inheritance
-- Regex support enables complex pattern matching
-- Recursive search through directories
-- **Key insight**: Most powerful for targeted searches
+**Dependency analysis**: `moss --json deps <dir> | python3 -c "..."`
 
-### Skeleton Extraction
-- Captures class/function hierarchy well
-- Preserves docstrings for understanding
-- Signatures provide type information
+**Symbol inventory**: `moss --json skeleton <dir> | python3 -c "..."`
 
-### Deps Command
-- Shows internal module relationships clearly
-- Can build dependency graphs with post-processing
-- **Key insight**: Critical for understanding architecture
+## Test Results
 
-## Areas for Improvement
+```
+DWIM:
+- Typo correction: 7/7 (100%)
+- Alias resolution: 8/8 (100%)
+- NL routing top-3: 8/8 (100%)
 
-### Missing Features
-1. **Complexity metrics**: Line counts per function, cyclomatic complexity
-2. **Reverse dependencies**: "Who imports this module?"
-3. **Symbol size**: End line numbers to calculate function length
-4. **Grouped output**: Option to organize by module for multi-file queries
-
-### Output Refinements
-1. **CFG verbosity control**: Option to show just structure, not all statements
-2. **Configurable depth**: Show only top-level symbols vs full hierarchy
-3. **Public API filter**: Show only `__all__` exports or non-underscore names
-4. **Diff-friendly output**: For tracking changes over time
-
-### UX Improvements
-1. **Better error messages**: When no matches found, suggest alternatives
-2. **Progress indicator**: For large directory scans
-3. **Output paging**: Long outputs could be paginated
-
-## Usage Patterns Discovered
-
-### Effective Workflows
-
-1. **Understanding a new file**:
-   ```bash
-   moss context <file>        # Get overview
-   moss skeleton <file>       # See full structure
-   ```
-
-2. **Finding implementations**:
-   ```bash
-   moss query <dir> --inherits <base>   # Find subclasses
-   moss query <dir> --signature <pattern>  # Find by signature
-   ```
-
-3. **Architecture analysis**:
-   ```bash
-   moss --json deps <dir> | python3 -c "..."  # Build dep graph
-   moss --json skeleton <dir> | python3 -c "..."  # Count symbols
-   ```
-
-4. **Code quality checks**:
-   ```bash
-   moss --json query <dir> --type method | python3 -c "..."  # Docstring coverage
-   ```
-
-### LLM-Specific Considerations
-- JSON output fits naturally into tool-use patterns
-- Structured data reduces ambiguity in responses
-- Symbol locations enable accurate code references
-- Post-processing with Python is natural in LLM context
+Tools on Moss codebase:
+- context: Shows 596 lines, 4 classes, 15 functions, 5 methods for dwim.py
+- query --inherits Exception: Found 4 exception classes
+- deps analysis: Identified moss.views (7 imports) as most-used internal module
+- skeleton: Extracted 19 top-level symbols correctly
+```
 
 ## Recommendations
 
 ### High Priority
-1. **Add line counts**: `--min-lines`, `--max-lines` filters
-2. **Add reverse deps**: "What modules import X?"
-3. **Add symbol sizes**: Include end_line in all outputs
+1. Lower DWIM threshold for natural language
+2. Add line counts for complexity filtering
 
 ### Medium Priority
-1. **CFG summary mode**: Just show node/edge counts, not full graph
-2. **Public API filter**: `--public-only` flag
-3. **Output grouping**: `--group-by=file` option
+1. Add reverse dependency lookup
+2. Add symbol end lines for size calculation
 
 ### Low Priority
-1. **Incremental updates**: For large codebases
-2. **Caching**: Speed up repeated queries
-3. **Watch mode**: Real-time updates
-
-## Test Coverage
-
-All introspection commands have unit tests covering:
-- Basic functionality
-- JSON output format
-- Error handling
-- Filter combinations
-
-656 tests currently passing with ~86% coverage.
+1. CFG summary mode
+2. Grouped multi-file output
