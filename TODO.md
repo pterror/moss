@@ -16,12 +16,14 @@
 - [ ] Find classes by inheritance
 - [ ] Search by complexity metrics (lines, branches, etc.)
 
-### MCP Server
-- [ ] Implement MCP server for direct tool access
-- [ ] Expose skeleton extraction as MCP tool
-- [ ] Expose anchor finding as MCP tool
-- [ ] Expose CFG building as MCP tool
-- [ ] Expose patch application as MCP tool
+### MCP Server ✅
+- [x] Implement MCP server for direct tool access
+- [x] Expose skeleton extraction as MCP tool
+- [x] Expose anchor finding as MCP tool
+- [x] Expose CFG building as MCP tool
+- [x] Expose patch application as MCP tool
+- [x] Expose dependency extraction as MCP tool
+- [x] Expose context generation as MCP tool
 
 ### LLM Evaluation
 - [ ] Use Moss CLI to explore codebases

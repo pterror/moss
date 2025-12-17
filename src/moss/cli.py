@@ -684,6 +684,21 @@ def cmd_context(args: Namespace) -> int:
     return 0
 
 
+def cmd_mcp_server(args: Namespace) -> int:
+    """Start the MCP server for LLM tool access."""
+    try:
+        from moss.mcp_server import main as mcp_main
+
+        mcp_main()
+        return 0
+    except ImportError as e:
+        print("Error: MCP SDK not installed. Install with: pip install 'moss[mcp]'")
+        print(f"Details: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -846,6 +861,10 @@ def create_parser() -> argparse.ArgumentParser:
     )
     context_parser.add_argument("path", help="Python file to analyze")
     context_parser.set_defaults(func=cmd_context)
+
+    # mcp-server command
+    mcp_parser = subparsers.add_parser("mcp-server", help="Start MCP server for LLM tool access")
+    mcp_parser.set_defaults(func=cmd_mcp_server)
 
     return parser
 
