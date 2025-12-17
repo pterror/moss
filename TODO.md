@@ -9,14 +9,16 @@
 
 ## Backlog
 
-- Multi-file refactoring support
-- Configurable output verbosity
+(empty)
 
 ---
 
 ## Completed
 
+- **Phase 19j**: Configurable Output Verbosity — verbosity levels (quiet/normal/verbose/debug), multiple formatters (text/JSON/compact), styling (colors, emoji), global output instance
+
 See `docs/` for details on completed work:
+- **Phase 19i**: Multi-file Refactoring — AST-based symbol renaming, code moves, import updates
 - **Phase 19h**: Progress Indicators — configurable progress bars, multi-stage tracking, ETA calculation
 - **Phase 19g**: Live CFG Rendering — auto-refresh visualization, file watcher integration, modern UI
 - **Phase 19f**: LSP Integration — pygls-based server, diagnostics, hover info, document symbols, go-to-definition
