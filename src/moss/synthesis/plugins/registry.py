@@ -321,6 +321,15 @@ class SynthesisRegistry:
         except ImportError:
             logger.debug("TemplateGenerator not available")
 
+        try:
+            from moss.synthesis.plugins.generators import LLMGenerator, MockLLMProvider
+
+            if "llm" not in [g.metadata.name for g in self.generators.get_all()]:
+                # Register with mock provider by default (safe for testing)
+                self.generators.register(LLMGenerator(provider=MockLLMProvider()))
+        except ImportError:
+            logger.debug("LLMGenerator not available")
+
         # Import built-in validators
         try:
             from moss.synthesis.plugins.validators import TestValidator
@@ -338,6 +347,14 @@ class SynthesisRegistry:
                 self.libraries.register(MemoryLibrary())
         except ImportError:
             logger.debug("MemoryLibrary not available")
+
+        try:
+            from moss.synthesis.plugins.libraries import LearnedLibrary
+
+            if "learned" not in [lib.metadata.name for lib in self.libraries.get_all()]:
+                self.libraries.register(LearnedLibrary())
+        except ImportError:
+            logger.debug("LearnedLibrary not available")
 
     def ensure_initialized(self) -> None:
         """Ensure the registry has discovered plugins."""
