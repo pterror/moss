@@ -11,13 +11,13 @@
 
 - Multi-file refactoring support
 - Configurable output verbosity
-- Progress indicators for large scans
 
 ---
 
 ## Completed
 
 See `docs/` for details on completed work:
+- **Phase 19h**: Progress Indicators — configurable progress bars, multi-stage tracking, ETA calculation
 - **Phase 19g**: Live CFG Rendering — auto-refresh visualization, file watcher integration, modern UI
 - **Phase 19f**: LSP Integration — pygls-based server, diagnostics, hover info, document symbols, go-to-definition
 - **Phase 19e**: Visual CFG Output — Mermaid/Graphviz rendering, HTML visualization, CLI integration
