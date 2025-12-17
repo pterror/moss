@@ -10,11 +10,11 @@
 - [x] `moss deps <path>` - Show dependencies (imports/exports)
 - [x] `moss context <path>` - Combined view (skeleton + deps + summary)
 
-### Query Interface
-- [ ] `moss query` command with pattern matching
-- [ ] Find functions by signature pattern
-- [ ] Find classes by inheritance
-- [ ] Search by complexity metrics (lines, branches, etc.)
+### Query Interface ✅
+- [x] `moss query` command with pattern matching
+- [x] Find functions by signature pattern
+- [x] Find classes by inheritance
+- [ ] Search by complexity metrics (lines, branches, etc.) - TODO: add line counting
 
 ### MCP Server ✅
 - [x] Implement MCP server for direct tool access
@@ -56,6 +56,12 @@
 - [ ] Plugin API documentation
 - [ ] Plugin development guide
 - [ ] Example plugin implementation
+
+## CI/CD Fixes (Priority)
+- [ ] Add ruff to CI workflow (currently missing)
+- [ ] Fix async test compatibility (pytest-asyncio mode configuration)
+- [ ] Fix async fixture warnings (pytest 9 deprecation)
+- [ ] Fix coverage reporting in CI
 
 ## Future Ideas
 - Real-time file watching and incremental updates

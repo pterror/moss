@@ -473,6 +473,102 @@ def cmd_anchors(args: Namespace) -> int:
     return 0
 
 
+def cmd_query(args: Namespace) -> int:
+    """Query code with pattern matching and filters."""
+    import re
+
+    from moss.skeleton import extract_python_skeleton
+
+    path = Path(args.path).resolve()
+
+    if not path.exists():
+        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        return 1
+
+    if path.is_file():
+        files = [path]
+    else:
+        pattern = args.pattern or "**/*.py"
+        files = list(path.glob(pattern))
+
+    # Compile patterns
+    name_pattern = re.compile(args.name) if args.name else None
+    sig_pattern = re.compile(args.signature) if args.signature else None
+
+    results: list[dict] = []
+
+    def matches_filters(sym: Any) -> bool:
+        """Check if a symbol matches all filters."""
+        # Type filter
+        if args.type and args.type != "all":
+            if sym.kind != args.type:
+                return False
+
+        # Name filter
+        if name_pattern and not name_pattern.search(sym.name):
+            return False
+
+        # Signature filter
+        if sig_pattern and sym.signature:
+            if not sig_pattern.search(sym.signature):
+                return False
+
+        # Inheritance filter (for classes)
+        if args.inherits and sym.kind == "class":
+            # Check if class inherits from specified base (look for "(Base" pattern)
+            if f"({args.inherits}" not in sym.signature:
+                return False
+
+        return True
+
+    def collect_matches(symbols: list, file_str: str, parent: str | None = None) -> None:
+        """Recursively collect matching symbols."""
+        for sym in symbols:
+            if matches_filters(sym):
+                result = {
+                    "file": file_str,
+                    "name": sym.name,
+                    "kind": sym.kind,
+                    "line": sym.lineno,
+                    "signature": sym.signature,
+                }
+                if sym.docstring:
+                    result["docstring"] = sym.docstring
+                if parent:
+                    result["context"] = parent
+                results.append(result)
+
+            # Always recurse into children to find nested matches
+            if sym.children:
+                collect_matches(sym.children, file_str, sym.name)
+
+    for file_path in files:
+        try:
+            source = file_path.read_text()
+            symbols = extract_python_skeleton(source)
+            collect_matches(symbols, str(file_path))
+        except SyntaxError as e:
+            if not args.quiet:
+                print(f"Syntax error in {file_path}: {e}", file=sys.stderr)
+
+    if getattr(args, "json", False):
+        output_result(results, args)
+    else:
+        for r in results:
+            ctx = f" (in {r['context']})" if r.get("context") else ""
+            doc = f" - {r['docstring'][:50]}..." if r.get("docstring") else ""
+            print(f"{r['file']}:{r['line']} {r['kind']} {r['name']}{ctx}")
+            if r.get("signature"):
+                print(f"  {r['signature']}")
+            if doc:
+                print(f" {doc}")
+
+    if not results:
+        print("No matches found")
+
+    return 0
+
+
 def cmd_cfg(args: Namespace) -> int:
     """Build and display control flow graph."""
     from moss.cfg import build_cfg
@@ -836,6 +932,29 @@ def create_parser() -> argparse.ArgumentParser:
     )
     anchors_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
     anchors_parser.set_defaults(func=cmd_anchors)
+
+    # query command
+    query_parser = subparsers.add_parser(
+        "query", help="Query code with pattern matching and filters"
+    )
+    query_parser.add_argument("path", help="File or directory to search")
+    query_parser.add_argument("--name", "-n", help="Name pattern (regex)")
+    query_parser.add_argument("--signature", "-s", help="Signature pattern (regex)")
+    query_parser.add_argument(
+        "--type",
+        "-t",
+        choices=["function", "class", "method", "all"],
+        help="Filter by type",
+    )
+    query_parser.add_argument("--inherits", "-i", help="Filter classes by base class")
+    query_parser.add_argument(
+        "--min-lines", type=int, dest="min_lines", help="Minimum lines (complexity)"
+    )
+    query_parser.add_argument(
+        "--pattern", "-p", help="Glob pattern for directory (default: **/*.py)"
+    )
+    query_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
+    query_parser.set_defaults(func=cmd_query)
 
     # cfg command
     cfg_parser = subparsers.add_parser("cfg", help="Build control flow graph")

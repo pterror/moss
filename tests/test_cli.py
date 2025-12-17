@@ -13,6 +13,7 @@ from moss.cli import (
     cmd_deps,
     cmd_distros,
     cmd_init,
+    cmd_query,
     cmd_run,
     cmd_skeleton,
     cmd_status,
@@ -47,9 +48,11 @@ class TestCreateParser:
         # New introspection commands
         assert "skeleton" in subparsers_action.choices
         assert "anchors" in subparsers_action.choices
+        assert "query" in subparsers_action.choices
         assert "cfg" in subparsers_action.choices
         assert "deps" in subparsers_action.choices
         assert "context" in subparsers_action.choices
+        assert "mcp-server" in subparsers_action.choices
 
 
 class TestMain:
@@ -568,3 +571,96 @@ def baz():
         assert "exports" in data
         assert data["summary"]["classes"] >= 1
         assert data["summary"]["functions"] >= 1
+
+
+class TestCmdQuery:
+    """Tests for query command."""
+
+    @pytest.fixture
+    def python_file(self, tmp_path: Path):
+        """Create a Python file for testing."""
+        py_file = tmp_path / "sample.py"
+        py_file.write_text("""
+class BaseClass:
+    '''A base class.'''
+    pass
+
+class ChildClass(BaseClass):
+    '''A child class.'''
+    def method(self): pass
+
+def my_function(x: int) -> str:
+    '''A function.'''
+    return str(x)
+
+def other_function():
+    pass
+""")
+        return py_file
+
+    def test_finds_by_name(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["query", str(python_file), "--name", "my_.*"])
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "my_function" in captured.out
+        assert "other_function" not in captured.out
+
+    def test_finds_by_type(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["query", str(python_file), "--type", "class"])
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "BaseClass" in captured.out
+        assert "ChildClass" in captured.out
+        assert "my_function" not in captured.out
+
+    def test_finds_by_inheritance(self, python_file: Path, capsys):
+        args = create_parser().parse_args(
+            ["--json", "query", str(python_file), "--inherits", "BaseClass", "--type", "class"]
+        )
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        names = [r["name"] for r in data]
+        assert "ChildClass" in names
+        # BaseClass doesn't inherit from BaseClass, so it shouldn't be in results
+        assert "BaseClass" not in names
+
+    def test_finds_by_signature(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["query", str(python_file), "--signature", r"x:\s*int"])
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "my_function" in captured.out
+
+    def test_json_output(self, python_file: Path, capsys):
+        args = create_parser().parse_args(
+            ["--json", "query", str(python_file), "--type", "function"]
+        )
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        import json
+
+        data = json.loads(captured.out)
+        assert isinstance(data, list)
+        names = [r["name"] for r in data]
+        assert "my_function" in names
+        assert "other_function" in names
+
+    def test_no_matches(self, python_file: Path, capsys):
+        args = create_parser().parse_args(["query", str(python_file), "--name", "nonexistent"])
+        result = cmd_query(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "No matches found" in captured.out
