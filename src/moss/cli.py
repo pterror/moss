@@ -1262,6 +1262,85 @@ def cmd_hooks(args: Namespace) -> int:
         return 0
 
 
+def cmd_rules(args: Namespace) -> int:
+    """Check code against custom rules."""
+    from moss.rules import (
+        create_engine_with_builtins,
+        load_rules_from_config,
+    )
+
+    output = setup_output(args)
+    directory = Path(getattr(args, "directory", ".")).resolve()
+
+    if not directory.exists():
+        output.error(f"Directory {directory} does not exist")
+        return 1
+
+    # Load rules
+    include_builtins = not getattr(args, "no_builtins", False)
+    custom_rules = load_rules_from_config(directory)
+    engine = create_engine_with_builtins(
+        include_builtins=include_builtins, custom_rules=custom_rules
+    )
+
+    if not engine.rules:
+        output.warning("No rules configured")
+        return 0
+
+    # List rules if requested
+    if getattr(args, "list", False):
+        output.header("Available Rules")
+        for rule in engine.rules:
+            status = "[enabled]" if rule.enabled else "[disabled]"
+            output.info(f"  {rule.name}: {rule.message} {status}")
+        return 0
+
+    # Run analysis
+    pattern = getattr(args, "pattern", "**/*.py")
+    result = engine.check_directory(directory, pattern=pattern)
+
+    if getattr(args, "json", False):
+        output.data(result.to_dict())
+        return 0
+
+    # Text output
+    if not result.violations:
+        output.success(f"No violations found in {result.files_checked} files")
+        return 0
+
+    output.header(f"Found {len(result.violations)} violations")
+    output.blank()
+
+    # Group by file
+    by_file: dict[Path, list] = {}
+    for v in result.violations:
+        if v.file_path not in by_file:
+            by_file[v.file_path] = []
+        by_file[v.file_path].append(v)
+
+    for file_path, violations in sorted(by_file.items()):
+        try:
+            rel_path = file_path.relative_to(directory)
+        except ValueError:
+            rel_path = file_path
+        output.step(str(rel_path))
+
+        for v in violations:
+            severity_marker = {"error": "E", "warning": "W", "info": "I"}.get(v.rule.severity, "?")
+            output.info(f"  {v.line}:{v.column} [{severity_marker}] {v.rule.message}")
+
+        output.blank()
+
+    # Summary
+    errors = len(result.by_severity("error"))
+    warnings = len(result.by_severity("warning"))
+    infos = len(result.by_severity("info"))
+    output.info(f"Summary: {errors} errors, {warnings} warnings, {infos} info")
+
+    # Return non-zero if errors found
+    return 1 if errors > 0 else 0
+
+
 def cmd_metrics(args: Namespace) -> int:
     """Generate codebase metrics dashboard."""
     from moss.metrics import collect_metrics, generate_dashboard
@@ -1832,6 +1911,33 @@ def create_parser() -> argparse.ArgumentParser:
         help="Dashboard title (default: directory name)",
     )
     metrics_parser.set_defaults(func=cmd_metrics)
+
+    # rules command
+    rules_parser = subparsers.add_parser("rules", help="Check code against custom analysis rules")
+    rules_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to analyze (default: current)",
+    )
+    rules_parser.add_argument(
+        "--pattern",
+        "-p",
+        default="**/*.py",
+        help="Glob pattern for files (default: **/*.py)",
+    )
+    rules_parser.add_argument(
+        "--list",
+        "-l",
+        action="store_true",
+        help="List available rules",
+    )
+    rules_parser.add_argument(
+        "--no-builtins",
+        action="store_true",
+        help="Disable built-in rules",
+    )
+    rules_parser.set_defaults(func=cmd_rules)
 
     return parser
 
