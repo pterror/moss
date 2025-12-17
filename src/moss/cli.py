@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from moss.output import Output, Verbosity, configure_output, get_output
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -20,35 +21,47 @@ def get_version() -> str:
     return __version__
 
 
+def setup_output(args: Namespace) -> Output:
+    """Configure global output based on CLI args."""
+    # Determine verbosity
+    if getattr(args, "quiet", False):
+        verbosity = Verbosity.QUIET
+    elif getattr(args, "debug", False):
+        verbosity = Verbosity.DEBUG
+    elif getattr(args, "verbose", False):
+        verbosity = Verbosity.VERBOSE
+    else:
+        verbosity = Verbosity.NORMAL
+
+    # Configure output
+    output = configure_output(
+        verbosity=verbosity,
+        json_format=getattr(args, "json", False),
+        no_color=getattr(args, "no_color", False),
+    )
+
+    return output
+
+
 def output_result(data: Any, args: Namespace) -> None:
     """Output result in appropriate format."""
-    if getattr(args, "json", False):
-        print(json.dumps(data, indent=2, default=str))
-    else:
-        if isinstance(data, str):
-            print(data)
-        elif isinstance(data, dict):
-            for key, value in data.items():
-                print(f"{key}: {value}")
-        elif isinstance(data, list):
-            for item in data:
-                print(item)
-        else:
-            print(data)
+    output = get_output()
+    output.data(data)
 
 
 def cmd_init(args: Namespace) -> int:
     """Initialize a new moss project."""
+    output = get_output()
     project_dir = Path(args.directory).resolve()
 
     if not project_dir.exists():
-        print(f"Error: Directory {project_dir} does not exist")
+        output.error(f"Directory {project_dir} does not exist")
         return 1
 
     config_file = project_dir / "moss_config.py"
 
     if config_file.exists() and not args.force:
-        print(f"Error: {config_file} already exists. Use --force to overwrite.")
+        output.error(f"{config_file} already exists. Use --force to overwrite.")
         return 1
 
     # Determine distro
@@ -82,21 +95,22 @@ config = (
 '''
 
     config_file.write_text(config_content)
-    print(f"Created {config_file}")
+    output.success(f"Created {config_file}")
 
     # Create .moss directory for runtime data
     moss_dir = project_dir / ".moss"
     if not moss_dir.exists():
         moss_dir.mkdir()
         (moss_dir / ".gitignore").write_text("*\n")
-        print(f"Created {moss_dir}/")
+        output.verbose(f"Created {moss_dir}/")
 
-    print(f"\nMoss initialized in {project_dir}")
-    print(f"  Config: {config_file.name}")
-    print(f"  Distro: {distro_name}")
-    print("\nNext steps:")
-    print("  1. Edit moss_config.py to customize your configuration")
-    print("  2. Run 'moss run \"your task\"' to execute a task")
+    output.info(f"Moss initialized in {project_dir}")
+    output.info(f"  Config: {config_file.name}")
+    output.info(f"  Distro: {distro_name}")
+    output.blank()
+    output.step("Next steps:")
+    output.info("  1. Edit moss_config.py to customize your configuration")
+    output.info("  2. Run 'moss run \"your task\"' to execute a task")
 
     return 0
 
@@ -109,6 +123,7 @@ def cmd_run(args: Namespace) -> int:
     from moss.events import EventBus
     from moss.shadow_git import ShadowGit
 
+    output = get_output()
     project_dir = Path(args.directory).resolve()
     config_file = project_dir / "moss_config.py"
 
@@ -117,7 +132,7 @@ def cmd_run(args: Namespace) -> int:
         try:
             config = load_config_file(config_file)
         except Exception as e:
-            print(f"Error loading config: {e}")
+            output.error(f"Error loading config: {e}")
             return 1
     else:
         config = MossConfig().with_project(project_dir, project_dir.name)
@@ -125,9 +140,9 @@ def cmd_run(args: Namespace) -> int:
     # Validate config
     errors = config.validate()
     if errors:
-        print("Configuration errors:")
+        output.error("Configuration errors:")
         for error in errors:
-            print(f"  - {error}")
+            output.error(f"  - {error}")
         return 1
 
     # Set up components
@@ -145,23 +160,26 @@ def cmd_run(args: Namespace) -> int:
 
     async def run_task() -> int:
         response = await handler.create_task(request)
-        print(f"Task created: {response.request_id}")
-        print(f"Ticket: {response.ticket_id}")
-        print(f"Status: {response.status.value}")
+        output.success(f"Task created: {response.request_id}")
+        output.info(f"Ticket: {response.ticket_id}")
+        output.info(f"Status: {response.status.value}")
 
         if args.wait:
-            print("\nWaiting for completion...")
+            output.step("Waiting for completion...")
             # Poll for status
             while True:
                 status = await handler.get_task_status(response.request_id)
                 if status is None:
-                    print("Task not found")
+                    output.error("Task not found")
                     return 1
 
                 if status.status.value in ("COMPLETED", "FAILED", "CANCELLED"):
-                    print(f"\nFinal status: {status.status.value}")
+                    if status.status.value == "COMPLETED":
+                        output.success(f"Final status: {status.status.value}")
+                    else:
+                        output.warning(f"Final status: {status.status.value}")
                     if status.result:
-                        print(f"Result: {json.dumps(status.result, indent=2)}")
+                        output.data(status.result)
                     break
 
                 await asyncio.sleep(0.5)
@@ -179,6 +197,7 @@ def cmd_status(args: Namespace) -> int:
     from moss.events import EventBus
     from moss.shadow_git import ShadowGit
 
+    output = get_output()
     project_dir = Path(args.directory).resolve()
     config_file = project_dir / "moss_config.py"
 
@@ -187,7 +206,7 @@ def cmd_status(args: Namespace) -> int:
         try:
             load_config_file(config_file)
         except Exception as e:
-            print(f"Error loading config: {e}")
+            output.error(f"Error loading config: {e}")
             return 1
 
     # Set up components
@@ -203,29 +222,27 @@ def cmd_status(args: Namespace) -> int:
         output_result(stats, args)
         return 0
 
-    print("Moss Status")
-    print("=" * 40)
-    print(f"Project: {project_dir.name}")
-    print(f"Config: {'moss_config.py' if config_file.exists() else '(default)'}")
-    print()
-    print("API Handler:")
-    print(f"  Active requests: {stats['active_requests']}")
-    print(f"  Pending checkpoints: {stats['pending_checkpoints']}")
-    print(f"  Active streams: {stats['active_streams']}")
-    print()
-    print("Manager:")
+    output.header("Moss Status")
+    output.info(f"Project: {project_dir.name}")
+    output.info(f"Config: {'moss_config.py' if config_file.exists() else '(default)'}")
+    output.blank()
+    output.step("API Handler:")
+    output.info(f"  Active requests: {stats['active_requests']}")
+    output.info(f"  Pending checkpoints: {stats['pending_checkpoints']}")
+    output.info(f"  Active streams: {stats['active_streams']}")
+    output.blank()
+    output.step("Manager:")
     manager_stats = stats["manager_stats"]
-    print(f"  Active workers: {manager_stats['active_workers']}")
-    print(f"  Total tickets: {manager_stats['total_tickets']}")
+    output.info(f"  Active workers: {manager_stats['active_workers']}")
+    output.info(f"  Total tickets: {manager_stats['total_tickets']}")
     tickets_by_status = manager_stats.get("tickets_by_status", {})
     if tickets_by_status:
-        print(f"  Tickets by status: {tickets_by_status}")
+        output.info(f"  Tickets by status: {tickets_by_status}")
 
-    if args.verbose:
-        print()
-        print("Workers:")
-        for worker_id, worker_info in manager_stats.get("workers", {}).items():
-            print(f"  {worker_id}: {worker_info}")
+    # Show verbose info using output.verbose()
+    output.verbose("Workers:")
+    for worker_id, worker_info in manager_stats.get("workers", {}).items():
+        output.verbose(f"  {worker_id}: {worker_info}")
 
     return 0
 
@@ -234,59 +251,60 @@ def cmd_config(args: Namespace) -> int:
     """Show or validate configuration."""
     from moss.config import list_distros, load_config_file
 
+    output = get_output()
+
     if args.list_distros:
-        print("Available distros:")
+        output.info("Available distros:")
         for name in list_distros():
-            print(f"  - {name}")
+            output.info(f"  - {name}")
         return 0
 
     project_dir = Path(args.directory).resolve()
     config_file = project_dir / "moss_config.py"
 
     if not config_file.exists():
-        print(f"No config file found at {config_file}")
-        print("Run 'moss init' to create one.")
+        output.error(f"No config file found at {config_file}")
+        output.info("Run 'moss init' to create one.")
         return 1
 
     try:
         config = load_config_file(config_file)
     except Exception as e:
-        print(f"Error loading config: {e}")
+        output.error(f"Error loading config: {e}")
         return 1
 
     if args.validate:
         errors = config.validate()
         if errors:
-            print("Configuration errors:")
+            output.error("Configuration errors:")
             for error in errors:
-                print(f"  - {error}")
+                output.error(f"  - {error}")
             return 1
-        print("Configuration is valid.")
+        output.success("Configuration is valid.")
         return 0
 
     # Show config
-    print("Configuration")
-    print("=" * 40)
-    print(f"Project: {config.project_name}")
-    print(f"Root: {config.project_root}")
-    print(f"Extends: {', '.join(config.extends) or '(none)'}")
-    print()
-    print("Validators:")
-    print(f"  syntax: {config.validators.syntax}")
-    print(f"  ruff: {config.validators.ruff}")
-    print(f"  pytest: {config.validators.pytest}")
-    print(f"  custom: {len(config.validators.custom)}")
-    print()
-    print("Policies:")
-    print(f"  velocity: {config.policies.velocity}")
-    print(f"  quarantine: {config.policies.quarantine}")
-    print(f"  rate_limit: {config.policies.rate_limit}")
-    print(f"  path: {config.policies.path}")
-    print()
-    print("Loop:")
-    print(f"  max_iterations: {config.loop.max_iterations}")
-    print(f"  timeout_seconds: {config.loop.timeout_seconds}")
-    print(f"  auto_commit: {config.loop.auto_commit}")
+    output.header("Configuration")
+    output.info(f"Project: {config.project_name}")
+    output.info(f"Root: {config.project_root}")
+    output.info(f"Extends: {', '.join(config.extends) or '(none)'}")
+    output.blank()
+    output.step("Validators:")
+    output.info(f"  syntax: {config.validators.syntax}")
+    output.info(f"  ruff: {config.validators.ruff}")
+    output.info(f"  pytest: {config.validators.pytest}")
+    output.info(f"  custom: {len(config.validators.custom)}")
+    output.blank()
+    output.step("Policies:")
+    output.info(f"  velocity: {config.policies.velocity}")
+    output.info(f"  quarantine: {config.policies.quarantine}")
+    output.info(f"  rate_limit: {config.policies.rate_limit}")
+    output.info(f"  path: {config.policies.path}")
+    output.blank()
+    output.step("Loop:")
+    output.info(f"  max_iterations: {config.loop.max_iterations}")
+    output.info(f"  timeout_seconds: {config.loop.timeout_seconds}")
+    output.info(f"  auto_commit: {config.loop.auto_commit}")
 
     return 0
 
@@ -295,6 +313,7 @@ def cmd_distros(args: Namespace) -> int:
     """List available configuration distros."""
     from moss.config import get_distro, list_distros
 
+    output = get_output()
     distros = list_distros()
 
     if getattr(args, "json", False):
@@ -306,14 +325,13 @@ def cmd_distros(args: Namespace) -> int:
         output_result(result, args)
         return 0
 
-    print("Available Distros")
-    print("=" * 40)
+    output.header("Available Distros")
 
     for name in sorted(distros):
         distro = get_distro(name)
         if distro:
             desc = distro.description or "(no description)"
-            print(f"  {name}: {desc}")
+            output.info(f"  {name}: {desc}")
 
     return 0
 
@@ -328,10 +346,11 @@ def cmd_skeleton(args: Namespace) -> int:
     from moss.plugins import get_registry
     from moss.views import ViewOptions, ViewTarget
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     results = []
@@ -382,18 +401,18 @@ def cmd_skeleton(args: Namespace) -> int:
             if getattr(args, "json", False):
                 results.append({"file": result["file"], "error": result["error"]})
             else:
-                print(f"Error in {result['file']}: {result['error']}", file=sys.stderr)
+                output.error(f"Error in {result['file']}: {result['error']}")
         else:
             if getattr(args, "json", False):
                 results.append({"file": result["file"], "symbols": result["symbols"]})
             else:
                 if len(files) > 1:
-                    print(f"\n=== {result['file']} ===")
+                    output.header(result["file"])
                 content = result["content"]
                 if content:
-                    print(content)
-                elif not args.quiet:
-                    print("(no symbols found)")
+                    output.print(content)
+                else:
+                    output.verbose("(no symbols found)")
 
     if getattr(args, "json", False):
         output_result(results if len(results) > 1 else results[0] if results else {}, args)
@@ -407,10 +426,11 @@ def cmd_anchors(args: Namespace) -> int:
 
     from moss.skeleton import extract_python_skeleton
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     # Filter types
@@ -472,15 +492,14 @@ def cmd_anchors(args: Namespace) -> int:
             symbols = extract_python_skeleton(source)
             collect_symbols(symbols, file_path)
         except SyntaxError as e:
-            if not args.quiet:
-                print(f"Syntax error in {file_path}: {e}", file=sys.stderr)
+            output.verbose(f"Syntax error in {file_path}: {e}")
 
     if getattr(args, "json", False):
         output_result(results, args)
     else:
         for r in results:
             ctx = f" (in {r['context']})" if r.get("context") else ""
-            print(f"{r['file']}:{r['line']} {r['type']} {r['name']}{ctx}")
+            output.print(f"{r['file']}:{r['line']} {r['type']} {r['name']}{ctx}")
 
     return 0
 
@@ -491,10 +510,11 @@ def cmd_query(args: Namespace) -> int:
 
     from moss.skeleton import extract_python_skeleton
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     if path.is_file():
@@ -573,8 +593,7 @@ def cmd_query(args: Namespace) -> int:
             symbols = extract_python_skeleton(source)
             collect_matches(symbols, str(file_path))
         except SyntaxError as e:
-            if not args.quiet:
-                print(f"Syntax error in {file_path}: {e}", file=sys.stderr)
+            output.verbose(f"Syntax error in {file_path}: {e}")
 
     if getattr(args, "json", False):
         if getattr(args, "group_by", None) == "file":
@@ -591,25 +610,24 @@ def cmd_query(args: Namespace) -> int:
             grouped: dict[str, list] = {}
             for r in results:
                 grouped.setdefault(r["file"], []).append(r)
-            for file_path, file_results in grouped.items():
-                print(f"\n{file_path}:")
+            for file_path_str, file_results in grouped.items():
+                output.header(file_path_str)
                 for r in file_results:
                     ctx = f" (in {r['context']})" if r.get("context") else ""
-                    print(f"  :{r['line']} {r['kind']} {r['name']}{ctx}")
+                    output.print(f"  :{r['line']} {r['kind']} {r['name']}{ctx}")
                     if r.get("signature"):
-                        print(f"    {r['signature']}")
+                        output.print(f"    {r['signature']}")
         else:
             for r in results:
                 ctx = f" (in {r['context']})" if r.get("context") else ""
-                doc = f" - {r['docstring'][:50]}..." if r.get("docstring") else ""
-                print(f"{r['file']}:{r['line']} {r['kind']} {r['name']}{ctx}")
+                output.print(f"{r['file']}:{r['line']} {r['kind']} {r['name']}{ctx}")
                 if r.get("signature"):
-                    print(f"  {r['signature']}")
-                if doc:
-                    print(f" {doc}")
+                    output.print(f"  {r['signature']}")
+                if r.get("docstring"):
+                    output.verbose(f"  {r['docstring'][:50]}...")
 
     if not results:
-        print("No matches found")
+        output.warning("No matches found")
 
     return 0
 
@@ -619,14 +637,15 @@ def cmd_cfg(args: Namespace) -> int:
     from moss.plugins import get_registry
     from moss.views import ViewOptions, ViewTarget
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     if not path.is_file():
-        print(f"Error: {path} must be a file", file=sys.stderr)
+        output.error(f"{path} must be a file")
         return 1
 
     # Handle --live mode
@@ -645,7 +664,7 @@ def cmd_cfg(args: Namespace) -> int:
     plugin = registry.find_plugin(target, "cfg")
 
     if plugin is None:
-        print("Error: No CFG plugin available for this file type", file=sys.stderr)
+        output.error("No CFG plugin available for this file type")
         return 1
 
     options = ViewOptions(extra={"function_name": args.function})
@@ -656,13 +675,13 @@ def cmd_cfg(args: Namespace) -> int:
     view = asyncio.run(render_cfg())
 
     if "error" in view.metadata:
-        print(f"Error: {view.metadata['error']}", file=sys.stderr)
+        output.error(view.metadata["error"])
         return 1
 
     cfgs = view.metadata.get("cfgs", [])
 
     if not cfgs:
-        print("No functions found", file=sys.stderr)
+        output.warning("No functions found")
         return 1
 
     # Determine output format
@@ -706,9 +725,9 @@ def cmd_cfg(args: Namespace) -> int:
         content = visualize_cfgs(cfg_objects, format="html")
         if args.output:
             Path(args.output).write_text(content)
-            print(f"Saved to {args.output}")
+            output.success(f"Saved to {args.output}")
         else:
-            print(content)
+            output.print(content)
     elif args.mermaid or output_format == "mermaid":
         # Mermaid output
         mermaid_lines = view.metadata.get("mermaid", "")
@@ -727,13 +746,13 @@ def cmd_cfg(args: Namespace) -> int:
 
         if args.output:
             Path(args.output).write_text(mermaid_lines)
-            print(f"Saved to {args.output}")
+            output.success(f"Saved to {args.output}")
         else:
-            print(mermaid_lines)
+            output.print(mermaid_lines)
     elif args.summary:
         # Summary mode: just show counts and complexity
         for cfg_data in cfgs:
-            print(
+            output.info(
                 f"{cfg_data['name']}: {cfg_data['node_count']} nodes, "
                 f"{cfg_data['edge_count']} edges, "
                 f"complexity {cfg_data['cyclomatic_complexity']}"
@@ -743,9 +762,9 @@ def cmd_cfg(args: Namespace) -> int:
         dot_content = view.metadata.get("dot", view.content)
         if args.output:
             Path(args.output).write_text(dot_content)
-            print(f"Saved to {args.output}")
+            output.success(f"Saved to {args.output}")
         else:
-            print(dot_content)
+            output.print(dot_content)
     elif output_format == "svg":
         from moss.visualization import render_dot_to_svg
 
@@ -753,9 +772,9 @@ def cmd_cfg(args: Namespace) -> int:
         if dot_content:
             svg = render_dot_to_svg(dot_content)
             Path(args.output).write_text(svg)
-            print(f"Saved to {args.output}")
+            output.success(f"Saved to {args.output}")
         else:
-            print("Error: No DOT content available for SVG rendering", file=sys.stderr)
+            output.error("No DOT content available for SVG rendering")
             return 1
     elif output_format == "png":
         from moss.visualization import render_dot_to_png
@@ -764,12 +783,12 @@ def cmd_cfg(args: Namespace) -> int:
         if dot_content:
             png = render_dot_to_png(dot_content)
             Path(args.output).write_bytes(png)
-            print(f"Saved to {args.output}")
+            output.success(f"Saved to {args.output}")
         else:
-            print("Error: No DOT content available for PNG rendering", file=sys.stderr)
+            output.error("No DOT content available for PNG rendering")
             return 1
     else:
-        print(view.content)
+        output.print(view.content)
 
     return 0
 
@@ -784,27 +803,28 @@ def cmd_deps(args: Namespace) -> int:
     from moss.plugins import get_registry
     from moss.views import ViewTarget
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     # Handle --dot mode: generate dependency graph visualization
     if getattr(args, "dot", False):
         if not path.is_dir():
-            print("Error: --dot requires a directory path", file=sys.stderr)
+            output.error("--dot requires a directory path")
             return 1
 
         pattern = args.pattern or "**/*.py"
         graph = build_dependency_graph(str(path), pattern)
 
         if not graph:
-            print("No internal dependencies found", file=sys.stderr)
+            output.warning("No internal dependencies found")
             return 1
 
         dot_output = dependency_graph_to_dot(graph, title=path.name)
-        print(dot_output)
+        output.print(dot_output)
         return 0
 
     # Handle --reverse mode: find what imports the target module
@@ -826,12 +846,12 @@ def cmd_deps(args: Namespace) -> int:
             output_result({"target": args.reverse, "importers": results}, args)
         else:
             if reverse_deps:
-                print(f"Files that import '{args.reverse}':")
+                output.info(f"Files that import '{args.reverse}':")
                 for rd in reverse_deps:
                     names = f" ({', '.join(rd.names)})" if rd.names else ""
-                    print(f"  {rd.file}:{rd.import_line} {rd.import_type}{names}")
+                    output.print(f"  {rd.file}:{rd.import_line} {rd.import_type}{names}")
             else:
-                print(f"No files found that import '{args.reverse}'")
+                output.warning(f"No files found that import '{args.reverse}'")
 
         return 0
 
@@ -877,8 +897,7 @@ def cmd_deps(args: Namespace) -> int:
 
     for result in rendered:
         if "error" in result:
-            if not args.quiet:
-                print(f"Error in {result['file']}: {result['error']}", file=sys.stderr)
+            output.verbose(f"Error in {result['file']}: {result['error']}")
             if getattr(args, "json", False):
                 results.append({"file": result["file"], "error": result["error"]})
         else:
@@ -892,10 +911,10 @@ def cmd_deps(args: Namespace) -> int:
                 )
             else:
                 if len(files) > 1:
-                    print(f"\n=== {result['file']} ===")
+                    output.header(result["file"])
                 content = result["content"]
                 if content:
-                    print(content)
+                    output.print(content)
 
     if getattr(args, "json", False):
         output_result(results if len(results) > 1 else results[0] if results else {}, args)
@@ -908,14 +927,15 @@ def cmd_context(args: Namespace) -> int:
     from moss.plugins import get_registry
     from moss.views import ViewTarget
 
+    output = get_output()
     path = Path(args.path).resolve()
 
     if not path.exists():
-        print(f"Error: Path {path} does not exist", file=sys.stderr)
+        output.error(f"Path {path} does not exist")
         return 1
 
     if not path.is_file():
-        print(f"Error: {path} must be a file", file=sys.stderr)
+        output.error(f"{path} must be a file")
         return 1
 
     registry = get_registry()
@@ -926,7 +946,7 @@ def cmd_context(args: Namespace) -> int:
     deps_plugin = registry.find_plugin(target, "dependency")
 
     if skeleton_plugin is None and deps_plugin is None:
-        print("Error: No plugins available for this file type", file=sys.stderr)
+        output.error("No plugins available for this file type")
         return 1
 
     async def render_views():
@@ -944,11 +964,11 @@ def cmd_context(args: Namespace) -> int:
 
     # Check for errors
     if skeleton_view and "error" in skeleton_view.metadata:
-        print(f"Error: {skeleton_view.metadata['error']}", file=sys.stderr)
+        output.error(skeleton_view.metadata["error"])
         return 1
 
     if deps_view and "error" in deps_view.metadata:
-        print(f"Error: {deps_view.metadata['error']}", file=sys.stderr)
+        output.error(deps_view.metadata["error"])
         return 1
 
     # Get data from views
@@ -997,27 +1017,27 @@ def cmd_context(args: Namespace) -> int:
         }
         output_result(result, args)
     else:
-        print(f"=== {path.name} ===")
-        print(f"Lines: {line_count}")
-        print(
+        output.header(path.name)
+        output.info(f"Lines: {line_count}")
+        output.info(
             f"Classes: {counts['classes']}, "
             f"Functions: {counts['functions']}, Methods: {counts['methods']}"
         )
-        print(f"Imports: {len(imports)}, Exports: {len(exports)}")
-        print()
+        output.info(f"Imports: {len(imports)}, Exports: {len(exports)}")
+        output.blank()
 
         if imports and deps_content:
-            print("--- Imports ---")
+            output.step("Imports")
             # Extract just the imports section from deps content
             imports_section = deps_content.split("Exports:")[0].strip()
-            print(imports_section)
-            print()
+            output.print(imports_section)
+            output.blank()
 
-        print("--- Skeleton ---")
+        output.step("Skeleton")
         if skeleton_content:
-            print(skeleton_content)
+            output.print(skeleton_content)
         else:
-            print("(no symbols)")
+            output.verbose("(no symbols)")
 
     return 0
 
@@ -1026,9 +1046,10 @@ def cmd_search(args: Namespace) -> int:
     """Semantic search across codebase."""
     from moss.semantic_search import create_search_system
 
+    out = get_output()
     directory = Path(args.directory).resolve()
     if not directory.exists():
-        print(f"Error: Directory {directory} does not exist", file=sys.stderr)
+        out.error(f"Directory {directory} does not exist")
         return 1
 
     # Create search system
@@ -1047,11 +1068,11 @@ def cmd_search(args: Namespace) -> int:
             exclude = args.exclude.split(",") if args.exclude else None
             count = await indexer.index_directory(directory, patterns, exclude)
             if not args.query:
-                print(f"Indexed {count} chunks from {directory}")
+                out.success(f"Indexed {count} chunks from {directory}")
                 return None
 
         if not args.query:
-            print("Error: No query provided. Use --query or --index", file=sys.stderr)
+            out.error("No query provided. Use --query or --index")
             return None
 
         # Search
@@ -1068,11 +1089,11 @@ def cmd_search(args: Namespace) -> int:
         return 0 if args.index else 1
 
     if not results:
-        print("No results found.")
+        out.warning("No results found.")
         return 0
 
     if getattr(args, "json", False):
-        output = [
+        json_results = [
             {
                 "file": r.chunk.file_path,
                 "symbol": r.chunk.symbol_name,
@@ -1084,9 +1105,10 @@ def cmd_search(args: Namespace) -> int:
             }
             for r in results
         ]
-        output_result(output, args)
+        output_result(json_results, args)
     else:
-        print(f"Found {len(results)} results:\n")
+        out.success(f"Found {len(results)} results:")
+        out.blank()
         for i, hit in enumerate(results, 1):
             chunk = hit.chunk
             location = f"{chunk.file_path}:{chunk.line_start}"
@@ -1094,9 +1116,9 @@ def cmd_search(args: Namespace) -> int:
             kind = chunk.symbol_kind or "file"
             score = f"{hit.score:.2f}"
 
-            print(f"{i}. [{kind}] {name}")
-            print(f"   Location: {location}")
-            print(f"   Score: {score} ({hit.match_type})")
+            out.info(f"{i}. [{kind}] {name}")
+            out.print(f"   Location: {location}")
+            out.print(f"   Score: {score} ({hit.match_type})")
 
             # Show snippet
             if chunk.content:
@@ -1106,22 +1128,23 @@ def cmd_search(args: Namespace) -> int:
                 # Indent snippet
                 snippet_lines = snippet.split("\n")[:3]
                 for line in snippet_lines:
-                    print(f"   | {line}")
-            print()
+                    out.print(f"   | {line}")
+            out.blank()
 
     return 0
 
 
 def cmd_mcp_server(args: Namespace) -> int:
     """Start the MCP server for LLM tool access."""
+    output = get_output()
     try:
         from moss.mcp_server import main as mcp_main
 
         mcp_main()
         return 0
     except ImportError as e:
-        print("Error: MCP SDK not installed. Install with: pip install 'moss[mcp]'")
-        print(f"Details: {e}", file=sys.stderr)
+        output.error("MCP SDK not installed. Install with: pip install 'moss[mcp]'")
+        output.debug(f"Details: {e}")
         return 1
     except KeyboardInterrupt:
         return 0
@@ -1129,6 +1152,7 @@ def cmd_mcp_server(args: Namespace) -> int:
 
 def cmd_lsp(args: Namespace) -> int:
     """Start the LSP server for IDE integration."""
+    output = get_output()
     try:
         from moss.lsp_server import start_server
 
@@ -1136,8 +1160,8 @@ def cmd_lsp(args: Namespace) -> int:
         start_server(transport)
         return 0
     except ImportError as e:
-        print("Error: LSP dependencies not installed. Install with: pip install 'moss[lsp]'")
-        print(f"Details: {e}", file=sys.stderr)
+        output.error("LSP dependencies not installed. Install with: pip install 'moss[lsp]'")
+        output.debug(f"Details: {e}")
         return 1
     except KeyboardInterrupt:
         return 0
@@ -1150,7 +1174,13 @@ def create_parser() -> argparse.ArgumentParser:
         description="Headless agent orchestration layer for AI engineering",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {get_version()}")
+
+    # Global output options
     parser.add_argument("--json", "-j", action="store_true", help="Output in JSON format")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode (errors only)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--debug", action="store_true", help="Debug output (most verbose)")
+    parser.add_argument("--no-color", action="store_true", help="Disable colored output")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -1213,12 +1243,6 @@ def create_parser() -> argparse.ArgumentParser:
         default=".",
         help="Project directory (default: current)",
     )
-    status_parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Show verbose output",
-    )
     status_parser.set_defaults(func=cmd_status)
 
     # config command
@@ -1260,9 +1284,6 @@ def create_parser() -> argparse.ArgumentParser:
     skeleton_parser.add_argument(
         "--public-only", action="store_true", dest="public_only", help="Exclude private symbols"
     )
-    skeleton_parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Suppress empty file messages"
-    )
     skeleton_parser.set_defaults(func=cmd_skeleton)
 
     # anchors command
@@ -1281,7 +1302,6 @@ def create_parser() -> argparse.ArgumentParser:
     anchors_parser.add_argument(
         "--pattern", "-p", help="Glob pattern for directory (default: **/*.py)"
     )
-    anchors_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
     anchors_parser.set_defaults(func=cmd_anchors)
 
     # query command
@@ -1307,7 +1327,6 @@ def create_parser() -> argparse.ArgumentParser:
     query_parser.add_argument(
         "--pattern", "-p", help="Glob pattern for directory (default: **/*.py)"
     )
-    query_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
     query_parser.add_argument(
         "--group-by", choices=["file"], dest="group_by", help="Group results by file"
     )
@@ -1350,7 +1369,6 @@ def create_parser() -> argparse.ArgumentParser:
     deps_parser.add_argument(
         "--search-dir", "-d", dest="search_dir", help="Directory to search for reverse deps"
     )
-    deps_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
     deps_parser.add_argument(
         "--dot", action="store_true", help="Output dependency graph in DOT format"
     )
@@ -1386,7 +1404,6 @@ def create_parser() -> argparse.ArgumentParser:
         default="hybrid",
         help="Search mode (default: hybrid)",
     )
-    search_parser.add_argument("--json", action="store_true", help="JSON output")
     search_parser.set_defaults(func=cmd_search)
 
     # mcp-server command
@@ -1414,6 +1431,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 0
+
+    # Configure output based on global flags
+    setup_output(args)
 
     return args.func(args)
 
