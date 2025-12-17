@@ -22,7 +22,7 @@ Based on LLM evaluation findings (see `docs/llm-evaluation.md`).
 
 ### Output Improvements
 - [x] CFG summary mode (node/edge counts only)
-- [ ] `--group-by=file` for multi-file query results
+- [x] `--group-by=file` for multi-file query results
 - [x] `--public-only` filter for exported symbols
 
 ## Phase 18: Plugin Architecture

@@ -8,7 +8,7 @@
 
 - **skeleton** `<path>` — classes, functions, methods with signatures and docstrings; `--public-only`
 - **anchors** `<path>` — find code elements; `--type` (function/class/method), `--name` (regex)
-- **query** `<path>` — pattern search; `--name`, `--signature`, `--type`, `--inherits`, `--min-lines`, `--max-lines`
+- **query** `<path>` — pattern search; `--name`, `--signature`, `--type`, `--inherits`, `--min-lines`, `--max-lines`, `--group-by=file`
 - **cfg** `<file> [function]` — control flow graph; `--dot` for graphviz, `--summary` for counts only
 - **deps** `<path>` — imports and exports; `--reverse <module>` for reverse lookup
 - **context** `<file>` — combined skeleton + deps + summary

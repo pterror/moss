@@ -571,16 +571,36 @@ def cmd_query(args: Namespace) -> int:
                 print(f"Syntax error in {file_path}: {e}", file=sys.stderr)
 
     if getattr(args, "json", False):
-        output_result(results, args)
+        if getattr(args, "group_by", None) == "file":
+            # Group results by file for JSON output
+            grouped: dict[str, list] = {}
+            for r in results:
+                grouped.setdefault(r["file"], []).append(r)
+            output_result(grouped, args)
+        else:
+            output_result(results, args)
     else:
-        for r in results:
-            ctx = f" (in {r['context']})" if r.get("context") else ""
-            doc = f" - {r['docstring'][:50]}..." if r.get("docstring") else ""
-            print(f"{r['file']}:{r['line']} {r['kind']} {r['name']}{ctx}")
-            if r.get("signature"):
-                print(f"  {r['signature']}")
-            if doc:
-                print(f" {doc}")
+        if getattr(args, "group_by", None) == "file":
+            # Group results by file for text output
+            grouped: dict[str, list] = {}
+            for r in results:
+                grouped.setdefault(r["file"], []).append(r)
+            for file_path, file_results in grouped.items():
+                print(f"\n{file_path}:")
+                for r in file_results:
+                    ctx = f" (in {r['context']})" if r.get("context") else ""
+                    print(f"  :{r['line']} {r['kind']} {r['name']}{ctx}")
+                    if r.get("signature"):
+                        print(f"    {r['signature']}")
+        else:
+            for r in results:
+                ctx = f" (in {r['context']})" if r.get("context") else ""
+                doc = f" - {r['docstring'][:50]}..." if r.get("docstring") else ""
+                print(f"{r['file']}:{r['line']} {r['kind']} {r['name']}{ctx}")
+                if r.get("signature"):
+                    print(f"  {r['signature']}")
+                if doc:
+                    print(f" {doc}")
 
     if not results:
         print("No matches found")
@@ -1016,6 +1036,9 @@ def create_parser() -> argparse.ArgumentParser:
         "--pattern", "-p", help="Glob pattern for directory (default: **/*.py)"
     )
     query_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress errors")
+    query_parser.add_argument(
+        "--group-by", choices=["file"], dest="group_by", help="Group results by file"
+    )
     query_parser.set_defaults(func=cmd_query)
 
     # cfg command
