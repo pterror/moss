@@ -1116,6 +1116,22 @@ def cmd_mcp_server(args: Namespace) -> int:
         return 0
 
 
+def cmd_lsp(args: Namespace) -> int:
+    """Start the LSP server for IDE integration."""
+    try:
+        from moss.lsp_server import start_server
+
+        transport = getattr(args, "transport", "stdio")
+        start_server(transport)
+        return 0
+    except ImportError as e:
+        print("Error: LSP dependencies not installed. Install with: pip install 'moss[lsp]'")
+        print(f"Details: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -1359,6 +1375,16 @@ def create_parser() -> argparse.ArgumentParser:
     # mcp-server command
     mcp_parser = subparsers.add_parser("mcp-server", help="Start MCP server for LLM tool access")
     mcp_parser.set_defaults(func=cmd_mcp_server)
+
+    # lsp command
+    lsp_parser = subparsers.add_parser("lsp", help="Start LSP server for IDE integration")
+    lsp_parser.add_argument(
+        "--transport",
+        "-t",
+        default="stdio",
+        help="Transport: 'stdio' (default) or 'tcp:host:port'",
+    )
+    lsp_parser.set_defaults(func=cmd_lsp)
 
     return parser
 
