@@ -17,9 +17,9 @@
 - [x] View compilation pipeline
 
 ## Phase 3: Structural Editing
-- [ ] Anchor resolution (fuzzy AST matching)
-- [ ] Patch application (AST-aware edits)
-- [ ] Fallback to text-based editing for broken AST
+- [x] Anchor resolution (fuzzy AST matching)
+- [x] Patch application (AST-aware edits)
+- [x] Fallback to text-based editing for broken AST
 
 ## Phase 4: Validation Loop
 - [ ] Validator protocol

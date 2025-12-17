@@ -1,5 +1,15 @@
 """Moss: Headless agent orchestration layer for AI engineering."""
 
+from moss.anchors import (
+    AmbiguousAnchorError,
+    Anchor,
+    AnchorMatch,
+    AnchorNotFoundError,
+    AnchorResolver,
+    AnchorType,
+    find_anchors,
+    resolve_anchor,
+)
 from moss.context import CompiledContext, ContextHost, StaticContext
 from moss.dependencies import (
     DependencyInfo,
@@ -19,6 +29,14 @@ from moss.handles import (
     HandleRef,
     HandleRegistry,
     MemoryHandle,
+)
+from moss.patches import (
+    Patch,
+    PatchResult,
+    PatchType,
+    apply_patch,
+    apply_patch_with_fallback,
+    apply_text_patch,
 )
 from moss.shadow_git import CommitHandle, GitError, ShadowBranch, ShadowGit
 from moss.skeleton import (
@@ -42,6 +60,12 @@ from moss.views import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "AmbiguousAnchorError",
+    "Anchor",
+    "AnchorMatch",
+    "AnchorNotFoundError",
+    "AnchorResolver",
+    "AnchorType",
     "BinaryFileHandle",
     "CommitHandle",
     "CompiledContext",
@@ -61,6 +85,9 @@ __all__ = [
     "Import",
     "Intent",
     "MemoryHandle",
+    "Patch",
+    "PatchResult",
+    "PatchType",
     "PythonDependencyProvider",
     "PythonSkeletonProvider",
     "RawViewProvider",
@@ -74,9 +101,14 @@ __all__ = [
     "ViewRegistry",
     "ViewTarget",
     "ViewType",
+    "apply_patch",
+    "apply_patch_with_fallback",
+    "apply_text_patch",
     "create_default_registry",
     "extract_dependencies",
     "extract_python_skeleton",
+    "find_anchors",
     "format_dependencies",
     "format_skeleton",
+    "resolve_anchor",
 ]
