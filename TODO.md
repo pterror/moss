@@ -1,20 +1,20 @@
 # Moss Implementation Checklist
 
 ## Phase 0: Foundation
-- [ ] Project structure (src/, tests/, pyproject.toml)
-- [ ] Linting setup (ruff config, pre-commit hook)
-- [ ] Basic test harness (pytest)
+- [x] Project structure (src/, tests/, pyproject.toml)
+- [x] Linting setup (ruff config, pre-commit hook)
+- [x] Basic test harness (pytest)
 
 ## Phase 1: Core Primitives
-- [ ] Event Bus (pub/sub with typed events)
-- [ ] Shadow Git wrapper (atomic commits, rollback, branch management)
-- [ ] Handle system (lazy references to files/artifacts)
+- [x] Event Bus (pub/sub with typed events)
+- [x] Shadow Git wrapper (atomic commits, rollback, branch management)
+- [x] Handle system (lazy references to files/artifacts)
 
 ## Phase 2: Context Engine
-- [ ] View Provider protocol (abstract base)
-- [ ] Skeleton provider (AST-based, Tree-sitter)
-- [ ] Dependency Graph provider
-- [ ] View compilation pipeline
+- [x] View Provider protocol (abstract base)
+- [x] Skeleton provider (AST-based, Tree-sitter)
+- [x] Dependency Graph provider
+- [x] View compilation pipeline
 
 ## Phase 3: Structural Editing
 - [ ] Anchor resolution (fuzzy AST matching)

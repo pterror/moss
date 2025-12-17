@@ -1,0 +1,213 @@
+"""Skeleton Provider: AST-based code signature extraction."""
+
+from __future__ import annotations
+
+import ast
+from dataclasses import dataclass
+
+from moss.views import View, ViewOptions, ViewProvider, ViewTarget, ViewType
+
+
+@dataclass
+class Symbol:
+    """A code symbol extracted from AST."""
+
+    name: str
+    kind: str  # class, function, method, variable
+    signature: str  # Full signature line
+    docstring: str | None
+    lineno: int
+    children: list[Symbol]
+
+
+class PythonSkeletonExtractor(ast.NodeVisitor):
+    """Extract skeleton from Python AST."""
+
+    def __init__(self, source: str, include_private: bool = False):
+        self.source = source
+        self.lines = source.splitlines()
+        self.include_private = include_private
+        self.symbols: list[Symbol] = []
+        self._stack: list[list[Symbol]] = [self.symbols]
+
+    def _should_include(self, name: str) -> bool:
+        """Check if a name should be included based on privacy settings."""
+        if self.include_private:
+            return True
+        return not name.startswith("_") or (name.startswith("__") and name.endswith("__"))
+
+    def _get_signature(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        """Get function signature."""
+        args = []
+
+        # Regular args
+        for i, arg in enumerate(node.args.args):
+            default_offset = len(node.args.args) - len(node.args.defaults)
+            arg_str = arg.arg
+            if arg.annotation:
+                arg_str += f": {ast.unparse(arg.annotation)}"
+            if i >= default_offset:
+                default = node.args.defaults[i - default_offset]
+                arg_str += f" = {ast.unparse(default)}"
+            args.append(arg_str)
+
+        # *args
+        if node.args.vararg:
+            arg_str = f"*{node.args.vararg.arg}"
+            if node.args.vararg.annotation:
+                arg_str += f": {ast.unparse(node.args.vararg.annotation)}"
+            args.append(arg_str)
+
+        # **kwargs
+        if node.args.kwarg:
+            arg_str = f"**{node.args.kwarg.arg}"
+            if node.args.kwarg.annotation:
+                arg_str += f": {ast.unparse(node.args.kwarg.annotation)}"
+            args.append(arg_str)
+
+        prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+        sig = f"{prefix} {node.name}({', '.join(args)})"
+
+        if node.returns:
+            sig += f" -> {ast.unparse(node.returns)}"
+
+        return sig
+
+    def _get_docstring(self, node: ast.AST) -> str | None:
+        """Extract docstring from a node."""
+        return ast.get_docstring(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if not self._should_include(node.name):
+            return
+
+        bases = [ast.unparse(b) for b in node.bases]
+        signature = f"class {node.name}"
+        if bases:
+            signature += f"({', '.join(bases)})"
+
+        symbol = Symbol(
+            name=node.name,
+            kind="class",
+            signature=signature,
+            docstring=self._get_docstring(node),
+            lineno=node.lineno,
+            children=[],
+        )
+
+        self._stack[-1].append(symbol)
+        self._stack.append(symbol.children)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if not self._should_include(node.name):
+            return
+
+        kind = "method" if len(self._stack) > 1 else "function"
+        symbol = Symbol(
+            name=node.name,
+            kind=kind,
+            signature=self._get_signature(node),
+            docstring=self._get_docstring(node),
+            lineno=node.lineno,
+            children=[],
+        )
+
+        self._stack[-1].append(symbol)
+        # Don't visit children of functions (no nested function extraction)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if not self._should_include(node.name):
+            return
+
+        kind = "method" if len(self._stack) > 1 else "function"
+        symbol = Symbol(
+            name=node.name,
+            kind=kind,
+            signature=self._get_signature(node),
+            docstring=self._get_docstring(node),
+            lineno=node.lineno,
+            children=[],
+        )
+
+        self._stack[-1].append(symbol)
+
+
+def format_skeleton(
+    symbols: list[Symbol],
+    include_docstrings: bool = True,
+    indent: int = 0,
+) -> str:
+    """Format symbols as skeleton text."""
+    lines = []
+    prefix = "    " * indent
+
+    for sym in symbols:
+        lines.append(f"{prefix}{sym.signature}:")
+
+        if include_docstrings and sym.docstring:
+            # Format docstring (first line only for brevity)
+            first_line = sym.docstring.split("\n")[0].strip()
+            if first_line:
+                lines.append(f'{prefix}    """{first_line}"""')
+
+        if sym.children:
+            child_text = format_skeleton(sym.children, include_docstrings, indent + 1)
+            lines.append(child_text)
+        else:
+            lines.append(f"{prefix}    ...")
+
+        lines.append("")  # Blank line between symbols
+
+    return "\n".join(lines).rstrip()
+
+
+class PythonSkeletonProvider(ViewProvider):
+    """Skeleton provider for Python files."""
+
+    @property
+    def view_type(self) -> ViewType:
+        return ViewType.SKELETON
+
+    @property
+    def supported_languages(self) -> set[str]:
+        return {"python"}
+
+    async def render(self, target: ViewTarget, options: ViewOptions | None = None) -> View:
+        """Extract and format Python skeleton."""
+        opts = options or ViewOptions()
+        source = target.path.read_text()
+
+        try:
+            tree = ast.parse(source)
+        except SyntaxError as e:
+            return View(
+                target=target,
+                view_type=ViewType.SKELETON,
+                content=f"# Parse error: {e}",
+                metadata={"error": str(e)},
+            )
+
+        extractor = PythonSkeletonExtractor(source, include_private=opts.include_private)
+        extractor.visit(tree)
+
+        content = format_skeleton(extractor.symbols, include_docstrings=opts.include_docstrings)
+
+        return View(
+            target=target,
+            view_type=ViewType.SKELETON,
+            content=content,
+            metadata={
+                "symbols": len(extractor.symbols),
+                "language": "python",
+            },
+        )
+
+
+def extract_python_skeleton(source: str, include_private: bool = False) -> list[Symbol]:
+    """Convenience function to extract skeleton from Python source."""
+    tree = ast.parse(source)
+    extractor = PythonSkeletonExtractor(source, include_private)
+    extractor.visit(tree)
+    return extractor.symbols

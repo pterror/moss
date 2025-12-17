@@ -33,7 +33,15 @@ Multi-agent model: Ticket-based (not shared chat history). Agents are isolated m
 
 ## Conventions
 
+### Working Style
+
+**Agentic by default.** Prefer an indefinite agentic loop - continue working through tasks autonomously, including committing work, unless instructed otherwise.
+
+**Bail out early.** If you hit repeated failures or get stuck in a loop, stop and ask for guidance rather than burning tokens on increasingly unlikely fixes.
+
 ### Commits
+
+**Commit consistently.** Don't leave work uncommitted - always commit when a logical unit of work is complete.
 
 Each commit should be a **unit of work** - a single logical change that could be reverted independently. Not "fixed stuff" but "fix: handle null response in validator loop".
 
