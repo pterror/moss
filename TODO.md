@@ -69,3 +69,9 @@
 - Visual CFG rendering (graphviz/mermaid output)
 - Semantic code search with embeddings
 - Multi-file refactoring support
+- **Auto-fix for lints**: Design an auto-fix system where lints can suggest and apply
+  fixes automatically. This requires careful design work around:
+  - Safe vs unsafe fixes
+  - Preview/diff before applying
+  - Rollback support (integrate with Shadow Git)
+  - Conflict resolution when multiple fixes overlap
