@@ -28,9 +28,9 @@
 - [x] Velocity monitoring (detect oscillation/stalls)
 
 ## Phase 5: Policy & Safety
-- [ ] Policy engine (intercept tool calls)
-- [ ] Quarantine mode (lock broken files)
-- [ ] Velocity checks
+- [x] Policy engine (intercept tool calls)
+- [x] Quarantine mode (lock broken files)
+- [x] Velocity checks
 
 ## Phase 6: Memory Layer
 - [ ] Episodic store (state, action, outcome logging)
