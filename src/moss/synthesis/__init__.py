@@ -40,6 +40,17 @@ Example usage:
         print(result.solution)
 """
 
+from .cache import (
+    ExecutionResultCache,
+    SolutionCache,
+    StrategyCache,
+    SynthesisCache,
+    clear_all_caches,
+    get_cache_stats,
+    get_solution_cache,
+    get_strategy_cache,
+    get_test_cache,
+)
 from .composer import CodeComposer, Composer, FunctionComposer, SequentialComposer
 from .framework import (
     SynthesisConfig,
@@ -70,14 +81,18 @@ __all__ = [
     "Context",
     "DecompositionError",
     "DecompositionStrategy",
+    "ExecutionResultCache",
     "FunctionComposer",
     "NoStrategyError",
     "SequentialComposer",
+    "SolutionCache",
     "Specification",
+    "StrategyCache",
     "StrategyMatch",
     "StrategyMetadata",
     "StrategyRouter",
     "Subproblem",
+    "SynthesisCache",
     "SynthesisConfig",
     "SynthesisError",
     "SynthesisEventType",
@@ -85,5 +100,10 @@ __all__ = [
     "SynthesisResult",
     "SynthesisState",
     "ValidationError",
+    "clear_all_caches",
     "create_synthesis_framework",
+    "get_cache_stats",
+    "get_solution_cache",
+    "get_strategy_cache",
+    "get_test_cache",
 ]
