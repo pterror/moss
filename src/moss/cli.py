@@ -1545,11 +1545,35 @@ def cmd_synthesize(args: Namespace) -> int:
     elif strategy_name == "pattern_based":
         strategies = [PatternBasedDecomposition()]
 
+    # Set up generator
+    generator = None
+    generator_name = getattr(args, "generator", "auto")
+
+    if generator_name != "auto":
+        from moss.synthesis.plugins.generators import (
+            LLMGenerator,
+            MockLLMProvider,
+            PlaceholderGenerator,
+            TemplateGenerator,
+        )
+
+        if generator_name == "placeholder":
+            generator = PlaceholderGenerator()
+        elif generator_name == "template":
+            generator = TemplateGenerator()
+        elif generator_name == "llm":
+            # Use mock provider by default (safe for testing)
+            # For real LLM, use environment variables or config
+            generator = LLMGenerator(provider=MockLLMProvider())
+            output.info("Using LLM generator with mock provider")
+            output.info("Set ANTHROPIC_API_KEY or OPENAI_API_KEY for real LLM")
+
     # Create framework
     config = SynthesisConfig(max_depth=getattr(args, "max_depth", 5))
     framework = SynthesisFramework(
         strategies=strategies,
         config=config,
+        generator=generator,
     )
 
     # Show specification
@@ -2291,6 +2315,13 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="show_decomposition",
         help="Show problem decomposition tree",
+    )
+    synth_parser.add_argument(
+        "--generator",
+        "-g",
+        choices=["auto", "placeholder", "template", "llm"],
+        default="auto",
+        help="Code generator to use (default: auto, uses highest priority)",
     )
     synth_parser.add_argument(
         "--dry-run",
