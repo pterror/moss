@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from moss.events import Event, EventBus, EventType
@@ -591,11 +592,24 @@ class SynthesisFramework:
             # Run legacy validator if provided and no synthesis validators
             if legacy_validator and not self._synthesis_validators:
                 try:
-                    # Legacy validators have different interface
-                    legacy_result = await legacy_validator.validate(current_code)
-                    if not legacy_result.success:
-                        all_passed = False
-                        validation_issues.append(legacy_result.error or "Validation failed")
+                    # Legacy validators work with files, so write code to temp file
+                    import tempfile
+
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                        f.write(current_code)
+                        temp_path = Path(f.name)
+
+                    try:
+                        legacy_result = await legacy_validator.validate(temp_path)
+                        if not legacy_result.success:
+                            all_passed = False
+                            # Extract error messages from issues
+                            for issue in legacy_result.errors:
+                                validation_issues.append(str(issue))
+                            if not legacy_result.errors:
+                                validation_issues.append("Validation failed")
+                    finally:
+                        temp_path.unlink(missing_ok=True)
                 except Exception as e:
                     logger.warning("Legacy validator error: %s", e)
 
@@ -632,9 +646,9 @@ class SynthesisFramework:
                     examples=list(spec.examples),
                 )
 
-                result = await self._generator.generate(spec, Context(), hints)
-                if result.success and result.code:
-                    current_code = result.code
+                gen_result = await self._generator.generate(spec, Context(), hints)
+                if gen_result.success and gen_result.code:
+                    current_code = gen_result.code
                     logger.debug("Regenerated code for retry")
                 else:
                     # Generator failed, can't improve

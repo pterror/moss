@@ -1546,7 +1546,9 @@ def cmd_synthesize(args: Namespace) -> int:
         strategies = [PatternBasedDecomposition()]
 
     # Set up generator
-    generator = None
+    from moss.synthesis.plugins import CodeGenerator
+
+    generator: CodeGenerator | None = None
     generator_name = getattr(args, "generator", "auto")
 
     if generator_name != "auto":
