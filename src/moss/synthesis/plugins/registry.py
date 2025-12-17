@@ -332,12 +332,12 @@ class SynthesisRegistry:
 
         # Import built-in validators
         try:
-            from moss.synthesis.plugins.validators import TestValidator
+            from moss.synthesis.plugins.validators import PytestValidator
 
             if "pytest" not in [v.metadata.name for v in self.validators.get_all()]:
-                self.validators.register(TestValidator())
+                self.validators.register(PytestValidator())
         except ImportError:
-            logger.debug("TestValidator not available")
+            logger.debug("PytestValidator not available")
 
         # Import built-in libraries
         try:

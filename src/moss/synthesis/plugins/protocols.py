@@ -290,7 +290,7 @@ class SynthesisValidator(Protocol):
     """Protocol for synthesis validation plugins.
 
     Validators check generated code against specifications. Built-in implementations:
-    - TestValidator: Run pytest/jest (the missing TestExecutorValidator)
+    - PytestValidator: Run pytest/jest to validate code
     - TypeValidator: mypy/pyright type checking
     - PropertyValidator: Hypothesis-based property testing
     """

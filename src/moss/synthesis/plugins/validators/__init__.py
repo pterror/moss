@@ -1,14 +1,15 @@
 """Built-in synthesis validator plugins.
 
 Validators:
-- TestValidator: Run pytest/jest to validate code (TestExecutorValidator)
+- PytestValidator: Run pytest/jest to validate code
 - TypeValidator: mypy/pyright type checking
 """
 
-from .test import TestValidator
+from .pytest_validator import PytestValidator, TestValidator
 from .type_check import TypeValidator
 
 __all__ = [
-    "TestValidator",
+    "PytestValidator",
+    "TestValidator",  # Backwards compatibility alias
     "TypeValidator",
 ]

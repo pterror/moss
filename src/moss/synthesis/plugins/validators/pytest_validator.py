@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class TestValidator:
+class PytestValidator:
     """Validator that runs pytest/jest to validate generated code.
 
     This validator:
@@ -413,4 +413,7 @@ class TestValidator:
 
 
 # Protocol compliance check
-assert isinstance(TestValidator(), SynthesisValidator)
+assert isinstance(PytestValidator(), SynthesisValidator)
+
+# Backwards compatibility alias
+TestValidator = PytestValidator
