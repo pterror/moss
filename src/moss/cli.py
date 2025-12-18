@@ -2234,6 +2234,45 @@ def cmd_git_hotspots(args: Namespace) -> int:
     return 0
 
 
+def cmd_coverage(args: Namespace) -> int:
+    """Show test coverage statistics."""
+    from moss.test_coverage import analyze_coverage
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+    run_tests = getattr(args, "run", False)
+
+    if not root.exists():
+        output.error(f"Directory not found: {root}")
+        return 1
+
+    if run_tests:
+        output.info(f"Running tests with coverage for {root.name}...")
+    else:
+        output.info(f"Checking coverage data for {root.name}...")
+
+    try:
+        report = analyze_coverage(root, run_tests=run_tests)
+    except Exception as e:
+        output.error(f"Failed to analyze coverage: {e}")
+        return 1
+
+    if report.error:
+        output.error(report.error)
+        return 1
+
+    # Output format
+    compact = getattr(args, "compact", False)
+    if compact and not wants_json(args):
+        output.print(report.to_compact())
+    elif wants_json(args):
+        output.data(report.to_dict())
+    else:
+        output.print(report.to_markdown())
+
+    return 0
+
+
 def cmd_health(args: Namespace) -> int:
     """Show project health and what needs attention."""
     from moss.status import StatusChecker
@@ -3757,6 +3796,22 @@ def create_parser() -> argparse.ArgumentParser:
         help="Number of days to analyze (default: 90)",
     )
     hotspots_parser.set_defaults(func=cmd_git_hotspots)
+
+    # coverage command
+    coverage_parser = subparsers.add_parser("coverage", help="Show test coverage statistics")
+    coverage_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to analyze (default: current)",
+    )
+    coverage_parser.add_argument(
+        "--run",
+        "-r",
+        action="store_true",
+        help="Run pytest with coverage first",
+    )
+    coverage_parser.set_defaults(func=cmd_coverage)
 
     return parser
 
