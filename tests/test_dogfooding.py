@@ -938,6 +938,87 @@ class GoodClass:
         assert "GoodClass" not in bad_names
 
 
+class TestMossAPI:
+    """Tests for the canonical MossAPI entry point."""
+
+    def test_api_import(self):
+        """Test that MossAPI can be imported from moss."""
+        from moss import MossAPI
+
+        assert MossAPI is not None
+
+    def test_api_for_project(self, tmp_path: Path):
+        """Test creating an API instance for a project."""
+        from moss import MossAPI
+
+        api = MossAPI.for_project(tmp_path)
+        assert api.root == tmp_path
+
+    def test_skeleton_api(self, tmp_path: Path):
+        """Test skeleton extraction via MossAPI."""
+        from moss import MossAPI
+
+        # Create a Python file
+        src = tmp_path / "src"
+        src.mkdir()
+        pkg = src / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "main.py").write_text("""
+def hello():
+    \"\"\"Say hello.\"\"\"
+    pass
+
+class Greeter:
+    \"\"\"A greeter.\"\"\"
+    def greet(self):
+        pass
+""")
+
+        api = MossAPI.for_project(tmp_path)
+        symbols = api.skeleton.extract("src/pkg/main.py")
+
+        names = {s.name for s in symbols}
+        assert "hello" in names
+        assert "Greeter" in names
+
+    def test_health_api(self, tmp_path: Path):
+        """Test health check via MossAPI."""
+        from moss import MossAPI
+
+        # Create minimal project
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n")
+        src = tmp_path / "src"
+        src.mkdir()
+        pkg = src / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+
+        api = MossAPI.for_project(tmp_path)
+        status = api.health.check()
+
+        assert 0 <= status.health_score <= 100
+        assert status.health_grade in ("A", "B", "C", "D", "F")
+
+    def test_anchor_api(self, tmp_path: Path):
+        """Test anchor finding via MossAPI."""
+        from moss import MossAPI
+
+        src = tmp_path / "src"
+        src.mkdir()
+        pkg = src / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "main.py").write_text("def my_function(): pass\n")
+
+        api = MossAPI.for_project(tmp_path)
+        matches = api.anchor.find("src/pkg/main.py", "my_function", "function")
+
+        assert len(matches) > 0
+        assert matches[0].anchor.name == "my_function"
+
+
 class TestStatusChecker:
     """Tests for StatusChecker."""
 

@@ -1,4 +1,14 @@
-"""Moss: Headless agent orchestration layer for AI engineering."""
+"""Moss: Headless agent orchestration layer for AI engineering.
+
+Primary entry point:
+    from moss import MossAPI
+
+    api = MossAPI.for_project("/path/to/project")
+    health = api.health.check()
+    skeleton = api.skeleton.extract("src/main.py")
+
+All individual components are also available as direct imports.
+"""
 
 from moss.agents import (
     Constraint,
@@ -120,6 +130,19 @@ from moss.memory import (
     VectorIndex,
     create_memory_manager,
 )
+from moss.moss_api import (
+    API,
+    CFGAPI,
+    AnchorAPI,
+    ContextAPI,
+    DependencyAPI,
+    GitAPI,
+    HealthAPI,
+    MossAPI,
+    PatchAPI,
+    SkeletonAPI,
+    ValidationAPI,
+)
 from moss.observability import (
     MetricsCollector,
     MetricType,
@@ -216,10 +239,14 @@ from moss.views import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "API",
+    "CFGAPI",
+    # HTTP API
     "APIHandler",
     "Action",
     "AmbiguousAnchorError",
     "Anchor",
+    "AnchorAPI",
     "AnchorMatch",
     "AnchorNotFoundError",
     "AnchorResolver",
@@ -237,9 +264,11 @@ __all__ = [
     "CommitHandle",
     "CompiledContext",
     "Constraint",
+    "ContextAPI",
     "ContextHost",
     "ControlFlowGraph",
     "DeferredHandle",
+    "DependencyAPI",
     "DependencyInfo",
     "Distro",
     "EdgeType",
@@ -254,11 +283,13 @@ __all__ = [
     "EventType",
     "Export",
     "FileHandle",
+    "GitAPI",
     "GitError",
     "Handle",
     "HandleMetadata",
     "HandleRef",
     "HandleRegistry",
+    "HealthAPI",
     "Import",
     "InMemoryVectorStore",
     "Intent",
@@ -279,11 +310,14 @@ __all__ = [
     "MetricType",
     "MetricValue",
     "MetricsCollector",
+    # Primary API
+    "MossAPI",
     "MossConfig",
     "MossLogger",
     "NodeType",
     "Outcome",
     "Patch",
+    "PatchAPI",
     "PatchResult",
     "PatchType",
     "PathPolicy",
@@ -316,6 +350,7 @@ __all__ = [
     "SilentLoop",
     "SimpleVectorIndex",
     "SimpleWorker",
+    "SkeletonAPI",
     "Span",
     "StateSnapshot",
     "StaticContext",
@@ -336,6 +371,7 @@ __all__ = [
     "TreeNode",
     "TreeSitterParser",
     "TreeSitterSkeletonProvider",
+    "ValidationAPI",
     "ValidationIssue",
     "ValidationResult",
     "ValidationSeverity",
