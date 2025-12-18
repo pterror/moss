@@ -806,3 +806,293 @@ class TestSMTGenerator:
 
         # Different types
         assert smt_gen._types_compatible("str", "int") is False
+
+
+class TestPBEGenerator:
+    """Tests for PBEGenerator (Programming by Example - FlashFill style)."""
+
+    @pytest.fixture
+    def pbe_gen(self):
+        """Create PBEGenerator instance."""
+        from moss.synthesis.plugins.generators import PBEGenerator
+
+        return PBEGenerator(max_candidates=50, max_concat_parts=4)
+
+    def test_metadata(self, pbe_gen):
+        """Test generator metadata."""
+        assert pbe_gen.metadata.name == "pbe"
+        assert pbe_gen.metadata.generator_type == GeneratorType.PBE
+        assert pbe_gen.metadata.priority > 0
+
+    def test_can_generate_requires_examples(self, pbe_gen):
+        """Test can_generate requires string examples."""
+        # No examples
+        spec = Specification(description="test")
+        assert pbe_gen.can_generate(spec, Context()) is False
+
+        # With string examples
+        spec = Specification(
+            description="uppercase string",
+            examples=((("hello",), "HELLO"), (("world",), "WORLD")),
+        )
+        assert pbe_gen.can_generate(spec, Context()) is True
+
+    def test_can_generate_requires_string_output(self, pbe_gen):
+        """Test can_generate only works with string outputs."""
+        # Non-string examples
+        spec = Specification(
+            description="add numbers",
+            examples=(((1, 2), 3), ((0, 0), 0)),
+        )
+        assert pbe_gen.can_generate(spec, Context()) is False
+
+    @pytest.mark.asyncio
+    async def test_generate_uppercase(self, pbe_gen):
+        """Test generating uppercase transformation."""
+        spec = Specification(
+            description="uppercase string",
+            examples=((("hello",), "HELLO"), (("world",), "WORLD")),
+        )
+
+        result = await pbe_gen.generate(spec, Context())
+
+        assert result.success is True
+        assert result.code is not None
+        # Verify the code would work
+        assert "upper" in result.code.lower() or "UPPER" in result.code
+
+    @pytest.mark.asyncio
+    async def test_generate_substring(self, pbe_gen):
+        """Test generating substring extraction."""
+        spec = Specification(
+            description="get first character",
+            examples=((("hello",), "h"), (("world",), "w"), (("abc",), "a")),
+        )
+
+        result = await pbe_gen.generate(spec, Context())
+
+        assert result.success is True
+        assert result.code is not None
+
+    @pytest.mark.asyncio
+    async def test_generate_identity(self, pbe_gen):
+        """Test generating identity function."""
+        spec = Specification(
+            description="return input",
+            examples=((("hello",), "hello"), (("world",), "world")),
+        )
+
+        result = await pbe_gen.generate(spec, Context())
+
+        assert result.success is True
+
+    def test_estimate_cost(self, pbe_gen):
+        """Test cost estimation."""
+        spec = Specification(
+            description="test",
+            examples=((("a",), "A"), (("b",), "B")),
+        )
+
+        cost = pbe_gen.estimate_cost(spec, Context())
+
+        assert cost.time_estimate_ms > 0
+        assert cost.token_estimate == 0  # No LLM calls
+
+
+class TestSketchGenerator:
+    """Tests for SketchGenerator (hole-filling synthesis)."""
+
+    @pytest.fixture
+    def sketch_gen(self):
+        """Create SketchGenerator instance."""
+        from moss.synthesis.plugins.generators import SketchGenerator
+
+        return SketchGenerator(max_candidates=500, max_holes=4)
+
+    def test_metadata(self, sketch_gen):
+        """Test generator metadata."""
+        assert sketch_gen.metadata.name == "sketch"
+        assert sketch_gen.metadata.generator_type == GeneratorType.ENUMERATION
+        assert sketch_gen.metadata.priority > 0
+
+    def test_can_generate_requires_sketch(self, sketch_gen):
+        """Test can_generate requires a sketch with holes."""
+        # No sketch (no ??)
+        spec = Specification(description="test")
+        assert sketch_gen.can_generate(spec, Context()) is False
+
+        # Sketch without holes
+        spec = Specification(description="def f(x): return x + 1")
+        assert sketch_gen.can_generate(spec, Context()) is False
+
+        # Sketch with holes (in description)
+        spec = Specification(
+            description="def f(x): return x ?? 2",
+            examples=(((3,), 6), ((0,), 0)),
+        )
+        assert sketch_gen.can_generate(spec, Context()) is True
+
+    def test_can_generate_sketch_in_constraints(self, sketch_gen):
+        """Test can_generate finds sketch in constraints."""
+        spec = Specification(
+            description="some description",
+            constraints=("sketch: def f(x): return x ?? 2",),
+        )
+        assert sketch_gen.can_generate(spec, Context()) is True
+
+    @pytest.mark.asyncio
+    async def test_generate_operator_hole(self, sketch_gen):
+        """Test filling an operator hole."""
+        spec = Specification(
+            description="def f(x): return x ?? 2",  # Sketch with hole
+            examples=(((3,), 6), ((0,), 0), ((5,), 10)),
+        )
+
+        result = await sketch_gen.generate(spec, Context())
+
+        assert result.success is True
+        assert result.code is not None
+        assert "*" in result.code  # Should find multiplication
+
+    @pytest.mark.asyncio
+    async def test_generate_typed_hole(self, sketch_gen):
+        """Test filling a typed hole."""
+        spec = Specification(
+            description="def f(x): return x - ??int",  # Sketch with typed hole
+            examples=(((5,), 4), ((10,), 9), ((1,), 0)),
+        )
+
+        result = await sketch_gen.generate(spec, Context())
+
+        assert result.success is True
+        assert result.code is not None
+        assert "1" in result.code  # Should find constant 1
+
+    @pytest.mark.asyncio
+    async def test_generate_no_solution(self, sketch_gen):
+        """Test when no solution exists."""
+        spec = Specification(
+            description="def f(x): return x ??op 0",  # No op makes x op 0 = 100 for all x
+            examples=(((1,), 100), ((2,), 100), ((3,), 100)),
+        )
+
+        result = await sketch_gen.generate(spec, Context())
+
+        # Should fail gracefully
+        assert result.success is False or result.confidence < 0.5
+
+    def test_estimate_cost(self, sketch_gen):
+        """Test cost estimation."""
+        spec = Specification(
+            description="def f(x): return x ?? 1",
+            examples=(((1,), 2),),
+        )
+
+        cost = sketch_gen.estimate_cost(spec, Context())
+
+        assert cost.time_estimate_ms > 0
+        assert cost.token_estimate == 0  # No LLM calls
+
+
+class TestSketchParser:
+    """Tests for SketchParser (hole parsing utility)."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create parser instance."""
+        from moss.synthesis.plugins.generators.sketch import SketchParser
+
+        return SketchParser()
+
+    def test_parse_no_holes(self, parser):
+        """Test parsing sketch without holes."""
+        holes = parser.parse("def f(x): return x + 1")
+        assert holes == []
+
+    def test_parse_single_hole(self, parser):
+        """Test parsing single hole."""
+        holes = parser.parse("def f(x): return x ?? 1")
+        assert len(holes) == 1
+        assert holes[0].hole_type is None
+        assert holes[0].original == "??"
+
+    def test_parse_typed_hole(self, parser):
+        """Test parsing typed hole."""
+        holes = parser.parse("def f(x): return x + ??int")
+        assert len(holes) == 1
+        assert holes[0].hole_type == "int"
+        assert holes[0].original == "??int"
+
+    def test_parse_multiple_holes(self, parser):
+        """Test parsing multiple holes."""
+        holes = parser.parse("def f(x): return ??op(x, ??int)")
+        assert len(holes) == 2
+        assert holes[0].hole_type == "op"
+        assert holes[1].hole_type == "int"
+
+    def test_fill_single_hole(self, parser):
+        """Test filling a single hole."""
+        sketch = "def f(x): return x ?? 2"
+        holes = parser.parse(sketch)
+        result = parser.fill(sketch, holes, ["*"])
+        assert result == "def f(x): return x * 2"
+
+    def test_fill_multiple_holes(self, parser):
+        """Test filling multiple holes."""
+        sketch = "def f(x): return x ??op ??int"
+        holes = parser.parse(sketch)
+        result = parser.fill(sketch, holes, ["+", "1"])
+        assert result == "def f(x): return x + 1"
+
+
+class TestPBESynthesizer:
+    """Tests for PBESynthesizer (DSL-based synthesis)."""
+
+    @pytest.fixture
+    def synthesizer(self):
+        """Create synthesizer instance."""
+        from moss.synthesis.plugins.generators.pbe import PBESynthesizer
+
+        return PBESynthesizer(max_candidates=50)
+
+    def test_synthesize_identity(self, synthesizer):
+        """Test synthesizing identity function."""
+        examples = [(("hello",), "hello"), (("world",), "world")]
+        candidates = synthesizer.synthesize(examples, num_inputs=1)
+
+        assert len(candidates) > 0
+        # First candidate should match all examples
+        best = candidates[0]
+        assert best.examples_matched == len(examples)
+
+    def test_synthesize_uppercase(self, synthesizer):
+        """Test synthesizing uppercase transformation."""
+        examples = [(("hello",), "HELLO"), (("world",), "WORLD")]
+        candidates = synthesizer.synthesize(examples, num_inputs=1)
+
+        assert len(candidates) > 0
+        best = candidates[0]
+        assert best.examples_matched == len(examples)
+
+    def test_synthesize_first_char(self, synthesizer):
+        """Test synthesizing first character extraction."""
+        examples = [(("hello",), "h"), (("world",), "w"), (("test",), "t")]
+        candidates = synthesizer.synthesize(examples, num_inputs=1)
+
+        assert len(candidates) > 0
+        best = candidates[0]
+        assert best.examples_matched == len(examples)
+
+    def test_synthesize_empty_examples(self, synthesizer):
+        """Test with empty examples."""
+        candidates = synthesizer.synthesize([], num_inputs=1)
+        assert candidates == []
+
+    def test_synthesize_concat(self, synthesizer):
+        """Test synthesizing concatenation."""
+        # Input + constant suffix
+        examples = [(("hello",), "hello!"), (("world",), "world!")]
+        candidates = synthesizer.synthesize(examples, num_inputs=1)
+
+        assert len(candidates) > 0
+        # Should find a solution that matches all
