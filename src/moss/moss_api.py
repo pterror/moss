@@ -1108,6 +1108,41 @@ class ToolInfoResult:
 
 
 @dataclass
+class ToolListResult:
+    """Result of listing available tools.
+
+    Attributes:
+        tools: List of tool information
+    """
+
+    tools: list[ToolInfoResult]
+
+    def to_compact(self) -> str:
+        """Return compact format for LLM consumption."""
+        lines = []
+        for t in self.tools:
+            aliases = f" (aka: {', '.join(t.aliases)})" if t.aliases else ""
+            lines.append(f"- {t.name}{aliases}: {t.description}")
+        return f"{len(self.tools)} tools:\n" + "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        """Return dict representation."""
+        return {
+            "tools": [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "keywords": t.keywords,
+                    "parameters": t.parameters,
+                    "aliases": t.aliases,
+                }
+                for t in self.tools
+            ],
+            "count": len(self.tools),
+        }
+
+
+@dataclass
 class DWIMAPI:
     """API for semantic tool routing and discovery.
 
@@ -1168,11 +1203,11 @@ class DWIMAPI:
             for m in matches
         ]
 
-    def list_tools(self) -> list[ToolInfoResult]:
+    def list_tools(self) -> ToolListResult:
         """List all available tools with their metadata.
 
         Returns:
-            List of ToolInfoResult with descriptions, keywords, etc.
+            ToolListResult with descriptions, keywords, etc.
         """
         from moss.dwim import TOOL_ALIASES, TOOL_REGISTRY
 
@@ -1188,7 +1223,7 @@ class DWIMAPI:
                     aliases=aliases,
                 )
             )
-        return results
+        return ToolListResult(tools=results)
 
     def get_tool_info(self, tool_name: str) -> ToolInfoResult | None:
         """Get detailed information about a specific tool.

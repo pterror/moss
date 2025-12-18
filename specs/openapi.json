@@ -367,7 +367,7 @@
     },
     "/dwim/list-tools": {
       "get": {
-        "description": "List all available tools with their metadata. List of ToolInfoResult with descriptions, keywords, etc.",
+        "description": "List all available tools with their metadata. ToolListResult with descriptions, keywords, etc.",
         "responses": {
           "200": {
             "description": "Successful response"

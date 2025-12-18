@@ -104,12 +104,17 @@ def _serialize_result(result: Any) -> str | dict[str, Any]:
     """Serialize an API result to text or JSON-safe form.
 
     Prefers text formats for MCP (more token-efficient):
-    1. to_compact() if available
-    2. to_markdown() as fallback
-    3. JSON for primitives and collections
+    1. Plain strings returned directly (for format functions)
+    2. to_compact() if available
+    3. to_markdown() as fallback
+    4. JSON for primitives and collections
     """
     if result is None:
         return {"result": None}
+
+    # Return strings directly (for format functions like skeleton_format, tree_format)
+    if isinstance(result, str):
+        return result
 
     # Prefer compact text representation
     if hasattr(result, "to_compact") and callable(result.to_compact):

@@ -529,7 +529,7 @@
     "name": "dwim_get_tool_info"
   },
   {
-    "description": "List all available tools with their metadata. List of ToolInfoResult with descriptions, keywords, etc.",
+    "description": "List all available tools with their metadata. ToolListResult with descriptions, keywords, etc.",
     "inputSchema": {
       "properties": {},
       "type": "object"
