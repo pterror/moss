@@ -103,6 +103,10 @@ grpc = [
     "grpcio>=1.60.0",
     "grpcio-tools>=1.60.0",
 ]
+eval = [
+    "swebench>=2.0.0",
+    "datasets>=2.0.0",
+]
 # Meta-group: install all optional features
 all = [
     "moss[server,mcp,lsp,llm,anthropic,openai,tree-sitter,chroma,tui]",

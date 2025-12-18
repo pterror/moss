@@ -628,10 +628,14 @@ Prove that moss's approach actually works.
 | Security iteration tracking | Monitor vuln count across refinements |
 
 **Implementation notes:**
-- Install SWE-bench: `pip install swebench`
-- Start with Lite subset (faster iteration)
-- Measure: Does skeleton context improve patch accuracy?
-- Measure: Does anchor-based patching reduce failed applies?
+- [x] SWE-bench harness: `moss eval swebench` command implemented
+  - Instance loading from HuggingFace datasets
+  - Multiple agent strategies: moss, bash, hybrid
+  - Subsets: lite, verified, full
+- [ ] Complete LLM integration for actually running agents
+- [ ] Start with Lite subset (faster iteration)
+- [ ] Measure: Does skeleton context improve patch accuracy?
+- [ ] Measure: Does anchor-based patching reduce failed applies?
 
 **From prior-art:** 12.47% pass@1 for SWE-agent. Moss should aim to match or beat
 by leveraging structural awareness.
@@ -712,6 +716,12 @@ Sessions should be resumable and observable for both humans and LLMs.
 - Checkpoints (Shadow Git snapshots)
 - Context summaries (what was learned)
 - Error history (for learning)
+- **Session-specific TODO lists** (like IDEs have):
+  - [ ] Per-session task list tracked in session state
+  - [ ] Automatically populated from `# TODO` comments in edited files
+  - [ ] LLM can add/check off items during work
+  - [ ] Survives session pause/resume
+  - [ ] Distinct from global TODO.md
 
 **Why this matters:**
 - Long-running tasks can be interrupted and resumed
@@ -723,6 +733,78 @@ Sessions should be resumable and observable for both humans and LLMs.
 - Store in `.moss/sessions/<name>/`
 - JSONL for events, markdown for summaries
 - Integrate with checkpoint system
+
+### CLI Output Optimization for LLMs
+
+When moss output is fed back to an LLM (e.g., via MCP), we should optimize it for token efficiency
+and readability by AI models.
+
+**Planned optimizations:**
+- [ ] **Progress bar deduplication**: Remove repeated progress updates, show only final state
+  - Detect ANSI cursor movements / line overwrites
+  - Collapse sequences like `[1/10]...[2/10]...[10/10]` to just `[10/10 done]`
+- [ ] **Graphics removal**: Strip decorative elements (boxes, spinners, emoji by default)
+  - Preserve structural information (indentation, hierarchy)
+  - Option to keep emoji if user wants them
+- [ ] **Color stripping**: Remove ANSI codes when output goes to non-TTY or LLM
+- [ ] **Whitespace normalization**: Collapse excessive blank lines
+- [ ] **Truncation with context**: When output is too long, show head + tail with clear marker
+
+**Bypass mechanism:**
+- [ ] `MOSS_RAW_OUTPUT=1` env var to disable all post-processing
+- [ ] `--raw` flag on commands
+- [ ] Useful when testing our own CLIs/TUIs
+
+**Implementation:**
+- Add `OutputPostProcessor` in `output.py`
+- Auto-detect when stdout is being captured vs interactive
+- Integrate with MCP server output
+
+### Queued / Deferred Tool Calls
+
+Allow agents to queue up tool calls now, then apply them later (with ability to fix up
+or discard on failure).
+
+**Use case:**
+- Agent plans multiple edits to a file
+- Instead of applying each immediately, queue them all
+- Review the batch, then apply atomically
+- If one fails, provide the error and let agent fix or discard that call
+
+**Proposed API:**
+```python
+# Queue mode
+with moss.queue_mode() as queue:
+    moss.edit(file, change1)  # Queued, not applied
+    moss.edit(file, change2)  # Queued
+    moss.edit(other_file, change3)  # Queued
+
+# Review what's queued
+queue.preview()  # Show pending changes
+
+# Apply all
+results = queue.apply()  # Returns success/failure per item
+
+# On failure
+for result in results:
+    if not result.success:
+        # Option 1: Let agent fix
+        fixed = agent.fix_call(result.original_call, result.error)
+        # Option 2: Discard
+        queue.discard(result.call_id)
+```
+
+**Benefits:**
+- Atomic batches (all-or-nothing option)
+- Better error recovery (see all failures at once)
+- Dry-run capability (preview without applying)
+- Rollback on partial failure
+
+**Implementation:**
+- [ ] Add `QueuedCallManager` class
+- [ ] Queue mode context manager
+- [ ] Integration with Shadow Git for atomic apply
+- [ ] MCP tools: `queue_tool_call`, `preview_queue`, `apply_queue`, `discard_queued`
 
 ---
 
