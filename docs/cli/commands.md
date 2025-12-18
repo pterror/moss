@@ -78,6 +78,107 @@ Extract structural views from code (coming soon).
 moss view <file> [--skeleton|--cfg|--deps]
 ```
 
+## moss summarize
+
+Generate a hierarchical summary of a codebase.
+
+```bash
+moss summarize [directory] [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--include-private`, `-p` | Include private (_prefixed) modules and symbols |
+| `--include-tests`, `-t` | Include test files |
+| `--json`, `-j` | Output as JSON |
+
+### Examples
+
+```bash
+# Summarize current directory
+moss summarize
+
+# Summarize specific project
+moss summarize ~/projects/myapp
+
+# Include everything
+moss summarize --include-private --include-tests
+
+# Get JSON for further processing
+moss summarize --json | jq .stats
+```
+
+## moss check-docs
+
+Verify documentation freshness against the codebase.
+
+```bash
+moss check-docs [directory] [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--strict`, `-s` | Exit with error on warnings (not just errors) |
+| `--json`, `-j` | Output as JSON |
+
+### What it checks
+
+- **Stale references**: Documentation mentions code that doesn't exist
+- **Missing documentation**: Code not mentioned in docs
+- **Outdated statistics**: Line counts in README don't match reality
+
+### Examples
+
+```bash
+# Check current project
+moss check-docs
+
+# Strict mode for CI
+moss check-docs --strict
+
+# Get structured output
+moss check-docs --json | jq .stats.coverage
+```
+
+## moss check-todos
+
+Verify TODO.md accuracy against implementation and code comments.
+
+```bash
+moss check-todos [directory] [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--strict`, `-s` | Exit with error on orphaned TODOs |
+| `--json`, `-j` | Output as JSON |
+
+### What it checks
+
+- **Tracked items**: Checkbox items in TODO.md with status
+- **Code TODOs**: TODO/FIXME/HACK/XXX comments in source
+- **Orphaned TODOs**: Code TODOs not tracked in TODO.md
+- **Categories**: Groups items by markdown headers
+
+### Examples
+
+```bash
+# Check current project
+moss check-todos
+
+# Strict mode for CI
+moss check-todos --strict
+
+# Get completion stats
+moss check-todos --json | jq .stats
+```
+
 ## Environment Variables
 
 | Variable | Description |
