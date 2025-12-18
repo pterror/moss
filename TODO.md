@@ -17,8 +17,8 @@ See `~/git/prose/moss/` for full synthesis design documents.
 Still needed:
 - [x] Documentation: how to add to Claude Code's MCP config (see `docs/getting-started/mcp-integration.md`)
 - [x] Add missing tools: `complexity`, `check-refs`, `git-hotspots`, `external-deps`
-- [ ] Resource providers: file summaries, codebase overview
-- [ ] Prompt templates: "understand this file", "prepare for refactor"
+- [x] Resource providers: codebase overview, project structure, file skeletons
+- [x] Prompt templates: understand-file, prepare-refactor, code-review, find-bugs
 - [ ] Test it works end-to-end with Claude Code
 
 ### Interface Generators (Single Source of Truth)
@@ -805,6 +805,38 @@ for result in results:
 - [ ] Queue mode context manager
 - [ ] Integration with Shadow Git for atomic apply
 - [ ] MCP tools: `queue_tool_call`, `preview_queue`, `apply_queue`, `discard_queued`
+
+**Additional notes:**
+- Queue should be **persistent** - survives session ending prematurely
+- Large span between request and action (e.g., "queue updating README" during main task)
+- Queue state stored in `.moss/queued_calls.json` or similar
+- Session restart should show pending queued items
+
+### Web Fetching with Intelligence
+
+Enhanced web fetching for agents - more than basic HTTP GET.
+
+**Features needed:**
+- [ ] **JS rendering**: Fetch after running JavaScript (headless browser by default)
+  - Playwright/Puppeteer integration
+  - Option for static fetch when JS not needed
+- [ ] **HTML optimization for tokens**: Strip non-essential elements, compress whitespace
+  - Remove nav, footer, ads, scripts, styles
+  - Extract main content (article, main, .content, etc.)
+  - Convert to clean markdown
+- [ ] **Cheap pre-summarization**: Lightweight extraction before LLM
+  - Extract title, headings, first paragraphs
+  - Schema.org / OpenGraph metadata
+  - Useful for deciding "is this page relevant?"
+- [ ] **Web search**: Search capability (via API or scraping)
+  - DuckDuckGo/Google integration
+  - Return structured results (title, snippet, URL)
+  - Rate limiting and caching
+
+**Use cases:**
+- Agent needs docs from a library website
+- Agent needs to check current API behavior
+- Research tasks that need web context
 
 ---
 

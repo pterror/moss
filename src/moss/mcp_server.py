@@ -6,6 +6,11 @@ Moss's code introspection capabilities as tools for LLM interaction.
 The server is generated from MossAPI introspection - all MossAPI methods
 automatically become available as MCP tools.
 
+Features:
+- **Tools**: All MossAPI methods exposed as MCP tools
+- **Resources**: Codebase overview, file summaries, project structure
+- **Prompts**: Templates for common tasks (understand file, refactor, review)
+
 Usage:
     # Install MCP dependencies
     pip install 'moss[mcp]'
@@ -29,12 +34,27 @@ _mcp_available = False
 Server: type = type(None)  # Placeholder
 Tool: type = type(None)  # Placeholder
 TextContent: type = type(None)  # Placeholder
+Resource: type = type(None)  # Placeholder
+Prompt: type = type(None)  # Placeholder
+PromptArgument: type = type(None)  # Placeholder
+GetPromptResult: type = type(None)  # Placeholder
+PromptMessage: type = type(None)  # Placeholder
+TextResourceContents: type = type(None)  # Placeholder
 stdio_server: Any = None  # Placeholder
 
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import TextContent, Tool
+    from mcp.types import (
+        GetPromptResult,
+        Prompt,
+        PromptArgument,
+        PromptMessage,
+        Resource,
+        TextContent,
+        TextResourceContents,
+        Tool,
+    )
 
     _mcp_available = True
 except ImportError:
@@ -141,6 +161,115 @@ def create_server() -> Any:
                 )
             ]
 
+    # -------------------------------------------------------------------------
+    # Resources
+    # -------------------------------------------------------------------------
+
+    @server.list_resources()
+    async def list_resources() -> list[Resource]:
+        """List available resources."""
+        cwd = Path.cwd()
+        resources = [
+            Resource(
+                uri="moss://overview",
+                name="Codebase Overview",
+                description="High-level overview of the codebase structure and health",
+                mimeType="application/json",
+            ),
+            Resource(
+                uri="moss://structure",
+                name="Project Structure",
+                description="Directory structure with file counts",
+                mimeType="text/plain",
+            ),
+        ]
+
+        # Add file skeletons as resources
+        for py_file in list(cwd.glob("src/**/*.py"))[:20]:  # Limit to avoid too many
+            rel_path = py_file.relative_to(cwd)
+            resources.append(
+                Resource(
+                    uri=f"moss://skeleton/{rel_path}",
+                    name=f"Skeleton: {py_file.name}",
+                    description=f"Structural skeleton of {rel_path}",
+                    mimeType="text/plain",
+                )
+            )
+
+        return resources
+
+    @server.read_resource()
+    async def read_resource(uri: str) -> list[TextResourceContents]:
+        """Read a resource by URI."""
+        content = _get_resource_content(uri)
+        return [TextResourceContents(uri=uri, mimeType="text/plain", text=content)]
+
+    # -------------------------------------------------------------------------
+    # Prompts
+    # -------------------------------------------------------------------------
+
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        """List available prompt templates."""
+        return [
+            Prompt(
+                name="understand-file",
+                description="Get comprehensive understanding of a source file",
+                arguments=[
+                    PromptArgument(
+                        name="path",
+                        description="Path to the file to understand",
+                        required=True,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="prepare-refactor",
+                description="Prepare for refactoring a module or file",
+                arguments=[
+                    PromptArgument(
+                        name="path",
+                        description="Path to the file/module to refactor",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="goal",
+                        description="What you want to achieve with the refactor",
+                        required=False,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="code-review",
+                description="Review code changes in a file or diff",
+                arguments=[
+                    PromptArgument(
+                        name="path",
+                        description="Path to the file to review",
+                        required=True,
+                    ),
+                ],
+            ),
+            Prompt(
+                name="find-bugs",
+                description="Analyze code for potential bugs and issues",
+                arguments=[
+                    PromptArgument(
+                        name="path",
+                        description="Path to the file to analyze",
+                        required=True,
+                    ),
+                ],
+            ),
+        ]
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+        """Get a prompt with filled arguments."""
+        args = arguments or {}
+        messages = _build_prompt_messages(name, args)
+        return GetPromptResult(messages=messages)
+
     return server
 
 
@@ -186,6 +315,318 @@ def _execute_tool(name: str, arguments: dict[str, Any], tools: list) -> Any:
 
     # Call the method
     return method(**args)
+
+
+# =============================================================================
+# Resource Helpers
+# =============================================================================
+
+
+def _get_resource_content(uri: str) -> str:
+    """Get content for a resource URI.
+
+    Supported URIs:
+    - moss://overview - Codebase overview
+    - moss://structure - Directory structure
+    - moss://skeleton/<path> - File skeleton
+    """
+    from moss import MossAPI
+
+    cwd = Path.cwd()
+
+    if uri == "moss://overview":
+        return _get_overview_content(cwd)
+
+    if uri == "moss://structure":
+        return _get_structure_content(cwd)
+
+    if uri.startswith("moss://skeleton/"):
+        rel_path = uri[len("moss://skeleton/") :]
+        file_path = cwd / rel_path
+        if not file_path.exists():
+            return f"File not found: {rel_path}"
+        api = MossAPI.for_project(cwd)
+        result = api.skeleton.extract(file_path)
+        return result.content if hasattr(result, "content") else str(result)
+
+    return f"Unknown resource: {uri}"
+
+
+def _get_overview_content(root: Path) -> str:
+    """Generate codebase overview."""
+    lines = [f"# Codebase Overview: {root.name}", ""]
+
+    # Count files
+    py_files = list(root.glob("**/*.py"))
+    py_files = [f for f in py_files if ".venv" not in str(f) and "__pycache__" not in str(f)]
+    total_lines = 0
+    for f in py_files[:100]:  # Limit for performance
+        try:
+            total_lines += len(f.read_text().splitlines())
+        except Exception:
+            pass
+
+    lines.extend(
+        [
+            f"- Python files: {len(py_files)}",
+            f"- Total lines: ~{total_lines}",
+            "",
+        ]
+    )
+
+    # Check for common files
+    markers = [
+        ("pyproject.toml", "Python package"),
+        ("setup.py", "Legacy setuptools"),
+        ("requirements.txt", "Pip requirements"),
+        ("Cargo.toml", "Rust package"),
+        ("package.json", "Node.js package"),
+        (".git", "Git repository"),
+    ]
+
+    detected = []
+    for marker, desc in markers:
+        if (root / marker).exists():
+            detected.append(desc)
+
+    if detected:
+        lines.append("## Detected")
+        for d in detected:
+            lines.append(f"- {d}")
+        lines.append("")
+
+    # Top-level structure
+    lines.append("## Structure")
+    for item in sorted(root.iterdir()):
+        if item.name.startswith(".") and item.name not in [".github", ".moss"]:
+            continue
+        if item.name in ["__pycache__", ".venv", "node_modules"]:
+            continue
+        suffix = "/" if item.is_dir() else ""
+        lines.append(f"- {item.name}{suffix}")
+
+    return "\n".join(lines)
+
+
+def _get_structure_content(root: Path) -> str:
+    """Generate directory tree structure."""
+    lines = []
+
+    def walk(path: Path, prefix: str = "") -> None:
+        entries = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name))
+        # Filter out common noise
+        entries = [
+            e
+            for e in entries
+            if e.name not in ["__pycache__", ".venv", "node_modules", ".git"]
+            and not e.name.endswith(".pyc")
+        ]
+
+        for i, entry in enumerate(entries[:30]):  # Limit per directory
+            is_last = i == len(entries) - 1 or i == 29
+            connector = "└── " if is_last else "├── "
+            lines.append(f"{prefix}{connector}{entry.name}")
+
+            if entry.is_dir() and len(prefix) < 12:  # Limit depth
+                extension = "    " if is_last else "│   "
+                walk(entry, prefix + extension)
+
+        if len(entries) > 30:
+            lines.append(f"{prefix}... ({len(entries) - 30} more)")
+
+    lines.append(root.name)
+    walk(root)
+    return "\n".join(lines)
+
+
+# =============================================================================
+# Prompt Helpers
+# =============================================================================
+
+
+def _build_prompt_messages(name: str, args: dict[str, str]) -> list[PromptMessage]:
+    """Build prompt messages for a named prompt."""
+    path = args.get("path", "")
+    cwd = Path.cwd()
+    file_path = cwd / path if path else cwd
+
+    if name == "understand-file":
+        return _prompt_understand_file(file_path)
+    elif name == "prepare-refactor":
+        goal = args.get("goal", "improve code quality")
+        return _prompt_prepare_refactor(file_path, goal)
+    elif name == "code-review":
+        return _prompt_code_review(file_path)
+    elif name == "find-bugs":
+        return _prompt_find_bugs(file_path)
+    else:
+        return [
+            PromptMessage(
+                role="user",
+                content=TextContent(type="text", text=f"Unknown prompt: {name}"),
+            )
+        ]
+
+
+def _prompt_understand_file(file_path: Path) -> list[PromptMessage]:
+    """Build prompt for understanding a file."""
+    from moss import MossAPI
+
+    content_parts = []
+
+    # Get skeleton
+    try:
+        api = MossAPI.for_project(file_path.parent)
+        skeleton = api.skeleton.extract(file_path)
+        content_parts.append(f"## Structure\n```\n{skeleton.content}\n```\n")
+    except Exception:
+        pass
+
+    # Get dependencies
+    try:
+        api = MossAPI.for_project(file_path.parent)
+        deps = api.deps.extract(file_path)
+        if hasattr(deps, "imports") and deps.imports:
+            imports_str = "\n".join(f"- {i}" for i in deps.imports[:20])
+            content_parts.append(f"## Imports\n{imports_str}\n")
+    except Exception:
+        pass
+
+    context = "\n".join(content_parts) if content_parts else "Unable to analyze file."
+
+    return [
+        PromptMessage(
+            role="user",
+            content=TextContent(
+                type="text",
+                text=f"""Please help me understand this file: {file_path.name}
+
+{context}
+
+Questions to address:
+1. What is the main purpose of this file?
+2. What are the key classes/functions and what do they do?
+3. How does this file fit into the larger codebase?
+4. Are there any notable patterns or design decisions?
+""",
+            ),
+        )
+    ]
+
+
+def _prompt_prepare_refactor(file_path: Path, goal: str) -> list[PromptMessage]:
+    """Build prompt for refactoring preparation."""
+    from moss import MossAPI
+
+    content_parts = []
+
+    # Get skeleton
+    try:
+        api = MossAPI.for_project(file_path.parent)
+        skeleton = api.skeleton.extract(file_path)
+        content_parts.append(f"## Current Structure\n```\n{skeleton.content}\n```\n")
+    except Exception:
+        pass
+
+    # Get complexity if available
+    try:
+        from moss.complexity import analyze_complexity
+
+        report = analyze_complexity(file_path.parent, pattern=str(file_path.name))
+        if report.functions:
+            high_complexity = [f for f in report.functions if f.cyclomatic >= 10]
+            if high_complexity:
+                funcs = "\n".join(f"- {f.name}: {f.cyclomatic}" for f in high_complexity[:5])
+                content_parts.append(f"## High Complexity Functions\n{funcs}\n")
+    except Exception:
+        pass
+
+    context = "\n".join(content_parts) if content_parts else "File analysis unavailable."
+
+    return [
+        PromptMessage(
+            role="user",
+            content=TextContent(
+                type="text",
+                text=f"""I want to refactor: {file_path.name}
+
+Goal: {goal}
+
+{context}
+
+Please help me:
+1. Identify what should be refactored to achieve the goal
+2. Suggest a step-by-step refactoring plan
+3. Highlight any risks or things to watch out for
+4. Recommend tests to add/verify before and after
+""",
+            ),
+        )
+    ]
+
+
+def _prompt_code_review(file_path: Path) -> list[PromptMessage]:
+    """Build prompt for code review."""
+    try:
+        content = file_path.read_text()
+    except Exception:
+        content = f"Could not read file: {file_path}"
+
+    return [
+        PromptMessage(
+            role="user",
+            content=TextContent(
+                type="text",
+                text=f"""Please review this code: {file_path.name}
+
+```python
+{content[:5000]}
+```
+
+Review checklist:
+- [ ] Code correctness
+- [ ] Error handling
+- [ ] Security concerns
+- [ ] Performance issues
+- [ ] Maintainability
+- [ ] Documentation
+- [ ] Test coverage considerations
+""",
+            ),
+        )
+    ]
+
+
+def _prompt_find_bugs(file_path: Path) -> list[PromptMessage]:
+    """Build prompt for bug finding."""
+    try:
+        content = file_path.read_text()
+    except Exception:
+        content = f"Could not read file: {file_path}"
+
+    return [
+        PromptMessage(
+            role="user",
+            content=TextContent(
+                type="text",
+                text=f"""Analyze this code for bugs and issues: {file_path.name}
+
+```python
+{content[:5000]}
+```
+
+Look for:
+1. Logic errors and off-by-one mistakes
+2. Null/None handling issues
+3. Resource leaks (files, connections)
+4. Race conditions or threading issues
+5. Security vulnerabilities (injection, auth)
+6. Error handling gaps
+7. Edge cases not handled
+""",
+            ),
+        )
+    ]
 
 
 # =============================================================================
