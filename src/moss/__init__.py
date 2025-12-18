@@ -206,6 +206,7 @@ from moss.tree_sitter import (
 )
 from moss.validators import (
     CommandValidator,
+    LinterValidatorAdapter,
     PytestValidator,
     RuffValidator,
     SyntaxValidator,
@@ -294,6 +295,7 @@ __all__ = [
     "InMemoryVectorStore",
     "Intent",
     "LanguageType",
+    "LinterValidatorAdapter",
     "LogContext",
     "LogFormat",
     "LoopConfig",

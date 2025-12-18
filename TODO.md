@@ -16,13 +16,13 @@ Refactor moss into a hyper-modular library-first architecture where the core is 
 - [x] Library usable without any CLI/server dependencies
 - [x] `from moss import MossAPI` as primary entry point
 
-#### 29b: Plugin Protocol (Everything is a Plugin)
-- [ ] Unified `LinterPlugin` protocol for all tool integrations
-- [ ] Native plugins (ruff, mypy) - fast path, optional deps
-- [ ] SARIF plugin - universal adapter for SARIF-outputting tools
-- [ ] JSON plugin - configurable parser for JSON output tools
-- [ ] Version detection and compatibility handling
-- [ ] Plugin discovery via entry points
+#### 29b: Plugin Protocol (Everything is a Plugin) ✅
+- [x] Unified `LinterPlugin` protocol for all tool integrations
+- [x] Native plugins (ruff, mypy) - fast path, optional deps
+- [x] SARIF plugin - universal adapter for SARIF-outputting tools
+- [x] LinterValidatorAdapter - bridge to existing Validator system
+- [x] Version detection and availability checking
+- [x] Plugin discovery via entry points
 
 #### 29c: Interface Generator Layer
 - [ ] `moss.gen.cli` - Generate argparse CLI from API introspection

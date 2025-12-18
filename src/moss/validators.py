@@ -336,6 +336,68 @@ class ValidatorChain:
         )
 
 
+class LinterValidatorAdapter(Validator):
+    """Adapter that wraps a LinterPlugin as a Validator.
+
+    This allows using the new plugin-based linters through the existing
+    Validator interface, enabling integration with ValidatorChain and
+    other validation infrastructure.
+    """
+
+    def __init__(self, plugin: Any):
+        """Create adapter for a LinterPlugin.
+
+        Args:
+            plugin: A LinterPlugin instance
+        """
+        from moss.plugins.linters import LinterPlugin
+
+        if not isinstance(plugin, LinterPlugin):
+            raise TypeError(f"Expected LinterPlugin, got {type(plugin).__name__}")
+        self._plugin = plugin
+
+    @property
+    def name(self) -> str:
+        return self._plugin.metadata.name
+
+    async def validate(self, path: Path) -> ValidationResult:
+        """Run the linter plugin and convert result to ValidationResult."""
+        from moss.plugins.linters import Severity
+
+        result = await self._plugin.run(path)
+
+        # Convert LinterIssue to ValidationIssue
+        issues = []
+        for issue in result.issues:
+            severity_map = {
+                Severity.ERROR: ValidationSeverity.ERROR,
+                Severity.WARNING: ValidationSeverity.WARNING,
+                Severity.INFO: ValidationSeverity.INFO,
+                Severity.HINT: ValidationSeverity.INFO,
+            }
+            issues.append(
+                ValidationIssue(
+                    message=issue.message,
+                    severity=severity_map.get(issue.severity, ValidationSeverity.INFO),
+                    file=issue.file,
+                    line=issue.line,
+                    column=issue.column,
+                    code=issue.rule_id,
+                    source=issue.source,
+                )
+            )
+
+        return ValidationResult(
+            success=result.success,
+            issues=issues,
+            metadata={
+                "tool_name": result.tool_name,
+                "tool_version": result.tool_version,
+                "execution_time_ms": result.execution_time_ms,
+            },
+        )
+
+
 def create_python_validator_chain(*, include_tests: bool = False) -> ValidatorChain:
     """Create a standard Python validation chain."""
     chain = ValidatorChain()

@@ -38,6 +38,11 @@ type_driven = "moss.synthesis.strategies:TypeDrivenDecomposition"
 test_driven = "moss.synthesis.strategies:TestDrivenDecomposition"
 pattern_based = "moss.synthesis.strategies:PatternBasedDecomposition"
 
+# Linter plugin entry points
+[project.entry-points."moss.linters"]
+ruff = "moss.plugins.linters:RuffPlugin"
+mypy = "moss.plugins.linters:MypyPlugin"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
