@@ -226,7 +226,7 @@ class TestFormatPlain:
 
         output = format_plain(roadmap)
 
-        assert "IN PROGRESS" in output
+        assert "In Progress" in output
         assert "Phase 1" in output
         assert "Test Phase" in output
         assert "[1/2]" in output
@@ -247,7 +247,7 @@ class TestFormatPlain:
 
         output = format_plain(roadmap)
 
-        assert "RECENTLY COMPLETED" in output
+        assert "Recently Completed" in output
         assert "Phase 1" in output
         assert "Test Phase" in output
 
@@ -262,7 +262,7 @@ class TestFormatPlain:
 
         output = format_plain(roadmap)
 
-        assert "NEXT UP" in output
+        assert "Next Up" in output
         assert "Phase 2" in output
         assert "Future" in output
 

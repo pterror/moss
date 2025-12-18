@@ -221,7 +221,7 @@ def format_plain(roadmap: Roadmap, show_completed: bool = False, max_items: int 
 
     active_phases = [p for p in roadmap.in_progress if is_truly_incomplete(p)]
     if active_phases:
-        lines.append("IN PROGRESS")
+        lines.append("In Progress")
         lines.append("=" * 50)
         for phase in active_phases:
             lines.extend(_format_phase_plain(phase))
@@ -230,7 +230,7 @@ def format_plain(roadmap: Roadmap, show_completed: bool = False, max_items: int 
     # Future section - show what's next (only incomplete)
     pending_future = [p for p in roadmap.future if is_truly_incomplete(p)]
     if pending_future:
-        lines.append("NEXT UP")
+        lines.append("Next Up")
         lines.append("=" * 50)
         display_future = pending_future if max_items == 0 else pending_future[:max_items]
         for phase in display_future:
@@ -244,7 +244,7 @@ def format_plain(roadmap: Roadmap, show_completed: bool = False, max_items: int 
     all_phases = roadmap.in_progress + roadmap.future
     recently_completed = [p for p in all_phases if not is_truly_incomplete(p)]
     if recently_completed:
-        lines.append("RECENTLY COMPLETED")
+        lines.append("Recently Completed")
         lines.append("=" * 50)
         display_completed = recently_completed if max_items == 0 else recently_completed[:max_items]
         for phase in display_completed:
@@ -406,7 +406,7 @@ def format_tui(
 
     # Title
     lines.append(box_top())
-    title = f"{BOLD}MOSS ROADMAP{RESET}" if use_color else "MOSS ROADMAP"
+    title = f"{BOLD}Moss Roadmap{RESET}" if use_color else "Moss Roadmap"
     lines.append(box_line(title.center(inner_width + (len(title) - len(_strip_ansi(title))))))
     lines.append(box_separator())
 
@@ -419,7 +419,7 @@ def format_tui(
 
     active_phases = [p for p in roadmap.in_progress if is_truly_incomplete(p)]
     if active_phases:
-        section_title = f"{CYAN}▶ IN PROGRESS{RESET}" if use_color else "▶ IN PROGRESS"
+        section_title = f"{CYAN}▶ In Progress{RESET}" if use_color else "▶ In Progress"
         lines.append(box_line(section_title))
         lines.append(box_line(""))
 
@@ -432,7 +432,7 @@ def format_tui(
     # Next Up section - show only incomplete future phases
     pending_future = [p for p in roadmap.future if is_truly_incomplete(p)]
     if pending_future:
-        section_title = f"{BLUE}○ NEXT UP{RESET}" if use_color else "○ NEXT UP"
+        section_title = f"{BLUE}○ Next Up{RESET}" if use_color else "○ Next Up"
         lines.append(box_line(section_title))
         lines.append(box_line(""))
 
@@ -476,7 +476,7 @@ def format_tui(
     all_phases = roadmap.in_progress + roadmap.future
     recently_completed = [p for p in all_phases if not is_truly_incomplete(p)]
     if recently_completed:
-        completed_text = "✓ RECENTLY COMPLETED"
+        completed_text = "✓ Recently Completed"
         section_title = f"{GREEN}{completed_text}{RESET}" if use_color else completed_text
         lines.append(box_line(section_title))
         lines.append(box_line(""))
