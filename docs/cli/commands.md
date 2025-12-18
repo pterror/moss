@@ -188,6 +188,40 @@ moss check-todos --strict
 moss check-todos --json | jq .stats
 ```
 
+## moss health
+
+Show project health and what needs attention.
+
+```bash
+moss health [directory] [options]
+```
+
+### What it shows
+
+- **Health score**: Overall project health (0-100) with letter grade
+- **Overview stats**: Code size, documentation coverage, TODO completion
+- **Next actions**: Pending TODOs prioritized from TODO.md
+- **Weak spots**: Areas needing attention (low doc coverage, orphaned TODOs)
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json`, `-j` | Output as JSON |
+
+### Examples
+
+```bash
+# Check current project health
+moss health
+
+# Check specific project
+moss health ~/projects/myapp
+
+# Get JSON for scripting
+moss health --json | jq .health.grade
+```
+
 ## Environment Variables
 
 | Variable | Description |

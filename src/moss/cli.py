@@ -1948,6 +1948,36 @@ def cmd_check_todos(args: Namespace) -> int:
     return 0
 
 
+def cmd_health(args: Namespace) -> int:
+    """Show project health and what needs attention."""
+    from moss.status import StatusChecker
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+
+    if not root.exists():
+        output.error(f"Directory not found: {root}")
+        return 1
+
+    output.info(f"Analyzing {root.name}...")
+
+    checker = StatusChecker(root)
+
+    try:
+        status = checker.check()
+    except Exception as e:
+        output.error(f"Failed to analyze project: {e}")
+        return 1
+
+    # Output format
+    if getattr(args, "json", False):
+        output.data(status.to_dict())
+    else:
+        output.print(status.to_markdown())
+
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -2614,6 +2644,24 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output as JSON",
     )
     check_todos_parser.set_defaults(func=cmd_check_todos)
+
+    # health command
+    health_parser = subparsers.add_parser(
+        "health", help="Show project health and what needs attention"
+    )
+    health_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to analyze (default: current)",
+    )
+    health_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
+    health_parser.set_defaults(func=cmd_health)
 
     return parser
 

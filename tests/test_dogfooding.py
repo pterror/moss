@@ -653,3 +653,87 @@ class TestDogfoodingCLI:
 
         result = cmd_check_todos(args)
         assert result == 0
+
+    def test_health_command(self, tmp_path: Path):
+        """Test health CLI command."""
+        from argparse import Namespace
+
+        from moss.cli import cmd_health
+
+        # Create minimal project
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n")
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "main.py").write_text('"""Main."""\ndef main(): pass\n')
+
+        args = Namespace(
+            directory=str(tmp_path),
+            json=False,
+            quiet=False,
+            verbose=False,
+            debug=False,
+            no_color=True,
+        )
+
+        result = cmd_health(args)
+        assert result == 0
+
+
+class TestStatusChecker:
+    """Tests for StatusChecker."""
+
+    def test_status_health_score(self, tmp_path: Path):
+        """Test health score calculation."""
+        from moss.status import StatusChecker
+
+        # Create minimal project
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\nAll documented.\n")
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        checker = StatusChecker(tmp_path)
+        status = checker.check()
+
+        # Should have a health score
+        assert 0 <= status.health_score <= 100
+        assert status.health_grade in ("A", "B", "C", "D", "F")
+
+    def test_status_to_markdown(self, tmp_path: Path):
+        """Test markdown output."""
+        from moss.status import StatusChecker
+
+        readme = tmp_path / "README.md"
+        readme.write_text("# Test\n")
+
+        checker = StatusChecker(tmp_path)
+        status = checker.check()
+
+        md = status.to_markdown()
+        assert "# Project Status" in md
+        assert "Health:" in md
+        assert "Overview" in md
+
+    def test_status_to_dict(self, tmp_path: Path):
+        """Test JSON dict output."""
+        from moss.status import StatusChecker
+
+        readme = tmp_path / "README.md"
+        readme.write_text("# Test\n")
+
+        checker = StatusChecker(tmp_path)
+        status = checker.check()
+
+        d = status.to_dict()
+        assert "name" in d
+        assert "health" in d
+        assert "stats" in d
+        assert d["health"]["score"] >= 0
+        assert d["health"]["grade"] in ("A", "B", "C", "D", "F")
