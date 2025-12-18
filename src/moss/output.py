@@ -374,6 +374,17 @@ def set_output(output: Output) -> None:
     _output = output
 
 
+def reset_output() -> None:
+    """Reset the global output instance.
+
+    This clears the cached output so a fresh one will be created
+    on the next get_output() call. Useful in tests to ensure
+    clean stdout/stderr references.
+    """
+    global _output
+    _output = None
+
+
 def configure_output(
     verbosity: Verbosity | None = None,
     json_format: bool = False,
