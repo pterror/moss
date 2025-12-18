@@ -127,20 +127,22 @@ Core philosophy: programming is essentially recursive abstraction - we build abs
 - **Meta-level tooling**: Tools that analyze/generate other tools (e.g., `moss patterns` analyzing plugin usage)
 - **Self-describing systems**: Code that can describe its own structure (skeleton, deps, etc.)
 
-**Continuous zoom / arbitrary granularity views**: Traditional tools have fixed levels (file, function, line), but code structure is fractal - you should be able to view it at any detail level continuously:
-- Full source → skeleton → signatures → names → nothing
+**Codebase views at arbitrary granularity**: Traditional tools have fixed levels (file, function, line), but codebase structure is fractal - you should be able to view it at any detail level:
 - Codebase → directories → files → symbols → blocks → expressions
-- But NOT as fixed levels - as a continuous spectrum where "blocks", "functions", "files" are just convenient labels for points on a continuum
-- The structural units (block, function, file, module) are emergent properties, not fundamental categories
-- Goal: `moss view <path> --detail=0.3` where detail is a float, not "skeleton" vs "full"
+- But NOT as fixed discrete levels - the structural units (block, function, file, module) are emergent properties, not fundamental categories
+- The right interface isn't a decimal (what does 0.3 mean?) - maybe:
+  - Token budget: "show me this codebase in ~500 tokens"
+  - Information-theoretic: "show me enough to answer question X"
+  - Iterative refinement: start coarse, drill down on request
+  - Semantic: "show me the public API" vs "show me the implementation"
 
 Research directions:
 - [ ] Can Moss analyze its own abstraction layers? (`moss abstractions` command)
 - [ ] Automatic abstraction discovery (find repeated patterns that could be factored out)
 - [ ] Abstraction quality metrics (coupling, cohesion, depth)
 - [ ] Tools for refactoring concrete code into abstract plugins
-- [ ] Continuous detail views - parameterized by a single "zoom" float rather than discrete modes
-- [ ] Semantic compression: what's the minimum representation that preserves X% of the information?
+- [ ] Token-budgeted codebase views: render codebase to fit N tokens
+- [ ] Question-driven views: "show me enough to understand how X works"
 
 ### PyPI Naming Collision
 
