@@ -8,19 +8,22 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 Candidates for the next session, roughly by size:
 
+- [ ] **Deps backend for moss rules** (medium) - ArchUnit-style architectural constraints
+  - Add `deps` backend to `moss.rules` multi-backend architecture
+  - Layering rules: "UI must not import Infrastructure"
+  - Query `moss deps` graph from rules
+  - See expanded design in "Codebase Analysis Gaps" → `moss rules`
+- [ ] **Weakness reporting improvements** (small) - Enhance `moss weaknesses` output
+  - Add SARIF output format for CI integration
+  - Add --fix suggestions for auto-correctable issues
+- [ ] **ACP streaming** (small) - Add streaming support to ACP server
+  - Progressive updates during long-running analyses
 - [ ] **ComponentGenerator** (medium) - Combine library functions bottom-up (SyPet/InSynth)
   - Build type graph from available functions
   - Petri net representation for reachability
 - [ ] **SMTGenerator** (medium) - Z3-based type-guided synthesis (Synquid)
   - Translate Python specs to Z3 constraints
   - Bidirectional type propagation
-- [ ] **Weakness reporting improvements** (small) - Enhance `moss weaknesses` output
-  - Add SARIF output format for CI integration
-  - Add --fix suggestions for auto-correctable issues
-- [ ] **ACP streaming** (small) - Add streaming support to ACP server
-  - Progressive updates during long-running analyses
-- [ ] **Sessions MVP** (large) - First-class session support
-  - See "Sessions as First-Class Citizens" section
 
 ## Future Work
 
@@ -179,6 +182,31 @@ Moss must not contribute to this problem.
 - [ ] **Security-aware prompting**: Include security requirements in synthesis specs
 - [ ] **Warn on sensitive code**: Flag auth, crypto, input handling for review
 
+### Shadow Integration Testing (Optional Validator Extension)
+
+**Problem**: Code compiles and passes unit tests, but breaks in production (e.g., changed an env var name, broke an API contract).
+
+**Concept**: Extend the Validator loop to optionally spin up the full stack for smoke testing.
+
+- [ ] **Container-based validation**: If project has `docker-compose.yml` or similar:
+  - Spin up ephemeral environment on Shadow Git branch
+  - Run smoke tests (curl endpoints, check health)
+  - Tear down after validation
+- [ ] **Configurable triggers**: Not every change needs this
+  - Config changes, API changes, env var changes → trigger
+  - Internal refactors with passing unit tests → skip
+- [ ] **Lightweight alternative**: For projects without containers:
+  - `moss validate --integration` runs integration test suite
+  - Slower than unit tests, but catches more
+- [ ] **Trade-off acknowledgment**: This is heavyweight
+  - Latency cost is significant (minutes, not seconds)
+  - Most projects get sufficient coverage from unit tests + type checking
+  - Value is highest for: API servers, microservices, config-heavy apps
+
+**When NOT to use**: Pure libraries, CLI tools, projects without integration tests.
+This extends the Validator concept from "syntax correctness" to "semantic correctness"
+but should remain optional due to latency cost.
+
 ### Codebase Analysis Gaps
 
 Tools we have:
@@ -224,7 +252,13 @@ Potential additions:
     - [x] `ast-grep` backend: structural patterns (wraps ast-grep CLI)
     - [x] `python` backend: escape hatch for arbitrary checks
     - [ ] `pyright` backend: type-aware rules (future)
-    - [ ] `deps` backend: cross-file analysis (future)
+    - [ ] `deps` backend: cross-file architectural rules (ArchUnit-style)
+      - Layering constraints: "UI must not import Infrastructure directly"
+      - Dependency direction: "Domain should not depend on Framework"
+      - Module boundaries: "Only X may import internal module Y"
+      - Circular dependency detection at package level
+      - Uses `moss deps` graph as input, rules query the graph
+      - Example: `@rule(backend="deps") def no_ui_to_infra(graph): ...`
   - [x] **Context detection**: auto-classify code context (test, library, CLI, etc.)
     - [x] Path heuristics: `/tests/` → test context
     - [x] Import detection: imports pytest → test context
@@ -261,6 +295,18 @@ Use cases:
 - "What did we decide about X?" → search TODO.md, docs/, past session logs
 - "Where is Y implemented?" → search codebase with semantic understanding
 - Agent context loading: retrieve relevant context for current task
+
+**Idiomatic Consistency Oracle** (pattern matching for "project style"):
+- [ ] **Cluster analysis**: Identify repeated patterns in existing code
+  - How errors are handled (try/except vs Result type)
+  - How HTTP responses are formatted
+  - Naming conventions for interfaces/implementations
+  - Uses `moss clones` + embeddings to find structural clusters
+- [ ] **Style check before synthesis**: Compare proposed code against clusters
+  - "95% of similar functions use Result<T>, but you wrote try/except"
+  - Suggest rewrites to match local idioms
+- [ ] **No LLM for detection**: Clustering is symbolic (hashing + similarity)
+  - LLM only for suggesting *how* to rewrite, not *whether* to
 
 ### Agent Log Analysis
 
@@ -742,6 +788,15 @@ Sessions should be resumable and observable for both humans and LLMs.
   - [ ] LLM can add/check off items during work
   - [ ] Survives session pause/resume
   - [ ] Distinct from global TODO.md
+- **Plan Graph / Intent Tracking** (Stateful Intent Graph):
+  - [ ] Before coding, agent generates dependency graph of intended changes
+    - E.g., "1. Update Model (UUID), 2. Migrate DB, 3. Update API"
+  - [ ] Plan is pinned in session state, survives context window limits
+  - [ ] **Drift detection**: As agent executes step N, check against step 1..N-1
+    - "You changed Model to use UUIDs, but API still expects Integers"
+    - Catches mid-refactor inconsistencies that context amnesia would miss
+  - [ ] Plan can be revised, but revisions are explicit (not silent drift)
+  - [ ] Validator loop already catches syntax/type errors; this catches *semantic* drift
 
 **Why this matters:**
 - Long-running tasks can be interrupted and resumed
