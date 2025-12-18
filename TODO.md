@@ -8,18 +8,20 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 Candidates for the next session, roughly by size:
 
-- [x] **PBEGenerator** (medium) - Programming by Example synthesis (FlashFill/PROSE)
-  - DSL-based string transformations (Concat, SubStr, Upper, Lower, etc.)
-  - See `src/moss/synthesis/plugins/generators/pbe.py`
-- [x] **SketchGenerator** (medium) - Fill holes in user templates (Sketch/Rosette)
-  - User provides code with `??` holes for operators, constants, expressions
-  - See `src/moss/synthesis/plugins/generators/sketch.py`
-- [x] **Test ComponentGenerator/SMTGenerator** (small) - Add tests for new generators
-  - Added to `tests/test_synthesis_plugins.py`
-- [x] **Drift auto-update in pre-commit** (small) - Run check_gen_drift.py --update automatically
-  - Added to scripts/pre-commit hook
-- [x] **CheckpointAPI to MossAPI** (small) - Expose checkpoint commands via library API
-  - Added to GitAPI: create_checkpoint, list_checkpoints, diff_checkpoint, merge_checkpoint, abort_checkpoint
+- [ ] **RelationalGenerator** (medium) - miniKanren-style logic programming synthesis
+  - Declarative constraint specification
+  - Bidirectional search
+- [ ] **`moss tree`** (small) - Git-aware tree visualization
+  - `git ls-tree -r --name-only HEAD | tree --fromfile`
+  - Option to show only tracked files
+- [ ] **Test PBEGenerator/SketchGenerator** (small) - Add tests for new generators
+  - Similar to ComponentGenerator/SMTGenerator tests
+- [ ] **`moss explore` REPL** (medium) - Interactive codebase exploration
+  - Tab completions, history
+  - Commands: skeleton, calls, callers, deps
+- [ ] **Idiomatic Consistency Oracle** (medium) - Pattern matching for project style
+  - Cluster analysis of existing code patterns
+  - Suggest rewrites to match local idioms
 
 ## Future Work
 
