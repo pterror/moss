@@ -6,6 +6,8 @@ from moss.external_deps import (
     Dependency,
     DependencyAnalysisResult,
     ExternalDependencyAnalyzer,
+    License,
+    LicenseIssue,
     ResolvedDependency,
     Vulnerability,
     create_external_dependency_analyzer,
@@ -143,6 +145,49 @@ class TestVulnerability:
         assert d["severity"] == "MEDIUM"
         assert d["summary"] == "XSS vulnerability"
         assert d["fixed_version"] == "4.0"
+
+
+# =============================================================================
+# License Tests
+# =============================================================================
+
+
+class TestLicense:
+    def test_create_license(self):
+        lic = License(package="requests", license="MIT", license_category="permissive")
+        assert lic.package == "requests"
+        assert lic.license == "MIT"
+        assert lic.license_category == "permissive"
+
+    def test_license_to_dict(self):
+        lic = License(package="flask", license="BSD-3-Clause", license_category="permissive")
+        d = lic.to_dict()
+        assert d["package"] == "flask"
+        assert d["license"] == "BSD-3-Clause"
+        assert d["license_category"] == "permissive"
+
+
+class TestLicenseIssue:
+    def test_create_license_issue(self):
+        issue = LicenseIssue(
+            package="gpl-lib",
+            license="GPL-3.0",
+            issue="Copyleft license may require source disclosure",
+            severity="WARNING",
+        )
+        assert issue.package == "gpl-lib"
+        assert issue.license == "GPL-3.0"
+        assert issue.severity == "WARNING"
+
+    def test_license_issue_to_dict(self):
+        issue = LicenseIssue(
+            package="unknown-lib",
+            license="Unknown",
+            issue="License not specified",
+        )
+        d = issue.to_dict()
+        assert d["package"] == "unknown-lib"
+        assert d["issue"] == "License not specified"
 
 
 # =============================================================================
@@ -367,6 +412,74 @@ class TestDependencyAnalysisResult:
         assert "CRITICAL" in md
         assert "CVE-2023-1234" in md
         assert "requests" in md
+
+    def test_has_license_issues_false(self):
+        result = DependencyAnalysisResult()
+        assert not result.has_license_issues
+
+    def test_has_license_issues_true(self):
+        result = DependencyAnalysisResult(
+            license_issues=[
+                LicenseIssue(package="pkg", license="Unknown", issue="License not specified"),
+            ]
+        )
+        assert result.has_license_issues
+
+    def test_copyleft_licenses(self):
+        result = DependencyAnalysisResult(
+            licenses=[
+                License(package="a", license="MIT", license_category="permissive"),
+                License(package="b", license="GPL-3.0", license_category="copyleft"),
+                License(package="c", license="AGPL-3.0", license_category="copyleft"),
+            ]
+        )
+        assert len(result.copyleft_licenses) == 2
+        assert all(lic.license_category == "copyleft" for lic in result.copyleft_licenses)
+
+    def test_unknown_licenses(self):
+        result = DependencyAnalysisResult(
+            licenses=[
+                License(package="a", license="MIT", license_category="permissive"),
+                License(package="b", license="Unknown", license_category="unknown"),
+            ]
+        )
+        assert len(result.unknown_licenses) == 1
+        assert result.unknown_licenses[0].package == "b"
+
+    def test_to_dict_with_licenses(self):
+        result = DependencyAnalysisResult(
+            licenses=[
+                License(package="a", license="GPL-3.0", license_category="copyleft"),
+            ],
+            license_issues=[
+                LicenseIssue(package="a", license="GPL-3.0", issue="Copyleft warning"),
+            ],
+        )
+        d = result.to_dict()
+        assert d["stats"]["license_issues"] == 1
+        assert d["stats"]["copyleft_licenses"] == 1
+        assert len(d["licenses"]) == 1
+        assert len(d["license_issues"]) == 1
+
+    def test_to_markdown_with_license_issues(self):
+        result = DependencyAnalysisResult(
+            sources=["pyproject.toml"],
+            licenses=[
+                License(package="gpl-lib", license="GPL-3.0", license_category="copyleft"),
+            ],
+            license_issues=[
+                LicenseIssue(
+                    package="gpl-lib",
+                    license="GPL-3.0",
+                    issue="Copyleft license may require source disclosure",
+                    severity="WARNING",
+                ),
+            ],
+        )
+        md = result.to_markdown()
+        assert "License Issues" in md
+        assert "gpl-lib" in md
+        assert "GPL-3.0" in md
 
 
 # =============================================================================

@@ -13,7 +13,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 # Try to import tomllib (Python 3.11+) or tomli
 try:
@@ -102,6 +102,40 @@ class Vulnerability:
 
 
 @dataclass
+class License:
+    """License information for a package."""
+
+    package: str
+    license: str  # SPDX identifier or license text
+    license_category: str = ""  # permissive, copyleft, proprietary, unknown
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "package": self.package,
+            "license": self.license,
+            "license_category": self.license_category,
+        }
+
+
+@dataclass
+class LicenseIssue:
+    """A license compatibility issue."""
+
+    package: str
+    license: str
+    issue: str  # Description of the issue
+    severity: str = "WARNING"  # WARNING or ERROR
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "package": self.package,
+            "license": self.license,
+            "issue": self.issue,
+            "severity": self.severity,
+        }
+
+
+@dataclass
 class DependencyAnalysisResult:
     """Result of dependency analysis."""
 
@@ -118,6 +152,10 @@ class DependencyAnalysisResult:
 
     # Security vulnerabilities
     vulnerabilities: list[Vulnerability] = field(default_factory=list)
+
+    # License information
+    licenses: list[License] = field(default_factory=list)
+    license_issues: list[LicenseIssue] = field(default_factory=list)
 
     @property
     def total_direct(self) -> int:
@@ -158,6 +196,18 @@ class DependencyAnalysisResult:
     def high_vulns(self) -> list[Vulnerability]:
         return [v for v in self.vulnerabilities if v.severity == "HIGH"]
 
+    @property
+    def has_license_issues(self) -> bool:
+        return bool(self.license_issues)
+
+    @property
+    def copyleft_licenses(self) -> list[License]:
+        return [lic for lic in self.licenses if lic.license_category == "copyleft"]
+
+    @property
+    def unknown_licenses(self) -> list[License]:
+        return [lic for lic in self.licenses if lic.license_category == "unknown"]
+
     def to_dict(self, *, weight_threshold: int = 0) -> dict[str, Any]:
         heavy = self.get_heavy_dependencies(weight_threshold) if weight_threshold > 0 else []
         return {
@@ -170,6 +220,9 @@ class DependencyAnalysisResult:
                 "vulnerabilities": len(self.vulnerabilities),
                 "critical_vulns": len(self.critical_vulns),
                 "high_vulns": len(self.high_vulns),
+                "license_issues": len(self.license_issues),
+                "copyleft_licenses": len(self.copyleft_licenses),
+                "unknown_licenses": len(self.unknown_licenses),
             },
             "sources": self.sources,
             "dependencies": [d.to_dict() for d in self.dependencies],
@@ -181,6 +234,8 @@ class DependencyAnalysisResult:
             "resolved_tree": [d.to_dict() for d in self.resolved_tree],
             "heavy_dependencies": [d.to_dict() for d in heavy],
             "vulnerabilities": [v.to_dict() for v in self.vulnerabilities],
+            "licenses": [lic.to_dict() for lic in self.licenses],
+            "license_issues": [issue.to_dict() for issue in self.license_issues],
         }
 
     def to_markdown(self, *, weight_threshold: int = 0) -> str:
@@ -202,6 +257,8 @@ class DependencyAnalysisResult:
         lines.append(f"- **Sources:** {', '.join(self.sources)}")
         if self.vulnerabilities:
             lines.append(f"- **Vulnerabilities:** {len(self.vulnerabilities)} found")
+        if self.license_issues:
+            lines.append(f"- **License issues:** {len(self.license_issues)} found")
         lines.append("")
 
         # Security vulnerabilities
@@ -226,6 +283,38 @@ class DependencyAnalysisResult:
                 summary = vuln.summary[:60] + "..." if len(vuln.summary) > 60 else vuln.summary
                 lines.append(f"| {vuln.severity} | {vuln.package} | {vuln.id} | {summary} |")
             lines.append("")
+
+        # License issues
+        if self.license_issues:
+            lines.append("## License Issues")
+            lines.append("")
+            lines.append("| Severity | Package | License | Issue |")
+            lines.append("|----------|---------|---------|-------|")
+            for issue in self.license_issues:
+                lines.append(
+                    f"| {issue.severity} | {issue.package} | {issue.license} | {issue.issue} |"
+                )
+            lines.append("")
+
+        # License summary (if licenses were checked)
+        if self.licenses:
+            copyleft = self.copyleft_licenses
+            unknown = self.unknown_licenses
+            if copyleft or unknown:
+                lines.append("## License Summary")
+                lines.append("")
+                if copyleft:
+                    lines.append(f"**{len(copyleft)} copyleft** licenses found:")
+                    lines.append("")
+                    for lic in copyleft:
+                        lines.append(f"- {lic.package}: {lic.license}")
+                    lines.append("")
+                if unknown:
+                    lines.append(f"**{len(unknown)} unknown** licenses found:")
+                    lines.append("")
+                    for lic in unknown:
+                        lines.append(f"- {lic.package}: {lic.license}")
+                    lines.append("")
 
         # Heavy dependency warnings
         if weight_threshold > 0 and self.resolved_tree:
@@ -311,13 +400,18 @@ class ExternalDependencyAnalyzer:
         self.root = root.resolve()
 
     def analyze(
-        self, *, resolve: bool = False, check_vulns: bool = False
+        self,
+        *,
+        resolve: bool = False,
+        check_vulns: bool = False,
+        check_licenses: bool = False,
     ) -> DependencyAnalysisResult:
         """Analyze project dependencies.
 
         Args:
             resolve: If True, resolve full transitive dependency tree
             check_vulns: If True, check for known vulnerabilities via OSV API
+            check_licenses: If True, check license compatibility
 
         Returns:
             DependencyAnalysisResult with all dependency information
@@ -349,6 +443,12 @@ class ExternalDependencyAnalyzer:
         # Check for vulnerabilities if requested
         if check_vulns:
             result.vulnerabilities = self._check_vulnerabilities(result.dependencies)
+
+        # Check licenses if requested
+        if check_licenses:
+            licenses, issues = self._check_licenses(result.dependencies)
+            result.licenses = licenses
+            result.license_issues = issues
 
         return result
 
@@ -624,6 +724,130 @@ class ExternalDependencyAnalyzer:
                 continue
 
         return vulnerabilities
+
+    # License categories based on common SPDX identifiers
+    PERMISSIVE_LICENSES: ClassVar[set[str]] = {
+        "mit",
+        "apache-2.0",
+        "apache 2.0",
+        "bsd-2-clause",
+        "bsd-3-clause",
+        "bsd",
+        "isc",
+        "unlicense",
+        "cc0-1.0",
+        "wtfpl",
+        "zlib",
+        "public domain",
+        "psf-2.0",
+        "python-2.0",
+    }
+
+    COPYLEFT_LICENSES: ClassVar[set[str]] = {
+        "gpl-2.0",
+        "gpl-3.0",
+        "gpl-2.0-only",
+        "gpl-3.0-only",
+        "gpl-2.0-or-later",
+        "gpl-3.0-or-later",
+        "agpl-3.0",
+        "agpl-3.0-only",
+        "lgpl-2.1",
+        "lgpl-3.0",
+        "lgpl-2.1-only",
+        "lgpl-3.0-only",
+        "mpl-2.0",
+        "eupl-1.2",
+        "gpl",
+        "agpl",
+        "lgpl",
+    }
+
+    def _check_licenses(
+        self, dependencies: list[Dependency]
+    ) -> tuple[list[License], list[LicenseIssue]]:
+        """Check dependencies for license information and compatibility.
+
+        Returns tuple of (licenses, issues).
+        """
+        licenses = []
+        issues = []
+
+        for dep in dependencies:
+            try:
+                # Get license info from pip
+                result = subprocess.run(
+                    ["pip", "show", dep.name],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0:
+                    continue
+
+                license_str = ""
+                for line in result.stdout.splitlines():
+                    if line.startswith("License:"):
+                        license_str = line.split(":", 1)[1].strip()
+                        break
+
+                if not license_str or license_str.lower() == "unknown":
+                    licenses.append(
+                        License(
+                            package=dep.name,
+                            license="Unknown",
+                            license_category="unknown",
+                        )
+                    )
+                    issues.append(
+                        LicenseIssue(
+                            package=dep.name,
+                            license="Unknown",
+                            issue="License not specified",
+                            severity="WARNING",
+                        )
+                    )
+                    continue
+
+                # Categorize license
+                license_lower = license_str.lower()
+                category = "unknown"
+
+                # Check permissive
+                for perm in self.PERMISSIVE_LICENSES:
+                    if perm in license_lower:
+                        category = "permissive"
+                        break
+
+                # Check copyleft
+                if category == "unknown":
+                    for copy in self.COPYLEFT_LICENSES:
+                        if copy in license_lower:
+                            category = "copyleft"
+                            # Add warning for copyleft in non-dev deps
+                            if not dep.is_dev:
+                                issues.append(
+                                    LicenseIssue(
+                                        package=dep.name,
+                                        license=license_str,
+                                        issue="Copyleft license may require source disclosure",
+                                        severity="WARNING",
+                                    )
+                                )
+                            break
+
+                licenses.append(
+                    License(
+                        package=dep.name,
+                        license=license_str,
+                        license_category=category,
+                    )
+                )
+
+            except Exception:
+                continue
+
+        return licenses, issues
 
 
 def create_external_dependency_analyzer(

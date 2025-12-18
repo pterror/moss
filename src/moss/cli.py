@@ -2057,11 +2057,14 @@ def cmd_external_deps(args: Namespace) -> int:
     resolve = getattr(args, "resolve", False)
     warn_weight = getattr(args, "warn_weight", 0)
     check_vulns = getattr(args, "check_vulns", False)
+    check_licenses = getattr(args, "check_licenses", False)
 
     output.info(f"Analyzing dependencies in {root.name}...")
 
     try:
-        result = analyzer.analyze(resolve=resolve, check_vulns=check_vulns)
+        result = analyzer.analyze(
+            resolve=resolve, check_vulns=check_vulns, check_licenses=check_licenses
+        )
     except Exception as e:
         output.error(f"Failed to analyze dependencies: {e}")
         return 1
@@ -2082,6 +2085,10 @@ def cmd_external_deps(args: Namespace) -> int:
 
     # Exit with error if vulnerabilities found
     if check_vulns and result.has_vulnerabilities:
+        return 1
+
+    # Exit with error if license issues found
+    if check_licenses and result.has_license_issues:
         return 1
 
     return 0
@@ -3046,6 +3053,12 @@ def create_parser() -> argparse.ArgumentParser:
         "-v",
         action="store_true",
         help="Check for known vulnerabilities via OSV API (exit 1 if found)",
+    )
+    external_deps_parser.add_argument(
+        "--check-licenses",
+        "-l",
+        action="store_true",
+        help="Check license compatibility (exit 1 if issues found)",
     )
     external_deps_parser.set_defaults(func=cmd_external_deps)
 
