@@ -22,14 +22,19 @@ Subagents: 15+ agent files (200KB-500KB each)
 
 | Tool | Calls | Errors | Success Rate |
 |------|-------|--------|--------------|
-| Bash | 1336 | 234 | 82% |
-| Edit | 985 | 12 | 99% |
+| Bash | 1,372 | 234 | 83% |
+| Edit | 990 | 7 | 99% |
 | Read | 644 | 4 | 99% |
-| TodoWrite | 285 | 0 | 100% |
-| Write | 252 | 4 | 98% |
+| TodoWrite | 286 | 0 | 100% |
+| Write | 253 | 9 | 96% |
 | Grep | 221 | 0 | 100% |
 | Glob | 40 | 0 | 100% |
 | Task | 12 | 0 | 100% |
+| Other | 35 | 3 | 91% |
+
+**Total**: 3,853 tool calls, 257 errors (93% success rate)
+
+*Note: "File not read yet" errors are attributed to Write (the tool that checks), not Edit.*
 
 ## Bash Command Patterns
 
@@ -56,14 +61,26 @@ Common error categories:
 3. **Build errors**: Missing dependencies, import errors
 4. **LSP server tests**: Specific test file with persistent failures
 
-### Edit Errors (12 total)
+### File Operation Errors (20 total)
 
-- 9: "File has not been read yet" - Write before Read
-- 3: "Found N matches" - Edit string not unique enough
+| Error | Count | Cause |
+|-------|-------|-------|
+| File not read yet | 9 | Write/Edit before Read |
+| File does not exist | 4 | Read/Write to missing file |
+| Found N matches | 3 | Edit string not unique |
+| String not found | 2 | Edit target changed |
+| File modified since read | 2 | Linter changed file |
 
-### Write Errors (4 total)
+### Other Errors (3 total)
 
-- 4: "File does not exist" - Tried to write to non-existent path
+- 2: User plan refinements (interactive editing, not rejections)
+- 1: KillShell on already-completed shell
+
+### User Rejections
+
+The 2 "user doesn't want to proceed" errors were actually **plan refinements** -
+the user was editing/improving proposed plans via Claude Code's interactive mode,
+not rejecting work outright.
 
 ## Observations
 
@@ -140,23 +157,30 @@ This would help users understand their agent interaction patterns.
 
 ## Token Usage
 
+**Note**: Log entries are duplicated per streaming chunk. Numbers below use unique requestId grouping.
+
 | Metric | Count |
 |--------|-------|
-| API Calls | 8,552 |
-| Input Tokens | 78K |
-| Cache Creation | 19.8M |
-| Cache Read | 819M |
-| Output Tokens | 1.47M |
+| Unique API Calls | 3,694 |
+| New Input Tokens | 33K |
+| Cache Creation | 7.4M |
+| Cache Read | 362M |
+| Output Tokens | 1.45M |
 
-**Key insight**: 99% of input comes from cache reads, showing effective use of context caching. Without caching, this session would have processed ~839M input tokens.
+**Key insight**: 98% of input comes from cache reads, showing effective use of context caching.
 
-Effective input: 839M tokens
-- Cache read (819M) at ~$0.30/M = $246
-- Cache creation (19.8M) at ~$3.75/M = $74
-- New input (78K) at ~$15/M = $1.17
-- Output (1.47M) at ~$75/M = $110
+Effective input: ~369M tokens
+- Cache read (362M) at ~$0.30/M = $109
+- Cache creation (7.4M) at ~$3.75/M = $28
+- New input (33K) at ~$15/M = $0.50
+- Output (1.45M) at ~$75/M = $109
 
-**Estimated session cost**: ~$430 for 8,552 API calls over 2 days of development.
+**Estimated session cost**: ~$250 for 3,694 API calls over 2 days of development.
+
+### Data Deduplication Note
+
+The raw log has 8,500+ assistant entries because each streaming chunk is logged separately.
+Grouping by `requestId` and taking max values gives the correct per-call totals.
 
 ---
 
