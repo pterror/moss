@@ -38,7 +38,7 @@ Still needed:
 - [x] Add missing tools: `complexity`, `check-refs`, `git-hotspots`, `external-deps`
 - [x] Resource providers: codebase overview, project structure, file skeletons
 - [x] Prompt templates: understand-file, prepare-refactor, code-review, find-bugs
-- [x] Test it works end-to-end with Claude Code (config added in `.claude/mcp.json`)
+- [x] Test it works end-to-end with Claude Code (config added in `.mcp.json`)
 
 ### Interface Generators (Single Source of Truth)
 

@@ -47,15 +47,14 @@ Add Moss to your Claude Code MCP configuration. The configuration file location 
 
 **Option A: Per-project configuration (recommended)**
 
-Create `.claude/mcp.json` in your project root:
+Create `.mcp.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "moss": {
-      "command": "python",
-      "args": ["-m", "moss.mcp_server"],
-      "cwd": "${workspaceFolder}"
+      "command": "uv",
+      "args": ["run", "python", "-m", "moss.mcp_server"]
     }
   }
 }
@@ -63,18 +62,20 @@ Create `.claude/mcp.json` in your project root:
 
 **Option B: Global configuration**
 
-Add to your global Claude Code settings (`~/.config/claude-code/mcp.json` or similar):
+Add to your global Claude Code settings (`~/.claude.json`):
 
 ```json
 {
   "mcpServers": {
     "moss": {
-      "command": "python",
-      "args": ["-m", "moss.mcp_server"]
+      "command": "uv",
+      "args": ["run", "python", "-m", "moss.mcp_server"]
     }
   }
 }
 ```
+
+Note: The MCP server runs in the directory where Claude Code is launched. Environment variables can be expanded using `${VAR}` syntax.
 
 ### 3. Verify the Connection
 
@@ -187,7 +188,7 @@ Automatically selects and executes the appropriate tool.
 
 ### Wrong Project Directory
 
-The MCP server operates in its current working directory. Ensure `cwd` in your configuration points to your project root.
+The MCP server operates in the directory where Claude Code was launched. To use a different directory, set the `MOSS_ROOT` environment variable in the server configuration.
 
 ## Advanced: Custom MCP Configuration
 
