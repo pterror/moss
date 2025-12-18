@@ -296,3 +296,360 @@ class TestPerformanceOnOwnCode:
 
         # Should complete in under 5 seconds
         assert elapsed < 5.0, f"CFG building took {elapsed:.2f}s"
+
+
+# ============================================================================
+# Tests for new dogfooding commands: summarize, check-docs, check-todos
+# ============================================================================
+
+
+class TestSummarizer:
+    """Tests for Summarizer."""
+
+    def test_summarize_file(self, tmp_path: Path):
+        """Test single file summarization."""
+        from moss.summarize import Summarizer
+
+        # Create a test file
+        test_file = tmp_path / "example.py"
+        test_file.write_text('''"""Example module."""
+
+def hello(name: str) -> str:
+    """Say hello."""
+    return f"Hello, {name}!"
+
+class Greeter:
+    """A greeter class."""
+
+    def greet(self, name: str) -> str:
+        """Greet someone."""
+        return f"Greetings, {name}!"
+''')
+
+        summarizer = Summarizer()
+        summary = summarizer.summarize_file(test_file)
+
+        assert summary is not None
+        assert summary.module_name == "example"
+        assert summary.docstring == "Example module."
+        assert len(summary.functions) == 1
+        assert summary.functions[0].name == "hello"
+        assert len(summary.classes) == 1
+        assert summary.classes[0].name == "Greeter"
+
+    def test_summarize_package(self, tmp_path: Path):
+        """Test package summarization."""
+        from moss.summarize import Summarizer
+
+        # Create a package
+        pkg_dir = tmp_path / "mypackage"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text('"""My package."""\n')
+        (pkg_dir / "module.py").write_text('"""A module."""\ndef foo(): pass\n')
+
+        summarizer = Summarizer()
+        summary = summarizer.summarize_package(pkg_dir)
+
+        assert summary is not None
+        assert summary.name == "mypackage"
+        assert summary.docstring == "My package."
+        assert len(summary.files) == 2  # __init__.py and module.py
+
+    def test_summarize_project(self, tmp_path: Path):
+        """Test project summarization."""
+        from moss.summarize import Summarizer
+
+        # Create src/pkg structure
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "myproject"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text('"""My project."""\n')
+        (pkg_dir / "core.py").write_text('"""Core module."""\nclass Core: pass\n')
+
+        summarizer = Summarizer()
+        summary = summarizer.summarize_project(tmp_path)
+
+        assert summary is not None
+        assert summary.name == tmp_path.name
+        assert len(summary.packages) == 1
+        assert summary.packages[0].name == "myproject"
+        assert summary.total_files >= 2
+
+    def test_exclude_private_files(self, tmp_path: Path):
+        """Test that private files are excluded by default."""
+        from moss.summarize import Summarizer
+
+        pkg_dir = tmp_path / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "public.py").write_text("def foo(): pass")
+        (pkg_dir / "_private.py").write_text("def bar(): pass")
+
+        summarizer = Summarizer(include_private=False)
+        summary = summarizer.summarize_package(pkg_dir)
+
+        assert summary is not None
+        module_names = [f.module_name for f in summary.files]
+        assert "public" in module_names
+        assert "_private" not in module_names
+
+    def test_exclude_test_files(self, tmp_path: Path):
+        """Test that test files are excluded by default."""
+        from moss.summarize import Summarizer
+
+        pkg_dir = tmp_path / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "main.py").write_text("def foo(): pass")
+        (pkg_dir / "test_main.py").write_text("def test_foo(): pass")
+
+        summarizer = Summarizer(include_tests=False)
+        summary = summarizer.summarize_package(pkg_dir)
+
+        assert summary is not None
+        module_names = [f.module_name for f in summary.files]
+        assert "main" in module_names
+        assert "test_main" not in module_names
+
+
+class TestDocChecker:
+    """Tests for DocChecker."""
+
+    def test_check_finds_missing_readme(self, tmp_path: Path):
+        """Test that missing README is flagged as error."""
+        from moss.check_docs import DocChecker
+
+        # Create a package but no README
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "main.py").write_text("def foo(): pass")
+
+        checker = DocChecker(tmp_path)
+        result = checker.check()
+
+        assert result.has_errors
+        assert any(i.category == "missing" and "README" in i.message for i in result.issues)
+
+    def test_check_finds_stale_references(self, tmp_path: Path):
+        """Test that stale references are flagged."""
+        from moss.check_docs import DocChecker
+
+        # Create README with reference to non-existent module
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n\nSee `nonexistent.module` for details.\n")
+
+        # Create a minimal package
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        checker = DocChecker(tmp_path)
+        result = checker.check()
+
+        assert result.has_warnings
+        stale_issues = [i for i in result.issues if i.category == "stale"]
+        assert len(stale_issues) >= 1
+
+    def test_coverage_calculation(self, tmp_path: Path):
+        """Test coverage is calculated correctly."""
+        from moss.check_docs import DocChecker
+
+        # Create README mentioning one module
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n\nSee `pkg.main` for the main module.\n")
+
+        # Create package with two modules
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+        (pkg_dir / "main.py").write_text("def foo(): pass")
+        (pkg_dir / "other.py").write_text("def bar(): pass")
+
+        checker = DocChecker(tmp_path)
+        result = checker.check()
+
+        # At least one module is documented
+        assert result.modules_documented >= 1
+        assert result.modules_found >= 2
+
+
+class TestTodoChecker:
+    """Tests for TodoChecker."""
+
+    def test_parse_todo_md(self, tmp_path: Path):
+        """Test parsing TODO.md checkbox items."""
+        from moss.check_todos import TodoChecker, TodoStatus
+
+        todo_file = tmp_path / "TODO.md"
+        todo_file.write_text("""# TODO
+
+## Phase 1
+- [x] Completed item
+- [ ] Pending item
+
+## Future
+- [ ] Another pending item
+""")
+
+        checker = TodoChecker(tmp_path)
+        result = checker.check()
+
+        assert len(result.tracked_items) == 3
+        done = [i for i in result.tracked_items if i.status == TodoStatus.DONE]
+        pending = [i for i in result.tracked_items if i.status == TodoStatus.PENDING]
+        assert len(done) == 1
+        assert len(pending) == 2
+
+    def test_scan_code_todos(self, tmp_path: Path):
+        """Test scanning code for TODO comments."""
+        from moss.check_todos import TodoChecker
+
+        code_file = tmp_path / "example.py"
+        code_file.write_text('''"""Module."""
+
+def foo():
+    # TODO: implement this
+    pass
+
+def bar():
+    # FIXME: broken
+    pass
+''')
+
+        checker = TodoChecker(tmp_path)
+        result = checker.check()
+
+        assert len(result.code_todos) >= 2
+        markers = {t.marker for t in result.code_todos}
+        assert "TODO" in markers
+        assert "FIXME" in markers
+
+    def test_orphan_detection(self, tmp_path: Path):
+        """Test that orphaned TODOs are detected."""
+        from moss.check_todos import TodoChecker, TodoStatus
+
+        # Create TODO.md with one item
+        todo_file = tmp_path / "TODO.md"
+        todo_file.write_text("# TODO\n- [ ] Tracked item\n")
+
+        # Create code with untracked TODO
+        code_file = tmp_path / "example.py"
+        code_file.write_text("# TODO: untracked item\n")
+
+        checker = TodoChecker(tmp_path)
+        result = checker.check()
+
+        assert result.orphan_count >= 1
+        orphans = [t for t in result.code_todos if t.status == TodoStatus.ORPHAN]
+        assert len(orphans) >= 1
+
+    def test_category_tracking(self, tmp_path: Path):
+        """Test that categories are tracked from headers."""
+        from moss.check_todos import TodoChecker
+
+        todo_file = tmp_path / "TODO.md"
+        todo_file.write_text("""# TODO
+
+## Phase 1
+- [ ] Item in phase 1
+
+### Sub-phase
+- [ ] Item in sub-phase
+""")
+
+        checker = TodoChecker(tmp_path)
+        result = checker.check()
+
+        categories = {i.category for i in result.tracked_items}
+        assert "Phase 1" in categories or "Sub-phase" in categories
+
+
+class TestDogfoodingCLI:
+    """Integration tests for dogfooding CLI commands."""
+
+    def test_summarize_command(self, tmp_path: Path):
+        """Test summarize CLI command."""
+        from argparse import Namespace
+
+        from moss.cli import cmd_summarize
+
+        # Create minimal project
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text('"""Package."""\n')
+        (pkg_dir / "main.py").write_text('"""Main."""\ndef main(): pass\n')
+
+        args = Namespace(
+            directory=str(tmp_path),
+            include_private=False,
+            include_tests=False,
+            json=False,
+            quiet=False,
+            verbose=False,
+            debug=False,
+            no_color=True,
+        )
+
+        result = cmd_summarize(args)
+        assert result == 0
+
+    def test_check_docs_command(self, tmp_path: Path):
+        """Test check-docs CLI command."""
+        from argparse import Namespace
+
+        from moss.cli import cmd_check_docs
+
+        # Create minimal project with README
+        readme = tmp_path / "README.md"
+        readme.write_text("# Project\n")
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        pkg_dir = src_dir / "pkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text("")
+
+        args = Namespace(
+            directory=str(tmp_path),
+            strict=False,
+            json=False,
+            quiet=False,
+            verbose=False,
+            debug=False,
+            no_color=True,
+        )
+
+        result = cmd_check_docs(args)
+        assert result == 0
+
+    def test_check_todos_command(self, tmp_path: Path):
+        """Test check-todos CLI command."""
+        from argparse import Namespace
+
+        from moss.cli import cmd_check_todos
+
+        # Create TODO.md
+        todo_file = tmp_path / "TODO.md"
+        todo_file.write_text("# TODO\n- [ ] Something\n")
+
+        args = Namespace(
+            directory=str(tmp_path),
+            strict=False,
+            json=False,
+            quiet=False,
+            verbose=False,
+            debug=False,
+            no_color=True,
+        )
+
+        result = cmd_check_todos(args)
+        assert result == 0
