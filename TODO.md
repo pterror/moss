@@ -129,7 +129,7 @@ Alternative synthesis approaches that don't rely on LLMs. See `docs/synthesis-ge
 
 Use moss to analyze itself and keep documentation current.
 
-- [ ] `moss summarize` - Recursive codebase summarization
+- [x] `moss summarize` - Recursive codebase summarization
   - Extract module purposes, key functions, architecture
   - Generate hierarchical summary (file → module → package → project)
   - Output as markdown or structured data
