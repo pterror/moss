@@ -567,6 +567,61 @@ flask
         assert "requirements-dev.txt" in result.sources
         assert result.total_dev == 2
 
+    def test_parse_package_json(self, tmp_path: Path):
+        package_json = tmp_path / "package.json"
+        package_json.write_text("""{
+  "name": "test-project",
+  "dependencies": {
+    "express": "^4.18.0",
+    "lodash": "~4.17.21"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  }
+}""")
+
+        analyzer = ExternalDependencyAnalyzer(tmp_path)
+        result = analyzer.analyze()
+
+        assert "package.json" in result.sources
+        assert result.total_direct == 2
+        assert result.total_dev == 2
+        names = [d.name for d in result.dependencies]
+        assert "express" in names
+        assert "lodash" in names
+
+    def test_parse_package_json_optional_deps(self, tmp_path: Path):
+        package_json = tmp_path / "package.json"
+        package_json.write_text("""{
+  "name": "test-project",
+  "dependencies": {},
+  "optionalDependencies": {
+    "fsevents": "^2.3.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  }
+}""")
+
+        analyzer = ExternalDependencyAnalyzer(tmp_path)
+        result = analyzer.analyze()
+
+        assert "optional" in result.optional_dependencies
+        assert "peer" in result.optional_dependencies
+        assert len(result.optional_dependencies["optional"]) == 1
+        assert len(result.optional_dependencies["peer"]) == 1
+
+    def test_parse_package_json_empty(self, tmp_path: Path):
+        package_json = tmp_path / "package.json"
+        package_json.write_text('{"name": "empty-project"}')
+
+        analyzer = ExternalDependencyAnalyzer(tmp_path)
+        result = analyzer.analyze()
+
+        assert "package.json" in result.sources
+        assert result.total_direct == 0
+
     def test_parse_dependency_string_simple(self, tmp_path: Path):
         analyzer = ExternalDependencyAnalyzer(tmp_path)
         dep = analyzer._parse_dependency_string("requests")

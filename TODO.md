@@ -56,7 +56,7 @@ Analyze PyPI/npm dependencies (not just internal imports):
 - [x] Identify heavy/bloated dependencies (`--warn-weight` threshold)
 - [x] Check for known vulnerabilities (`--check-vulns` via OSV API)
 - [x] License compatibility checking (`--check-licenses` flag)
-- [ ] package.json/npm support
+- [x] package.json/npm support (dependencies, devDependencies, optional, peer)
 
 ### Enterprise Features
 

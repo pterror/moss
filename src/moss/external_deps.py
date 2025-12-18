@@ -436,6 +436,12 @@ class ExternalDependencyAnalyzer:
             self._parse_requirements(requirements_dev, result, is_dev=True)
             result.sources.append("requirements-dev.txt")
 
+        # Try package.json (npm/Node.js)
+        package_json = self.root / "package.json"
+        if package_json.exists():
+            self._parse_package_json(package_json, result)
+            result.sources.append("package.json")
+
         # Resolve transitive dependencies if requested
         if resolve:
             result.resolved_tree = self._resolve_dependencies(result.dependencies)
@@ -515,6 +521,73 @@ class ExternalDependencyAnalyzer:
                     result.dev_dependencies.append(dep)
                 else:
                     result.dependencies.append(dep)
+
+    def _parse_package_json(self, path: Path, result: DependencyAnalysisResult) -> None:
+        """Parse package.json for npm dependencies."""
+        import json
+
+        try:
+            content = path.read_text()
+            data = json.loads(content)
+        except Exception:
+            return
+
+        # Regular dependencies
+        deps = data.get("dependencies", {})
+        for name, version_spec in deps.items():
+            dep = self._parse_npm_dependency(name, version_spec)
+            if dep:
+                result.dependencies.append(dep)
+
+        # Dev dependencies
+        dev_deps = data.get("devDependencies", {})
+        for name, version_spec in dev_deps.items():
+            dep = self._parse_npm_dependency(name, version_spec, is_dev=True)
+            if dep:
+                result.dev_dependencies.append(dep)
+
+        # Optional dependencies
+        optional_deps = data.get("optionalDependencies", {})
+        if optional_deps:
+            opt_list = []
+            for name, version_spec in optional_deps.items():
+                dep = self._parse_npm_dependency(name, version_spec)
+                if dep:
+                    dep.is_optional = True
+                    dep.optional_group = "optional"
+                    opt_list.append(dep)
+            if opt_list:
+                result.optional_dependencies["optional"] = opt_list
+
+        # Peer dependencies (treated as optional)
+        peer_deps = data.get("peerDependencies", {})
+        if peer_deps:
+            peer_list = []
+            for name, version_spec in peer_deps.items():
+                dep = self._parse_npm_dependency(name, version_spec)
+                if dep:
+                    dep.is_optional = True
+                    dep.optional_group = "peer"
+                    peer_list.append(dep)
+            if peer_list:
+                result.optional_dependencies["peer"] = peer_list
+
+    def _parse_npm_dependency(
+        self, name: str, version_spec: str, *, is_dev: bool = False
+    ) -> Dependency | None:
+        """Parse an npm dependency name and version spec."""
+        if not name:
+            return None
+
+        # Clean up version spec
+        # npm uses: ^1.0.0, ~1.0.0, >=1.0.0, 1.0.0, *, latest, git urls, etc.
+        version_spec = version_spec.strip()
+
+        # Skip git/url/file dependencies for now
+        if version_spec.startswith(("git:", "git+", "http:", "https:", "file:")):
+            version_spec = "(git/url)"
+
+        return Dependency(name=name, version_spec=version_spec, is_dev=is_dev)
 
     def _parse_dependency_string(self, dep_str: str) -> Dependency | None:
         """Parse a dependency string like 'requests>=2.0,<3.0' or 'package[extra1,extra2]'."""
