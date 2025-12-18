@@ -2732,6 +2732,129 @@ def cmd_lint(args: Namespace) -> int:
     return 1 if errors > 0 else 0
 
 
+def cmd_checkpoint(args: Namespace) -> int:
+    """Manage checkpoints (shadow branches) for safe code modifications.
+
+    Subcommands:
+    - create: Create a checkpoint with current changes
+    - list: List active checkpoints
+    - diff: Show changes in a checkpoint
+    - merge: Merge checkpoint changes into base branch
+    - abort: Abandon a checkpoint
+    """
+    import asyncio
+
+    from moss.shadow_git import ShadowGit
+
+    output = setup_output(args)
+    root = Path(".").resolve()
+    action = getattr(args, "action", "list")
+    name = getattr(args, "name", None)
+    message = getattr(args, "message", None)
+
+    # Verify we're in a git repo
+    if not (root / ".git").exists():
+        output.error("Not a git repository")
+        return 1
+
+    git = ShadowGit(root)
+
+    async def run_action() -> int:
+        if action == "create":
+            branch_name = name or f"checkpoint/{asyncio.get_event_loop().time():.0f}"
+            try:
+                branch = await git.create_shadow_branch(branch_name)
+                commit_msg = message or f"Checkpoint: {branch_name}"
+                handle = await git.commit(branch, commit_msg, allow_empty=True)
+                output.success(f"Created checkpoint: {branch.name}")
+                output.info(f"Commit: {handle.sha[:8]}")
+            except Exception as e:
+                output.error(f"Failed to create checkpoint: {e}")
+                return 1
+
+        elif action == "list":
+            # List shadow branches from git
+            result = await git._run_git("branch", "--list", "shadow/*", "checkpoint/*")
+            branches = [b.strip() for b in result.stdout.strip().split("\n") if b.strip()]
+            if not branches:
+                output.info("No active checkpoints")
+            else:
+                output.header("Active Checkpoints")
+                for branch in branches:
+                    current = "*" if branch.startswith("*") else " "
+                    branch = branch.lstrip("* ")
+                    output.print(f"  {current} {branch}")
+
+        elif action == "diff":
+            if not name:
+                output.error("Checkpoint name required for diff")
+                return 1
+            try:
+                result = await git._run_git("diff", f"HEAD...{name}", check=False)
+                if result.stdout:
+                    output.print(result.stdout)
+                else:
+                    output.info("No differences")
+            except Exception as e:
+                output.error(f"Failed to get diff: {e}")
+                return 1
+
+        elif action == "merge":
+            if not name:
+                output.error("Checkpoint name required for merge")
+                return 1
+            try:
+                # Get current branch as base
+                base_result = await git._run_git("rev-parse", "--abbrev-ref", "HEAD")
+                base_branch = base_result.stdout.strip()
+
+                # Create a temporary ShadowBranch object
+                from moss.shadow_git import ShadowBranch
+
+                branch = ShadowBranch(name=name, base_branch=base_branch, repo_path=root)
+                git._branches[name] = branch
+
+                merge_msg = message or f"Merge checkpoint {name}"
+                handle = await git.squash_merge(branch, merge_msg)
+                output.success(f"Merged checkpoint {name}")
+                output.info(f"Commit: {handle.sha[:8]}")
+
+                # Clean up the branch
+                await git._run_git("branch", "-D", name, check=False)
+            except Exception as e:
+                output.error(f"Failed to merge: {e}")
+                return 1
+
+        elif action == "abort":
+            if not name:
+                output.error("Checkpoint name required for abort")
+                return 1
+            try:
+                # Get current branch
+                base_result = await git._run_git("rev-parse", "--abbrev-ref", "HEAD")
+                current = base_result.stdout.strip()
+
+                # If we're on the checkpoint branch, switch away first
+                if current == name:
+                    # Get base branch from the branch name if possible
+                    await git._run_git("checkout", "-", check=False)
+
+                # Delete the branch
+                await git._run_git("branch", "-D", name)
+                output.success(f"Aborted checkpoint: {name}")
+            except Exception as e:
+                output.error(f"Failed to abort: {e}")
+                return 1
+
+        else:
+            output.error(f"Unknown action: {action}")
+            return 1
+
+        return 0
+
+    return asyncio.run(run_action())
+
+
 def cmd_complexity(args: Namespace) -> int:
     """Analyze cyclomatic complexity of functions."""
     from moss.complexity import analyze_complexity
@@ -4432,6 +4555,29 @@ def create_parser() -> argparse.ArgumentParser:
         help="Attempt to fix issues automatically",
     )
     lint_parser.set_defaults(func=cmd_lint)
+
+    # checkpoint command
+    checkpoint_parser = subparsers.add_parser(
+        "checkpoint", help="Manage checkpoints (shadow branches) for safe code modifications"
+    )
+    checkpoint_parser.add_argument(
+        "action",
+        nargs="?",
+        default="list",
+        choices=["create", "list", "diff", "merge", "abort"],
+        help="Action to perform (default: list)",
+    )
+    checkpoint_parser.add_argument(
+        "name",
+        nargs="?",
+        help="Checkpoint name (required for diff, merge, abort)",
+    )
+    checkpoint_parser.add_argument(
+        "--message",
+        "-m",
+        help="Message for create/merge operations",
+    )
+    checkpoint_parser.set_defaults(func=cmd_checkpoint)
 
     # complexity command
     complexity_parser = subparsers.add_parser(
