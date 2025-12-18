@@ -1948,6 +1948,49 @@ def cmd_check_todos(args: Namespace) -> int:
     return 0
 
 
+def cmd_roadmap(args: Namespace) -> int:
+    """Show project roadmap and progress from TODO.md."""
+    from moss.roadmap import display_roadmap, find_todo_md
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+
+    # Find TODO.md
+    todo_path = find_todo_md(root)
+    if todo_path is None:
+        output.error("TODO.md not found")
+        return 1
+
+    # Determine display mode
+    # --plain explicitly sets plain text (good for LLMs)
+    # --tui explicitly sets TUI
+    # Default: TUI if stdout is a TTY, plain otherwise
+    use_tui = getattr(args, "tui", False)
+    use_plain = getattr(args, "plain", False)
+
+    if use_plain:
+        tui = False
+    elif use_tui:
+        tui = True
+    else:
+        # Auto-detect: TUI for humans at terminal, plain for piping/LLMs
+        import sys
+
+        tui = sys.stdout.isatty()
+
+    use_color = not getattr(args, "no_color", False) and tui
+    width = getattr(args, "width", 80)
+    show_completed = getattr(args, "completed", False)
+
+    return display_roadmap(
+        path=todo_path,
+        tui=tui,
+        show_completed=show_completed,
+        use_color=use_color,
+        width=width,
+    )
+
+
 def cmd_health(args: Namespace) -> int:
     """Show project health and what needs attention."""
     from moss.status import StatusChecker
@@ -2809,6 +2852,48 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output as JSON",
     )
     report_parser.set_defaults(func=cmd_report)
+
+    # roadmap command
+    roadmap_parser = subparsers.add_parser(
+        "roadmap", help="Show project roadmap and progress from TODO.md"
+    )
+    roadmap_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to search for TODO.md (default: current)",
+    )
+    roadmap_parser.add_argument(
+        "--tui",
+        "-t",
+        action="store_true",
+        help="Use TUI display with box drawing (default for humans)",
+    )
+    roadmap_parser.add_argument(
+        "--plain",
+        "-p",
+        action="store_true",
+        help="Use plain text display (better for LLMs)",
+    )
+    roadmap_parser.add_argument(
+        "--completed",
+        "-c",
+        action="store_true",
+        help="Include completed phases",
+    )
+    roadmap_parser.add_argument(
+        "--width",
+        "-w",
+        type=int,
+        default=80,
+        help="Terminal width for TUI mode (default: 80)",
+    )
+    roadmap_parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable colors in output",
+    )
+    roadmap_parser.set_defaults(func=cmd_roadmap)
 
     return parser
 

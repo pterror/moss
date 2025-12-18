@@ -18,6 +18,34 @@ Moss implements a "Compiled Context" approach that prioritizes architectural awa
 - **Configuration DSL**: Distro-based configuration with inheritance
 - **Code Synthesis**: Plugin-based code generation with decomposition strategies and LLM integration
 
+## Common Commands
+
+Quick reference for the most useful commands:
+
+```bash
+# Project health & roadmap
+moss health              # Show project health score and issues
+moss roadmap             # Show project roadmap with progress (TUI)
+moss roadmap --plain     # Plain text output (better for LLMs)
+
+# Code analysis
+moss skeleton src/       # Extract code structure (classes, functions)
+moss deps src/main.py    # Show imports and exports
+moss cfg src/main.py     # Build control flow graphs
+
+# Code operations
+moss run "Fix the bug"   # Submit a task
+moss synthesize "spec"   # Generate code from specification
+
+# Project management
+moss status              # Current task status
+moss summarize           # Generate codebase summary
+moss health --ci         # Health check for CI (exit codes)
+```
+
+> **Note for LLMs**: Use `--plain` or `--json` flags for machine-readable output.
+> Human users get TUI/colored output by default when at a terminal.
+
 ## Architecture
 
 ```
