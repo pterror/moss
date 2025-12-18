@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from moss.summarize import ProjectSummary, Summarizer
 
@@ -276,8 +276,34 @@ class DocChecker:
         # Looks like a module if it has dots or ends with .py
         return "." in ref or ref.endswith(".py") or ref.startswith("moss")
 
+    # Files that are generated, not in source tree
+    GENERATED_FILES: ClassVar[set[str]] = {"moss_config.py", "moss.toml"}
+
+    # Entry point group names (not modules)
+    ENTRY_POINT_GROUPS: ClassVar[set[str]] = {
+        "moss.plugins",
+        "moss.synthesis.generators",
+        "moss.synthesis.validators",
+        "moss.synthesis.strategies",
+        "moss.synthesis.libraries",
+    }
+
     def _module_exists(self, ref: str, all_modules: set[str]) -> bool:
-        """Check if a reference matches an existing module."""
+        """Check if a reference matches an existing module or file."""
+        # Skip known generated files
+        if ref in self.GENERATED_FILES:
+            return True
+
+        # Skip entry point group names
+        if ref in self.ENTRY_POINT_GROUPS:
+            return True
+
+        # Check if it's a file path that exists
+        if "/" in ref or ref.endswith(".py"):
+            file_path = self.root / ref
+            if file_path.exists():
+                return True
+
         normalized = self._normalize_module_name(ref)
         if not normalized:
             return True  # Can't verify, assume it's fine
