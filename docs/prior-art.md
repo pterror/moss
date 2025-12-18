@@ -714,6 +714,110 @@ Moss uses structural anchors (AST nodes) rather than line numbers:
 - [ ] Measure retry rate (how often does first attempt fail?)
 - [ ] Measure drift resistance (apply patch after other edits)
 
+## Context Management for Coding Agents
+
+### The Challenge
+- **Context rot**: LLM recall degrades as context grows (finite "attention budget")
+- **Lost in the middle**: Models recall beginning/end better than middle
+- **Cost**: Token usage directly impacts API costs
+
+### Four Core Techniques (2025)
+
+| Technique | Description | Use Case |
+|-----------|-------------|----------|
+| **Offloading** | Summarize tool responses, store full data in references | Large outputs |
+| **Reduction** | Compact conversations to reduce token count | Long sessions |
+| **Retrieval (RAG)** | Dynamically fetch relevant info at runtime | Large codebases |
+| **Isolation** | Sub-agents handle specific tasks without context overlap | Parallel work |
+
+### Approaches Compared
+
+**Observation Masking** (OpenHands, Cursor, Warp):
+- Selectively hide/mask parts of context
+- Keep critical info visible
+- Fast, deterministic
+
+**LLM Summarization** (Claude Code's auto-compact):
+- Summarize full trajectory at 95% context usage
+- Preserves semantic meaning
+- Slower, uses tokens for summarization itself
+
+### Best Practices (Token Budget Management)
+- **70% soft cap**: Prefer summarization, warn user
+- **85-90% hard cap**: Force summarize or drop least-valuable chunks
+- **Absolute cap**: Refuse/clarify before exceeding provider limits
+
+### Results
+- Advanced memory systems: 80-90% token reduction
+- 26% quality improvement with 90%+ token reduction (via intelligent memory)
+
+### Moss Implementation Notes
+- Already have: `context_memory.py` with summarization
+- Needed: Token budget tracking, auto-compact trigger
+- Consider: Hybrid approach (masking + summarization)
+- Priority: Critical for long sessions (see `docs/log-analysis.md`)
+
+## Program Repair vs Program Synthesis
+
+### Key Differences
+
+| Aspect | Program Synthesis | Automatic Program Repair |
+|--------|------------------|-------------------------|
+| **Goal** | Create new programs from specs | Fix existing buggy programs |
+| **Input** | Formal specification/examples | Buggy program + test suite |
+| **Starting Point** | Builds from scratch | Modifies existing code |
+| **Search Space** | All possible programs | Mutations of existing code |
+
+### How They Connect
+Semantics-based APR can frame repair as synthesis:
+- **SemFix**: Component-based synthesis for repair
+- **Angelix**: Extract constraints via symbolic execution, synthesize fixes
+- **S3**: Syntax-guided synthesis for repair
+
+### APR Categories
+1. **Template-based**: Pattern matching on AST (GenProg, ARJA)
+2. **Machine Learning**: Learn fix patterns from history
+3. **Deep Learning**: End-to-end neural repair (current SOTA)
+4. **Semantics-based**: Symbolic execution + synthesis
+
+### Moss Positioning
+Moss spans both:
+- **Synthesis**: Generate code from specs (type hints, tests, natural language)
+- **Repair**: Fix validation failures in synthesis loop
+- Key insight: Repair is often easier than synthesis (smaller search space)
+
+## Multi-Modal Code Generation
+
+### Screenshot-to-Code (2025)
+
+**Challenge**: Converting UI designs/screenshots to functional code is hard for MLLMs.
+- Complex UIs overwhelm single-model approaches
+- Need to unify: visual perception, layout planning, code synthesis
+
+**ScreenCoder** (SOTA 2025):
+- Modular multi-agent framework
+- Three stages:
+  1. **Grounding Agent**: VLM detects UI components with bounding boxes
+  2. **Planning Agent**: Determine layout structure
+  3. **Generation Agent**: Produce HTML/CSS code
+- Outperforms end-to-end approaches
+
+**DCGen** (Divide-and-Conquer):
+- Identifies common MLLM failures in design-to-code
+- Breaks task into subtasks
+- Tested on GPT-4o, Gemini, Claude
+
+**Google ScreenAI**:
+- Visual language model for UI understanding
+- Tasks: Q&A about screenshots, navigation, summarization
+- Links Vision Encoder → Connector → LLM
+
+### Moss Implementation Notes
+- Could add `moss ui-to-code <screenshot>` command
+- Multi-agent approach aligns with moss's architecture
+- Use existing skeleton view to validate generated structure
+- Consider: Figma/Sketch plugin that calls moss
+
 ## Benchmarking TODO
 
 - [ ] Implement SWE-bench evaluation harness
