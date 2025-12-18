@@ -2167,6 +2167,37 @@ def cmd_roadmap(args: Namespace) -> int:
     )
 
 
+def cmd_analyze_session(args: Namespace) -> int:
+    """Analyze a Claude Code session log."""
+    from moss.session_analysis import analyze_session
+
+    output = setup_output(args)
+    session_path = Path(getattr(args, "session_path", ""))
+
+    if not session_path.exists():
+        output.error(f"Session file not found: {session_path}")
+        return 1
+
+    output.info(f"Analyzing {session_path.name}...")
+
+    try:
+        analysis = analyze_session(session_path)
+    except Exception as e:
+        output.error(f"Failed to analyze session: {e}")
+        return 1
+
+    # Output format
+    compact = getattr(args, "compact", False)
+    if compact and not wants_json(args):
+        output.print(analysis.to_compact())
+    elif wants_json(args):
+        output.data(analysis.to_dict())
+    else:
+        output.print(analysis.to_markdown())
+
+    return 0
+
+
 def cmd_health(args: Namespace) -> int:
     """Show project health and what needs attention."""
     from moss.status import StatusChecker
@@ -3660,6 +3691,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Max items per section (0 = unlimited, default: 0)",
     )
     roadmap_parser.set_defaults(func=cmd_roadmap)
+
+    # analyze-session command
+    session_parser = subparsers.add_parser(
+        "analyze-session", help="Analyze a Claude Code session log"
+    )
+    session_parser.add_argument(
+        "session_path",
+        type=Path,
+        help="Path to the JSONL session file",
+    )
+    session_parser.set_defaults(func=cmd_analyze_session)
 
     return parser
 
