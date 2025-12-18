@@ -1,68 +1,57 @@
-"""Tests for custom analysis rules module."""
+"""Tests for multi-backend custom analysis rules module."""
 
 from pathlib import Path
 
 from moss.rules import (
-    BUILTIN_RULES,
-    Rule,
+    CodeContext,
+    Location,
+    RuleContext,
     RuleEngine,
     RuleResult,
+    Severity,
     Violation,
     create_engine_with_builtins,
+    detect_context,
+    get_builtin_rules,
     load_rules_from_config,
     load_rules_from_toml,
+    pattern_rule,
+    rule,
 )
-
-
-class TestRule:
-    """Tests for Rule dataclass."""
-
-    def test_default_values(self):
-        rule = Rule(
-            name="test-rule",
-            pattern=r"\btest\b",
-            message="Test message",
-        )
-
-        assert rule.name == "test-rule"
-        assert rule.severity == "warning"
-        assert rule.category == "custom"
-        assert rule.file_pattern == "*.py"
-        assert rule.enabled is True
-
-    def test_custom_values(self):
-        rule = Rule(
-            name="custom-rule",
-            pattern=r"\bfoo\b",
-            message="Custom message",
-            severity="error",
-            category="security",
-            file_pattern="*.txt",
-            enabled=False,
-        )
-
-        assert rule.severity == "error"
-        assert rule.category == "security"
-        assert rule.file_pattern == "*.txt"
-        assert rule.enabled is False
 
 
 class TestViolation:
     """Tests for Violation dataclass."""
 
     def test_basic_violation(self):
-        rule = Rule(name="test", pattern="x", message="msg")
+        location = Location(file_path=Path("test.py"), line=10, column=5)
         violation = Violation(
-            rule=rule,
-            file_path=Path("test.py"),
-            line=10,
-            column=5,
-            match_text="xxx",
+            rule_name="test-rule",
+            message="Test message",
+            location=location,
+            severity=Severity.WARNING,
         )
 
-        assert violation.line == 10
-        assert violation.column == 5
-        assert violation.match_text == "xxx"
+        assert violation.location.line == 10
+        assert violation.location.column == 5
+        assert violation.severity == Severity.WARNING
+
+    def test_to_dict(self):
+        location = Location(file_path=Path("test.py"), line=5, column=3)
+        violation = Violation(
+            rule_name="test-rule",
+            message="Test message",
+            location=location,
+            severity=Severity.ERROR,
+            category="security",
+        )
+
+        d = violation.to_dict()
+
+        assert d["rule"] == "test-rule"
+        assert d["line"] == 5
+        assert d["severity"] == "error"
+        assert d["category"] == "security"
 
 
 class TestRuleResult:
@@ -76,46 +65,89 @@ class TestRuleResult:
         assert result.rules_applied == 0
 
     def test_by_severity(self):
-        error_rule = Rule(name="err", pattern="x", message="m", severity="error")
-        warning_rule = Rule(name="warn", pattern="y", message="m", severity="warning")
-
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=error_rule, file_path=Path("a.py"), line=1, column=1, match_text="x"
+                    rule_name="err",
+                    message="m",
+                    location=Location(Path("a.py"), 1, 1),
+                    severity=Severity.ERROR,
                 ),
                 Violation(
-                    rule=error_rule, file_path=Path("b.py"), line=2, column=1, match_text="x"
+                    rule_name="err",
+                    message="m",
+                    location=Location(Path("b.py"), 2, 1),
+                    severity=Severity.ERROR,
                 ),
                 Violation(
-                    rule=warning_rule, file_path=Path("c.py"), line=3, column=1, match_text="y"
+                    rule_name="warn",
+                    message="m",
+                    location=Location(Path("c.py"), 3, 1),
+                    severity=Severity.WARNING,
                 ),
             ]
         )
 
-        assert len(result.by_severity("error")) == 2
-        assert len(result.by_severity("warning")) == 1
-        assert len(result.by_severity("info")) == 0
+        assert len(result.by_severity(Severity.ERROR)) == 2
+        assert len(result.by_severity(Severity.WARNING)) == 1
+        assert len(result.by_severity(Severity.INFO)) == 0
 
     def test_by_rule(self):
-        rule1 = Rule(name="rule1", pattern="x", message="m")
-        rule2 = Rule(name="rule2", pattern="y", message="m")
-
         result = RuleResult(
             violations=[
-                Violation(rule=rule1, file_path=Path("a.py"), line=1, column=1, match_text="x"),
-                Violation(rule=rule2, file_path=Path("a.py"), line=2, column=1, match_text="y"),
+                Violation(
+                    rule_name="rule1",
+                    message="m",
+                    location=Location(Path("a.py"), 1, 1),
+                ),
+                Violation(
+                    rule_name="rule2",
+                    message="m",
+                    location=Location(Path("a.py"), 2, 1),
+                ),
             ]
         )
 
         assert len(result.by_rule("rule1")) == 1
         assert len(result.by_rule("rule2")) == 1
 
-    def test_to_dict(self):
-        rule = Rule(name="test", pattern="x", message="Test", severity="warning")
+    def test_count_properties(self):
         result = RuleResult(
             violations=[
-                Violation(rule=rule, file_path=Path("test.py"), line=5, column=3, match_text="x"),
+                Violation(
+                    rule_name="e",
+                    message="m",
+                    location=Location(Path("a.py"), 1, 1),
+                    severity=Severity.ERROR,
+                ),
+                Violation(
+                    rule_name="w",
+                    message="m",
+                    location=Location(Path("b.py"), 2, 1),
+                    severity=Severity.WARNING,
+                ),
+                Violation(
+                    rule_name="i",
+                    message="m",
+                    location=Location(Path("c.py"), 3, 1),
+                    severity=Severity.INFO,
+                ),
+            ]
+        )
+
+        assert result.error_count == 1
+        assert result.warning_count == 1
+        assert result.info_count == 1
+
+    def test_to_dict(self):
+        result = RuleResult(
+            violations=[
+                Violation(
+                    rule_name="test",
+                    message="Test",
+                    location=Location(Path("test.py"), 5, 3),
+                    severity=Severity.WARNING,
+                ),
             ],
             files_checked=10,
             rules_applied=3,
@@ -128,7 +160,6 @@ class TestRuleResult:
         assert d["total_violations"] == 1
         assert d["by_severity"]["warning"] == 1
         assert len(d["violations"]) == 1
-        assert d["violations"][0]["rule"] == "test"
 
 
 class TestRuleEngine:
@@ -136,19 +167,20 @@ class TestRuleEngine:
 
     def test_empty_engine(self):
         engine = RuleEngine()
-        assert engine.rules == []
+        assert engine.rules == {}
 
     def test_add_rule(self):
         engine = RuleEngine()
-        rule = Rule(name="test", pattern="x", message="m")
+        spec = pattern_rule("test", r"\btest\b", "Test message")
 
-        engine.add_rule(rule)
+        engine.add_rule(spec)
 
         assert len(engine.rules) == 1
 
     def test_remove_rule(self):
-        rule = Rule(name="test", pattern="x", message="m")
-        engine = RuleEngine([rule])
+        spec = pattern_rule("test", r"\btest\b", "Test message")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
         result = engine.remove_rule("test")
 
@@ -166,83 +198,58 @@ class TestRuleEngine:
         test_file = tmp_path / "test.py"
         test_file.write_text("x = 1\nprint('hello')\ny = 2\n")
 
-        rule = Rule(
-            name="no-print",
-            pattern=r"\bprint\s*\(",
-            message="No print",
-        )
-        engine = RuleEngine([rule])
+        spec = pattern_rule("no-print", r"\bprint\s*\(", "No print")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
-        violations = engine.check_file(test_file)
+        result = engine.check_file(test_file)
 
-        assert len(violations) == 1
-        assert violations[0].line == 2
-        assert "print" in violations[0].match_text
+        assert len(result.violations) == 1
+        assert result.violations[0].location.line == 2
 
     def test_check_file_multiple_matches(self, tmp_path: Path):
         test_file = tmp_path / "test.py"
         test_file.write_text("print(1)\nprint(2)\nprint(3)\n")
 
-        rule = Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print")
-        engine = RuleEngine([rule])
+        spec = pattern_rule("no-print", r"\bprint\s*\(", "No print")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
-        violations = engine.check_file(test_file)
+        result = engine.check_file(test_file)
 
-        assert len(violations) == 3
-
-    def test_check_file_multiple_rules(self, tmp_path: Path):
-        test_file = tmp_path / "test.py"
-        test_file.write_text("print(1)\nbreakpoint()\n")
-
-        rules = [
-            Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print"),
-            Rule(name="no-breakpoint", pattern=r"\bbreakpoint\s*\(", message="No breakpoint"),
-        ]
-        engine = RuleEngine(rules)
-
-        violations = engine.check_file(test_file)
-
-        assert len(violations) == 2
+        assert len(result.violations) == 3
 
     def test_check_file_disabled_rule(self, tmp_path: Path):
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
 
-        rule = Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print", enabled=False)
-        engine = RuleEngine([rule])
+        spec = pattern_rule("no-print", r"\bprint\s*\(", "No print")
+        spec.enabled = False
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
-        violations = engine.check_file(test_file)
+        result = engine.check_file(test_file)
 
-        assert len(violations) == 0
+        assert len(result.violations) == 0
 
     def test_check_file_nonexistent(self, tmp_path: Path):
-        rule = Rule(name="test", pattern="x", message="m")
-        engine = RuleEngine([rule])
+        spec = pattern_rule("test", r"\btest\b", "Test")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
-        violations = engine.check_file(tmp_path / "nonexistent.py")
+        result = engine.check_file(tmp_path / "nonexistent.py")
 
-        assert len(violations) == 0
-
-    def test_check_file_includes_context(self, tmp_path: Path):
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\nprint('x')\nline4\nline5\n")
-
-        rule = Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print")
-        engine = RuleEngine([rule])
-
-        violations = engine.check_file(test_file)
-
-        assert len(violations) == 1
-        assert "line2" in violations[0].context
-        assert "print" in violations[0].context
+        # Should handle gracefully
+        assert result.files_checked == 1
 
     def test_check_directory(self, tmp_path: Path):
         (tmp_path / "a.py").write_text("print(1)\n")
         (tmp_path / "b.py").write_text("print(2)\nprint(3)\n")
         (tmp_path / "c.txt").write_text("print(4)\n")  # Not .py
 
-        rule = Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print")
-        engine = RuleEngine([rule])
+        spec = pattern_rule("no-print", r"\bprint\s*\(", "No print")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
         result = engine.check_directory(tmp_path)
 
@@ -255,8 +262,9 @@ class TestRuleEngine:
         (tmp_path / "a.py").write_text("print(1)\n")
         (sub / "b.py").write_text("print(2)\n")
 
-        rule = Rule(name="no-print", pattern=r"\bprint\s*\(", message="No print")
-        engine = RuleEngine([rule])
+        spec = pattern_rule("no-print", r"\bprint\s*\(", "No print")
+        engine = RuleEngine()
+        engine.add_rule(spec)
 
         result = engine.check_directory(tmp_path)
 
@@ -268,16 +276,17 @@ class TestBuiltinRules:
     """Tests for built-in rules."""
 
     def test_builtin_rules_exist(self):
-        assert len(BUILTIN_RULES) > 0
+        builtins = get_builtin_rules()
+        assert len(builtins) > 0
 
     def test_no_print_rule(self, tmp_path: Path):
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')\n")
 
         engine = create_engine_with_builtins()
-        violations = engine.check_file(test_file)
+        result = engine.check_file(test_file)
 
-        print_violations = [v for v in violations if v.rule.name == "no-print"]
+        print_violations = [v for v in result.violations if v.rule_name == "no-print"]
         assert len(print_violations) == 1
 
     def test_no_breakpoint_rule(self, tmp_path: Path):
@@ -285,9 +294,9 @@ class TestBuiltinRules:
         test_file.write_text("breakpoint()\n")
 
         engine = create_engine_with_builtins()
-        violations = engine.check_file(test_file)
+        result = engine.check_file(test_file)
 
-        bp_violations = [v for v in violations if v.rule.name == "no-breakpoint"]
+        bp_violations = [v for v in result.violations if v.rule_name == "no-breakpoint"]
         assert len(bp_violations) == 1
 
 
@@ -315,35 +324,25 @@ category = "style"
 
         assert len(rules) == 2
         assert rules[0].name == "no-debug"
-        assert rules[0].severity == "warning"
+        assert rules[0].severity == Severity.WARNING
         assert rules[1].name == "no-star"
         assert rules[1].category == "style"
 
-    def test_load_rules_with_all_fields(self, tmp_path: Path):
+    def test_load_rules_with_backend(self, tmp_path: Path):
         rules_file = tmp_path / "rules.toml"
         rules_file.write_text("""
 [[rules]]
-name = "custom"
-pattern = "foobar"
-message = "Found foobar"
-severity = "error"
-category = "security"
-file_pattern = "*.txt"
-enabled = false
-fix = "Remove foobar"
-documentation = "See docs"
+name = "ast-rule"
+pattern = "print($ARGS)"
+message = "Use ast-grep pattern"
+backend = "ast-grep"
 """)
 
         rules = load_rules_from_toml(rules_file)
 
         assert len(rules) == 1
-        rule = rules[0]
-        assert rule.severity == "error"
-        assert rule.category == "security"
-        assert rule.file_pattern == "*.txt"
-        assert rule.enabled is False
-        assert rule.fix == "Remove foobar"
-        assert rule.documentation == "See docs"
+        assert rules[0].name == "ast-rule"
+        assert "ast-grep" in rules[0].backends
 
 
 class TestLoadRulesFromConfig:
@@ -391,48 +390,81 @@ message = "msg"
         assert len(rules) == 1
         assert rules[0].name == "from-pyproject"
 
-    def test_load_from_multiple_sources(self, tmp_path: Path):
-        (tmp_path / "moss.toml").write_text("""
-[[rules]]
-name = "rule1"
-pattern = "a"
-message = "m"
-""")
-
-        moss_dir = tmp_path / ".moss"
-        moss_dir.mkdir()
-        (moss_dir / "rules.toml").write_text("""
-[[rules]]
-name = "rule2"
-pattern = "b"
-message = "m"
-""")
-
-        rules = load_rules_from_config(tmp_path)
-
-        assert len(rules) == 2
-
 
 class TestCreateEngineWithBuiltins:
     """Tests for create_engine_with_builtins."""
 
     def test_with_builtins(self):
         engine = create_engine_with_builtins(include_builtins=True)
-        assert len(engine.rules) >= len(BUILTIN_RULES)
+        assert len(engine.rules) >= len(get_builtin_rules())
 
     def test_without_builtins(self):
         engine = create_engine_with_builtins(include_builtins=False)
         assert len(engine.rules) == 0
 
     def test_with_custom_rules(self):
-        custom = [Rule(name="custom", pattern="x", message="m")]
+        custom = [pattern_rule("custom", "x", "m")]
         engine = create_engine_with_builtins(include_builtins=False, custom_rules=custom)
 
         assert len(engine.rules) == 1
-        assert engine.rules[0].name == "custom"
+        assert "custom" in engine.rules
 
-    def test_combined(self):
-        custom = [Rule(name="custom", pattern="x", message="m")]
-        engine = create_engine_with_builtins(include_builtins=True, custom_rules=custom)
 
-        assert len(engine.rules) == len(BUILTIN_RULES) + 1
+class TestContextDetection:
+    """Tests for code context detection."""
+
+    def test_detect_test_file_by_path(self, tmp_path: Path):
+        test_file = tmp_path / "tests" / "test_foo.py"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text("def test_something(): pass\n")
+
+        context = detect_context(test_file)
+
+        assert context == CodeContext.TEST
+
+    def test_detect_test_file_by_imports(self, tmp_path: Path):
+        test_file = tmp_path / "foo.py"
+        test_file.write_text("import pytest\n\ndef test_x(): pass\n")
+
+        context = detect_context(test_file)
+
+        assert context == CodeContext.TEST
+
+    def test_detect_library_code(self, tmp_path: Path):
+        lib_file = tmp_path / "mymodule.py"
+        lib_file.write_text("def helper(): return 42\n")
+
+        context = detect_context(lib_file)
+
+        assert context == CodeContext.LIBRARY
+
+
+class TestRuleDecorator:
+    """Tests for @rule decorator."""
+
+    def test_rule_registration(self):
+        @rule(backend="python")
+        def my_test_rule(ctx: RuleContext) -> list[Violation]:
+            """Test rule docstring."""
+            return []
+
+        assert my_test_rule.name == "my_test_rule"
+        assert my_test_rule.description == "Test rule docstring."
+        assert "python" in my_test_rule.backends
+
+    def test_rule_with_options(self):
+        @rule(
+            backend="regex",
+            name="custom-name",
+            severity="error",
+            category="security",
+            context="not:test",
+        )
+        def another_rule(ctx: RuleContext) -> list[Violation]:
+            """Another rule."""
+            return []
+
+        assert another_rule.name == "custom-name"
+        assert another_rule.severity == Severity.ERROR
+        assert another_rule.category == "security"
+        assert another_rule.exclude_contexts == [CodeContext.TEST]

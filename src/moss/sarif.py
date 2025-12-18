@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from moss.rules import RuleResult, Violation
+from moss.rules import RuleResult, Severity, Violation
 
 # SARIF specification version
 SARIF_VERSION = "2.1.0"
@@ -68,9 +68,9 @@ def generate_sarif(
     # Build rules dictionary for tool component
     rules_dict: dict[str, dict] = {}
     for violation in result.violations:
-        rule_id = violation.rule.name
+        rule_id = violation.rule_name
         if rule_id not in rules_dict:
-            rules_dict[rule_id] = _build_rule_descriptor(violation.rule)
+            rules_dict[rule_id] = _build_rule_descriptor(violation)
 
     # Build results array
     results = [_build_result(v, config) for v in result.violations]
@@ -103,31 +103,31 @@ def generate_sarif(
     return sarif
 
 
-def _build_rule_descriptor(rule) -> dict[str, Any]:
-    """Build a SARIF rule descriptor."""
+def _build_rule_descriptor(violation: Violation) -> dict[str, Any]:
+    """Build a SARIF rule descriptor from a violation."""
     severity_map = {
-        "error": "error",
-        "warning": "warning",
-        "info": "note",
+        Severity.ERROR: "error",
+        Severity.WARNING: "warning",
+        Severity.INFO: "note",
     }
 
-    descriptor = {
-        "id": rule.name,
-        "name": rule.name.replace("-", " ").title(),
-        "shortDescription": {"text": rule.message},
+    descriptor: dict[str, Any] = {
+        "id": violation.rule_name,
+        "name": violation.rule_name.replace("-", " ").title(),
+        "shortDescription": {"text": violation.message},
         "defaultConfiguration": {
-            "level": severity_map.get(rule.severity, "warning"),
+            "level": severity_map.get(violation.severity, "warning"),
         },
         "properties": {
-            "category": rule.category,
+            "category": violation.category,
         },
     }
 
-    if rule.documentation:
-        descriptor["helpUri"] = rule.documentation
+    # Note: documentation field doesn't exist in new Violation structure
+    # If we add it in metadata, we can extract it here
 
-    if rule.fix:
-        descriptor["help"] = {"text": rule.fix}
+    if violation.fix:
+        descriptor["help"] = {"text": violation.fix}
 
     return descriptor
 
@@ -135,13 +135,13 @@ def _build_rule_descriptor(rule) -> dict[str, Any]:
 def _build_result(violation: Violation, config: SARIFConfig) -> dict[str, Any]:
     """Build a SARIF result from a violation."""
     severity_map = {
-        "error": "error",
-        "warning": "warning",
-        "info": "note",
+        Severity.ERROR: "error",
+        Severity.WARNING: "warning",
+        Severity.INFO: "note",
     }
 
     # Build file URI
-    file_path = violation.file_path
+    file_path = violation.location.file_path
     if config.base_path:
         try:
             file_path = file_path.relative_to(config.base_path)
@@ -149,16 +149,16 @@ def _build_result(violation: Violation, config: SARIFConfig) -> dict[str, Any]:
             pass
 
     result: dict[str, Any] = {
-        "ruleId": violation.rule.name,
-        "level": severity_map.get(violation.rule.severity, "warning"),
-        "message": {"text": violation.rule.message},
+        "ruleId": violation.rule_name,
+        "level": severity_map.get(violation.severity, "warning"),
+        "message": {"text": violation.message},
         "locations": [
             {
                 "physicalLocation": {
                     "artifactLocation": {"uri": str(file_path)},
                     "region": {
-                        "startLine": violation.line,
-                        "startColumn": violation.column,
+                        "startLine": violation.location.line,
+                        "startColumn": violation.location.column,
                     },
                 }
             }
@@ -166,15 +166,15 @@ def _build_result(violation: Violation, config: SARIFConfig) -> dict[str, Any]:
     }
 
     # Add snippet if available and configured
-    if config.include_snippets and violation.context:
+    if config.include_snippets and violation.context_lines:
         result["locations"][0]["physicalLocation"]["region"]["snippet"] = {
-            "text": violation.context
+            "text": violation.context_lines
         }
 
     # Add fingerprint for deduplication
     if config.include_fingerprints:
         # Simple fingerprint based on rule + location
-        fingerprint = f"{violation.rule.name}:{file_path}:{violation.line}"
+        fingerprint = f"{violation.rule_name}:{file_path}:{violation.location.line}"
         result["fingerprints"] = {"primaryLocationLineHash": fingerprint}
 
     return result

@@ -1442,6 +1442,8 @@ def cmd_hooks(args: Namespace) -> int:
 def cmd_rules(args: Namespace) -> int:
     """Check code against custom rules."""
     from moss.rules import (
+        EngineConfig,
+        Severity,
         create_engine_with_builtins,
         load_rules_from_config,
     )
@@ -1457,8 +1459,15 @@ def cmd_rules(args: Namespace) -> int:
     # Load rules
     include_builtins = not getattr(args, "no_builtins", False)
     custom_rules = load_rules_from_config(directory)
+
+    # Configure engine with file pattern
+    pattern = getattr(args, "pattern", "**/*.py")
+    config = EngineConfig(include_patterns=[pattern])
+
     engine = create_engine_with_builtins(
-        include_builtins=include_builtins, custom_rules=custom_rules
+        include_builtins=include_builtins,
+        custom_rules=custom_rules,
+        config=config,
     )
 
     if not engine.rules:
@@ -1468,14 +1477,14 @@ def cmd_rules(args: Namespace) -> int:
     # List rules if requested
     if getattr(args, "list", False):
         output.header("Available Rules")
-        for rule in engine.rules:
+        for rule in engine.rules.values():
             status = "[enabled]" if rule.enabled else "[disabled]"
-            output.info(f"  {rule.name}: {rule.message} {status}")
+            backends = ", ".join(rule.backends)
+            output.info(f"  {rule.name} ({backends}): {rule.description} {status}")
         return 0
 
     # Run analysis
-    pattern = getattr(args, "pattern", "**/*.py")
-    result = engine.check_directory(directory, pattern=pattern)
+    result = engine.check_directory(directory)
 
     if getattr(args, "json", False):
         output.data(result.to_dict())
@@ -1507,9 +1516,10 @@ def cmd_rules(args: Namespace) -> int:
     # Group by file
     by_file: dict[Path, list] = {}
     for v in result.violations:
-        if v.file_path not in by_file:
-            by_file[v.file_path] = []
-        by_file[v.file_path].append(v)
+        file_path = v.location.file_path
+        if file_path not in by_file:
+            by_file[file_path] = []
+        by_file[file_path].append(v)
 
     for file_path, violations in sorted(by_file.items()):
         try:
@@ -1519,15 +1529,19 @@ def cmd_rules(args: Namespace) -> int:
         output.step(str(rel_path))
 
         for v in violations:
-            severity_marker = {"error": "E", "warning": "W", "info": "I"}.get(v.rule.severity, "?")
-            output.info(f"  {v.line}:{v.column} [{severity_marker}] {v.rule.message}")
+            severity_marker = {
+                Severity.ERROR: "E",
+                Severity.WARNING: "W",
+                Severity.INFO: "I",
+            }.get(v.severity, "?")
+            output.info(f"  {v.location.line}:{v.location.column} [{severity_marker}] {v.message}")
 
         output.blank()
 
     # Summary
-    errors = len(result.by_severity("error"))
-    warnings = len(result.by_severity("warning"))
-    infos = len(result.by_severity("info"))
+    errors = result.error_count
+    warnings = result.warning_count
+    infos = result.info_count
     output.info(f"Summary: {errors} errors, {warnings} warnings, {infos} info")
 
     # Return non-zero if errors found

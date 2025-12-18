@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from moss.rules import Rule, RuleResult, Violation
+from moss.rules import Location, RuleResult, Severity, Violation
 from moss.sarif import (
     SARIF_VERSION,
     SARIFConfig,
@@ -49,22 +49,15 @@ class TestGenerateSarif:
         assert sarif["runs"][0]["results"] == []
 
     def test_single_violation(self):
-        rule = Rule(
-            name="test-rule",
-            pattern="test",
-            message="Test message",
-            severity="warning",
-            category="test-category",
-        )
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("test.py"),
-                    line=10,
-                    column=5,
-                    match_text="test",
-                    context="line with test",
+                    rule_name="test-rule",
+                    message="Test message",
+                    location=Location(Path("test.py"), 10, 5),
+                    severity=Severity.WARNING,
+                    category="test-category",
+                    context_lines="line with test",
                 )
             ]
         )
@@ -78,15 +71,12 @@ class TestGenerateSarif:
         assert sarif_result["message"]["text"] == "Test message"
 
     def test_location_info(self):
-        rule = Rule(name="test", pattern="x", message="msg")
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("src/file.py"),
-                    line=42,
-                    column=13,
-                    match_text="x",
+                    rule_name="test",
+                    message="msg",
+                    location=Location(Path("src/file.py"), 42, 13),
                 )
             ]
         )
@@ -100,16 +90,13 @@ class TestGenerateSarif:
         assert physical["region"]["startColumn"] == 13
 
     def test_includes_snippet(self):
-        rule = Rule(name="test", pattern="x", message="msg")
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("test.py"),
-                    line=1,
-                    column=1,
-                    match_text="x",
-                    context="full line with x in it",
+                    rule_name="test",
+                    message="msg",
+                    location=Location(Path("test.py"), 1, 1),
+                    context_lines="full line with x in it",
                 )
             ]
         )
@@ -121,16 +108,13 @@ class TestGenerateSarif:
         assert "x" in snippet["text"]
 
     def test_excludes_snippet_when_disabled(self):
-        rule = Rule(name="test", pattern="x", message="msg")
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("test.py"),
-                    line=1,
-                    column=1,
-                    match_text="x",
-                    context="context text",
+                    rule_name="test",
+                    message="msg",
+                    location=Location(Path("test.py"), 1, 1),
+                    context_lines="context text",
                 )
             ]
         )
@@ -142,15 +126,12 @@ class TestGenerateSarif:
         assert "snippet" not in location["physicalLocation"]["region"]
 
     def test_includes_fingerprints(self):
-        rule = Rule(name="test", pattern="x", message="msg")
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("test.py"),
-                    line=1,
-                    column=1,
-                    match_text="x",
+                    rule_name="test",
+                    message="msg",
+                    location=Location(Path("test.py"), 1, 1),
                 )
             ]
         )
@@ -163,43 +144,53 @@ class TestGenerateSarif:
 
     def test_severity_mapping(self):
         # Test error
-        error_rule = Rule(name="err", pattern="x", message="m", severity="error")
         error_result = RuleResult(
             violations=[
-                Violation(rule=error_rule, file_path=Path("t.py"), line=1, column=1, match_text="x")
+                Violation(
+                    rule_name="err",
+                    message="m",
+                    location=Location(Path("t.py"), 1, 1),
+                    severity=Severity.ERROR,
+                )
             ]
         )
         sarif = generate_sarif(error_result)
         assert sarif["runs"][0]["results"][0]["level"] == "error"
 
         # Test warning
-        warn_rule = Rule(name="warn", pattern="x", message="m", severity="warning")
         warn_result = RuleResult(
             violations=[
-                Violation(rule=warn_rule, file_path=Path("t.py"), line=1, column=1, match_text="x")
+                Violation(
+                    rule_name="warn",
+                    message="m",
+                    location=Location(Path("t.py"), 1, 1),
+                    severity=Severity.WARNING,
+                )
             ]
         )
         sarif = generate_sarif(warn_result)
         assert sarif["runs"][0]["results"][0]["level"] == "warning"
 
         # Test info -> note
-        info_rule = Rule(name="info", pattern="x", message="m", severity="info")
         info_result = RuleResult(
             violations=[
-                Violation(rule=info_rule, file_path=Path("t.py"), line=1, column=1, match_text="x")
+                Violation(
+                    rule_name="info",
+                    message="m",
+                    location=Location(Path("t.py"), 1, 1),
+                    severity=Severity.INFO,
+                )
             ]
         )
         sarif = generate_sarif(info_result)
         assert sarif["runs"][0]["results"][0]["level"] == "note"
 
     def test_multiple_violations(self):
-        rule1 = Rule(name="rule1", pattern="a", message="msg1")
-        rule2 = Rule(name="rule2", pattern="b", message="msg2")
         result = RuleResult(
             violations=[
-                Violation(rule=rule1, file_path=Path("a.py"), line=1, column=1, match_text="a"),
-                Violation(rule=rule1, file_path=Path("b.py"), line=2, column=2, match_text="a"),
-                Violation(rule=rule2, file_path=Path("c.py"), line=3, column=3, match_text="b"),
+                Violation(rule_name="rule1", message="msg1", location=Location(Path("a.py"), 1, 1)),
+                Violation(rule_name="rule1", message="msg1", location=Location(Path("b.py"), 2, 2)),
+                Violation(rule_name="rule2", message="msg2", location=Location(Path("c.py"), 3, 3)),
             ]
         )
 
@@ -227,18 +218,16 @@ class TestGenerateSarif:
         assert driver["informationUri"] == "https://example.com"
 
     def test_rule_descriptors(self):
-        rule = Rule(
-            name="my-rule",
-            pattern="x",
-            message="My message",
-            severity="error",
-            category="security",
-            documentation="https://docs.example.com",
-            fix="Remove the issue",
-        )
         result = RuleResult(
             violations=[
-                Violation(rule=rule, file_path=Path("t.py"), line=1, column=1, match_text="x")
+                Violation(
+                    rule_name="my-rule",
+                    message="My message",
+                    location=Location(Path("t.py"), 1, 1),
+                    severity=Severity.ERROR,
+                    category="security",
+                    fix="Remove the issue",
+                )
             ]
         )
 
@@ -251,19 +240,15 @@ class TestGenerateSarif:
         assert rule_desc["shortDescription"]["text"] == "My message"
         assert rule_desc["defaultConfiguration"]["level"] == "error"
         assert rule_desc["properties"]["category"] == "security"
-        assert rule_desc["helpUri"] == "https://docs.example.com"
         assert "Remove the issue" in rule_desc["help"]["text"]
 
     def test_relative_paths(self):
-        rule = Rule(name="test", pattern="x", message="msg")
         result = RuleResult(
             violations=[
                 Violation(
-                    rule=rule,
-                    file_path=Path("/home/user/project/src/file.py"),
-                    line=1,
-                    column=1,
-                    match_text="x",
+                    rule_name="test",
+                    message="msg",
+                    location=Location(Path("/home/user/project/src/file.py"), 1, 1),
                 )
             ]
         )
