@@ -1824,6 +1824,39 @@ def cmd_diff(args: Namespace) -> int:
     return 0
 
 
+def cmd_summarize(args: Namespace) -> int:
+    """Generate hierarchical codebase summary."""
+    from moss.summarize import Summarizer
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+
+    if not root.exists():
+        output.error(f"Directory not found: {root}")
+        return 1
+
+    output.info(f"Summarizing {root.name}...")
+
+    summarizer = Summarizer(
+        include_private=getattr(args, "include_private", False),
+        include_tests=getattr(args, "include_tests", False),
+    )
+
+    try:
+        summary = summarizer.summarize_project(root)
+    except Exception as e:
+        output.error(f"Failed to summarize: {e}")
+        return 1
+
+    # Output format
+    if getattr(args, "json", False):
+        output.data(summary.to_dict())
+    else:
+        output.print(summary.to_markdown())
+
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -2397,6 +2430,38 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show unified diff of changes",
     )
     edit_parser.set_defaults(func=cmd_edit)
+
+    # summarize command
+    summarize_parser = subparsers.add_parser(
+        "summarize", help="Generate hierarchical codebase summary"
+    )
+    summarize_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to summarize (default: current)",
+    )
+    summarize_parser.add_argument(
+        "--include-private",
+        "-p",
+        action="store_true",
+        dest="include_private",
+        help="Include private (_prefixed) modules and symbols",
+    )
+    summarize_parser.add_argument(
+        "--include-tests",
+        "-t",
+        action="store_true",
+        dest="include_tests",
+        help="Include test files",
+    )
+    summarize_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
+    summarize_parser.set_defaults(func=cmd_summarize)
 
     return parser
 
