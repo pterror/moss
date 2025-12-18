@@ -136,7 +136,15 @@ Can moss answer questions about itself? Examples:
 
 This is dogfooding at the meta level - using moss to understand moss.
 
-See `docs/prior-art.md` for research references and competitor analysis.
+### Competitor Analysis
+
+See `docs/prior-art.md` for research references.
+
+- [ ] **Investigate SWE-agent**: How does it work? What's their ACI? Performance on SWE-bench?
+- [ ] **Investigate Aider**: Edit format, multi-file handling, git integration patterns
+- [ ] **Investigate OpenHands**: Sandbox/runtime approach, architecture
+
+Key question: Do they do something moss should adopt, or is moss's structural-awareness approach better?
 
 ---
 
