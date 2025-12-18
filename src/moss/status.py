@@ -15,6 +15,7 @@ from moss.check_todos import TodoChecker, TodoCheckResult, TodoStatus
 from moss.dependency_analysis import DependencyAnalysis, DependencyAnalyzer
 from moss.structural_analysis import StructuralAnalysis, StructuralAnalyzer
 from moss.summarize import DocSummarizer, Summarizer
+from moss.test_analysis import TestAnalysis, TestAnalyzer
 
 
 @dataclass
@@ -72,6 +73,13 @@ class ProjectStatus:
     struct_classes: int = 0
     struct_hotspots: int = 0
 
+    # Test stats
+    test_files: int = 0
+    test_ratio: float = 0.0
+    modules_with_tests: int = 0
+    modules_without_tests: int = 0
+    untested_exports: int = 0
+
     # Issues
     weak_spots: list[WeakSpot] = field(default_factory=list)
     next_actions: list[NextAction] = field(default_factory=list)
@@ -81,6 +89,7 @@ class ProjectStatus:
     todo_check: TodoCheckResult | None = None
     dep_analysis: DependencyAnalysis | None = None
     struct_analysis: StructuralAnalysis | None = None
+    test_analysis: TestAnalysis | None = None
 
     @property
     def health_score(self) -> int:
@@ -116,6 +125,14 @@ class ProjectStatus:
         # Penalize for structural hotspots (moderate)
         if self.struct_hotspots > 5:
             score -= min(15, (self.struct_hotspots - 5))
+
+        # Penalize for low test coverage (moderate)
+        if self.test_ratio < 0.3 and self.test_files > 0:
+            score -= int((0.3 - self.test_ratio) * 20)
+
+        # Penalize for many untested modules
+        if self.modules_without_tests > 10:
+            score -= min(10, (self.modules_without_tests - 10))
 
         return max(0, min(100, score))
 
@@ -166,6 +183,12 @@ class ProjectStatus:
             lines.append(f"| Circular Deps | {self.dep_circular} |")
         if self.struct_hotspots > 0:
             lines.append(f"| Code Hotspots | {self.struct_hotspots} |")
+        if self.test_files > 0:
+            lines.append(f"| Tests | {self.test_files} files, {self.test_ratio:.1f}x ratio |")
+            tested = self.modules_with_tests
+            total = self.modules_with_tests + self.modules_without_tests
+            if total > 0:
+                lines.append(f"| Modules Tested | {tested}/{total} ({tested * 100 // total}%) |")
         lines.append("")
 
         # Next actions
@@ -228,6 +251,13 @@ class ProjectStatus:
                     "functions_analyzed": self.struct_functions,
                     "classes_analyzed": self.struct_classes,
                     "hotspots": self.struct_hotspots,
+                },
+                "tests": {
+                    "test_files": self.test_files,
+                    "test_ratio": self.test_ratio,
+                    "modules_with_tests": self.modules_with_tests,
+                    "modules_without_tests": self.modules_without_tests,
+                    "untested_exports": self.untested_exports,
                 },
             },
             "next_actions": [
@@ -413,6 +443,42 @@ class StatusChecker:
                             suggestion="Consider splitting into smaller modules",
                         )
                     )
+        except Exception:
+            pass
+
+        # Test analysis
+        test_analyzer = TestAnalyzer(self.root)
+        try:
+            test_result = test_analyzer.analyze()
+            status.test_analysis = test_result
+            status.test_files = test_result.test_files
+            status.test_ratio = test_result.test_ratio
+            status.modules_with_tests = test_result.modules_with_tests
+            status.modules_without_tests = test_result.modules_without_tests
+            status.untested_exports = len(test_result.untested_exports)
+
+            # Add low test coverage as weak spot
+            if test_result.test_ratio < 0.3 and test_result.test_files > 0:
+                status.weak_spots.append(
+                    WeakSpot(
+                        category="tests",
+                        severity="medium",
+                        message=f"Low test ratio: {test_result.test_ratio:.2f}",
+                        suggestion="Add more tests",
+                    )
+                )
+
+            # Add modules without tests as weak spots
+            untested_modules = [m for m in test_result.module_mappings if not m.has_tests]
+            if len(untested_modules) > 5:
+                status.weak_spots.append(
+                    WeakSpot(
+                        category="tests",
+                        severity="low",
+                        message=f"{len(untested_modules)} modules without tests",
+                        suggestion="Add tests for untested modules",
+                    )
+                )
         except Exception:
             pass
 
