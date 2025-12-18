@@ -125,6 +125,23 @@ Alternative synthesis approaches that don't rely on LLMs. See `docs/synthesis-ge
 - Full TypeScript/JavaScript synthesis support
 - Go and Rust synthesis strategies
 
+### Future: Dogfooding / Self-Analysis
+
+Use moss to analyze itself and keep documentation current.
+
+- [ ] `moss summarize` - Recursive codebase summarization
+  - Extract module purposes, key functions, architecture
+  - Generate hierarchical summary (file → module → package → project)
+  - Output as markdown or structured data
+- [ ] `moss check-docs` - Verify documentation freshness
+  - Compare codebase summary against README, docs/, docstrings
+  - Flag stale/missing documentation
+  - Suggest updates based on code changes
+- [ ] `moss check-todos` - Verify TODO.md accuracy
+  - Cross-reference TODOs with implementation status
+  - Detect completed items still marked pending
+  - Find undocumented TODOs in code comments
+
 ### Future: Enterprise Features
 - Team collaboration (shared caches)
 - Role-based access control
