@@ -4,6 +4,15 @@ See `CHANGELOG.md` for completed features (Phases 15-29).
 
 See `~/git/prose/moss/` for full synthesis design documents.
 
+## Next Up
+
+Candidates for the next session, roughly by size:
+
+- [ ] **Unix socket transport** (small) - Add Unix socket option to HTTP server
+- [ ] **`moss clones`** (medium) - Structural similarity via AST hashing
+- [ ] **RAG/semantic search** (medium) - `moss rag index/search` for doc retrieval
+- [ ] **`moss security`** (medium) - Security analysis command (see details below)
+
 ## Future Work
 
 ### MCP Server (EXISTS - needs dogfooding)

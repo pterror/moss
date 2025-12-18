@@ -134,6 +134,13 @@ Before suggesting `/exit`:
 2. Update TODO.md with any pending work
 3. Commit everything
 
+**Session handoffs.** When ending a session, add a "Next Up" section at the top of TODO.md with 3-5 candidates for the next session. Include:
+- Task name and rough size (small/medium/large)
+- One-line description of what it involves
+- Any context the next session needs (e.g., "see docs/X for design")
+
+This creates continuity between sessions - the next session starts by checking "Next Up" and picking a task. Move completed items from "Next Up" to CHANGELOG.md or mark them done in their original TODO.md section.
+
 A fresh session with good documentation beats a stale session with bloated context.
 
 ### Commits
