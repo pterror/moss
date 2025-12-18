@@ -1,13 +1,26 @@
-"""Validators: Domain-specific verification for the silent loop."""
+"""Validators: Domain-specific verification for the silent loop.
+
+Validators can be registered via entry points or programmatically.
+
+Entry point group: moss.validators
+
+Example plugin registration in pyproject.toml:
+    [project.entry-points."moss.validators"]
+    my_validator = "my_package.validators:MyValidator"
+"""
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationSeverity(Enum):
@@ -406,3 +419,97 @@ def create_python_validator_chain(*, include_tests: bool = False) -> ValidatorCh
     if include_tests:
         chain.add(PytestValidator())
     return chain
+
+
+# =============================================================================
+# Validator Registry
+# =============================================================================
+
+# Registry of validator classes
+_VALIDATORS: dict[str, type[Validator]] = {}
+
+
+def register_validator(name: str, validator_class: type[Validator]) -> None:
+    """Register a validator class.
+
+    Args:
+        name: Validator name (e.g., "syntax", "ruff")
+        validator_class: Validator class (not instance)
+    """
+    _VALIDATORS[name] = validator_class
+
+
+def get_validator(name: str, **kwargs: Any) -> Validator:
+    """Get a validator instance by name.
+
+    Args:
+        name: Validator name
+        **kwargs: Arguments to pass to validator constructor
+
+    Returns:
+        Validator instance
+
+    Raises:
+        ValueError: If validator not found
+    """
+    if name not in _VALIDATORS:
+        available = ", ".join(_VALIDATORS.keys())
+        raise ValueError(f"Validator '{name}' not found. Available: {available}")
+    return _VALIDATORS[name](**kwargs)
+
+
+def list_validators() -> list[str]:
+    """List all registered validator names."""
+    return list(_VALIDATORS.keys())
+
+
+def get_all_validators() -> list[Validator]:
+    """Get instances of all registered validators (with default args)."""
+    return [cls() for cls in _VALIDATORS.values()]
+
+
+def _discover_entry_points() -> None:
+    """Discover and register validators from entry points."""
+    try:
+        eps = entry_points(group="moss.validators")
+        for ep in eps:
+            try:
+                validator_class = ep.load()
+                if ep.name not in _VALIDATORS:
+                    register_validator(ep.name, validator_class)
+                    logger.debug("Discovered validator: %s", ep.name)
+            except Exception as e:
+                logger.warning("Failed to load validator '%s': %s", ep.name, e)
+    except Exception:
+        pass
+
+
+def _register_builtin_validators() -> None:
+    """Register built-in validators."""
+    register_validator("syntax", SyntaxValidator)
+    register_validator("ruff", RuffValidator)
+    register_validator("pytest", PytestValidator)
+
+
+# Auto-register on import
+_register_builtin_validators()
+_discover_entry_points()
+
+
+__all__ = [
+    "CommandValidator",
+    "LinterValidatorAdapter",
+    "PytestValidator",
+    "RuffValidator",
+    "SyntaxValidator",
+    "ValidationIssue",
+    "ValidationResult",
+    "ValidationSeverity",
+    "Validator",
+    "ValidatorChain",
+    "create_python_validator_chain",
+    "get_all_validators",
+    "get_validator",
+    "list_validators",
+    "register_validator",
+]

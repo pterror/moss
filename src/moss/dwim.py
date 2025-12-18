@@ -12,19 +12,31 @@ Key features:
 - Embedding support: optional vector-based similarity (if available)
 - Tool routing: find best tool for a natural language description
 - Confidence scoring: know when to auto-correct vs suggest
+
+Tools can be registered via entry points or programmatically.
+
+Entry point group: moss.dwim.tools
+
+Example plugin registration in pyproject.toml:
+    [project.entry-points."moss.dwim.tools"]
+    my_tool = "my_package.tools:MyToolInfo"
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from importlib.metadata import entry_points
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -142,150 +154,228 @@ class ToolInfo:
     parameters: list[str]
 
 
+# =============================================================================
+# Tool Registry
+# =============================================================================
+
 # Registry of tools with semantic information
-TOOL_REGISTRY: dict[str, ToolInfo] = {
-    "skeleton": ToolInfo(
-        name="skeleton",
-        description="Extract code structure showing classes, functions, and methods",
-        keywords=[
-            "structure",
-            "outline",
-            "hierarchy",
-            "overview",
-            "symbols",
-            "tree",
-            "ast",
-            "classes",
-            "functions",
-            "list",
-            "show",
-            "all",
-            "api",
-            "definition",
-            "public",
-        ],
-        parameters=["path", "pattern"],
-    ),
-    "anchors": ToolInfo(
-        name="anchors",
-        description="Find specific code elements like functions, classes, or methods",
-        keywords=[
-            "find",
-            "locate",
-            "definitions",
-            "defs",
-            "functions",
-            "classes",
-            "methods",
-            "symbols",
-            "where",
-            "location",
-            "named",
-        ],
-        parameters=["path", "type", "name", "pattern"],
-    ),
-    "query": ToolInfo(
-        name="query",
-        description="Search and filter code by size, complexity, and inheritance",
-        keywords=[
-            "search",
-            "find",
-            "grep",
-            "filter",
-            "pattern",
-            "regex",
-            "match",
-            "inherits",
-            "inherit",
-            "subclass",
-            "extends",
-            "extending",
-            "inheritance",
-            "base",
-            "derived",
-            "lines",
-            "complex",
-            "large",
-            "small",
-            "size",
-            "over",
-            "under",
-            "long",
-            "short",
-            "min",
-            "max",
-            "functions",
-            "classes",
-            "methods",
-        ],
-        parameters=["path", "name", "signature", "type", "inherits", "pattern"],
-    ),
-    "cfg": ToolInfo(
-        name="cfg",
-        description="Build control flow graph showing execution paths",
-        keywords=[
-            "flow",
-            "control",
-            "graph",
-            "execution",
-            "branches",
-            "paths",
-            "complexity",
-            "call",
-            "logic",
-            "branch",
-            "loop",
-            "if",
-            "while",
-        ],
-        parameters=["path", "function"],
-    ),
-    "deps": ToolInfo(
-        name="deps",
-        description="Extract imports and exports showing module dependencies",
-        keywords=[
-            "imports",
-            "exports",
-            "dependencies",
-            "modules",
-            "packages",
-            "requires",
-            "uses",
-            "import",
-            "export",
-            "dependency",
-            "analysis",
-            "external",
-            "reverse",
-        ],
-        parameters=["path", "pattern"],
-    ),
-    "context": ToolInfo(
-        name="context",
-        description="Generate combined view with skeleton, dependencies, and summary",
-        keywords=[
-            "summary",
-            "overview",
-            "combined",
-            "info",
-            "details",
-            "comprehensive",
-            "explain",
-            "about",
-            "understand",
-            "what",
-            "does",
-            "describe",
-        ],
-        parameters=["path"],
-    ),
-    "apply_patch": ToolInfo(
-        name="apply_patch",
-        description="Apply code changes using anchor-based patching",
-        keywords=["edit", "modify", "change", "patch", "update", "fix", "replace"],
-        parameters=["file_path", "anchor", "new_content", "edit_type"],
-    ),
-}
+_TOOLS: dict[str, ToolInfo] = {}
+
+
+def register_tool(tool: ToolInfo) -> None:
+    """Register a tool for semantic routing.
+
+    Args:
+        tool: ToolInfo describing the tool
+    """
+    _TOOLS[tool.name] = tool
+
+
+def unregister_tool(name: str) -> bool:
+    """Unregister a tool.
+
+    Args:
+        name: Tool name to remove
+
+    Returns:
+        True if tool was removed, False if not found
+    """
+    if name in _TOOLS:
+        del _TOOLS[name]
+        return True
+    return False
+
+
+def get_tool(name: str) -> ToolInfo | None:
+    """Get a tool by name.
+
+    Args:
+        name: Tool name
+
+    Returns:
+        ToolInfo or None if not found
+    """
+    return _TOOLS.get(name)
+
+
+def _discover_entry_points() -> None:
+    """Discover and register tools from entry points."""
+    try:
+        eps = entry_points(group="moss.dwim.tools")
+        for ep in eps:
+            try:
+                tool_info = ep.load()
+                if isinstance(tool_info, ToolInfo):
+                    if tool_info.name not in _TOOLS:
+                        register_tool(tool_info)
+                        logger.debug("Discovered tool: %s", tool_info.name)
+                elif callable(tool_info):
+                    # Factory function
+                    info = tool_info()
+                    if isinstance(info, ToolInfo) and info.name not in _TOOLS:
+                        register_tool(info)
+                        logger.debug("Discovered tool: %s", info.name)
+            except Exception as e:
+                logger.warning("Failed to load tool '%s': %s", ep.name, e)
+    except Exception:
+        pass
+
+
+def _register_builtin_tools() -> None:
+    """Register built-in tools."""
+    builtin_tools = [
+        ToolInfo(
+            name="skeleton",
+            description="Extract code structure showing classes, functions, and methods",
+            keywords=[
+                "structure",
+                "outline",
+                "hierarchy",
+                "overview",
+                "symbols",
+                "tree",
+                "ast",
+                "classes",
+                "functions",
+                "list",
+                "show",
+                "all",
+                "api",
+                "definition",
+                "public",
+            ],
+            parameters=["path", "pattern"],
+        ),
+        ToolInfo(
+            name="anchors",
+            description="Find specific code elements like functions, classes, or methods",
+            keywords=[
+                "find",
+                "locate",
+                "definitions",
+                "defs",
+                "functions",
+                "classes",
+                "methods",
+                "symbols",
+                "where",
+                "location",
+                "named",
+            ],
+            parameters=["path", "type", "name", "pattern"],
+        ),
+        ToolInfo(
+            name="query",
+            description="Search and filter code by size, complexity, and inheritance",
+            keywords=[
+                "search",
+                "find",
+                "grep",
+                "filter",
+                "pattern",
+                "regex",
+                "match",
+                "inherits",
+                "inherit",
+                "subclass",
+                "extends",
+                "extending",
+                "inheritance",
+                "base",
+                "derived",
+                "lines",
+                "complex",
+                "large",
+                "small",
+                "size",
+                "over",
+                "under",
+                "long",
+                "short",
+                "min",
+                "max",
+                "functions",
+                "classes",
+                "methods",
+            ],
+            parameters=["path", "name", "signature", "type", "inherits", "pattern"],
+        ),
+        ToolInfo(
+            name="cfg",
+            description="Build control flow graph showing execution paths",
+            keywords=[
+                "flow",
+                "control",
+                "graph",
+                "execution",
+                "branches",
+                "paths",
+                "complexity",
+                "call",
+                "logic",
+                "branch",
+                "loop",
+                "if",
+                "while",
+            ],
+            parameters=["path", "function"],
+        ),
+        ToolInfo(
+            name="deps",
+            description="Extract imports and exports showing module dependencies",
+            keywords=[
+                "imports",
+                "exports",
+                "dependencies",
+                "modules",
+                "packages",
+                "requires",
+                "uses",
+                "import",
+                "export",
+                "dependency",
+                "analysis",
+                "external",
+                "reverse",
+            ],
+            parameters=["path", "pattern"],
+        ),
+        ToolInfo(
+            name="context",
+            description="Generate combined view with skeleton, dependencies, and summary",
+            keywords=[
+                "summary",
+                "overview",
+                "combined",
+                "info",
+                "details",
+                "comprehensive",
+                "explain",
+                "about",
+                "understand",
+                "what",
+                "does",
+                "describe",
+            ],
+            parameters=["path"],
+        ),
+        ToolInfo(
+            name="apply_patch",
+            description="Apply code changes using anchor-based patching",
+            keywords=["edit", "modify", "change", "patch", "update", "fix", "replace"],
+            parameters=["file_path", "anchor", "new_content", "edit_type"],
+        ),
+    ]
+    for tool in builtin_tools:
+        register_tool(tool)
+
+
+# Auto-register on import
+_register_builtin_tools()
+_discover_entry_points()
+
+# Backwards compatibility alias
+TOOL_REGISTRY = _TOOLS
 
 # Semantic aliases: alternative names that map to canonical tools
 TOOL_ALIASES: dict[str, str] = {
@@ -651,8 +741,13 @@ def list_tools() -> list[dict]:
             "keywords": info.keywords,
             "parameters": info.parameters,
         }
-        for info in TOOL_REGISTRY.values()
+        for info in _TOOLS.values()
     ]
+
+
+def list_tool_names() -> list[str]:
+    """List all registered tool names."""
+    return list(_TOOLS.keys())
 
 
 def get_tool_info(tool_name: str) -> dict | None:
@@ -662,7 +757,7 @@ def get_tool_info(tool_name: str) -> dict | None:
     if match.confidence < SUGGEST_THRESHOLD:
         return None
 
-    info = TOOL_REGISTRY.get(match.tool)
+    info = _TOOLS.get(match.tool)
     if not info:
         return None
 
@@ -673,3 +768,26 @@ def get_tool_info(tool_name: str) -> dict | None:
         "parameters": info.parameters,
         "aliases": [alias for alias, target in TOOL_ALIASES.items() if target == info.name],
     }
+
+
+__all__ = [
+    "PARAM_ALIASES",
+    "TOOL_ALIASES",
+    "TOOL_REGISTRY",
+    "ToolInfo",
+    "ToolMatch",
+    "ToolRouter",
+    "analyze_intent",
+    "get_router",
+    "get_tool",
+    "get_tool_info",
+    "list_tool_names",
+    "list_tools",
+    "normalize_parameters",
+    "register_tool",
+    "resolve_parameter",
+    "resolve_tool",
+    "suggest_tool",
+    "suggest_tools",
+    "unregister_tool",
+]

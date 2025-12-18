@@ -118,6 +118,30 @@ The key insight: vibe coding works better when the agent understands structure, 
 
 ## Notes
 
+### Programming as Recursive Abstraction
+
+Core philosophy: programming is essentially recursive abstraction - we build abstractions on top of abstractions. This has implications for Moss's design:
+
+- **Plugin architecture as abstraction**: Each plugin system is an abstraction layer that can be extended
+- **Composable primitives**: Small tools compose into larger capabilities
+- **Meta-level tooling**: Tools that analyze/generate other tools (e.g., `moss patterns` analyzing plugin usage)
+- **Self-describing systems**: Code that can describe its own structure (skeleton, deps, etc.)
+
+**Continuous zoom / arbitrary granularity views**: Traditional tools have fixed levels (file, function, line), but code structure is fractal - you should be able to view it at any detail level continuously:
+- Full source → skeleton → signatures → names → nothing
+- Codebase → directories → files → symbols → blocks → expressions
+- But NOT as fixed levels - as a continuous spectrum where "blocks", "functions", "files" are just convenient labels for points on a continuum
+- The structural units (block, function, file, module) are emergent properties, not fundamental categories
+- Goal: `moss view <path> --detail=0.3` where detail is a float, not "skeleton" vs "full"
+
+Research directions:
+- [ ] Can Moss analyze its own abstraction layers? (`moss abstractions` command)
+- [ ] Automatic abstraction discovery (find repeated patterns that could be factored out)
+- [ ] Abstraction quality metrics (coupling, cohesion, depth)
+- [ ] Tools for refactoring concrete code into abstract plugins
+- [ ] Continuous detail views - parameterized by a single "zoom" float rather than discrete modes
+- [ ] Semantic compression: what's the minimum representation that preserves X% of the information?
+
 ### PyPI Naming Collision
 
 There's an existing `moss` package on PyPI (a data science tool requiring numpy/pandas). Before publishing, we need to either:
