@@ -73,7 +73,10 @@ def _check_mcp() -> None:
 
 
 def _serialize_value(value: Any) -> Any:
-    """Recursively serialize a value to JSON-safe form."""
+    """Recursively serialize a value to JSON-safe form.
+
+    Prefers custom to_dict() methods over raw asdict() for controlled output.
+    """
     if value is None:
         return None
     if isinstance(value, (str, int, float, bool)):
@@ -84,6 +87,9 @@ def _serialize_value(value: Any) -> Any:
         return {k: _serialize_value(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_serialize_value(v) for v in value]
+    # Prefer to_dict() for controlled serialization (e.g., ProjectStatus)
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return _serialize_value(value.to_dict())
     if is_dataclass(value) and not isinstance(value, type):
         return _serialize_value(asdict(value))
     if hasattr(value, "__dict__"):
@@ -94,11 +100,26 @@ def _serialize_value(value: Any) -> Any:
     return str(value)
 
 
-def _serialize_result(result: Any) -> dict[str, Any]:
-    """Serialize an API result to JSON-safe form."""
+def _serialize_result(result: Any) -> str | dict[str, Any]:
+    """Serialize an API result to text or JSON-safe form.
+
+    Prefers text formats for MCP (more token-efficient):
+    1. to_compact() if available
+    2. to_markdown() as fallback
+    3. JSON for primitives and collections
+    """
     if result is None:
         return {"result": None}
 
+    # Prefer compact text representation
+    if hasattr(result, "to_compact") and callable(result.to_compact):
+        return result.to_compact()
+
+    # Fallback to markdown if available
+    if hasattr(result, "to_markdown") and callable(result.to_markdown):
+        return result.to_markdown()
+
+    # For other types, serialize to JSON-safe form
     serialized = _serialize_value(result)
 
     if isinstance(serialized, dict):
@@ -106,6 +127,24 @@ def _serialize_result(result: Any) -> dict[str, Any]:
     if isinstance(serialized, list):
         return {"items": serialized, "count": len(serialized)}
     return {"result": serialized}
+
+
+# Maximum output size in characters (roughly ~50K tokens)
+MAX_OUTPUT_CHARS = 200_000
+
+
+def _truncate_output(text: str) -> str:
+    """Truncate output if too large, preserving useful context."""
+    if len(text) <= MAX_OUTPUT_CHARS:
+        return text
+
+    # Keep first 80% and last 10%, with truncation message in middle
+    head_size = int(MAX_OUTPUT_CHARS * 0.8)
+    tail_size = int(MAX_OUTPUT_CHARS * 0.1)
+    omitted = len(text) - head_size - tail_size
+    truncation_msg = f"\n\n... [TRUNCATED: {omitted:,} chars omitted] ...\n\n"
+
+    return text[:head_size] + truncation_msg + text[-tail_size:]
 
 
 # =============================================================================
@@ -145,7 +184,13 @@ def create_server() -> Any:
         try:
             result = _execute_tool(name, arguments, tools)
             serialized = _serialize_result(result)
-            return [TextContent(type="text", text=json.dumps(serialized, indent=2))]
+            # Return text directly if already a string, otherwise compact JSON
+            if isinstance(serialized, str):
+                text = serialized
+            else:
+                text = json.dumps(serialized, separators=(",", ":"))
+            # Truncate if output is too large for LLM consumption
+            return [TextContent(type="text", text=_truncate_output(text))]
         except FileNotFoundError as e:
             return [
                 TextContent(
@@ -199,10 +244,12 @@ def create_server() -> Any:
         return resources
 
     @server.read_resource()
-    async def read_resource(uri: str) -> list[TextResourceContents]:
+    async def read_resource(uri: Any) -> list[TextResourceContents]:
         """Read a resource by URI."""
-        content = _get_resource_content(uri)
-        return [TextResourceContents(uri=uri, mimeType="text/plain", text=content)]
+        # Convert AnyUrl to string if needed
+        uri_str = str(uri)
+        content = _get_resource_content(uri_str)
+        return [TextResourceContents(uri=uri_str, mimeType="text/plain", text=content)]
 
     # -------------------------------------------------------------------------
     # Prompts
