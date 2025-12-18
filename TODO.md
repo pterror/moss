@@ -46,6 +46,17 @@ Advanced abstraction discovery:
 - [ ] Full TypeScript/JavaScript synthesis support
 - [ ] Go and Rust synthesis strategies
 
+### External Dependency Analysis
+
+Analyze PyPI/npm dependencies (not just internal imports):
+
+- [ ] Parse pyproject.toml/requirements.txt/package.json for dependencies
+- [ ] Resolve full dependency tree (transitive dependencies)
+- [ ] Show dependency weight (how many sub-dependencies each brings)
+- [ ] Identify heavy/bloated dependencies
+- [ ] Check for known vulnerabilities (CVE integration)
+- [ ] License compatibility checking
+
 ### Enterprise Features
 
 - [ ] Team collaboration (shared caches)

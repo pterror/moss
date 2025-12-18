@@ -1948,6 +1948,60 @@ def cmd_check_todos(args: Namespace) -> int:
     return 0
 
 
+def cmd_mutate(args: Namespace) -> int:
+    """Run mutation testing to find undertested code."""
+    import asyncio
+
+    from moss.mutation import MutationAnalyzer
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+
+    if not root.exists():
+        output.error(f"Directory not found: {root}")
+        return 1
+
+    analyzer = MutationAnalyzer(root)
+
+    if not analyzer.is_available():
+        output.error("mutmut not installed. Run: pip install mutmut")
+        return 1
+
+    output.info("Running mutation testing (this may take several minutes)...")
+
+    # Get options
+    quick_check = getattr(args, "quick", False)
+    since = getattr(args, "since", None)
+    paths_arg = getattr(args, "paths", None)
+    paths = [Path(p) for p in paths_arg] if paths_arg else None
+
+    try:
+        result = asyncio.run(
+            analyzer.run(
+                quick_check=quick_check,
+                paths=paths,
+                since=since,
+            )
+        )
+    except Exception as e:
+        output.error(f"Mutation testing failed: {e}")
+        return 1
+
+    # Output format
+    if getattr(args, "json", False):
+        output.data(result.to_dict())
+    else:
+        output.print(result.to_markdown())
+
+    # Exit code based on mutation score
+    if getattr(args, "strict", False):
+        if result.mutation_score < 0.8:  # 80% threshold
+            output.warning(f"Mutation score {result.mutation_score:.0%} below 80% threshold")
+            return 1
+
+    return 0
+
+
 def cmd_roadmap(args: Namespace) -> int:
     """Show project roadmap and progress from TODO.md."""
     from moss.roadmap import display_roadmap, find_todo_md
@@ -2799,6 +2853,47 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output as JSON",
     )
     check_todos_parser.set_defaults(func=cmd_check_todos)
+
+    # mutate command
+    mutate_parser = subparsers.add_parser(
+        "mutate", help="Run mutation testing to find undertested code"
+    )
+    mutate_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to analyze (default: current)",
+    )
+    mutate_parser.add_argument(
+        "--quick",
+        "-q",
+        action="store_true",
+        help="Quick mode: test only a sample of mutations",
+    )
+    mutate_parser.add_argument(
+        "--since",
+        metavar="COMMIT",
+        help="Only mutate files changed since COMMIT",
+    )
+    mutate_parser.add_argument(
+        "--paths",
+        nargs="+",
+        metavar="PATH",
+        help="Specific paths to mutate",
+    )
+    mutate_parser.add_argument(
+        "--strict",
+        "-s",
+        action="store_true",
+        help="Exit with error if mutation score < 80%%",
+    )
+    mutate_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
+    mutate_parser.set_defaults(func=cmd_mutate)
 
     # health command
     health_parser = subparsers.add_parser(
