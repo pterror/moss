@@ -1969,10 +1969,120 @@ def cmd_health(args: Namespace) -> int:
         output.error(f"Failed to analyze project: {e}")
         return 1
 
+    # Filter by focus area
+    focus = getattr(args, "focus", "all")
+    if focus != "all":
+        focus_category_map = {
+            "deps": ["dependencies"],
+            "tests": ["tests"],
+            "complexity": ["complexity"],
+            "api": ["api"],
+        }
+        allowed = focus_category_map.get(focus, [])
+        status.weak_spots = [w for w in status.weak_spots if w.category in allowed]
+
+    # Filter by severity
+    severity = getattr(args, "severity", "low")
+    severity_order = {"low": 0, "medium": 1, "high": 2}
+    min_severity = severity_order.get(severity, 0)
+    status.weak_spots = [
+        w for w in status.weak_spots if severity_order.get(w.severity, 0) >= min_severity
+    ]
+
     # Output format
     if getattr(args, "json", False):
         output.data(status.to_dict())
     else:
+        output.print(_format_concise_health(status))
+
+    # CI mode exit codes
+    if getattr(args, "ci", False):
+        grade = status.health_grade
+        if grade in ("A", "B"):
+            return 0  # Healthy
+        elif grade in ("C", "D"):
+            return 1  # Warnings
+        else:
+            return 2  # Critical
+
+    return 0
+
+
+def _format_concise_health(status) -> str:
+    """Format health status concisely for terminal display."""
+    lines = []
+
+    # Header with grade
+    grade = status.health_grade
+    score = status.health_score
+    lines.append(f"# {status.name}: {grade} ({score}/100)")
+    lines.append("")
+
+    # Compact stats line
+    stats = []
+    stats.append(f"{status.total_files} files")
+    if status.doc_coverage > 0:
+        stats.append(f"{status.doc_coverage:.0%} doc coverage")
+    if status.test_files > 0:
+        stats.append(f"{status.test_ratio:.1f}x test ratio")
+    if status.dep_circular > 0:
+        stats.append(f"{status.dep_circular} circular deps")
+    if status.struct_hotspots > 0:
+        stats.append(f"{status.struct_hotspots} hotspots")
+    lines.append(" | ".join(stats))
+    lines.append("")
+
+    # Show only high-severity issues by default
+    high_issues = [w for w in status.weak_spots if w.severity == "high"]
+    if high_issues:
+        lines.append("## Issues")
+        for w in high_issues[:5]:
+            lines.append(f"- [!] {w.category}: {w.message}")
+        if len(high_issues) > 5:
+            lines.append(f"  ... and {len(high_issues) - 5} more")
+        lines.append("")
+
+    # Next actions (top 3)
+    if status.next_actions:
+        lines.append("## Next Up")
+        for action in sorted(status.next_actions, key=lambda a: a.priority)[:3]:
+            lines.append(f"- {action.description}")
+        lines.append("")
+
+    # Hint for more details
+    if len(status.weak_spots) > len(high_issues):
+        other = len(status.weak_spots) - len(high_issues)
+        lines.append(f"Run `moss report` for full details ({other} more issues)")
+
+    return "\n".join(lines)
+
+
+def cmd_report(args: Namespace) -> int:
+    """Generate comprehensive project report (verbose health)."""
+    from moss.status import StatusChecker
+
+    output = setup_output(args)
+    root = Path(getattr(args, "directory", ".")).resolve()
+
+    if not root.exists():
+        output.error(f"Directory not found: {root}")
+        return 1
+
+    output.info(f"Generating report for {root.name}...")
+
+    checker = StatusChecker(root)
+
+    try:
+        status = checker.check()
+    except Exception as e:
+        output.error(f"Failed to analyze project: {e}")
+        return 1
+
+    # Output format
+    if getattr(args, "json", False):
+        output.data(status.to_dict())
+    else:
+        # Full markdown output
         output.print(status.to_markdown())
 
     return 0
@@ -2661,7 +2771,44 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Output as JSON",
     )
+    health_parser.add_argument(
+        "--focus",
+        "-f",
+        choices=["deps", "tests", "complexity", "api", "all"],
+        default="all",
+        help="Focus on specific analysis area",
+    )
+    health_parser.add_argument(
+        "--severity",
+        "-s",
+        choices=["low", "medium", "high"],
+        default="low",
+        help="Minimum severity to show (default: low = show all)",
+    )
+    health_parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="CI mode: exit 0=healthy, 1=warnings, 2=critical",
+    )
     health_parser.set_defaults(func=cmd_health)
+
+    # report command (verbose health)
+    report_parser = subparsers.add_parser(
+        "report", help="Generate comprehensive project report (verbose health)"
+    )
+    report_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to analyze (default: current)",
+    )
+    report_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
+    report_parser.set_defaults(func=cmd_report)
 
     return parser
 
