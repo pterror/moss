@@ -60,13 +60,18 @@ Multi-agent model: Ticket-based (not shared chat history). Agents are isolated m
 
 **Bail out early.** If you hit repeated failures or get stuck in a loop, stop and ask for guidance rather than burning tokens on increasingly unlikely fixes.
 
-**Keep sessions fresh.** Long sessions accumulate context and degrade quality (see `docs/log-analysis.md`). When a session grows long or feels sluggish:
+**Keep sessions fresh.** Long sessions accumulate context and degrade quality (see `docs/log-analysis.md`). Consider wrapping up a session when:
+- A major feature or logical unit of work is complete
+- You've made 50+ tool calls
+- You're re-reading files you already read earlier (sign of forgetting)
+- The conversation has drifted across many unrelated topics
+
+Before suggesting `/exit`:
 1. Note down all discoveries, insights, and open questions to appropriate files
 2. Update TODO.md with any pending work
 3. Commit everything
-4. Ask the user to `/exit` and start a fresh session
 
-A fresh session with good documentation beats a stale session with everything in context.
+A fresh session with good documentation beats a stale session with bloated context.
 
 ### Commits
 
