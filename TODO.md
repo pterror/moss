@@ -175,11 +175,11 @@ Expand `moss health` into a comprehensive but concise project analysis. Rename c
 - [ ] Missing test fixtures detection
 
 ##### 28d: API Surface Analysis
-- [ ] Public exports inventory (`__all__`, non-underscore names)
-- [ ] Public/private ratio per module
-- [ ] "Breaking change risk" - widely-imported exports
-- [ ] Undocumented public APIs
-- [ ] Inconsistent naming patterns
+- [x] Public exports inventory (`__all__`, non-underscore names)
+- [x] Public/private ratio per module
+- [x] "Breaking change risk" - widely-imported exports
+- [x] Undocumented public APIs
+- [x] Inconsistent naming patterns
 
 ##### 28e: Health Command Refactor
 - [ ] Concise single-screen output (no scrolling for healthy projects)
