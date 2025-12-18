@@ -128,6 +128,72 @@ class JsonRpcNotification:
 
 
 # =============================================================================
+# Streaming Support
+# =============================================================================
+
+
+class ProgressStreamer:
+    """Context manager for streaming progress updates.
+
+    Provides progress tracking for long-running operations with
+    periodic updates to the client.
+
+    Usage:
+        progress = ProgressStreamer(server, session_id, 100, "Analyzing files")
+        async with progress:
+            for i, file in enumerate(files):
+                process(file)
+                await progress.update(1)
+    """
+
+    def __init__(
+        self,
+        server: ACPServer,
+        session_id: str,
+        total: int,
+        description: str,
+        update_interval: float = 0.5,
+    ) -> None:
+        self.server = server
+        self.session_id = session_id
+        self.total = total
+        self.description = description
+        self.update_interval = update_interval
+        self.current = 0
+        self._last_update = 0.0
+
+    async def __aenter__(self) -> ProgressStreamer:
+        """Enter context - send initial progress."""
+        await self._send_progress()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        """Exit context - send final progress."""
+        self.current = self.total
+        await self._send_progress()
+
+    async def update(self, increment: int = 1) -> None:
+        """Update progress by increment."""
+        import time
+
+        self.current += increment
+        now = time.time()
+
+        # Only send update if interval has passed (avoid flooding)
+        if now - self._last_update >= self.update_interval:
+            await self._send_progress()
+            self._last_update = now
+
+    async def _send_progress(self) -> None:
+        """Send progress notification."""
+        percent = min(100, int(self.current / max(1, self.total) * 100))
+        await self.server.send_update(
+            self.session_id,
+            thought=f"{self.description}... {percent}% ({self.current}/{self.total})",
+        )
+
+
+# =============================================================================
 # ACP Server
 # =============================================================================
 
@@ -226,6 +292,56 @@ class ACPServer:
             params["tool_call"] = tool_call
 
         await self._send_notification("session/update", params)
+
+    async def stream_content(
+        self,
+        session_id: str,
+        content: str,
+        chunk_size: int = 100,
+        delay: float = 0.01,
+    ) -> None:
+        """Stream content progressively to the client.
+
+        Breaks content into chunks and sends them with small delays,
+        giving a more responsive feel for long outputs.
+
+        Args:
+            session_id: Session to send to
+            content: Full content to stream
+            chunk_size: Approximate characters per chunk (split on line boundaries)
+            delay: Delay between chunks in seconds
+        """
+        # Split content into lines for cleaner chunking
+        lines = content.split("\n")
+        buffer = ""
+
+        for line in lines:
+            buffer += line + "\n"
+
+            # Send when buffer reaches chunk size
+            if len(buffer) >= chunk_size:
+                await self.send_update(session_id, content=buffer)
+                buffer = ""
+                await asyncio.sleep(delay)
+
+        # Send any remaining content
+        if buffer:
+            await self.send_update(session_id, content=buffer)
+
+    async def stream_progress(
+        self,
+        session_id: str,
+        total: int,
+        description: str = "Processing",
+    ) -> ProgressStreamer:
+        """Create a progress streamer for long-running operations.
+
+        Usage:
+            async with await server.stream_progress(session_id, 100, "Analyzing") as progress:
+                for item in items:
+                    await progress.update(1)
+        """
+        return ProgressStreamer(self, session_id, total, description)
 
     # -------------------------------------------------------------------------
     # Handler Methods (Client → Agent, we implement these)
@@ -494,34 +610,98 @@ class ACPServer:
             await self.send_update(session.id, content=f"Pattern detection failed: {e}")
 
     async def _handle_weaknesses(self, session: Session, api: MossAPI) -> None:
-        """Handle weakness detection requests."""
+        """Handle weakness detection requests with streaming."""
         await self.send_update(session.id, thought="Analyzing architectural weaknesses...")
         try:
             analysis = api.weaknesses.analyze()
-            content = "## Architectural Weaknesses\n\n"
-            content += f"**Total:** {len(analysis.weaknesses)}\n\n"
-            by_sev = analysis.by_severity
             from moss.weaknesses import Severity
 
-            content += f"- High: {len(by_sev.get(Severity.HIGH, []))}\n"
-            content += f"- Medium: {len(by_sev.get(Severity.MEDIUM, []))}\n"
-            content += f"- Low: {len(by_sev.get(Severity.LOW, []))}\n"
-            await self.send_update(session.id, content=content)
+            by_sev = analysis.by_severity
+
+            # Stream header
+            await self.send_update(
+                session.id,
+                content="## Architectural Weaknesses\n\n"
+                f"**Total:** {len(analysis.weaknesses)}\n\n"
+                f"- High: {len(by_sev.get(Severity.HIGH, []))}\n"
+                f"- Medium: {len(by_sev.get(Severity.MEDIUM, []))}\n"
+                f"- Low: {len(by_sev.get(Severity.LOW, []))}\n\n",
+            )
+
+            # Stream high severity issues first (most important)
+            high_issues = by_sev.get(Severity.HIGH, [])
+            if high_issues:
+                await self.send_update(session.id, content="### High Severity\n")
+                for w in high_issues[:5]:
+                    loc = f" (`{w.file_path}:{w.line_start}`)" if w.file_path else ""
+                    await self.send_update(
+                        session.id,
+                        content=f"- **{w.title}**{loc}\n  {w.description}\n",
+                    )
+                    await asyncio.sleep(0.05)  # Small delay for streaming effect
+                if len(high_issues) > 5:
+                    await self.send_update(
+                        session.id,
+                        content=f"\n*... and {len(high_issues) - 5} more high severity issues*\n",
+                    )
+
+            # Stream medium severity (sample)
+            medium_issues = by_sev.get(Severity.MEDIUM, [])
+            if medium_issues:
+                await self.send_update(session.id, content="\n### Medium Severity (sample)\n")
+                for w in medium_issues[:3]:
+                    loc = f" (`{w.file_path}:{w.line_start}`)" if w.file_path else ""
+                    await self.send_update(
+                        session.id,
+                        content=f"- {w.title}{loc}\n",
+                    )
+                    await asyncio.sleep(0.05)
+                if len(medium_issues) > 3:
+                    await self.send_update(
+                        session.id,
+                        content=f"\n*... and {len(medium_issues) - 3} more*\n",
+                    )
+
         except Exception as e:
             await self.send_update(session.id, content=f"Weakness analysis failed: {e}")
 
     async def _handle_security(self, session: Session, api: MossAPI) -> None:
-        """Handle security analysis requests."""
+        """Handle security analysis requests with streaming."""
         await self.send_update(session.id, thought="Running security analysis...")
         try:
             analysis = api.security.analyze()
-            content = "## Security Analysis\n\n"
-            content += f"**Total findings:** {analysis.total_count}\n"
-            content += f"- Critical: {analysis.critical_count}\n"
-            content += f"- High: {analysis.high_count}\n"
-            content += f"- Medium: {analysis.medium_count}\n"
-            content += f"- Low: {analysis.low_count}\n"
-            await self.send_update(session.id, content=content)
+
+            # Stream summary
+            await self.send_update(
+                session.id,
+                content="## Security Analysis\n\n"
+                f"**Total findings:** {analysis.total_count}\n"
+                f"- Critical: {analysis.critical_count}\n"
+                f"- High: {analysis.high_count}\n"
+                f"- Medium: {analysis.medium_count}\n"
+                f"- Low: {analysis.low_count}\n\n",
+            )
+
+            # Stream critical and high findings progressively
+            critical_high = [f for f in analysis.findings if f.severity in ("critical", "high")]
+            if critical_high:
+                await self.send_update(
+                    session.id, content="### Critical & High Severity Findings\n"
+                )
+                for finding in critical_high[:10]:
+                    await self.send_update(
+                        session.id,
+                        content=f"- **{finding.severity.upper()}**: {finding.message}\n"
+                        f"  `{finding.file}:{finding.line}`\n",
+                    )
+                    await asyncio.sleep(0.05)
+                if len(critical_high) > 10:
+                    more_count = len(critical_high) - 10
+                    await self.send_update(
+                        session.id,
+                        content=f"\n*... and {more_count} more critical/high findings*\n",
+                    )
+
         except Exception as e:
             await self.send_update(session.id, content=f"Security analysis failed: {e}")
 
