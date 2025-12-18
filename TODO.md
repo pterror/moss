@@ -98,6 +98,25 @@ Plugin system for synthesis components inspired by Synquid, miniKanren, DreamCod
 - [x] Compression gain estimation (simplified DreamCoder metric)
 - [x] 31 tests for learned library
 
+### Future: Non-LLM Code Generators
+
+Alternative synthesis approaches that don't rely on LLMs. See `docs/synthesis-generators.md` for details.
+
+#### High Priority
+- [ ] `EnumerativeGenerator` - enumerate ASTs, test against examples (Escher/Myth)
+- [ ] `ComponentGenerator` - combine library functions bottom-up (SyPet/InSynth)
+- [ ] `SMTGenerator` - Z3-based type-guided synthesis (Synquid)
+
+#### Medium Priority
+- [ ] `PBEGenerator` - Programming by Example (FlashFill/PROSE)
+- [ ] `SketchGenerator` - fill holes in user templates (Sketch/Rosette)
+- [ ] `RelationalGenerator` - miniKanren-style logic programming
+
+#### Research/Experimental
+- [ ] `GeneticGenerator` - evolutionary search (PushGP)
+- [ ] `NeuralGuidedGenerator` - small model guides enumeration (DeepCoder)
+- [ ] `BidirectionalStrategy` - λ²-style type+example guided search
+
 ### Future: DreamCoder-style Learning
 - [ ] Compression-based abstraction discovery
 - [ ] MDL-based abstraction scoring
