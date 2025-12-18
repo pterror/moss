@@ -159,19 +159,19 @@ Expand `moss health` into a comprehensive but concise project analysis. Rename c
 - [ ] Dependency graph visualization (optional `--graph` output)
 
 ##### 28b: Structural Hotspots
-- [ ] Functions with too many parameters (>5)
-- [ ] Classes with too many methods (>15)
-- [ ] Files over threshold (>500 lines)
-- [ ] Deep nesting detection (from CFG analysis)
-- [ ] Long functions (>50 lines)
-- [ ] Complex conditionals (high branching factor)
+- [x] Functions with too many parameters (>5)
+- [x] Classes with too many methods (>15)
+- [x] Files over threshold (>500 lines)
+- [x] Deep nesting detection (from CFG analysis)
+- [x] Long functions (>50 lines)
+- [x] Complex conditionals (high branching factor)
 - [ ] Configurable thresholds in moss.toml
 
 ##### 28c: Test Coverage Analysis
-- [ ] Module-to-test mapping (which modules have tests)
-- [ ] Test-to-code ratio per package
-- [ ] Untested public API surface (exports without tests)
-- [ ] Test file organization health
+- [x] Module-to-test mapping (which modules have tests)
+- [x] Test-to-code ratio per package
+- [x] Untested public API surface (exports without tests)
+- [x] Test file organization health
 - [ ] Missing test fixtures detection
 
 ##### 28d: API Surface Analysis
