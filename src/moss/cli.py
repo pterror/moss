@@ -430,6 +430,33 @@ def cmd_skeleton(args: Namespace) -> int:
     return 0
 
 
+def cmd_tree(args: Namespace) -> int:
+    """Show git-aware file tree."""
+    from moss.tree import generate_tree
+
+    output = setup_output(args)
+    path = Path(getattr(args, "path", ".")).resolve()
+
+    if not path.exists():
+        output.error(f"Path not found: {path}")
+        return 1
+
+    tracked_only = getattr(args, "tracked", False)
+    gitignore = not getattr(args, "all", False)
+
+    result = generate_tree(path, tracked_only=tracked_only, gitignore=gitignore)
+
+    compact = getattr(args, "compact", False)
+    if compact and not wants_json(args):
+        output.print(result.to_compact())
+    elif wants_json(args):
+        output.data(result.to_dict())
+    else:
+        output.print(result.to_text())
+
+    return 0
+
+
 def cmd_anchors(args: Namespace) -> int:
     """Find anchors (functions, classes, methods) in code."""
     import re
@@ -2030,26 +2057,102 @@ def cmd_diff(args: Namespace) -> int:
 def cmd_summarize(args: Namespace) -> int:
     """Generate hierarchical codebase summary."""
     output = setup_output(args)
-    root = Path(getattr(args, "directory", ".")).resolve()
+    path = Path(getattr(args, "path", ".")).resolve()
 
-    if not root.exists():
-        output.error(f"Directory not found: {root}")
+    if not path.exists():
+        output.error(f"Path not found: {path}")
         return 1
 
+    compact = getattr(args, "compact", False)
+
+    # Single file mode
+    if path.is_file():
+        suffix = path.suffix.lower()
+
+        # Documentation file (markdown, rst, txt)
+        if suffix in (".md", ".rst", ".txt"):
+            from moss.summarize import DocSummarizer
+
+            summarizer = DocSummarizer()
+            summary = summarizer.summarize_file(path)
+
+            if summary is None:
+                output.error(f"Failed to read file: {path}")
+                return 1
+
+            if compact and not wants_json(args):
+                output.print(summary.to_compact())
+            elif wants_json(args):
+                output.data(summary.to_dict())
+            else:
+                output.print(summary.to_markdown())
+
+            return 0
+
+        # Python file
+        elif suffix == ".py":
+            from moss.summarize import Summarizer
+
+            summarizer = Summarizer(
+                include_private=getattr(args, "include_private", False),
+                include_tests=True,  # Include if explicitly targeting a test file
+            )
+            summary = summarizer.summarize_file(path)
+
+            if summary is None:
+                output.error(f"Failed to summarize: {path}")
+                return 1
+
+            if compact and not wants_json(args):
+                # Compact format for single Python file
+                lines_fmt = (
+                    f"{summary.line_count / 1000:.0f}K"
+                    if summary.line_count >= 1000
+                    else str(summary.line_count)
+                )
+                parts = [f"{summary.module_name}.py"]
+                parts.append(f"{lines_fmt} lines")
+                parts.append(f"{len(summary.classes)} classes, {len(summary.functions)} funcs")
+                output.print(" | ".join(parts))
+            elif wants_json(args):
+                output.data(
+                    {
+                        "module": summary.module_name,
+                        "path": str(summary.path),
+                        "docstring": summary.docstring,
+                        "line_count": summary.line_count,
+                        "classes": [
+                            {"name": c.name, "docstring": c.docstring} for c in summary.classes
+                        ],
+                        "functions": [
+                            {"name": f.name, "signature": f.signature, "docstring": f.docstring}
+                            for f in summary.functions
+                        ],
+                    }
+                )
+            else:
+                output.print(summary.to_markdown())
+
+            return 0
+
+        else:
+            output.error(f"Unsupported file type: {suffix}")
+            return 1
+
+    # Directory mode
     # Check if --docs mode
     if getattr(args, "docs", False):
         from moss.summarize import DocSummarizer
 
-        output.info(f"Summarizing documentation in {root.name}...")
+        output.info(f"Summarizing documentation in {path.name}...")
         summarizer = DocSummarizer()
 
         try:
-            summary = summarizer.summarize_docs(root)
+            summary = summarizer.summarize_docs(path)
         except Exception as e:
             output.error(f"Failed to summarize docs: {e}")
             return 1
 
-        compact = getattr(args, "compact", False)
         if compact and not wants_json(args):
             output.print(summary.to_compact())
         elif wants_json(args):
@@ -2062,7 +2165,7 @@ def cmd_summarize(args: Namespace) -> int:
     # Default: summarize code
     from moss.summarize import Summarizer
 
-    output.info(f"Summarizing {root.name}...")
+    output.info(f"Summarizing {path.name}...")
 
     summarizer = Summarizer(
         include_private=getattr(args, "include_private", False),
@@ -2070,13 +2173,12 @@ def cmd_summarize(args: Namespace) -> int:
     )
 
     try:
-        summary = summarizer.summarize_project(root)
+        summary = summarizer.summarize_project(path)
     except Exception as e:
         output.error(f"Failed to summarize: {e}")
         return 1
 
     # Output format
-    compact = getattr(args, "compact", False)
     if compact and not wants_json(args):
         output.print(summary.to_compact())
     elif wants_json(args):
@@ -3971,6 +4073,28 @@ def create_parser() -> argparse.ArgumentParser:
     # Introspection commands
     # ==========================================================================
 
+    # tree command
+    tree_parser = subparsers.add_parser("tree", help="Show git-aware file tree")
+    tree_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Directory to show (default: current)",
+    )
+    tree_parser.add_argument(
+        "--tracked",
+        "-t",
+        action="store_true",
+        help="Only show git-tracked files",
+    )
+    tree_parser.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        help="Show all files (ignore .gitignore)",
+    )
+    tree_parser.set_defaults(func=cmd_tree)
+
     # skeleton command
     skeleton_parser = subparsers.add_parser(
         "skeleton", help="Extract code skeleton (functions, classes, methods)"
@@ -4483,13 +4607,13 @@ def create_parser() -> argparse.ArgumentParser:
 
     # summarize command
     summarize_parser = subparsers.add_parser(
-        "summarize", help="Generate hierarchical codebase summary"
+        "summarize", help="Summarize code or documentation files"
     )
     summarize_parser.add_argument(
-        "directory",
+        "path",
         nargs="?",
         default=".",
-        help="Directory to summarize (default: current)",
+        help="File or directory to summarize (default: current directory)",
     )
     summarize_parser.add_argument(
         "--include-private",

@@ -37,6 +37,52 @@
     "name": "skeleton_format"
   },
   {
+    "description": "Generate and format tree as readable text. Formatted tree visualization",
+    "inputSchema": {
+      "properties": {
+        "compact": {
+          "default": false,
+          "description": "If True, use token-efficient format",
+          "type": "boolean"
+        },
+        "path": {
+          "description": "Directory to visualize (default: project root)",
+          "type": "string"
+        },
+        "tracked_only": {
+          "default": false,
+          "description": "If True, only show git-tracked files",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "tree_format"
+  },
+  {
+    "description": "Generate a tree visualization of a directory. Dict with root, file_count, dir_count, files list, and tree_text",
+    "inputSchema": {
+      "properties": {
+        "gitignore": {
+          "default": true,
+          "description": "If True, respect .gitignore when showing all files",
+          "type": "boolean"
+        },
+        "path": {
+          "description": "Directory to visualize (default: project root)",
+          "type": "string"
+        },
+        "tracked_only": {
+          "default": false,
+          "description": "If True, only show git-tracked files",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "tree_generate"
+  },
+  {
     "description": "Find anchors matching a name in a file. List of AnchorMatch objects with locations and confidence scores",
     "inputSchema": {
       "properties": {

@@ -243,12 +243,15 @@ def introspect_api() -> list[SubAPI]:
         PatchAPI,
         RefCheckAPI,
         SkeletonAPI,
+        TreeAPI,
         ValidationAPI,
     )
 
     # Map of property name to API class
+    # NOTE: When adding a new sub-API, add it here AND to the import above
     sub_apis = {
         "skeleton": SkeletonAPI,
+        "tree": TreeAPI,
         "anchor": AnchorAPI,
         "patch": PatchAPI,
         "dependencies": DependencyAPI,

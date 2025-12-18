@@ -8,12 +8,32 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 Candidates for the next session, roughly by size:
 
+- [x] **`moss summarize`** (small) - Summarize markdown/text files for LLM consumption
+  - Extract structure (headings, bullet points) into concise overview
+  - Token-efficient output (collapsible sections, key points only)
+  - Useful for TODO.md, README, docs/ - quick context without reading 1000 lines
+- [ ] **CLI/MCP help improvements** (small) - Better discoverability
+  - `moss help <command>` with examples
+  - MCP tool descriptions with usage examples
+  - List available commands grouped by category
+  - **Autogenerate from MossAPI** - derive help text from docstrings/type hints
+    - CLI argparse help from API method signatures
+    - MCP tool descriptions from API docstrings
+    - Single source of truth (library)
+- [ ] **Compact output for all commands** (small) - Ensure consistency
+  - Add `to_compact()` to all result types (dependencies, etc.)
+  - Consider a lint rule or test to enforce this convention
+  - Pattern: every result class should have `to_markdown()`, `to_compact()`, `to_dict()`
+- [ ] **RAG / Semantic Search** (medium) - Higher priority than other medium items
+  - See Future Work section for full design
+  - Start with: `moss rag index` + `moss rag search`
+  - Immediate value: "what did we decide about X?" queries
 - [ ] **RelationalGenerator** (medium) - miniKanren-style logic programming synthesis
   - Declarative constraint specification
   - Bidirectional search
-- [ ] **`moss tree`** (small) - Git-aware tree visualization
-  - `git ls-tree -r --name-only HEAD | tree --fromfile`
-  - Option to show only tracked files
+- [x] **`moss tree`** (small) - Git-aware tree visualization (DONE)
+  - Pure Python implementation, `--tracked`, `--all` flags
+  - MCP: `tree_generate`, `tree_format`
 - [ ] **Test PBEGenerator/SketchGenerator** (small) - Add tests for new generators
   - Similar to ComponentGenerator/SMTGenerator tests
 - [ ] **`moss explore` REPL** (medium) - Interactive codebase exploration
@@ -271,11 +291,7 @@ Potential additions:
   - Future improvements:
     - [ ] Pre-filters for performance (don't run every rule on every file)
     - [ ] Multi-backend composition: `@rule(backend=["ast-grep", "pyright"])`
-- [ ] `moss tree` - Git-aware tree visualization:
-  - Display tracked files in tree format (`git ls-tree -r --name-only HEAD | tree --fromfile`)
-  - Option to show only tracked files (exclude .gitignore'd)
-  - Option to show with file sizes, last modified dates
-  - Integration with `moss skeleton` for code structure within files
+- [x] `moss tree` - Git-aware tree visualization (DONE - see Next Up)
 - [ ] `moss clones` - Structural similarity via hashing:
   - Normalize AST subtrees: replace variable names with positional placeholders ($1, $2, $3)
   - Hash normalized structure → same hash = same structure

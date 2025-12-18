@@ -10,7 +10,6 @@ Provides hierarchical summaries of codebases:
 from __future__ import annotations
 
 import ast
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -447,6 +446,86 @@ class DocFileSummary:
 
         return "\n".join(lines)
 
+    def to_compact(self) -> str:
+        """Format as compact token-efficient summary.
+
+        Shows file stats and hierarchical structure in minimal tokens.
+        Example:
+            TODO.md (1000 lines, 8K words)
+            ├─ Next Up (5 items)
+            ├─ Future Work
+            │  ├─ MCP Server
+            │  ├─ Interface Generators
+            │  └─ ...
+            └─ Notes
+        """
+        lines = []
+
+        # Header with stats
+        words_fmt = (
+            f"{self.word_count / 1000:.0f}K" if self.word_count >= 1000 else str(self.word_count)
+        )
+        lines.append(f"{self.path.name} ({self.line_count} lines, {words_fmt} words)")
+
+        if not self.sections:
+            return "\n".join(lines)
+
+        # Build tree structure from sections
+        # Group by top-level sections
+        top_sections: list[tuple[DocSection, list[DocSection]]] = []
+        current_top: DocSection | None = None
+        current_children: list[DocSection] = []
+
+        for sec in self.sections:
+            if sec.level <= 2:  # h1 or h2 = top level
+                if current_top is not None:
+                    top_sections.append((current_top, current_children))
+                current_top = sec
+                current_children = []
+            else:
+                current_children.append(sec)
+
+        if current_top is not None:
+            top_sections.append((current_top, current_children))
+
+        # Render as tree
+        for i, (top, children) in enumerate(top_sections):
+            is_last_top = i == len(top_sections) - 1
+            prefix = "└─" if is_last_top else "├─"
+            lines.append(f"{prefix} {top.title}")
+
+            # Show up to 5 children, then "..."
+            visible_children = children[:5]
+            has_more = len(children) > 5
+
+            for j, child in enumerate(visible_children):
+                is_last_child = j == len(visible_children) - 1 and not has_more
+                child_prefix = "   └─" if is_last_child else "   ├─"
+                if is_last_top:
+                    child_prefix = "   " + child_prefix[3:]
+                else:
+                    child_prefix = "│  " + child_prefix[3:]
+                lines.append(f"{child_prefix} {child.title}")
+
+            if has_more:
+                more_prefix = "   └─" if is_last_top else "│  └─"
+                lines.append(f"{more_prefix} ... (+{len(children) - 5} more)")
+
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON output."""
+        return {
+            "path": str(self.path),
+            "title": self.title,
+            "word_count": self.word_count,
+            "line_count": self.line_count,
+            "sections": [
+                {"title": s.title, "level": s.level, "line": s.line} for s in self.sections
+            ],
+            "links": self.links,
+        }
+
 
 @dataclass
 class DocSummary:
@@ -528,15 +607,22 @@ class DocSummary:
 
 
 class DocSummarizer:
-    """Summarizes documentation files in a project."""
+    """Summarizes documentation files in a project.
 
-    # Patterns for markdown headings
-    HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$")
-    LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+    Uses moss.plugins.markdown for proper markdown parsing (handles code blocks, etc.)
+    """
 
-    def __init__(self):
-        self.heading_re = re.compile(r"^(#{1,6})\s+(.+)$")
-        self.link_re = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+    def summarize_file(self, path: Path) -> DocFileSummary | None:
+        """Summarize a single documentation file.
+
+        Args:
+            path: Path to the documentation file
+
+        Returns:
+            DocFileSummary or None if file cannot be read
+        """
+        path = path.resolve()
+        return self._summarize_doc_file(path, path.parent)
 
     def summarize_docs(self, root: Path) -> DocSummary:
         """Summarize all documentation in a project."""
@@ -580,40 +666,39 @@ class DocSummarizer:
         except Exception:
             return None
 
-        lines = content.splitlines()
+        # Use the proper markdown parser that handles code blocks correctly
+        from moss.plugins.markdown import extract_markdown_structure
+
+        structure = extract_markdown_structure(content)
+
+        # Convert to DocSection format
         sections: list[DocSection] = []
-        links: list[str] = []
         title: str | None = None
 
-        for i, line in enumerate(lines, 1):
-            # Extract headings
-            match = self.heading_re.match(line)
-            if match:
-                level = len(match.group(1))
-                heading_text = match.group(2).strip()
-                if title is None and level == 1:
-                    title = heading_text
-                sections.append(
-                    DocSection(
-                        title=heading_text,
-                        level=level,
-                        line=i,
-                        word_count=0,  # Could count words in section
-                    )
+        for heading in structure.headings:
+            if title is None and heading.level == 1:
+                title = heading.text
+            sections.append(
+                DocSection(
+                    title=heading.text,
+                    level=heading.level,
+                    line=heading.line,
+                    word_count=0,
                 )
+            )
 
-            # Extract links
-            for link_match in self.link_re.finditer(line):
-                links.append(link_match.group(2))
+        # Extract link URLs
+        links = [link.url for link in structure.links]
 
-        # Count words (simple whitespace split)
+        # Count words and lines
         word_count = len(content.split())
+        line_count = len(content.splitlines())
 
         return DocFileSummary(
             path=path,
             title=title,
             sections=sections,
             word_count=word_count,
-            line_count=len(lines),
+            line_count=line_count,
             links=links,
         )

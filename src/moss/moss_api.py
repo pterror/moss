@@ -92,6 +92,74 @@ class SkeletonAPI:
 
 
 @dataclass
+class TreeAPI:
+    """API for git-aware file tree visualization.
+
+    Shows project structure with awareness of git tracking status.
+    """
+
+    root: Path
+
+    def generate(
+        self,
+        path: str | Path | None = None,
+        tracked_only: bool = False,
+        gitignore: bool = True,
+    ) -> dict[str, Any]:
+        """Generate a tree visualization of a directory.
+
+        Args:
+            path: Directory to visualize (default: project root)
+            tracked_only: If True, only show git-tracked files
+            gitignore: If True, respect .gitignore when showing all files
+
+        Returns:
+            Dict with root, file_count, dir_count, files list, and tree_text
+        """
+        from moss.tree import generate_tree
+
+        target = self._resolve_path(path) if path else self.root
+        result = generate_tree(target, tracked_only=tracked_only, gitignore=gitignore)
+
+        return {
+            "root": str(result.root),
+            "file_count": result.file_count,
+            "dir_count": result.dir_count,
+            "files": result.files,
+            "tree_text": result.to_text(),
+        }
+
+    def format(
+        self,
+        path: str | Path | None = None,
+        tracked_only: bool = False,
+        compact: bool = False,
+    ) -> str:
+        """Generate and format tree as readable text.
+
+        Args:
+            path: Directory to visualize (default: project root)
+            tracked_only: If True, only show git-tracked files
+            compact: If True, use token-efficient format
+
+        Returns:
+            Formatted tree visualization
+        """
+        from moss.tree import generate_tree
+
+        target = self._resolve_path(path) if path else self.root
+        result = generate_tree(target, tracked_only=tracked_only)
+
+        return result.to_compact() if compact else result.to_text()
+
+    def _resolve_path(self, file_path: str | Path) -> Path:
+        path = Path(file_path)
+        if not path.is_absolute():
+            path = self.root / path
+        return path
+
+
+@dataclass
 class AnchorAPI:
     """API for finding code locations using fuzzy anchors.
 
@@ -1171,6 +1239,7 @@ class MossAPI:
 
     # Sub-APIs (initialized lazily)
     _skeleton: SkeletonAPI | None = None
+    _tree: TreeAPI | None = None
     _anchor: AnchorAPI | None = None
     _patch: PatchAPI | None = None
     _dependencies: DependencyAPI | None = None
@@ -1206,6 +1275,13 @@ class MossAPI:
         if self._skeleton is None:
             self._skeleton = SkeletonAPI(root=self.root)
         return self._skeleton
+
+    @property
+    def tree(self) -> TreeAPI:
+        """Access file tree visualization functionality."""
+        if self._tree is None:
+            self._tree = TreeAPI(root=self.root)
+        return self._tree
 
     @property
     def anchor(self) -> AnchorAPI:

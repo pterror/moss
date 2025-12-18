@@ -1111,6 +1111,88 @@
         ]
       }
     },
+    "/tree/format": {
+      "post": {
+        "description": "Generate and format tree as readable text. Formatted tree visualization",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "compact": {
+                    "default": false,
+                    "description": "If True, use token-efficient format",
+                    "type": "boolean"
+                  },
+                  "path": {
+                    "description": "Directory to visualize (default: project root)",
+                    "type": "string"
+                  },
+                  "tracked_only": {
+                    "default": false,
+                    "description": "If True, only show git-tracked files",
+                    "type": "boolean"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Generate and format tree as readable text",
+        "tags": [
+          "tree"
+        ]
+      }
+    },
+    "/tree/generate": {
+      "post": {
+        "description": "Generate a tree visualization of a directory. Dict with root, file_count, dir_count, files list, and tree_text",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "gitignore": {
+                    "default": true,
+                    "description": "If True, respect .gitignore when showing all files",
+                    "type": "boolean"
+                  },
+                  "path": {
+                    "description": "Directory to visualize (default: project root)",
+                    "type": "string"
+                  },
+                  "tracked_only": {
+                    "default": false,
+                    "description": "If True, only show git-tracked files",
+                    "type": "boolean"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Generate a tree visualization of a directory",
+        "tags": [
+          "tree"
+        ]
+      }
+    },
     "/validation/create-chain": {
       "post": {
         "description": "Create a standard Python validator chain. ValidatorChain configured for Python (syntax + ruff + pytest)",
@@ -1163,6 +1245,10 @@
     {
       "description": "API for code skeleton extraction. Extracts structural summaries of code (classes, functions, signatures) without implementation details.",
       "name": "skeleton"
+    },
+    {
+      "description": "API for git-aware file tree visualization. Shows project structure with awareness of git tracking status.",
+      "name": "tree"
     },
     {
       "description": "API for finding code locations using fuzzy anchors. Anchors identify code elements (functions, classes, variables) by name and type, with fuzzy matching support.",
