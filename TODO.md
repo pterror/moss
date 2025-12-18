@@ -46,33 +46,11 @@ Advanced abstraction discovery:
 - [ ] Full TypeScript/JavaScript synthesis support
 - [ ] Go and Rust synthesis strategies
 
-### External Dependency Analysis
-
-Analyze PyPI/npm dependencies (not just internal imports):
-
-- [x] Parse pyproject.toml/requirements.txt for dependencies (`moss external-deps`)
-- [x] Resolve full dependency tree (transitive dependencies) (`--resolve` flag)
-- [x] Show dependency weight (how many sub-dependencies each brings)
-- [x] Identify heavy/bloated dependencies (`--warn-weight` threshold)
-- [x] Check for known vulnerabilities (`--check-vulns` via OSV API)
-- [x] License compatibility checking (`--check-licenses` flag)
-- [x] package.json/npm support (dependencies, devDependencies, optional, peer)
-
 ### CLI Output Enhancement
 
-Token-efficient output modes for AI agent consumption:
+Remaining token-efficient output features:
 
-- [x] `--compact` flag for single-line summaries (e.g., `deps: 5 direct | vulns: 0 | licenses: ok`)
-- [x] `--jq EXPR` flag - pipe JSON output through jq for field extraction
 - [ ] `--query EXPR` flag - relaxed DWIM syntax for flexible querying (needs design work)
-
-The `--jq` option is straightforward (shell out to jq). The `--query` variant would allow more natural queries like `"direct deps"` or `"high vulns"` but requires careful design to handle fuzzy matching.
-
-Multi-command aggregation:
-
-- [x] `moss overview` - run all checks (health, deps, docs, todos, refs) and output combined results
-- [x] `--preset NAME` flag - named presets for command combinations (ci, quick, full)
-- [x] Custom presets via moss.toml or pyproject.toml `[tool.moss.presets.*]`
 - [ ] Format strings for custom output templates
 
 ### Overview Comprehensiveness
@@ -103,17 +81,21 @@ Potential additions:
 
 ### Agent Log Analysis
 
-Analyze Claude Code session logs to identify inefficiencies and patterns:
-- Logs at `~/.claude/projects/<project>/` (sessions are UUIDs, subagents are `agent-*`)
-- Could use jq to extract patterns from JSON logs
+Manual analysis complete - see `docs/log-analysis.md` for methodology and insights.
 
-Potential analysis:
-- [ ] Tool call frequency and success rates
-- [ ] Common retry patterns (what fails and why)
-- [ ] Context efficiency (token usage per task)
-- [ ] Subagent spawn patterns (when/why)
-- [ ] Time spent in different phases (planning, editing, testing)
-- [ ] Error categories and resolution patterns
+Next: Build tooling to automate this and extract actionable improvements:
+
+- [ ] `moss analyze-session <path>` - parse Claude Code JSONL logs
+  - Tool call frequency/success rates
+  - Error patterns and retry loops
+  - Token usage and context growth
+  - Parallelization opportunities
+- [ ] `moss extract-preferences <path>` - infer user preferences from session history
+  - Coding style patterns (naming, structure, error handling)
+  - Tool usage preferences (which tools work well, which cause friction)
+  - Common corrections/refinements (what does the user keep fixing?)
+  - Generate suggested CLAUDE.md additions
+- [ ] `moss diff-preferences <old> <new>` - track preference drift over time
 
 ### Enterprise Features
 
