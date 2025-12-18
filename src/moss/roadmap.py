@@ -437,17 +437,31 @@ def format_tui(
         lines.append(box_line(""))
 
         display_future = pending_future if max_items == 0 else pending_future[:max_items]
+
+        # Calculate max name length for alignment
+        def phase_name(p: Phase) -> str:
+            prefix = f"Phase {p.id}: " if p.id else ""
+            return f"{prefix}{p.title}"
+
+        max_name_len = max(len(phase_name(p)) for p in display_future)
+        bar_width = 10  # Mini progress bar width
+
         for phase in display_future:
-            phase_prefix = f"Phase {phase.id}: " if phase.id else ""
+            name = phase_name(phase)
+            padded_name = name.ljust(max_name_len)
             completed, total = phase.progress
+
             if total > 0:
                 pct = int(100 * completed / total)
-                progress_str = f"[{completed}/{total}] {pct}%"
+                filled = int(bar_width * completed / total)
+                empty = bar_width - filled
+                bar = PROGRESS_CHARS["full"] * filled + PROGRESS_CHARS["empty"] * empty
+                progress_str = f"{bar} [{completed}/{total}] {pct}%"
                 if use_color:
                     progress_str = f"{DIM}{progress_str}{RESET}"
-                phase_line = f"  ○ {phase_prefix}{phase.title} {progress_str}"
+                phase_line = f"  ○ {padded_name} {progress_str}"
             else:
-                phase_line = f"  ○ {phase_prefix}{phase.title}"
+                phase_line = f"  ○ {padded_name}"
             lines.append(box_line(phase_line))
 
         remaining = len(pending_future) - len(display_future)
