@@ -8,22 +8,20 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 Candidates for the next session, roughly by size:
 
-- [ ] **Deps backend for moss rules** (medium) - ArchUnit-style architectural constraints
-  - Add `deps` backend to `moss.rules` multi-backend architecture
-  - Layering rules: "UI must not import Infrastructure"
-  - Query `moss deps` graph from rules
-  - See expanded design in "Codebase Analysis Gaps" → `moss rules`
-- [ ] **Weakness reporting improvements** (small) - Enhance `moss weaknesses` output
-  - Add SARIF output format for CI integration
-  - Add --fix suggestions for auto-correctable issues
-- [ ] **ACP streaming** (small) - Add streaming support to ACP server
-  - Progressive updates during long-running analyses
-- [ ] **ComponentGenerator** (medium) - Combine library functions bottom-up (SyPet/InSynth)
-  - Build type graph from available functions
-  - Petri net representation for reachability
-- [ ] **SMTGenerator** (medium) - Z3-based type-guided synthesis (Synquid)
-  - Translate Python specs to Z3 constraints
-  - Bidirectional type propagation
+- [ ] **PBEGenerator** (medium) - Programming by Example synthesis (FlashFill/PROSE)
+  - Input/output examples → synthesize string transformations
+  - DSL for common patterns (substring, concat, conditionals)
+  - See `docs/prior-art.md` for PROSE/FlashFill background
+- [ ] **SketchGenerator** (medium) - Fill holes in user templates (Sketch/Rosette)
+  - User provides code with `??` holes
+  - Enumerate candidates and check against examples
+- [ ] **Test ComponentGenerator/SMTGenerator** (small) - Add tests for new generators
+  - Unit tests with mock context/specs
+  - Integration tests with actual library composition
+- [ ] **Drift auto-update in pre-commit** (small) - Run check_gen_drift.py --update automatically
+  - Prevents CI failures from forgetting to update specs
+- [ ] **CheckpointAPI to MossAPI** (small) - Expose checkpoint commands via library API
+  - Currently CLI-only, should be programmatically accessible
 
 ## Future Work
 
@@ -85,14 +83,14 @@ Alternative synthesis approaches that don't rely on LLMs. See `docs/synthesis-ge
   - Bottom-up AST enumeration with depth-based exploration
   - Tests against input/output examples for pruning
   - See `src/moss/synthesis/plugins/generators/enumeration.py`
-- [ ] `ComponentGenerator` - combine library functions bottom-up (SyPet/InSynth)
-  - Build type graph from available functions (use `moss deps` + `external-deps`)
-  - Petri net representation: places=types, transitions=methods, tokens=variables
-  - Two-phase: sketch generation via reachability, then SAT for argument binding
-- [ ] `SMTGenerator` - Z3-based type-guided synthesis (Synquid)
-  - Translate Python specs to Z3 constraints (`pip install z3-solver`)
-  - Use docstrings/contracts as refinement types
-  - Bidirectional type propagation (top-down + bottom-up)
+- [x] `ComponentGenerator` - combine library functions bottom-up (SyPet/InSynth)
+  - Build type graph from available functions
+  - BFS search for function compositions from input types to goal type
+  - See `src/moss/synthesis/plugins/generators/component.py`
+- [x] `SMTGenerator` - Z3-based type-guided synthesis (Synquid)
+  - Z3 constraint encoding with candidate generation
+  - Examples as equality constraints for validation
+  - See `src/moss/synthesis/plugins/generators/smt.py`
 
 #### Medium Priority
 - [ ] `PBEGenerator` - Programming by Example (FlashFill/PROSE)
@@ -243,6 +241,8 @@ Potential additions:
   - [x] Hardcoded values (URLs, paths, IPs)
   - [x] Error handling issues (bare except, swallowed exceptions)
   - [x] Pattern consistency checks (via patterns analysis)
+  - [x] SARIF output format (`--sarif FILE`) for CI integration
+  - [x] Fix suggestions (`--fix`) for auto-correctable issues
   - See `src/moss/weaknesses.py` for implementation
 - [x] `moss rules` - Custom structural analysis framework (Phase A complete):
   - [x] User-defined rules as Python files (LLM-writable, type-checkable)
@@ -253,13 +253,10 @@ Potential additions:
     - [x] `ast-grep` backend: structural patterns (wraps ast-grep CLI)
     - [x] `python` backend: escape hatch for arbitrary checks
     - [ ] `pyright` backend: type-aware rules (future)
-    - [ ] `deps` backend: cross-file architectural rules (ArchUnit-style)
-      - Layering constraints: "UI must not import Infrastructure directly"
-      - Dependency direction: "Domain should not depend on Framework"
-      - Module boundaries: "Only X may import internal module Y"
-      - Circular dependency detection at package level
-      - Uses `moss deps` graph as input, rules query the graph
-      - Example: `@rule(backend="deps") def no_ui_to_infra(graph): ...`
+    - [x] `deps` backend: cross-file architectural rules (ArchUnit-style)
+      - See `src/moss/rules/backends/deps.py`
+      - Layering constraints, module boundaries, circular dependency detection
+      - Pattern queries: `imports:module`, `imports_from:module`, `layer:name`
   - [x] **Context detection**: auto-classify code context (test, library, CLI, etc.)
     - [x] Path heuristics: `/tests/` → test context
     - [x] Import detection: imports pytest → test context
@@ -366,6 +363,7 @@ See `docs/prior-art.md` for detailed research (updated Dec 2025).
   - `moss.acp_server` module with JSON-RPC 2.0 over stdio
   - Integrated with moss tools: skeleton, deps, complexity, health, patterns, weaknesses, security
   - Uses DWIM for semantic routing of unknown prompts
+  - Progressive streaming for long-running analyses (ProgressStreamer, stream_content)
   - See `docs/prior-art.md` for protocol details
 - [ ] **Intent Prediction** (Windsurf's Supercomplete) - predict what user wants, not just next token
 - [ ] **Manager View** (Antigravity) - UI for orchestrating multiple concurrent agents
