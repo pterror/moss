@@ -154,18 +154,33 @@ Core philosophy: programming is essentially recursive abstraction - we build abs
 
 **Implementation: Merkle tree structure** (partially implemented in `context_memory.py`)
 - Already have: `DocumentSummary` with `merkle_hash`, `ContentHash`, `SummaryStore`
-- Each node (expression, block, function, file, directory) has a content hash
-- Parent nodes contain hashes of children → content-addressable tree
-- Each node also has a **summary** (compressed representation) at multiple detail levels
-- Navigation: start at root, see summary, drill into any subtree
+- **Vision**: entire codebase as one Merkle tree, from root down to expressions
+  - Root (codebase) → directories → files → symbols → blocks → expressions
+  - Each node: content hash + summary at multiple detail levels
+  - Parent hash = f(children hashes) → changes propagate up
 - Benefits:
   - Efficient change detection (hash changes propagate up)
   - Cacheable at any level (hash = cache key)
   - Natural for incremental updates
   - Can verify integrity (useful for distributed/cached views)
-- Structure mirrors git's object model but for AST, not files
-- Could integrate with actual git: each commit = snapshot of Merkle tree
-- **Still needed**: extend from documents to AST nodes, integrate with skeleton/CFG views
+- Structure mirrors git's object model but for AST, not just files
+
+**Storage: in-repo, git-diff friendly**
+- Store the Merkle tree inside the codebase itself (e.g., `.moss/tree/`)
+- Format must be git-friendly:
+  - Text-based, not binary
+  - Deterministic ordering (sorted keys)
+  - One file per directory? Or single JSONL with stable line order?
+  - Changes to one file should only affect that file's entry + ancestors
+- Could be: `.moss/tree/{hash}.summary` or `.moss/tree/index.jsonl`
+- Enables: `git diff` shows which summaries changed, reviewable in PRs
+- Auto-regenerate on `moss index` or git hooks
+
+**Still needed**:
+- Extend from documents to full codebase (directories, not just files)
+- Integrate with skeleton/CFG views
+- Design git-friendly storage format
+- Incremental update (only rehash changed subtrees)
 
 **Rendering strategies**:
 - **Budget allocation**: given N tokens, allocate to subtrees by importance (size, complexity, relevance to query)
