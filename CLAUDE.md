@@ -50,7 +50,7 @@ Multi-agent model: Ticket-based (not shared chat history). Agents are isolated m
 
 **Everything is a plugin.** Where possible, use plugin protocols instead of hardcoded implementations. Even "native" integrations should implement the same plugin interface as third-party ones.
 
-**Server as API.** The server is the canonical API surface; CLI and TUI are frontends to the server, not the other way around.
+**Library is the API.** The library is the canonical API surface. CLI, TUI, HTTP server, MCP, and LSP are all frontends to the library. The server adds optional benefits (concurrent clients, persistent state, network access) but isn't required.
 
 ## Conventions
 

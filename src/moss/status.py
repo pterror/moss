@@ -12,6 +12,7 @@ from typing import Any
 
 from moss.check_docs import DocChecker, DocCheckResult
 from moss.check_todos import TodoChecker, TodoCheckResult, TodoStatus
+from moss.dependency_analysis import DependencyAnalysis, DependencyAnalyzer
 from moss.summarize import DocSummarizer, Summarizer
 
 
@@ -58,6 +59,13 @@ class ProjectStatus:
     todos_done: int = 0
     todos_orphaned: int = 0
 
+    # Dependency stats
+    dep_modules: int = 0
+    dep_edges: int = 0
+    dep_circular: int = 0
+    dep_god_modules: int = 0
+    dep_orphan_modules: int = 0
+
     # Issues
     weak_spots: list[WeakSpot] = field(default_factory=list)
     next_actions: list[NextAction] = field(default_factory=list)
@@ -65,6 +73,7 @@ class ProjectStatus:
     # Raw results for detailed access
     doc_check: DocCheckResult | None = None
     todo_check: TodoCheckResult | None = None
+    dep_analysis: DependencyAnalysis | None = None
 
     @property
     def health_score(self) -> int:
@@ -88,6 +97,14 @@ class ProjectStatus:
         # Penalize for doc check warnings
         if self.doc_check and self.doc_check.warning_count > 0:
             score -= min(15, self.doc_check.warning_count)
+
+        # Penalize for circular dependencies (severe)
+        if self.dep_circular > 0:
+            score -= min(20, self.dep_circular * 10)
+
+        # Penalize for god modules (moderate)
+        if self.dep_god_modules > 3:
+            score -= min(10, (self.dep_god_modules - 3) * 2)
 
         return max(0, min(100, score))
 
@@ -132,6 +149,10 @@ class ProjectStatus:
         lines.append(f"| TODOs | {todo_str} |")
         if self.todos_orphaned > 0:
             lines.append(f"| Orphaned TODOs | {self.todos_orphaned} |")
+        if self.dep_modules > 0:
+            lines.append(f"| Dependencies | {self.dep_edges} edges, {self.dep_modules} modules |")
+        if self.dep_circular > 0:
+            lines.append(f"| Circular Deps | {self.dep_circular} |")
         lines.append("")
 
         # Next actions
@@ -182,6 +203,13 @@ class ProjectStatus:
                     "pending": self.todos_pending,
                     "done": self.todos_done,
                     "orphaned": self.todos_orphaned,
+                },
+                "dependencies": {
+                    "modules": self.dep_modules,
+                    "edges": self.dep_edges,
+                    "circular": self.dep_circular,
+                    "god_modules": self.dep_god_modules,
+                    "orphan_modules": self.dep_orphan_modules,
                 },
             },
             "next_actions": [
@@ -293,6 +321,41 @@ class StatusChecker:
                         severity="medium",
                         message=f"{todo_result.orphan_count} TODOs in code not tracked in TODO.md",
                         suggestion="Add important TODOs to TODO.md or resolve them",
+                    )
+                )
+        except Exception:
+            pass
+
+        # Analyze dependencies
+        dep_analyzer = DependencyAnalyzer(self.root)
+        try:
+            dep_result = dep_analyzer.analyze()
+            status.dep_analysis = dep_result
+            status.dep_modules = dep_result.total_modules
+            status.dep_edges = dep_result.total_edges
+            status.dep_circular = len(dep_result.circular_deps)
+            status.dep_god_modules = len(dep_result.god_modules)
+            status.dep_orphan_modules = len(dep_result.orphan_modules)
+
+            # Add circular dependencies as high-severity weak spots
+            for cd in dep_result.circular_deps:
+                status.weak_spots.append(
+                    WeakSpot(
+                        category="dependencies",
+                        severity="high",
+                        message=f"Circular dependency: {cd.description}",
+                        suggestion="Refactor to break the cycle",
+                    )
+                )
+
+            # Add god modules as medium-severity weak spots
+            for m in dep_result.god_modules[:5]:  # Top 5
+                status.weak_spots.append(
+                    WeakSpot(
+                        category="dependencies",
+                        severity="medium",
+                        message=f"High fan-in module: `{m.name}` ({m.fan_in} importers)",
+                        suggestion="Consider breaking into smaller modules",
                     )
                 )
         except Exception:
