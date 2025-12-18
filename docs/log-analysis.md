@@ -196,6 +196,48 @@ depends on subscription tier, not raw API rates.*
 The raw log has 8,500+ assistant entries because each streaming chunk is logged separately.
 Grouping by `requestId` and taking max values gives the correct per-call totals.
 
+## Architectural Insights
+
+### The Real Problem: Context Accumulation
+
+The chatlog-as-context paradigm is fundamentally flawed:
+- Context grew 19K → 156K tokens over 31 hours
+- 99% of tokens are re-sent unchanged every turn
+- "Lost in the middle" - models degrade at high context
+- Signal drowns in noise
+
+### Why All Agentic Tools Do This
+
+Every tool (Claude Code, Cursor, Copilot, etc.) uses similar approaches. Not because it's optimal, but:
+1. LLM APIs are stateless - must send context each call
+2. Summarization risks losing critical details
+3. RAG retrieval might miss something
+4. "Good enough" for short sessions
+5. Engineering complexity / risk aversion
+
+### The Better Approach (Moss Vision)
+
+**For code:** Merkle tree of structural views
+- Hash AST/modules/deps
+- Know what changed instantly
+- Invalidate cached summaries surgically
+
+**For chat:** Don't keep history
+- Task state: "implementing feature X"
+- Retrieved memories: RAG for relevant past learnings
+- Recent turns: last 2-3 exchanges only
+- Compiled context: skeleton/deps, not raw files
+
+Target: **1-10K tokens** instead of 100K+
+
+### Why This Should Be More Reliable
+
+Curated context isn't just cheaper - it's *better*:
+- Model focuses on relevant signal
+- No "lost in the middle" degradation
+- Less noise = fewer hallucinations
+- Faster iteration cycles
+
 ---
 
 *Analysis performed on session from Dec 17-18, 2025*
