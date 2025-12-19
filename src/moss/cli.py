@@ -3286,6 +3286,170 @@ def cmd_rag(args: Namespace) -> int:
         return 1
 
 
+def cmd_loop(args: Namespace) -> int:
+    """Run composable agent loops.
+
+    Subcommands:
+    - list: Show available loop templates
+    - run: Execute a loop on a file
+    - benchmark: Compare loop performance
+    """
+    import asyncio
+
+    from moss.agent_loop import (
+        AgentLoopRunner,
+        BenchmarkTask,
+        LLMConfig,
+        LLMToolExecutor,
+        LoopBenchmark,
+        critic_loop,
+        incremental_loop,
+        simple_loop,
+    )
+
+    output = setup_output(args)
+    action = getattr(args, "action", "list")
+
+    # Built-in loop registry
+    loops = {
+        "simple": simple_loop,
+        "critic": critic_loop,
+        "incremental": incremental_loop,
+    }
+
+    if action == "list":
+        output.header("Available Loops")
+        for name, factory in loops.items():
+            loop = factory()
+            steps = ", ".join(s.name for s in loop.steps)
+            output.print(f"  {name}: {steps}")
+        return 0
+
+    elif action == "run":
+        loop_name = getattr(args, "loop_name", "simple")
+        file_path = getattr(args, "file", None)
+        mock = getattr(args, "mock", False)
+        model = getattr(args, "model", None)
+
+        if loop_name not in loops:
+            output.error(f"Unknown loop: {loop_name}. Use 'moss loop list' to see options.")
+            return 1
+
+        if not file_path:
+            output.error("File path required. Use --file <path>")
+            return 1
+
+        file_path = Path(file_path).resolve()
+        if not file_path.exists():
+            output.error(f"File not found: {file_path}")
+            return 1
+
+        loop = loops[loop_name]()
+        config = LLMConfig(mock=mock)
+        if model:
+            config.model = model
+
+        executor = LLMToolExecutor(config=config, root=file_path.parent)
+        runner = AgentLoopRunner(executor)
+
+        output.info(f"Running '{loop_name}' loop on {file_path.name}...")
+
+        async def run_loop():
+            return await runner.run(loop, initial_input={"file_path": str(file_path)})
+
+        result = asyncio.run(run_loop())
+
+        if wants_json(args):
+            output.data(
+                {
+                    "status": result.status.name,
+                    "success": result.success,
+                    "metrics": {
+                        "llm_calls": result.metrics.llm_calls,
+                        "llm_tokens": result.metrics.llm_tokens_in + result.metrics.llm_tokens_out,
+                        "tool_calls": result.metrics.tool_calls,
+                        "wall_time": result.metrics.wall_time_seconds,
+                    },
+                    "error": result.error,
+                }
+            )
+        else:
+            status = "✓" if result.success else "✗"
+            output.print(f"{status} {result.status.name}")
+            output.print(
+                f"  LLM: {result.metrics.llm_calls} calls, "
+                f"{result.metrics.llm_tokens_in + result.metrics.llm_tokens_out} tokens"
+            )
+            output.print(f"  Tools: {result.metrics.tool_calls} calls")
+            output.print(f"  Time: {result.metrics.wall_time_seconds:.2f}s")
+            if result.error:
+                output.error(f"  Error: {result.error}")
+
+        return 0 if result.success else 1
+
+    elif action == "benchmark":
+        loop_names = getattr(args, "loops", None) or list(loops.keys())
+        file_path = getattr(args, "file", None)
+        mock = getattr(args, "mock", True)  # Default to mock for benchmarks
+
+        if not file_path:
+            output.error("File path required. Use --file <path>")
+            return 1
+
+        file_path = Path(file_path).resolve()
+        if not file_path.exists():
+            output.error(f"File not found: {file_path}")
+            return 1
+
+        config = LLMConfig(mock=mock)
+        executor = LLMToolExecutor(config=config, root=file_path.parent)
+        benchmark = LoopBenchmark(executor=executor)
+
+        tasks = [BenchmarkTask(name=file_path.name, input_data={"file_path": str(file_path)})]
+
+        output.info(f"Benchmarking {len(loop_names)} loops...")
+
+        async def run_benchmark():
+            results = []
+            for name in loop_names:
+                if name not in loops:
+                    output.warning(f"Unknown loop: {name}, skipping")
+                    continue
+                loop = loops[name]()
+                result = await benchmark.run(loop, tasks)
+                results.append(result)
+            return results
+
+        results = asyncio.run(run_benchmark())
+
+        if wants_json(args):
+            output.data(
+                [
+                    {
+                        "loop": r.loop_name,
+                        "success_rate": r.success_rate,
+                        "avg_llm_calls": r.avg_llm_calls,
+                        "avg_tool_calls": r.avg_tool_calls,
+                        "total_time": r.total_time_seconds,
+                    }
+                    for r in results
+                ]
+            )
+        else:
+            output.header("Loop Comparison")
+            for r in sorted(results, key=lambda x: x.avg_llm_calls):
+                output.print(
+                    f"  {r.loop_name}: {r.success_rate:.0%} success, "
+                    f"{r.avg_llm_calls:.1f} LLM calls, {r.avg_tool_calls:.1f} tool calls"
+                )
+
+        return 0
+
+    else:
+        output.error(f"Unknown action: {action}")
+        return 1
+
+
 def cmd_health(args: Namespace) -> int:
     """Show project health and what needs attention."""
     from moss.status import StatusChecker
@@ -5300,6 +5464,43 @@ def create_parser() -> argparse.ArgumentParser:
         help="Force re-indexing (for index action)",
     )
     rag_parser.set_defaults(func=cmd_rag)
+
+    # loop command
+    loop_parser = subparsers.add_parser("loop", help="Run composable agent loops")
+    loop_parser.add_argument(
+        "action",
+        nargs="?",
+        default="list",
+        choices=["list", "run", "benchmark"],
+        help="Action: list (show loops), run (execute), benchmark (compare)",
+    )
+    loop_parser.add_argument(
+        "loop_name",
+        nargs="?",
+        default="simple",
+        help="Loop to run: simple, critic, incremental (default: simple)",
+    )
+    loop_parser.add_argument(
+        "--file",
+        "-f",
+        help="File to process (required for run/benchmark)",
+    )
+    loop_parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Use mock LLM responses (for testing)",
+    )
+    loop_parser.add_argument(
+        "--model",
+        "-m",
+        help="LLM model to use (e.g., gemini/gemini-3-flash-preview)",
+    )
+    loop_parser.add_argument(
+        "--loops",
+        nargs="+",
+        help="Loops to benchmark (default: all)",
+    )
+    loop_parser.set_defaults(func=cmd_loop)
 
     # security command
     security_parser = subparsers.add_parser(

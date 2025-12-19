@@ -48,9 +48,11 @@ See `~/git/prose/moss/` for full synthesis design documents.
   - Agent already calls moss tools recursively (skeleton, patch, validation)
   - MCP client would add external tools (filesystem, git, browser, etc.)
   - Would enable moss loops to be fully autonomous agents
-- [ ] **Recursive self-improvement for moss agent** - Agent improves its own CLAUDE.md/TODO.md
-  - Periodic review: "What patterns am I repeating? What constraints are missing?"
-  - Propose additions to Negative Constraints, Recipes, Dogfooding table
+- [ ] **Recursive self-improvement for moss workflows** - Loops that improve other loops
+  - Not just CLAUDE.md - any workflow can be a target
+  - Critic loop reviewing loop definitions for inefficiencies
+  - Subagents proposing step reordering, tool substitutions
+  - Works for LLM-heavy and tool-heavy workflows alike
   - Requires careful human review to avoid runaway changes
 - [ ] **Multi-LLM rotation to reduce bias** - Switch providers periodically
   - Model-specific biases accumulate when using one LLM exclusively

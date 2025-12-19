@@ -70,6 +70,7 @@ Test via CLI (`moss <command>`) rather than MCP when modifying moss source - MCP
 ### Updating CLAUDE.md
 Add: workflow patterns, conventions, project-specific knowledge, tool usage patterns.
 Don't add: temporary notes (TODO.md), implementation details (docs/), one-off decisions (commit messages).
+Keep it slim: If CLAUDE.md grows past ~150 lines, refactor content to docs/ and reference it.
 
 ### Updating TODO.md
 Proactively add features, ideas, patterns, technical debt, integration opportunities.
