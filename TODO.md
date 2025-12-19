@@ -4,10 +4,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Dogfood new tree commands** - Test `path`, `view`, `search-tree`, `expand`, `callers` in real work
+1. **Dogfood new tree commands** - Test `path`, `view`, `search-tree`, `expand`, `callers`, `callees` in real work
 2. **Wire tree commands to MCP** - Add DWIM routing for new commands
-3. **Indexing for tree** - Speed up `search-tree` and `callers` with persistent index
-4. **Deprecate old commands** - Phase out `skeleton`, `summarize`, `anchors` in favor of new tree commands
+3. **Proper reference tracing** - AST-based callers/callees like GitHub (current impl is string matching)
+4. **Indexing for tree** - Speed up `search-tree` and `callers` with persistent index
 
 ## Active Backlog
 
