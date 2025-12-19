@@ -59,11 +59,128 @@ def _truncate_output(text: str) -> str:
     return text[:head_size] + f"\n\n... [{omitted:,} chars truncated] ...\n\n" + text[-tail_size:]
 
 
+# Known CLI subcommands for detecting natural language vs CLI syntax
+_CLI_COMMANDS = {
+    "init",
+    "config",
+    "distros",
+    "skeleton",
+    "tree",
+    "anchors",
+    "query",
+    "cfg",
+    "deps",
+    "context",
+    "complexity",
+    "clones",
+    "patterns",
+    "weaknesses",
+    "lint",
+    "security",
+    "rules",
+    "health",
+    "report",
+    "overview",
+    "check-docs",
+    "check-todos",
+    "check-refs",
+    "coverage",
+    "external-deps",
+    "git-hotspots",
+    "diff",
+    "checkpoint",
+    "synthesize",
+    "edit",
+    "search",
+    "rag",
+    "mcp-server",
+    "acp-server",
+    "lsp",
+    "tui",
+    "shell",
+    "explore",
+    "gen",
+    "watch",
+    "hooks",
+    "mutate",
+    "run",
+    "status",
+    "pr",
+    "roadmap",
+    "metrics",
+    "summarize",
+    "analyze-session",
+    "extract-preferences",
+    "diff-preferences",
+    "eval",
+    "dwim",
+    "help",
+    "loop",
+}
+
+
+def _extract_paths(text: str) -> list[str]:
+    """Extract file paths from natural language text."""
+    import re
+
+    paths = []
+    # Match patterns like src/foo.py, ./bar.py, foo/bar/, *.py
+    for match in re.finditer(r"[\w./\-*]+\.(?:py|md|json|yaml|toml|txt|js|ts|rs|go)", text):
+        paths.append(match.group())
+    # Match directory patterns like src/, ./foo/bar/
+    for match in re.finditer(r'(?:^|[\s"])([./]?[\w\-]+(?:/[\w\-]+)+)/?(?:[\s"]|$)', text):
+        paths.append(match.group(1))
+    return paths
+
+
+def _dwim_rewrite(command: str) -> str | None:
+    """Try to rewrite natural language as a CLI command using DWIM.
+
+    Returns rewritten command or None if input looks like valid CLI syntax.
+    """
+    from pathlib import Path
+
+    try:
+        args = shlex.split(command)
+    except ValueError:
+        return None  # Malformed quotes - let _execute_command handle the error
+
+    if not args:
+        return None
+
+    # If first word is a known command, don't rewrite
+    if args[0].lower() in _CLI_COMMANDS:
+        return None
+
+    # Looks like natural language - use DWIM
+    from moss import MossAPI
+
+    api = MossAPI.for_project(Path.cwd())
+    results = api.dwim.analyze_intent(command, top_k=1)
+
+    if not results or results[0].confidence < 0.15:
+        return None
+
+    # Get the best matching tool
+    tool = results[0].tool
+
+    # Map tool names to CLI commands (handle underscores -> hyphens)
+    cli_cmd = tool.replace("_", "-").replace(".", " ")
+
+    # Extract paths from the original query
+    paths = _extract_paths(command)
+
+    # Build the command
+    if paths:
+        return f"{cli_cmd} {' '.join(paths)}"
+    return cli_cmd
+
+
 def _execute_command(command: str) -> dict[str, Any]:
     """Execute a moss CLI command and return the result.
 
     Args:
-        command: CLI command string (e.g., "skeleton src/main.py" or "search find_symbols Query")
+        command: CLI command string or natural language query
 
     Returns:
         Dict with 'output' (stdout), 'error' (stderr if any), 'exit_code'
@@ -73,6 +190,11 @@ def _execute_command(command: str) -> dict[str, Any]:
 
     from moss.cli import main as cli_main
     from moss.output import reset_output
+
+    # Try DWIM rewrite for natural language
+    rewritten = _dwim_rewrite(command)
+    if rewritten:
+        command = rewritten
 
     # Parse command string into args
     try:
