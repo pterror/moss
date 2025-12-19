@@ -1359,6 +1359,54 @@ class WeaknessesAPI:
 
 
 @dataclass
+class GuessabilityAPI:
+    """API for evaluating codebase structure quality.
+
+    Measures how intuitive and predictable the codebase structure is.
+    Can you guess where to find functionality based on its name?
+    """
+
+    root: Path
+
+    def analyze(self) -> Any:
+        """Analyze codebase guessability.
+
+        Evaluates:
+        - Name-content alignment: Do module names reflect their contents?
+        - Predictability: Are similar things in similar places?
+        - Pattern consistency: Are conventions followed?
+
+        Returns:
+            GuessabilityReport with scores and recommendations
+        """
+        from moss.guessability import GuessabilityAnalyzer
+
+        analyzer = GuessabilityAnalyzer(self.root)
+        return analyzer.analyze()
+
+    def score(self) -> dict[str, float | str]:
+        """Get overall guessability score.
+
+        Returns:
+            Dict with 'score' (0.0-1.0) and 'grade' (A-F)
+        """
+        report = self.analyze()
+        return {
+            "score": report.overall_score,
+            "grade": report.grade,
+        }
+
+    def recommendations(self) -> list[str]:
+        """Get guessability improvement recommendations.
+
+        Returns:
+            List of actionable recommendations
+        """
+        report = self.analyze()
+        return report.recommendations
+
+
+@dataclass
 class WebAPI:
     """API for token-efficient web fetching and search.
 
@@ -2168,6 +2216,7 @@ class MossAPI:
     _rag: RAGAPI | None = None
     _web: WebAPI | None = None
     _search: SearchAPI | None = None
+    _guessability: GuessabilityAPI | None = None
 
     @classmethod
     def for_project(cls, path: str | Path) -> MossAPI:
@@ -2334,6 +2383,13 @@ class MossAPI:
         if self._search is None:
             self._search = SearchAPI(root=self.root)
         return self._search
+
+    @property
+    def guessability(self) -> GuessabilityAPI:
+        """Access codebase guessability analysis."""
+        if self._guessability is None:
+            self._guessability = GuessabilityAPI(root=self.root)
+        return self._guessability
 
 
 # Convenience alias

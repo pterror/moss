@@ -840,6 +840,48 @@
         ]
       }
     },
+    "/guessability/analyze": {
+      "get": {
+        "description": "Analyze codebase guessability. Evaluates: - Name-content alignment: Do module names reflect their contents? - Predictability: Are similar things in similar places? - Pattern consistency: Are conventions followed? GuessabilityReport with scores and recommendations",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Analyze codebase guessability",
+        "tags": [
+          "guessability"
+        ]
+      }
+    },
+    "/guessability/recommendations": {
+      "post": {
+        "description": "Get guessability improvement recommendations. List of actionable recommendations",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get guessability improvement recommendations",
+        "tags": [
+          "guessability"
+        ]
+      }
+    },
+    "/guessability/score": {
+      "post": {
+        "description": "Get overall guessability score. Dict with 'score' (0.0-1.0) and 'grade' (A-F)",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get overall guessability score",
+        "tags": [
+          "guessability"
+        ]
+      }
+    },
     "/health/analyze-structure": {
       "get": {
         "description": "Analyze structural code quality. StructuralAnalysis with hotspots and metrics",
@@ -2156,6 +2198,10 @@
     {
       "description": "API for codebase search operations. Provides unified search across the codebase using structural analysis (skeleton/anchors), text patterns (grep), and file patterns (glob). Use this instead of raw grep/glob for better integration with Moss.",
       "name": "search"
+    },
+    {
+      "description": "API for evaluating codebase structure quality. Measures how intuitive and predictable the codebase structure is. Can you guess where to find functionality based on its name?",
+      "name": "guessability"
     }
   ]
 }

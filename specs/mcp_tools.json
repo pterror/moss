@@ -1153,5 +1153,29 @@
       "type": "object"
     },
     "name": "search_grep"
+  },
+  {
+    "description": "Analyze codebase guessability. Evaluates: - Name-content alignment: Do module names reflect their contents? - Predictability: Are similar things in similar places? - Pattern consistency: Are conventions followed? GuessabilityReport with scores and recommendations",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "guessability_analyze"
+  },
+  {
+    "description": "Get guessability improvement recommendations. List of actionable recommendations",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "guessability_recommendations"
+  },
+  {
+    "description": "Get overall guessability score. Dict with 'score' (0.0-1.0) and 'grade' (A-F)",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "guessability_score"
   }
 ]
