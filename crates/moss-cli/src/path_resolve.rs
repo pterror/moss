@@ -66,9 +66,18 @@ fn get_all_paths(root: &Path) -> Vec<(String, bool)> {
     all_paths
 }
 
+/// Normalize string for comparison: lowercase, separators become spaces
+fn normalize_for_match(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .map(|c| if c == '-' || c == '.' || c == '_' { ' ' } else { c })
+        .collect()
+}
+
 /// Resolve from a pre-loaded list of paths
 fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatch> {
     let query_lower = query.to_lowercase();
+    let query_normalized = normalize_for_match(query);
 
     // Try exact match first
     for (path, is_dir) in all_paths {
@@ -81,7 +90,7 @@ fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatc
         }
     }
 
-    // Try exact filename/dirname match (case-insensitive)
+    // Try exact filename/dirname match (case-insensitive, _ and - equivalent)
     let mut exact_matches: Vec<PathMatch> = Vec::new();
     for (path, is_dir) in all_paths {
         let name = Path::new(path)
@@ -92,8 +101,11 @@ fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatc
             .file_stem()
             .map(|n| n.to_string_lossy().to_lowercase())
             .unwrap_or_default();
+        let name_normalized = normalize_for_match(&name);
+        let stem_normalized = normalize_for_match(&stem);
 
-        if name == query_lower || stem == query_lower {
+        if name == query_lower || stem == query_lower
+            || name_normalized == query_normalized || stem_normalized == query_normalized {
             exact_matches.push(PathMatch {
                 path: path.clone(),
                 kind: if *is_dir { "directory" } else { "file" }.to_string(),
@@ -167,5 +179,22 @@ mod tests {
         let matches = resolve("dwim", dir.path());
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "src/moss/dwim.py");
+    }
+
+    #[test]
+    fn test_underscore_hyphen_equivalence() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("docs")).unwrap();
+        fs::write(dir.path().join("docs/prior-art.md"), "").unwrap();
+
+        // underscore query should match hyphen filename
+        let matches = resolve("prior_art", dir.path());
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].path, "docs/prior-art.md");
+
+        // hyphen query should also work
+        let matches = resolve("prior-art", dir.path());
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].path, "docs/prior-art.md");
     }
 }
