@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 
+mod daemon;
 mod index;
 mod path_resolve;
 mod symbols;
@@ -143,7 +144,36 @@ fn cmd_path(query: &str, root: Option<&Path>, json: bool) -> i32 {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap());
 
-    let matches = path_resolve::resolve(&query, &root);
+    // Try daemon first
+    let client = daemon::DaemonClient::new(&root);
+    if client.is_available() {
+        if let Ok(matches) = client.path_query(query) {
+            if matches.is_empty() {
+                if json {
+                    println!("[]");
+                } else {
+                    eprintln!("No matches for: {}", query);
+                }
+                return 1;
+            }
+            if json {
+                let output: Vec<_> = matches
+                    .iter()
+                    .map(|m| serde_json::json!({"path": m.path, "kind": m.kind}))
+                    .collect();
+                println!("{}", serde_json::to_string(&output).unwrap());
+            } else {
+                for m in &matches {
+                    println!("{} ({})", m.path, m.kind);
+                }
+            }
+            return 0;
+        }
+        // Fall through to direct if daemon query failed
+    }
+
+    // Direct path resolution
+    let matches = path_resolve::resolve(query, &root);
 
     if matches.is_empty() {
         if json {

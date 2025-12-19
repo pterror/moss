@@ -26,6 +26,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Active Backlog
 
 **Small:**
+- [ ] Profiling infrastructure - measure hot paths in CLI, daemon, and Python components
 - [ ] Model-agnostic naming - don't over-fit to specific LLM conventions
 - [ ] Multiple agents concurrently - no requirement to join back to main stream
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
