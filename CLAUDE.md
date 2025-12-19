@@ -55,6 +55,12 @@ Multi-agent model: Ticket-based (not shared chat history). Agents are isolated m
 
 This is why we have skeleton views (understand code without LLM), validation loops (catch errors without LLM), and DWIM (find tools without LLM). The goal: an agent that calls the LLM 10x less than naive approaches.
 
+**Prompt engineering for token efficiency.** When you do call an LLM, minimize output tokens:
+- System prompt: "Be terse. No preamble, no markdown formatting. Plain text only."
+- Don't set max_tokens - let the model decide based on the prompt
+- For analysis: "bullet points, max 5 items, no code"
+- Result: 12x reduction in output tokens (1421 → 112) with same quality insights
+
 **Hyper-modular architecture.** Prefer many small, focused modules over fewer large ones. This aids:
 - **Maintainability**: Easier to understand, modify, and test small units
 - **Composability**: Small pieces combine flexibly
