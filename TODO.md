@@ -8,9 +8,16 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 **For next session:**
 
-1. **Recursive self-improvement for moss workflows** (medium) - Loops that improve other loops
-   - Not just CLAUDE.md - any workflow can be a target
+1. **Add WebAPI to MCP tools** (small) - Expose web.fetch/search via MCP
+   - Run `moss gen --target=mcp` after adding to introspect.py
+   - Test with Claude Code
+
+2. **Add skeleton expand to MCP** (small) - Expose expand_symbol via MCP
+   - Useful for getting full enum definitions when skeleton isn't enough
+
+3. **Recursive self-improvement for moss workflows** (medium) - Loops that improve other loops
    - Critic loop reviewing loop definitions for inefficiencies
+   - Start with a simple example: optimize a docstring loop
 
 **Continue autonomously** - Keep picking up tasks from Backlog.
 
