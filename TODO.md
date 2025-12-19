@@ -23,6 +23,11 @@ See `~/git/prose/moss/` for full synthesis design documents.
    - `moss loop list` to show available loops
    - `moss loop benchmark` for comparisons
 
+**Backlog (small):**
+- [ ] **Add minimal system prompt to LLMToolExecutor** - Tell LLM to respond with minimum output (except code)
+  - Reduces token usage significantly
+  - Example: "Respond concisely. For code, provide complete implementations."
+
 **Deferred:**
 - Add missing CLI APIs → after loop work validates architecture
 - CLI from MossAPI (large) → wait for more API stability
