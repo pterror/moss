@@ -1,6 +1,6 @@
 [
   {
-    "description": "Extract skeleton from a Python file. List of Symbol objects representing the code structure",
+    "description": "Extract code skeleton (functions, classes, methods). Example: moss skeleton src/main.py",
     "inputSchema": {
       "properties": {
         "file_path": {
@@ -16,7 +16,7 @@
     "name": "skeleton_extract"
   },
   {
-    "description": "Extract and format skeleton as readable text. Formatted string representation of the skeleton",
+    "description": "Extract code skeleton (functions, classes, methods). Example: moss skeleton src/main.py",
     "inputSchema": {
       "properties": {
         "file_path": {
@@ -37,7 +37,7 @@
     "name": "skeleton_format"
   },
   {
-    "description": "Generate and format tree as readable text. Formatted tree visualization",
+    "description": "Show git-aware file tree. Example: moss tree",
     "inputSchema": {
       "properties": {
         "compact": {
@@ -60,7 +60,7 @@
     "name": "tree_format"
   },
   {
-    "description": "Generate a tree visualization of a directory. TreeResult with tree visualization and file counts",
+    "description": "Show git-aware file tree. Example: moss tree",
     "inputSchema": {
       "properties": {
         "gitignore": {
@@ -83,7 +83,7 @@
     "name": "tree_generate"
   },
   {
-    "description": "Find anchors matching a name in a file. List of AnchorMatch objects with locations and confidence scores",
+    "description": "Find anchors (functions, classes, methods) in code. Example: moss anchors src/api.py",
     "inputSchema": {
       "properties": {
         "anchor_type": {
@@ -109,7 +109,7 @@
     "name": "anchor_find"
   },
   {
-    "description": "Resolve a single anchor (raises if ambiguous or not found). Single best AnchorMatch AnchorNotFoundError: If no match found AmbiguousAnchorError: If multiple matches with equal confidence",
+    "description": "Find anchors (functions, classes, methods) in code. Example: moss anchors src/api.py",
     "inputSchema": {
       "properties": {
         "anchor_type": {
@@ -217,7 +217,7 @@
     "name": "patch_create"
   },
   {
-    "description": "Run full dependency analysis on the project. DependencyAnalysis with circular deps, god modules, orphans, etc.",
+    "description": "Extract dependencies (imports and exports). Example: moss deps src/api.py",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -225,7 +225,7 @@
     "name": "dependencies_analyze"
   },
   {
-    "description": "Extract imports and exports from a file. DependencyInfo with imports and exports",
+    "description": "Extract dependencies (imports and exports). Example: moss deps src/api.py",
     "inputSchema": {
       "properties": {
         "file_path": {
@@ -241,7 +241,7 @@
     "name": "dependencies_extract"
   },
   {
-    "description": "Extract and format dependencies as readable text. Formatted string with imports and exports",
+    "description": "Extract dependencies (imports and exports). Example: moss deps src/api.py",
     "inputSchema": {
       "properties": {
         "file_path": {
@@ -257,7 +257,7 @@
     "name": "dependencies_format"
   },
   {
-    "description": "Build CFGs for all functions in a file. List of ControlFlowGraph objects for each function",
+    "description": "Build and display control flow graph. Example: moss cfg src/main.py",
     "inputSchema": {
       "properties": {
         "file_path": {
@@ -460,7 +460,7 @@
     "name": "health_analyze_tests"
   },
   {
-    "description": "Run full health analysis on the project. ProjectStatus with health score, grade, and detailed metrics",
+    "description": "Show project health and what needs attention. Example: moss health",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -468,7 +468,7 @@
     "name": "health_check"
   },
   {
-    "description": "Check documentation health. DocCheckResult with coverage and issues",
+    "description": "Check documentation freshness against codebase. Example: moss check-docs",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -476,7 +476,7 @@
     "name": "health_check_docs"
   },
   {
-    "description": "Check TODO tracking health. TodoCheckResult with tracked and orphaned TODOs",
+    "description": "Check TODOs against implementation status. Example: moss check-todos",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -484,7 +484,7 @@
     "name": "health_check_todos"
   },
   {
-    "description": "Generate a project summary. ProjectSummary with module information",
+    "description": "Generate hierarchical codebase summary. Example: moss summarize",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -553,7 +553,7 @@
     "name": "dwim_resolve_tool"
   },
   {
-    "description": "Analyze cyclomatic complexity of all Python files. ComplexityReport with complexity metrics for all functions",
+    "description": "Analyze cyclomatic complexity of functions. Example: moss complexity src/",
     "inputSchema": {
       "properties": {
         "pattern": {
@@ -567,7 +567,7 @@
     "name": "complexity_analyze"
   },
   {
-    "description": "Get functions exceeding a complexity threshold. List of function details for high-complexity functions",
+    "description": "Analyze cyclomatic complexity of functions. Example: moss complexity src/",
     "inputSchema": {
       "properties": {
         "threshold": {
@@ -581,7 +581,7 @@
     "name": "complexity_get_high_risk"
   },
   {
-    "description": "Run bidirectional reference check. RefCheckResult with valid, broken, and stale references",
+    "description": "Check bidirectional references between code and docs. Example: moss check-refs",
     "inputSchema": {
       "properties": {
         "staleness_days": {
@@ -611,7 +611,7 @@
     "name": "ref_check_check_docs_to_code"
   },
   {
-    "description": "Analyze git history for hot spots. GitHotspotAnalysis with frequently changed files",
+    "description": "Find frequently changed files in git history. Example: moss git-hotspots",
     "inputSchema": {
       "properties": {
         "days": {
@@ -625,7 +625,7 @@
     "name": "git_hotspots_analyze"
   },
   {
-    "description": "Get the top N most frequently changed files. List of hotspot details for most frequently changed files",
+    "description": "Find frequently changed files in git history. Example: moss git-hotspots",
     "inputSchema": {
       "properties": {
         "days": {
@@ -644,7 +644,7 @@
     "name": "git_hotspots_get_top_hotspots"
   },
   {
-    "description": "Analyze project dependencies. DependencyAnalysisResult with dependency information",
+    "description": "Analyze external dependencies. Example: moss external-deps",
     "inputSchema": {
       "properties": {
         "check_licenses": {
@@ -668,7 +668,7 @@
     "name": "external_deps_analyze"
   },
   {
-    "description": "Check for security vulnerabilities. List of vulnerability details",
+    "description": "Analyze external dependencies. Example: moss external-deps",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -676,7 +676,7 @@
     "name": "external_deps_check_security"
   },
   {
-    "description": "List direct dependencies. List of direct dependency details",
+    "description": "Analyze external dependencies. Example: moss external-deps",
     "inputSchema": {
       "properties": {},
       "type": "object"

@@ -3956,6 +3956,33 @@ def cmd_eval(args: Namespace) -> int:
     return 0
 
 
+def cmd_help(args: Namespace) -> int:
+    """Show detailed help for commands."""
+    from moss.help import (
+        format_category_list,
+        format_command_help,
+        get_command_help,
+    )
+
+    output = setup_output(args)
+    command = getattr(args, "topic", None)
+
+    if not command:
+        # Show categorized list
+        output.print(format_category_list())
+        return 0
+
+    # Show help for specific command
+    cmd = get_command_help(command)
+    if not cmd:
+        output.error(f"Unknown command: {command}")
+        output.info("Run 'moss help' to see all commands.")
+        return 1
+
+    output.print(format_command_help(cmd))
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -4293,6 +4320,18 @@ def create_parser() -> argparse.ArgumentParser:
         help="Workspace directory (default: current)",
     )
     shell_parser.set_defaults(func=cmd_shell)
+
+    # explore command (alias for shell with better discoverability)
+    explore_parser = subparsers.add_parser(
+        "explore", help="Interactive REPL for codebase exploration (alias for shell)"
+    )
+    explore_parser.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Workspace directory (default: current)",
+    )
+    explore_parser.set_defaults(func=cmd_shell)
 
     # watch command
     watch_parser = subparsers.add_parser("watch", help="Watch files and re-run tests on changes")
@@ -5316,6 +5355,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Maximum agent iterations per instance (default: 10)",
     )
     eval_parser.set_defaults(func=cmd_eval)
+
+    # help command (with examples and categories)
+    help_parser = subparsers.add_parser(
+        "help", help="Show detailed help for commands with examples"
+    )
+    help_parser.add_argument(
+        "topic",
+        nargs="?",
+        help="Command to get help for (omit for category list)",
+    )
+    help_parser.set_defaults(func=cmd_help)
 
     return parser
 

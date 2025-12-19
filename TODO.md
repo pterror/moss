@@ -8,27 +8,16 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 Candidates for the next session:
 
-- [ ] **CLI/MCP help improvements** (small) - Better discoverability
-  - `moss help <command>` with examples
-  - MCP tool descriptions with usage examples
-  - List available commands grouped by category
-  - **Autogenerate from MossAPI** - derive help text from docstrings/type hints
-- [ ] **Research Goose (Block)** (small) - https://github.com/block/goose
-  - Developer agent from Block (Square)
-  - Compare architecture, tool design, trust model
-  - Add findings to `docs/prior-art.md`
-- [ ] **RAG / Semantic Search** (medium) - Higher priority than other medium items
-  - See Future Work section for full design
-  - Start with: `moss rag index` + `moss rag search`
-  - Immediate value: "what did we decide about X?" queries
-- [ ] **`moss explore` REPL** (medium) - Interactive codebase exploration
-  - Tab completions, history
-  - Commands: skeleton, calls, callers, deps
-- [ ] **Live TODO tracking** (medium) - Like Claude Code's task display
-  - Show agent's task list being processed in real-time
-  - Session persistence (resume where you left off)
+- [ ] **Add RAG to MossAPI/MCP** (small) - Expose rag.index/search as MCP tools
+- [ ] **Persistent RAG backend** (medium) - SQLite-based vector store for Nix environments
+- [ ] **Test harness improvements** (medium) - More comprehensive integration tests
 
 **Recently completed:**
+- [x] Live TODO tracking - `moss.live_todos` with session persistence, callbacks, real-time display
+- [x] `moss explore` REPL - Tab completion, history, commands: skeleton, deps, cfg, anchors, query, search, complexity, health, tree
+- [x] RAG / Semantic Search - `moss rag index/search/stats/clear` (in-memory works, chromadb for persistence)
+- [x] CLI/MCP help improvements - `moss help` with categories, examples, and enhanced MCP descriptions
+- [x] Research Goose (Block) - added to `docs/prior-art.md`
 - [x] `moss summarize` - markdown/text summarization
 - [x] `moss tree` - git-aware tree visualization
 - [x] Test PBEGenerator/SketchGenerator - 25 new tests
@@ -367,7 +356,7 @@ See `docs/prior-art.md` for detailed research (updated Dec 2025).
 - [x] Windsurf (Codeium's IDE) - Cascade, Supercomplete, Rules system
 - [x] Google Antigravity - Agent-first IDE, Manager View, multi-agent dispatch
 - [x] VS Code Copilot - Agent Mode, MCP integration (128 tool limit), LSP→MCP lineage
-- [ ] Goose (Block) - https://github.com/block/goose - developer agent
+- [x] Goose (Block) - https://github.com/block/goose - developer agent (MCP-native, trust model, extension security)
 
 **Review with user (async, don't block):**
 - [ ] Review IDE/tool research (Warp, Zed, Windsurf, Antigravity, VS Code Copilot)

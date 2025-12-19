@@ -57,7 +57,83 @@ class MossShell:
             "search": self.cmd_search,
             "context": self.cmd_context,
             "anchors": self.cmd_anchors,
+            "complexity": self.cmd_complexity,
+            "health": self.cmd_health,
+            "tree": self.cmd_tree,
         }
+
+        # Setup tab completion
+        self._setup_completer()
+
+    def _setup_completer(self) -> None:
+        """Setup tab completion for commands and paths."""
+
+        def completer(text: str, state: int) -> str | None:
+            """Tab completion function."""
+            line = readline.get_line_buffer()
+            words = line.split()
+
+            if not words or (len(words) == 1 and not line.endswith(" ")):
+                # Complete command names
+                matches = [c for c in self.commands if c.startswith(text)]
+            else:
+                # Complete file paths
+                if text:
+                    # Expand ~ and resolve relative paths
+                    if text.startswith("~"):
+                        base = Path.home()
+                        text_path = text[2:] if text.startswith("~/") else ""
+                    elif text.startswith("/"):
+                        base = Path("/")
+                        text_path = text[1:]
+                    else:
+                        base = self.workspace
+                        text_path = text
+
+                    # Split into directory and prefix
+                    if "/" in text_path:
+                        dir_part, prefix = text_path.rsplit("/", 1)
+                        search_dir = base / dir_part
+                    else:
+                        prefix = text_path
+                        search_dir = base
+
+                    # Find matching files
+                    try:
+                        if search_dir.is_dir():
+                            matches = []
+                            for p in search_dir.iterdir():
+                                name = p.name
+                                if name.startswith(prefix):
+                                    # Add trailing / for directories
+                                    rel = p.relative_to(self.workspace)
+                                    match = str(rel)
+                                    if p.is_dir():
+                                        match += "/"
+                                    matches.append(match)
+                        else:
+                            matches = []
+                    except (PermissionError, OSError):
+                        matches = []
+                else:
+                    # No text, complete current directory
+                    try:
+                        matches = [
+                            str(p.relative_to(self.workspace)) + ("/" if p.is_dir() else "")
+                            for p in self.workspace.iterdir()
+                            if not p.name.startswith(".")
+                        ][:20]
+                    except (PermissionError, OSError):
+                        matches = []
+
+            try:
+                return matches[state]
+            except IndexError:
+                return None
+
+        readline.set_completer(completer)
+        readline.set_completer_delims(" \t\n")
+        readline.parse_and_bind("tab: complete")
 
     def _load_history(self) -> None:
         """Load command history."""
@@ -144,19 +220,29 @@ class MossShell:
         commands = [
             ("help", "Show this help message"),
             ("exit, quit", "Exit the shell"),
+            ("", ""),
             ("cd <path>", "Change working directory"),
             ("pwd", "Print working directory"),
             ("ls [path]", "List files (Python files by default)"),
+            ("tree [path]", "Show file tree"),
+            ("", ""),
             ("skeleton <path>", "Extract code skeleton"),
             ("deps <path>", "Show file dependencies"),
             ("cfg <path> [func]", "Show control flow graph"),
+            ("anchors <path>", "Find anchors (functions, classes)"),
+            ("context <path>", "Show full context for a file"),
+            ("", ""),
             ("query <pattern>", "Search symbols by name pattern"),
             ("search <query>", "Semantic search across codebase"),
-            ("context <path>", "Show full context for a file"),
-            ("anchors <path>", "Find anchors (functions, classes)"),
+            ("", ""),
+            ("complexity [path]", "Show complexity analysis"),
+            ("health", "Show project health summary"),
         ]
         for cmd, desc in commands:
-            self.output.info(f"  {cmd:20} {desc}")
+            if cmd:
+                self.output.info(f"  {cmd:20} {desc}")
+            else:
+                self.output.blank()
 
     def cmd_exit(self, args: list[str]) -> None:
         """Exit the shell."""
@@ -484,6 +570,83 @@ class MossShell:
             )
             if sym.children:
                 self._collect_anchors(sym.children, file_path, results)
+
+    def cmd_complexity(self, args: list[str]) -> None:
+        """Show complexity analysis for a path."""
+        path = self._resolve_path(args[0]) if args else self.workspace
+
+        from moss.complexity import analyze_complexity
+
+        try:
+            report = analyze_complexity(path)
+        except Exception as e:
+            self.output.error(f"Complexity analysis failed: {e}")
+            return
+
+        if not report.functions:
+            self.output.warning("No functions found")
+            return
+
+        # Sort by complexity
+        sorted_funcs = sorted(report.functions, key=lambda f: f.complexity, reverse=True)
+
+        self.output.header("Complexity Analysis")
+        self.output.info(f"Files: {report.total_files}, Functions: {report.total_functions}")
+        self.output.info(f"Average complexity: {report.average_complexity:.1f}")
+        self.output.blank()
+
+        # Show top complex functions
+        self.output.step("Most complex functions:")
+        for func in sorted_funcs[:10]:
+            if func.complexity <= 5:
+                grade = "A"
+            elif func.complexity <= 10:
+                grade = "B"
+            elif func.complexity <= 20:
+                grade = "C"
+            else:
+                grade = "D"
+            loc = f"{func.file}:{func.line}"
+            self.output.info(f"  {func.name} ({loc}) - {func.complexity} [{grade}]")
+
+    def cmd_health(self, args: list[str]) -> None:
+        """Show project health summary."""
+        from moss.status import check_project_status
+
+        try:
+            status = check_project_status(self.workspace)
+        except Exception as e:
+            self.output.error(f"Health check failed: {e}")
+            return
+
+        self.output.header(f"Health: {status.health_grade} ({status.health_score}/100)")
+        self.output.blank()
+
+        # Stats
+        self.output.info(f"Python files: {status.stats.get('python_files', 0)}")
+        self.output.info(f"Total lines: {status.stats.get('total_lines', 0)}")
+        self.output.info(f"Doc coverage: {status.stats.get('doc_coverage', 0)}%")
+
+        # Next actions
+        if status.next_actions:
+            self.output.blank()
+            self.output.step("Next actions:")
+            for action in status.next_actions[:5]:
+                self.output.info(f"  - {action}")
+
+    def cmd_tree(self, args: list[str]) -> None:
+        """Show file tree."""
+        path = self._resolve_path(args[0]) if args else self.workspace
+        tracked_only = "--tracked" in args or "-t" in args
+
+        from moss.tree import generate_tree
+
+        try:
+            result = generate_tree(path, tracked_only=tracked_only)
+            self.output.print(result.tree)
+            self.output.info(f"({result.file_count} files, {result.dir_count} directories)")
+        except Exception as e:
+            self.output.error(f"Tree generation failed: {e}")
 
     def _resolve_path(self, path_str: str) -> Path:
         """Resolve a path relative to workspace."""

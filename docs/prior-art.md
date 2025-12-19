@@ -145,6 +145,71 @@ See `docs/synthesis-generators.md` for how these map to moss generator plugins.
 - @files/@folders referencing maps to moss's context management
 - Bugbot shows value of continuous monitoring - moss could watch for issues during synthesis
 
+### Goose (Block)
+- **Repo**: https://github.com/block/goose
+- **Docs**: https://block.github.io/goose/
+- **What it is**: Open-source AI agent for automating engineering tasks (24.7k stars, Apache 2.0)
+
+**Key Architecture Insights:**
+- **Tech Stack**: Rust (59.6%) + TypeScript (32.9%), available as desktop app + CLI
+- **MCP-First Design**: Extensions are MCP servers - the same protocol moss uses
+- **Modular Crates**: `goose` (core), `goose-cli`, `goose-server`, `goose-mcp`, `goose-bench`
+- **Multi-Model**: Tetrate Agent Router, OpenRouter, OpenAI, Anthropic, Gemini - any LLM
+- **Local Execution**: Runs on-machine for privacy and control
+
+**Extension System:**
+- Built entirely on MCP - any MCP server can integrate
+- **Built-in**: Developer (default), Computer Controller (web scraping, automations), Memory, Tutorial
+- **Platform**: Chat Recall (search history), Extension Manager, Skills (load from `.goose/skills`), Todo
+- **Security**: Automatic malware scanning before extension activation
+
+**Permission System (Trust Model):**
+Four distinct modes matching our Smart Trust Levels design:
+1. **Completely Autonomous**: No approvals (default) - like our "Full Trust"
+2. **Manual Approval**: Confirm every tool call - like our "Low Trust"
+3. **Smart Approval**: Risk-based auto-approve - like our "Smart Approval" with risk classification
+4. **Chat Only**: No tool execution - conversational only
+
+Configurable mid-session via `/mode` command or settings.
+
+**Interactive Processing Loop:**
+1. Human submits request
+2. Provider Chat sends request + available tools to LLM
+3. Model Extension Call executes tool requests (JSON format)
+4. Response to Model returns execution results
+5. **Context Revision**: Removes outdated information to optimize tokens
+6. Model Response delivers final answer
+
+**Token Optimization:**
+- Summarization with smaller models
+- Algorithmic content deletion
+- Efficient file operations (find-replace over rewrites)
+
+**Error Handling:**
+- Captures errors and sends back to model for resolution (doesn't halt)
+- Similar to moss's validator loop concept
+
+**Agent Internals** (`crates/goose/src/agents/`):
+- `subagent_handler.rs` - Multi-agent delegation
+- `router_tool_selector.rs` - Routes requests to appropriate tools
+- `extension_malware_check.rs` - Security validation
+- `large_response_handler.rs` - Manages oversized outputs
+- `retry.rs` - Error recovery
+
+**Moss Observations:**
+- **MCP alignment**: Goose validates MCP as the right protocol choice - they're all-in
+- **Trust model similarity**: Their 4 permission modes map almost exactly to our Smart Trust Levels design
+- **Context Revision**: Their token optimization via "removing outdated info" aligns with moss's context_memory.py approach
+- **Extension security**: Malware scanning is interesting - moss could add similar checks for MCP servers
+- **Skills directory**: `.goose/skills` pattern similar to Claude Code's - could adopt for moss
+- **Rust + MCP**: Proves Rust is viable for agent infrastructure (we're Python, but could learn from their patterns)
+
+**Key Differentiator vs Moss:**
+- Goose is more "general agent" (terminal, web, files), moss is more "structural awareness"
+- Goose relies on MCP for everything; moss has native AST/structural tools
+- Goose has mature desktop app; moss is library-first
+- Both: multi-model, local execution, MCP integration, verification loops
+
 ## Competitive Analysis Summary
 
 ### What Competitors Do Better Than Moss Currently:
@@ -154,6 +219,7 @@ See `docs/synthesis-generators.md` for how these map to moss generator plugins.
 3. **OpenHands**: Multi-agent coordination, sandbox runtime
 4. **Claude Code**: Native Anthropic integration, checkpoint/rollback
 5. **Cursor**: IDE integration, massive adoption, codebase indexing
+6. **Goose**: MCP-native architecture, mature desktop app, extension security (malware scanning)
 
 ### Moss's Unique Differentiators:
 

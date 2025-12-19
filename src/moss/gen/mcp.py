@@ -112,9 +112,21 @@ def method_to_tool(method: APIMethod, api_name: str) -> MCPTool:
     # Generate tool name: subapi_method
     tool_name = f"{api_name}_{method.name}"
 
+    # Enhance description with example from help module if available
+    description = method.description
+    try:
+        from moss.help import get_mcp_tool_description
+
+        enhanced = get_mcp_tool_description(api_name, method.name)
+        if enhanced and enhanced != description:
+            # Use enhanced description if it provides more info
+            description = enhanced
+    except ImportError:
+        pass  # help module not available, use original
+
     return MCPTool(
         name=tool_name,
-        description=method.description,
+        description=description,
         input_schema=input_schema,
         api_path=f"{api_name}.{method.name}",
     )
