@@ -1354,6 +1354,42 @@ Formats:
 - AST-FIM aligns with moss's structural awareness
 - Consider: FIM for `SketchGenerator` (fill holes in templates)
 
+## Query-Based Code Analysis
+
+### CodeQL (GitHub)
+- **Site**: https://codeql.github.com
+- **Repo**: https://github.com/github/codeql
+- **What it is**: Semantic code analysis engine treating code as queryable data
+
+**Technical Approach:**
+- Code → Database (relational representation of AST, control flow, data flow)
+- Custom query language (QL) for pattern matching
+- Declarative rules for vulnerability detection
+- Deep data flow and taint tracking
+
+**Key Concepts:**
+- **Code as data**: Extract relational database from source code
+- **QL language**: Logic-based queries over code structure
+- **Data flow analysis**: Track values through program execution
+- **Security focus**: Primary use case is finding vulnerabilities
+
+**Use Cases:**
+- Security vulnerability detection (OWASP Top 10)
+- Code quality checks
+- API misuse detection
+- Migration analysis
+
+**Moss Observations:**
+- CodeQL's "code as data" is similar to moss's SQLite index approach
+- QL queries could inform moss's structural queries
+- Consider: Export moss index in CodeQL-compatible format
+- Data flow analysis is more advanced than moss's current callers/callees
+
+**Research Value:**
+- How to represent code relationally
+- Query language design for code patterns
+- Scaling analysis to large codebases
+
 ## Code Search & Retrieval
 
 ### The Challenge

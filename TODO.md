@@ -6,7 +6,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 1. **Rust CLI infrastructure** - Fast startup for hot paths
    - [x] Create `crates/moss-cli/` with Cargo workspace
-   - [x] Implement `moss path` in Rust with fuzzy matching (~6ms with index cache)
+   - [x] Implement `moss path` in Rust with fuzzy matching (~4ms with LIKE pre-filter)
    - [x] Add SQLite index for file caching
    - [x] Add `view`, `search-tree`, `reindex` commands
    - [x] Add tree-sitter parsing for Python/Rust
