@@ -41,6 +41,14 @@ Multi-agent model: Ticket-based (not shared chat history). Agents are isolated m
 
 ## Design Paradigm
 
+**Minimize LLM usage.** LLM calls are expensive (cost) and slow (latency). Design everything to reduce them:
+- **Structural tools first**: Use AST, grep, validation - not LLM - for deterministic tasks
+- **LLM only for judgment**: Generation, decisions, ambiguity resolution
+- **Measure separately**: Track LLM calls vs tool calls in benchmarks
+- **Cache aggressively**: Same query → same answer (where applicable)
+
+This is why we have skeleton views (understand code without LLM), validation loops (catch errors without LLM), and DWIM (find tools without LLM). The goal: an agent that calls the LLM 10x less than naive approaches.
+
 **Hyper-modular architecture.** Prefer many small, focused modules over fewer large ones. This aids:
 - **Maintainability**: Easier to understand, modify, and test small units
 - **Composability**: Small pieces combine flexibly

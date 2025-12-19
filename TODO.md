@@ -103,14 +103,24 @@ critic_loop = Loop(
 
 **Performance Harness:**
 ```python
+@dataclass
+class LoopMetrics:
+    """Track what matters: LLM usage is the bottleneck."""
+    llm_calls: int           # Expensive! Minimize this
+    llm_tokens_in: int
+    llm_tokens_out: int
+    tool_calls: int          # Cheap, fast - prefer these
+    wall_time_seconds: float
+    success: bool
+
 class LoopRunner:
-    def run(self, loop: Loop, task: str) -> LoopResult:
-        """Execute loop, tracking metrics."""
+    def run(self, loop: Loop, task: str) -> tuple[LoopResult, LoopMetrics]:
+        """Execute loop, tracking metrics separately for LLM vs tools."""
         ...
 
     def benchmark(self, loops: list[Loop], tasks: list[str]) -> BenchmarkReport:
-        """Compare loop configs on same tasks."""
-        # Returns: tokens/task, success rate, latency
+        """Compare loop configs - primary metric is LLM calls reduced."""
+        # Goal: 10x fewer LLM calls than naive approaches
 ```
 
 **Mini-agents:** Lightweight loops for subtasks - same mechanism, smaller scope.
