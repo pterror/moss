@@ -3,6 +3,8 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 use std::path::Path;
 
+use crate::index::FileIndex;
+
 #[derive(Debug, Clone)]
 pub struct PathMatch {
     pub path: String,
@@ -23,11 +25,26 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
         return resolve(file_part, root);
     }
 
-    let query_lower = query.to_lowercase();
+    // Try to use index if available
+    let all_paths = get_all_paths(root);
 
-    // Collect all files using gitignore-aware walker
+    resolve_from_paths(query, &all_paths)
+}
+
+/// Get all paths, using index if available, falling back to filesystem walk
+fn get_all_paths(root: &Path) -> Vec<(String, bool)> {
+    // Try index first
+    if let Ok(mut index) = FileIndex::open(root) {
+        if index.needs_refresh() {
+            let _ = index.refresh();
+        }
+        if let Ok(files) = index.all_files() {
+            return files.into_iter().map(|f| (f.path, f.is_dir)).collect();
+        }
+    }
+
+    // Fall back to filesystem walk
     let mut all_paths: Vec<(String, bool)> = Vec::new();
-
     let walker = WalkBuilder::new(root)
         .hidden(false)
         .git_ignore(true)
@@ -46,8 +63,15 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
         }
     }
 
+    all_paths
+}
+
+/// Resolve from a pre-loaded list of paths
+fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatch> {
+    let query_lower = query.to_lowercase();
+
     // Try exact match first
-    for (path, is_dir) in &all_paths {
+    for (path, is_dir) in all_paths {
         if path == query {
             return vec![PathMatch {
                 path: path.clone(),
@@ -59,7 +83,7 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
 
     // Try exact filename/dirname match (case-insensitive)
     let mut exact_matches: Vec<PathMatch> = Vec::new();
-    for (path, is_dir) in &all_paths {
+    for (path, is_dir) in all_paths {
         let name = Path::new(path)
             .file_name()
             .map(|n| n.to_string_lossy().to_lowercase())
@@ -88,7 +112,7 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
 
     let mut fuzzy_matches: Vec<PathMatch> = Vec::new();
 
-    for (path, is_dir) in &all_paths {
+    for (path, is_dir) in all_paths {
         let mut buf = Vec::new();
         if let Some(score) = pattern.score(nucleo_matcher::Utf32Str::new(path, &mut buf), &mut matcher) {
             fuzzy_matches.push(PathMatch {
