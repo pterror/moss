@@ -6,27 +6,43 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 ## Next Up
 
-**For next session:**
+**For next session (autonomous, longer):**
 
-1. **Fix loop data flow** (medium) - Enable simple_loop/critic_loop to work
-   - Steps need access to both initial_input AND previous outputs
-   - Consider: context dict passed through all steps
-   - Test with real Gemini calls (API key in .env)
-
-2. **Add loop tests with mock LLM** (small) - Ensure loops work
+1. **Add loop tests with mock LLM** (small) - Ensure loops work
    - Unit tests for AgentLoopRunner with mock executor
+   - Test LoopContext passing between steps
    - Test LLM/tool routing in LLMToolExecutor
    - Test token tracking
+   - File: `tests/test_agent_loop.py`
 
-3. **CLI integration for loops** (medium) - Make loops accessible
-   - `moss loop run <loop-name> --file <path>`
-   - `moss loop list` to show available loops
-   - `moss loop benchmark` for comparisons
+2. **CLI integration for loops** (medium) - Make loops accessible
+   - `moss loop run <loop-name> --file <path>` - run a named loop
+   - `moss loop list` - show available loops (simple_loop, critic_loop, etc.)
+   - `moss loop benchmark` - compare loop performance
+   - Pattern: follow existing CLI structure in `src/moss/cli.py`
+
+3. **Build a real agentic task** (medium) - Prove the loop works E2E
+   - Example: "Add docstrings to all functions in file X"
+   - Loop: skeleton → LLM generate docstrings → patch apply → validate
+   - Test with real Gemini calls, measure tokens used
+
+4. **Fix litellm Nix compatibility** (small, optional) - Native lib issue
+   - litellm's tokenizers needs libstdc++
+   - Try: add `stdenv.cc.cc.lib` to flake.nix buildInputs
+   - Or: continue using google-genai directly for Gemini
 
 **Backlog (small):**
-- [ ] **Add minimal system prompt to LLMToolExecutor** - Tell LLM to respond with minimum output (except code)
-  - Reduces token usage significantly
-  - Example: "Respond concisely. For code, provide complete implementations."
+- [ ] **Fix skeleton MCP tool** - tree-sitter plugins not loading in MCP server
+  - `mcp__moss__skeleton_format` returns "No skeleton plugin found for: .py"
+  - Works fine via CLI: `moss skeleton <file>`
+- [ ] **Token-efficient web search** - Reduce tokens when doing research
+  - Current approach burns context on search results
+  - Consider: summarize in smaller chunks, cache results, extract key facts only
+- [ ] **MCP client for moss agent** - Let loops call external MCP servers
+  - Agent already calls moss tools recursively (skeleton, patch, validation)
+  - MCP client would add external tools (filesystem, git, browser, etc.)
+  - Would enable moss loops to be fully autonomous agents
+  - See MCP client SDK: https://modelcontextprotocol.io/
 
 **Deferred:**
 - Add missing CLI APIs → after loop work validates architecture
@@ -35,23 +51,27 @@ See `~/git/prose/moss/` for full synthesis design documents.
 ---
 
 **Completed this session:**
-- [x] **Test composable loops E2E** - ✅ Validated architecture, found bugs, documented
-  - Token savings: **90.2% average** (skeleton vs full file)
-  - Bugs found: max_iterations naming, simple_loop data flow
-  - Benchmark system works: 100% success rate on tool-only loops
+- [x] **Fix loop data flow** - ✅ Added LoopContext for context passing
+  - Steps now access both initial_input AND previous step outputs
+  - `context.input` = original input, `context.steps` = all outputs
+- [x] **Test with real Gemini 3 Flash** - ✅ Working end-to-end
+  - Uses google-genai directly (litellm has Nix linking issues)
+- [x] **Prompt engineering for token efficiency** - ✅ 12x reduction in output tokens
+  - System prompt: "Be terse. No markdown. Plain text only. Max 5 bullet points."
+  - Let model determine output length (no max_tokens limit)
+  - 1421 tokens → 112 tokens, same quality insights
+- [x] **Refactor LLMToolExecutor** - ✅ Simplified config
+  - Single `model` field with litellm-style naming (e.g., "gemini/gemini-3-flash-preview")
+  - Routes Gemini to google-genai, others to litellm
+  - Mock mode via `mock=True`
+- [x] **Update CLAUDE.md** - Added MCP tools preference, note-taking practices
+
+**Previously completed:**
+- [x] **Test composable loops E2E** - ✅ Token savings 90.2% average
 - [x] **Research A2A protocol** - ✅ Added to docs/prior-art.md
-  - A2A = agent-to-agent (complements MCP which is agent-to-tools)
-  - Good fit with moss's ticket-based model
-  - 150+ orgs, Linux Foundation governance, Python SDK available
-- [x] **Fix agent_loop bugs** - ✅ Renamed max_iterations→max_steps, documented simple_loop
+- [x] **Fix agent_loop bugs** - ✅ Renamed max_iterations→max_steps
 - [x] **Research ADK & LangGraph** - ✅ Added to docs/prior-art.md
-  - ADK: Google's "batteries-included" multi-agent framework
-  - LangGraph: Graph-based fine-grained control (LangChain)
-  - Both validate need for structured loops; moss differentiates via structural awareness
-- [x] **Add LLM executor** - ✅ LLMConfig + LLMToolExecutor with Gemini/Anthropic/OpenAI support
-  - Routes llm.* tools to LLM, others to MossToolExecutor
-  - Tracks tokens from API responses
-  - Mock mode for testing without API key
+- [x] **Add LLM executor** - ✅ LLMConfig + LLMToolExecutor
 
 **Previously completed:**
 - [x] **Composable Loop primitives** - ✅ LoopStep, AgentLoop, AgentLoopRunner, LoopMetrics

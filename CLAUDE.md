@@ -6,9 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ALWAYS NOTE THINGS DOWN.** The worst thing that can happen is forgetting. When you discover something important - a bug, a design decision, a naming collision, a future improvement - write it down immediately in the appropriate place:
 - Bugs/issues → fix them or add to TODO.md
+- Environment/compatibility issues → TODO.md (e.g., "litellm doesn't work in Nix")
 - Design decisions → docs/ or code comments
 - Future work → TODO.md
 - Conventions → this file (CLAUDE.md)
+
+Don't just move on when something doesn't work. Document it so the next session knows what to avoid or fix.
 
 ## Project Overview
 
@@ -21,6 +24,9 @@ This project uses Nix flakes for reproducible development environments:
 ```bash
 # Enter dev shell (automatic with direnv, or manual)
 nix develop
+
+# Install all optional dependencies
+uv sync --extra all
 
 # Tools available: Python 3.13, uv, ruff, ripgrep
 ```
@@ -77,7 +83,20 @@ This is why we have skeleton views (understand code without LLM), validation loo
 
 ## Dogfooding
 
-**Use moss tools.** We built them - use them. Before making significant changes:
+**Prefer moss MCP tools over generic tools.** When understanding the codebase, use moss tools instead of reading files directly:
+
+| Task | Use This | Not This |
+|------|----------|----------|
+| Understand file structure | `mcp__moss__skeleton_format` | Reading full file |
+| Get codebase overview | `mcp__moss__health_summarize` | Manual exploration |
+| Find complex code | `mcp__moss__complexity_analyze` | Grepping for patterns |
+| Check project health | `mcp__moss__health_check` | Multiple grep/read calls |
+| See file tree | `mcp__moss__tree_format` | `ls -R` or Glob |
+| Find the right tool | `mcp__moss__dwim_analyze_intent` | Guessing |
+
+**Why:** Moss tools are token-efficient (skeleton is 87% smaller than full file) and provide structural understanding. Reading raw files burns context on syntax when you need semantics.
+
+**CLI for testing changes:**
 
 ```bash
 # Understand structure before editing
@@ -91,17 +110,9 @@ moss complexity src/moss/
 
 # After changes, validate references
 moss check-refs src/
-
-# Don't know which tool to use? Use Python to query DWIM
-uv run python -c "from moss.dwim import analyze_intent; print(analyze_intent('summarize codebase')[:3])"
 ```
 
-This isn't just about testing the tools - it's about getting better context before making changes. If a tool isn't useful, that's valuable feedback → add to TODO.md.
-
-**CLI over MCP when testing changes.** The MCP server (via Claude Code) loads code at startup and caches it. When you modify moss source code (especially `moss_api.py`, `dwim.py`, or the `gen/` module), the MCP server won't see the changes until reloaded. Instead:
-- Test via CLI: `moss <command>` or `uv run python -c "from moss..."`
-- Test via Python: Direct imports give immediate feedback
-- Only rely on MCP tools for stable, committed functionality
+When you modify moss source code, test via CLI (`moss <command>`) rather than MCP - the MCP server caches code at startup and won't see changes until reloaded. If a tool isn't useful, that's valuable feedback → add to TODO.md.
 
 **Discover tools with DWIM.** If you don't know which tool to use, use `dwim_analyze_intent` (MCP) or Python (`from moss.dwim import analyze_intent`) with a natural language description. DWIM now knows about all 56+ tools and handles word variations (summarize→summary). Note: `moss dwim` CLI command doesn't exist yet (see "CLI from MossAPI" in TODO.md).
 

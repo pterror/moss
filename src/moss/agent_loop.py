@@ -7,7 +7,6 @@ Track them separately and optimize for fewer LLM calls.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Protocol, runtime_checkable
@@ -173,6 +172,35 @@ class StepResult:
     tokens_out: int = 0
 
 
+@dataclass
+class LoopContext:
+    """Context passed through all loop steps.
+
+    Provides access to initial input and all previous step outputs.
+    This enables steps to access both the original request AND
+    results from earlier steps.
+
+    Attributes:
+        input: The original initial_input passed to run()
+        steps: Dict mapping step names to their outputs
+        last: The most recent step's output (convenience)
+    """
+
+    input: Any = None
+    steps: dict[str, Any] = field(default_factory=dict)
+    last: Any = None
+
+    def get(self, step_name: str, default: Any = None) -> Any:
+        """Get a specific step's output."""
+        return self.steps.get(step_name, default)
+
+    def with_step(self, step_name: str, output: Any) -> LoopContext:
+        """Return new context with step output added."""
+        new_steps = dict(self.steps)
+        new_steps[step_name] = output
+        return LoopContext(input=self.input, steps=new_steps, last=output)
+
+
 class LoopStatus(Enum):
     """Final status of a loop execution."""
 
@@ -205,12 +233,28 @@ class LoopResult:
 
 @runtime_checkable
 class ToolExecutor(Protocol):
-    """Protocol for executing tools."""
+    """Protocol for executing tools.
 
-    async def execute(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
+    Tools receive a LoopContext containing:
+    - context.input: Original initial_input from run()
+    - context.steps: Dict of previous step outputs
+    - context.last: Most recent step output
+    - context.get(name): Get specific step output
+    """
+
+    async def execute(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> tuple[Any, int, int]:
         """Execute a tool and return (output, tokens_in, tokens_out).
 
-        For non-LLM tools, tokens should be (0, 0).
+        Args:
+            tool_name: The tool to execute (e.g., "skeleton.format")
+            context: Full loop context with input and previous outputs
+            step: The step definition (for input_from, etc.)
+
+        Returns:
+            Tuple of (output, tokens_in, tokens_out).
+            For non-LLM tools, tokens should be (0, 0).
         """
         ...
 
@@ -229,15 +273,22 @@ class AgentLoopRunner:
 
         Args:
             loop: The loop definition to execute
-            initial_input: Initial input for the first step
+            initial_input: Initial input for the first step. Can be any value;
+                          it will be wrapped in a LoopContext for step access.
 
         Returns:
             LoopResult with final status and metrics
+
+        Note:
+            Steps receive a LoopContext with:
+            - context.input: The original initial_input
+            - context.steps: Dict of all previous step outputs
+            - context.last: Most recent step output
+            - context.get(step_name): Get specific step output
         """
         metrics = LoopMetrics()
         step_results: list[StepResult] = []
-        step_outputs: dict[str, Any] = {}
-        current_input = initial_input
+        context = LoopContext(input=initial_input)
 
         start_time = time.time()
 
@@ -261,16 +312,12 @@ class AgentLoopRunner:
                     error=f"Step '{current_step_name}' not found",
                 )
 
-            # Get input for this step
-            if step.input_from and step.input_from in step_outputs:
-                current_input = step_outputs[step.input_from]
-
-            # Execute step with retries
-            step_result = await self._execute_step(step, current_input, metrics)
+            # Execute step with the full context
+            step_result = await self._execute_step(step, context, metrics)
             step_results.append(step_result)
 
             if step_result.status == StepStatus.SUCCESS:
-                step_outputs[step.name] = step_result.output
+                context = context.with_step(step.name, step_result.output)
 
                 # Check exit conditions
                 for condition in loop.exit_conditions:
@@ -354,7 +401,7 @@ class AgentLoopRunner:
         )
 
     async def _execute_step(
-        self, step: LoopStep, input_data: Any, metrics: LoopMetrics
+        self, step: LoopStep, context: LoopContext, metrics: LoopMetrics
     ) -> StepResult:
         """Execute a single step with retry logic."""
         retries = 0
@@ -363,7 +410,9 @@ class AgentLoopRunner:
         while retries <= step.max_retries:
             start = time.time()
             try:
-                output, tokens_in, tokens_out = await self.executor.execute(step.tool, input_data)
+                output, tokens_in, tokens_out = await self.executor.execute(
+                    step.tool, context, step
+                )
                 duration = time.time() - start
 
                 metrics.record_step(step.name, step.step_type, duration, tokens_in, tokens_out)
@@ -506,6 +555,11 @@ class MossToolExecutor:
     """Execute tools via MossAPI.
 
     Maps tool names to MossAPI methods. Non-LLM tools return (0, 0) for tokens.
+
+    Tools receive the full LoopContext and can access:
+    - context.input: Original input (typically {file_path: ..., task: ...})
+    - context.steps: Previous step outputs
+    - context.get(step_name): Specific step output
     """
 
     def __init__(self, root: Any = None):
@@ -514,53 +568,101 @@ class MossToolExecutor:
         from moss.moss_api import MossAPI
 
         self.api = MossAPI(root or Path.cwd())
-        self._tool_map = self._build_tool_map()
 
-    def _build_tool_map(self) -> dict[str, Callable[..., Any]]:
-        """Build mapping from tool names to API methods."""
-        return {
-            # Skeleton
-            "skeleton.format": lambda input: self.api.skeleton.format(input["file_path"]),
-            "skeleton.extract": lambda input: self.api.skeleton.extract(input["file_path"]),
-            # Validation
-            "validation.validate": lambda input: self.api.validation.validate(
-                input.get("file_path", input)
-            ),
-            # Patch
-            "patch.apply": lambda input: self.api.patch.apply(input["file_path"], input["patch"]),
-            "patch.apply_with_fallback": lambda input: self.api.patch.apply_with_fallback(
-                input["file_path"], input["patch"]
-            ),
-            # Anchors
-            "anchor.find": lambda input: self.api.anchor.find(input["file_path"], input["name"]),
-            "anchor.resolve": lambda input: self.api.anchor.resolve(
-                input["file_path"], input["name"]
-            ),
-            # Dependencies
-            "dependencies.format": lambda input: self.api.dependencies.format(input["file_path"]),
-            # DWIM
-            "dwim.analyze_intent": lambda input: self.api.dwim.analyze_intent(
-                input if isinstance(input, str) else input["query"]
-            ),
-            # Health
-            "health.check": lambda _: self.api.health.check(),
-            "health.summarize": lambda _: self.api.health.summarize(),
-            # Complexity
-            "complexity.analyze": lambda input: self.api.complexity.analyze(
-                input.get("pattern", "**/*.py") if isinstance(input, dict) else "**/*.py"
-            ),
-        }
+    def _get_input(self, context: LoopContext, step: LoopStep) -> Any:
+        """Extract the appropriate input for this step.
 
-    async def execute(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
+        Priority:
+        1. If step.input_from is set, use that step's output
+        2. Otherwise use context.input (original initial_input)
+        """
+        if step.input_from and step.input_from in context.steps:
+            return context.steps[step.input_from]
+        return context.input
+
+    def _get_file_path(self, context: LoopContext, step: LoopStep) -> str:
+        """Extract file_path from context - always available from initial input."""
+        # Always get file_path from original input
+        initial = context.input
+        if isinstance(initial, dict) and "file_path" in initial:
+            return initial["file_path"]
+        if isinstance(initial, str):
+            return initial
+        raise ValueError(f"Cannot extract file_path from context.input: {initial}")
+
+    async def execute(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> tuple[Any, int, int]:
         """Execute a tool and return (output, tokens_in, tokens_out).
 
         All MossAPI tools are non-LLM, so tokens are always (0, 0).
         """
-        if tool_name not in self._tool_map:
-            raise ValueError(f"Unknown tool: {tool_name}")
+        input_data = self._get_input(context, step)
 
-        func = self._tool_map[tool_name]
-        result = func(input_data)
+        # Route to appropriate tool
+        if tool_name == "skeleton.format":
+            file_path = self._get_file_path(context, step)
+            result = self.api.skeleton.format(file_path)
+
+        elif tool_name == "skeleton.extract":
+            file_path = self._get_file_path(context, step)
+            result = self.api.skeleton.extract(file_path)
+
+        elif tool_name == "validation.validate":
+            file_path = self._get_file_path(context, step)
+            result = self.api.validation.validate(file_path)
+
+        elif tool_name == "patch.apply":
+            file_path = self._get_file_path(context, step)
+            if isinstance(input_data, dict):
+                patch = input_data.get("patch", input_data)
+            else:
+                patch = input_data
+            result = self.api.patch.apply(file_path, patch)
+
+        elif tool_name == "patch.apply_with_fallback":
+            file_path = self._get_file_path(context, step)
+            if isinstance(input_data, dict):
+                patch = input_data.get("patch", input_data)
+            else:
+                patch = input_data
+            result = self.api.patch.apply_with_fallback(file_path, patch)
+
+        elif tool_name == "anchor.find":
+            file_path = self._get_file_path(context, step)
+            name = input_data.get("name") if isinstance(input_data, dict) else input_data
+            result = self.api.anchor.find(file_path, name)
+
+        elif tool_name == "anchor.resolve":
+            file_path = self._get_file_path(context, step)
+            name = input_data.get("name") if isinstance(input_data, dict) else input_data
+            result = self.api.anchor.resolve(file_path, name)
+
+        elif tool_name == "dependencies.format":
+            file_path = self._get_file_path(context, step)
+            result = self.api.dependencies.format(file_path)
+
+        elif tool_name == "dwim.analyze_intent":
+            if isinstance(input_data, str):
+                query = input_data
+            else:
+                query = input_data.get("query", str(input_data))
+            result = self.api.dwim.analyze_intent(query)
+
+        elif tool_name == "health.check":
+            result = self.api.health.check()
+
+        elif tool_name == "health.summarize":
+            result = self.api.health.summarize()
+
+        elif tool_name == "complexity.analyze":
+            pattern = "**/*.py"
+            if isinstance(input_data, dict):
+                pattern = input_data.get("pattern", pattern)
+            result = self.api.complexity.analyze(pattern)
+
+        else:
+            raise ValueError(f"Unknown tool: {tool_name}")
 
         # Handle async results
         if hasattr(result, "__await__"):
@@ -577,42 +679,40 @@ class MossToolExecutor:
 
 @dataclass
 class LLMConfig:
-    """Configuration for LLM calls.
+    """Configuration for LLM calls via litellm.
+
+    Uses litellm's unified interface for all providers. Model names follow
+    litellm conventions (e.g., "gemini/gemini-2.0-flash", "gpt-4o").
 
     Attributes:
-        provider: LLM provider ("anthropic", "openai", "gemini", "mock")
-        model: Model name (provider-specific)
-        api_key_env: Environment variable for API key (None = provider default)
-        temperature: Sampling temperature
+        model: Model name in litellm format (see litellm docs for all options)
+        temperature: Sampling temperature (0.0 = deterministic)
         max_tokens: Maximum tokens in response
-        system_prompt: Optional system prompt override
+        system_prompt: Optional system prompt (prepended to all requests)
+        mock: If True, return placeholder responses without API calls
 
-    Provider defaults:
-        - anthropic: model="claude-sonnet-4-20250514", env=ANTHROPIC_API_KEY
-        - openai: model="gpt-4o", env=OPENAI_API_KEY
-        - gemini: model="gemini-3-flash-preview", env=GOOGLE_API_KEY
-        - mock: no API calls, returns placeholder responses
+    Common model names:
+        - "gemini/gemini-3-flash-preview" (latest flash, fast)
+        - "gemini/gemini-3-pro" (powerful reasoning)
+        - "gpt-4o" (OpenAI)
+        - "claude-sonnet-4-20250514" (Anthropic)
+        - "ollama/llama3" (local via Ollama)
+
+    API keys are read from environment variables automatically by litellm:
+        - GOOGLE_API_KEY for Gemini
+        - OPENAI_API_KEY for OpenAI
+        - ANTHROPIC_API_KEY for Anthropic
     """
 
-    provider: str = "gemini"  # Default to Gemini (free tier available)
-    model: str = "gemini-3-flash-preview"
-    api_key_env: str | None = None  # None = use provider's default env var
+    model: str = "gemini/gemini-3-flash-preview"  # Default: latest flash model
     temperature: float = 0.0
-    max_tokens: int = 4096
-    system_prompt: str | None = None
-
-    def __post_init__(self) -> None:
-        """Set provider-appropriate model defaults if not specified."""
-        # If user sets provider but uses default model, update model
-        default_models = {
-            "anthropic": "claude-sonnet-4-20250514",
-            "openai": "gpt-4o",
-            "gemini": "gemini-3-flash-preview",
-            "mock": "mock",
-        }
-        if self.model == "gemini-3-flash-preview" and self.provider != "gemini":
-            # User changed provider but forgot to change model
-            self.model = default_models.get(self.provider, self.model)
+    max_tokens: int | None = None  # Let the model determine output length
+    system_prompt: str = (
+        "Be terse. No preamble, no summary, no markdown formatting. "
+        "Plain text only - no bold, no headers, no code blocks unless asked. "
+        "For analysis: short bullet points, max 5 items, no code."
+    )
+    mock: bool = False  # Set True for testing without API calls
 
 
 def _load_dotenv() -> bool:
@@ -635,26 +735,22 @@ class LLMToolExecutor:
     """Execute tools including LLM-based ones with token tracking.
 
     Routes tool calls to either MossAPI (structural tools) or LLM
-    (generation/reasoning tools). Tracks tokens from LLM responses.
+    (generation/reasoning tools). Uses litellm for unified LLM access.
 
     LLM tools are prefixed with "llm." and include:
     - llm.generate: Generate code/text from prompt
     - llm.critique: Review and critique code
     - llm.decide: Make a decision based on context
 
-    Environment variables are loaded from .env file automatically
-    (requires python-dotenv: pip install 'moss[dotenv]').
+    Environment variables are loaded from .env file automatically.
 
     Example:
-        config = LLMConfig(provider="gemini")  # Uses GOOGLE_API_KEY from .env
+        config = LLMConfig(model="gemini/gemini-2.0-flash")
         executor = LLMToolExecutor(config)
 
-        # Run a loop that uses both structural and LLM tools
         runner = AgentLoopRunner(executor)
         result = await runner.run(critic_loop(), initial_input)
 
-        # Check token usage
-        print(f"LLM calls: {result.metrics.llm_calls}")
         print(f"Tokens: {result.metrics.llm_tokens_in + result.metrics.llm_tokens_out}")
     """
 
@@ -681,189 +777,60 @@ class LLMToolExecutor:
 
         self.config = config or LLMConfig()
         self.moss_executor = moss_executor or MossToolExecutor(root)
-        self._client: Any = None
 
-    def _get_client(self) -> Any:
-        """Get or create the LLM client (lazy initialization)."""
-        if self._client is not None:
-            return self._client
-
-        if self.config.provider == "mock":
-            self._client = None
-            return None
-
-        if self.config.provider == "anthropic":
-            try:
-                import anthropic
-
-                api_key = None
-                if self.config.api_key_env:
-                    import os
-
-                    api_key = os.environ.get(self.config.api_key_env)
-                self._client = anthropic.Anthropic(api_key=api_key)
-            except ImportError as e:
-                raise ImportError(
-                    "anthropic package required. Install with: pip install anthropic"
-                ) from e
-
-        elif self.config.provider == "openai":
-            try:
-                import openai
-
-                api_key = None
-                if self.config.api_key_env:
-                    import os
-
-                    api_key = os.environ.get(self.config.api_key_env)
-                self._client = openai.OpenAI(api_key=api_key)
-            except ImportError as e:
-                raise ImportError(
-                    "openai package required. Install with: pip install openai"
-                ) from e
-
-        elif self.config.provider == "gemini":
-            try:
-                from google import genai
-
-                api_key = None
-                if self.config.api_key_env:
-                    import os
-
-                    api_key = os.environ.get(self.config.api_key_env)
-                self._client = genai.Client(api_key=api_key)
-            except ImportError as e:
-                raise ImportError(
-                    "google-genai package required. Install with: pip install google-genai"
-                ) from e
-
-        else:
-            raise ValueError(f"Unknown LLM provider: {self.config.provider}")
-
-        return self._client
-
-    async def execute(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
+    async def execute(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> tuple[Any, int, int]:
         """Execute a tool and return (output, tokens_in, tokens_out).
 
         Routes to LLM for "llm.*" tools, otherwise uses MossToolExecutor.
         """
         if tool_name.startswith("llm."):
-            return await self._execute_llm(tool_name, input_data)
+            return await self._execute_llm(tool_name, context, step)
         else:
-            return await self.moss_executor.execute(tool_name, input_data)
+            return await self.moss_executor.execute(tool_name, context, step)
 
-    async def _execute_llm(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
-        """Execute an LLM-based tool."""
+    async def _execute_llm(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> tuple[Any, int, int]:
+        """Execute an LLM-based tool.
+
+        Uses google-genai for Gemini models. Falls back to litellm for others.
+        """
         # Extract the specific LLM operation
         operation = tool_name.split(".", 1)[1] if "." in tool_name else tool_name
 
-        # Build the prompt based on operation
-        prompt = self._build_prompt(operation, input_data)
+        # Build the prompt based on operation and full context
+        prompt = self._build_prompt(operation, context, step)
 
         # Mock mode - return placeholder
-        if self.config.provider == "mock":
-            mock_response = f"[MOCK {operation}]: {str(input_data)[:100]}"
-            # Estimate tokens (4 chars per token)
+        if self.config.mock:
+            mock_response = f"[MOCK {operation}]: {str(context.last)[:100]}"
             tokens_in = len(prompt) // 4
             tokens_out = len(mock_response) // 4
             return mock_response, tokens_in, tokens_out
 
-        # Real LLM call
-        client = self._get_client()
-
-        if self.config.provider == "anthropic":
-            return await self._call_anthropic(client, prompt)
-        elif self.config.provider == "openai":
-            return await self._call_openai(client, prompt)
-        elif self.config.provider == "gemini":
-            return await self._call_gemini(client, prompt)
+        # Route based on model prefix
+        if self.config.model.startswith("gemini/"):
+            return await self._call_gemini(prompt)
         else:
-            raise ValueError(f"Unknown provider: {self.config.provider}")
+            return await self._call_litellm(prompt)
 
-    def _build_prompt(self, operation: str, input_data: Any) -> str:
-        """Build a prompt for the given LLM operation."""
-        # Convert input to string if needed
-        if isinstance(input_data, dict):
-            context = "\n".join(f"{k}: {v}" for k, v in input_data.items())
-        else:
-            context = str(input_data)
-
-        prompts = {
-            "generate": f"Generate code based on the following context:\n\n{context}",
-            "critique": (
-                "Review and critique the following code. "
-                f"Identify issues and suggest improvements:\n\n{context}"
-            ),
-            "decide": f"Based on the following context, make a decision:\n\n{context}",
-            "needs_more_context": (
-                "Given this code skeleton, do you need to see the full implementation "
-                f"to make changes? Answer YES or NO with brief explanation:\n\n{context}"
-            ),
-        }
-
-        return prompts.get(operation, f"Process the following:\n\n{context}")
-
-    async def _call_anthropic(self, client: Any, prompt: str) -> tuple[str, int, int]:
-        """Make an Anthropic API call."""
+    async def _call_gemini(self, prompt: str) -> tuple[str, int, int]:
+        """Call Gemini via google-genai SDK."""
         import asyncio
 
-        # Anthropic client is sync, run in thread pool
-        def _sync_call() -> tuple[str, int, int]:
-            messages = [{"role": "user", "content": prompt}]
-
-            kwargs: dict[str, Any] = {
-                "model": self.config.model,
-                "max_tokens": self.config.max_tokens,
-                "messages": messages,
-            }
-            if self.config.temperature > 0:
-                kwargs["temperature"] = self.config.temperature
-            if self.config.system_prompt:
-                kwargs["system"] = self.config.system_prompt
-
-            response = client.messages.create(**kwargs)
-
-            # Extract text and token counts
-            text = response.content[0].text if response.content else ""
-            tokens_in = response.usage.input_tokens
-            tokens_out = response.usage.output_tokens
-
-            return text, tokens_in, tokens_out
-
-        return await asyncio.to_thread(_sync_call)
-
-    async def _call_openai(self, client: Any, prompt: str) -> tuple[str, int, int]:
-        """Make an OpenAI API call."""
-        import asyncio
+        try:
+            from google import genai
+        except ImportError as e:
+            raise ImportError(
+                "google-genai required for Gemini. Install with: pip install 'moss[gemini]'"
+            ) from e
 
         def _sync_call() -> tuple[str, int, int]:
-            messages: list[dict[str, str]] = []
-            if self.config.system_prompt:
-                messages.append({"role": "system", "content": self.config.system_prompt})
-            messages.append({"role": "user", "content": prompt})
+            client = genai.Client()  # Uses GOOGLE_API_KEY env var
 
-            response = client.chat.completions.create(
-                model=self.config.model,
-                messages=messages,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-            )
-
-            # Extract text and token counts
-            text = response.choices[0].message.content or ""
-            tokens_in = response.usage.prompt_tokens if response.usage else 0
-            tokens_out = response.usage.completion_tokens if response.usage else 0
-
-            return text, tokens_in, tokens_out
-
-        return await asyncio.to_thread(_sync_call)
-
-    async def _call_gemini(self, client: Any, prompt: str) -> tuple[str, int, int]:
-        """Make a Google Gemini API call."""
-        import asyncio
-
-        def _sync_call() -> tuple[str, int, int]:
-            # Build config with system instruction if provided
+            # Build config
             config: dict[str, Any] = {}
             if self.config.system_prompt:
                 config["system_instruction"] = self.config.system_prompt
@@ -872,16 +839,18 @@ class LLMToolExecutor:
             if self.config.temperature > 0:
                 config["temperature"] = self.config.temperature
 
+            # Extract model name (remove "gemini/" prefix)
+            model_name = self.config.model
+            if model_name.startswith("gemini/"):
+                model_name = model_name[7:]
+
             response = client.models.generate_content(
-                model=self.config.model,
+                model=model_name,
                 contents=prompt,
                 config=config if config else None,
             )
 
-            # Extract text and token counts
             text = response.text or ""
-
-            # Token counts from usage_metadata
             tokens_in = 0
             tokens_out = 0
             if hasattr(response, "usage_metadata") and response.usage_metadata:
@@ -891,6 +860,95 @@ class LLMToolExecutor:
             return text, tokens_in, tokens_out
 
         return await asyncio.to_thread(_sync_call)
+
+    async def _call_litellm(self, prompt: str) -> tuple[str, int, int]:
+        """Call LLM via litellm (for non-Gemini models)."""
+        import asyncio
+
+        try:
+            from litellm import completion
+        except ImportError as e:
+            raise ImportError(
+                "litellm required for non-Gemini models. Install with: pip install 'moss[llm]'"
+            ) from e
+
+        def _sync_call() -> tuple[str, int, int]:
+            messages: list[dict[str, str]] = []
+            if self.config.system_prompt:
+                messages.append({"role": "system", "content": self.config.system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            kwargs: dict[str, Any] = {
+                "model": self.config.model,
+                "messages": messages,
+                "temperature": self.config.temperature,
+            }
+            if self.config.max_tokens is not None:
+                kwargs["max_tokens"] = self.config.max_tokens
+
+            response = completion(**kwargs)
+
+            text = response.choices[0].message.content or ""
+            tokens_in = response.usage.prompt_tokens if response.usage else 0
+            tokens_out = response.usage.completion_tokens if response.usage else 0
+
+            return text, tokens_in, tokens_out
+
+        return await asyncio.to_thread(_sync_call)
+
+    def _build_prompt(self, operation: str, context: LoopContext, step: LoopStep) -> str:
+        """Build a prompt for the given LLM operation.
+
+        Has access to:
+        - context.input: Original task/file info
+        - context.steps: All previous step outputs
+        - context.last: Most recent step output
+        - step.input_from: Which step's output to focus on
+        """
+        # Get the primary input (what this step should focus on)
+        if step.input_from and step.input_from in context.steps:
+            focus_input = context.steps[step.input_from]
+        else:
+            focus_input = context.last or context.input
+
+        # Format the focus input
+        if isinstance(focus_input, dict):
+            focus_str = "\n".join(f"{k}: {v}" for k, v in focus_input.items())
+        else:
+            focus_str = str(focus_input)
+
+        # Include original task context if available
+        task_context = ""
+        if isinstance(context.input, dict):
+            task = context.input.get("task", "")
+            file_path = context.input.get("file_path", "")
+            if task:
+                task_context = f"Task: {task}\n"
+            if file_path:
+                task_context += f"File: {file_path}\n"
+        if task_context:
+            task_context += "\n"
+
+        prompts = {
+            "generate": (
+                f"{task_context}Generate code based on the following context:\n\n{focus_str}"
+            ),
+            "critique": (
+                f"{task_context}Review and critique the following code. "
+                f"Identify issues and suggest improvements:\n\n{focus_str}"
+            ),
+            "decide": (
+                f"{task_context}Based on the following context, make a decision:\n\n{focus_str}"
+            ),
+            "needs_more_context": (
+                f"{task_context}Given this code skeleton, do you need to see "
+                f"the full implementation to make changes? "
+                f"Answer YES or NO with brief explanation:\n\n{focus_str}"
+            ),
+        }
+
+        default_prompt = f"{task_context}Process the following:\n\n{focus_str}"
+        return prompts.get(operation, default_prompt)
 
 
 async def run_simple_loop(file_path: str, patch_spec: dict[str, Any]) -> LoopResult:
