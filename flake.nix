@@ -20,6 +20,7 @@
             ruff
             ripgrep
             jq
+            sqlite
             # VS Code extension development
             nodejs_22
             nodePackages.npm
