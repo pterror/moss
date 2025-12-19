@@ -570,6 +570,302 @@ class MossToolExecutor:
         return result, 0, 0
 
 
+# ============================================================================
+# LLM Tool Executor
+# ============================================================================
+
+
+@dataclass
+class LLMConfig:
+    """Configuration for LLM calls.
+
+    Attributes:
+        provider: LLM provider ("anthropic", "openai", "gemini", "mock")
+        model: Model name (provider-specific)
+        api_key_env: Environment variable for API key (None = provider default)
+        temperature: Sampling temperature
+        max_tokens: Maximum tokens in response
+        system_prompt: Optional system prompt override
+
+    Provider defaults:
+        - anthropic: model="claude-sonnet-4-20250514", env=ANTHROPIC_API_KEY
+        - openai: model="gpt-4o", env=OPENAI_API_KEY
+        - gemini: model="gemini-3-flash-preview", env=GOOGLE_API_KEY
+        - mock: no API calls, returns placeholder responses
+    """
+
+    provider: str = "gemini"  # Default to Gemini (free tier available)
+    model: str = "gemini-3-flash-preview"
+    api_key_env: str | None = None  # None = use provider's default env var
+    temperature: float = 0.0
+    max_tokens: int = 4096
+    system_prompt: str | None = None
+
+    def __post_init__(self) -> None:
+        """Set provider-appropriate model defaults if not specified."""
+        # If user sets provider but uses default model, update model
+        default_models = {
+            "anthropic": "claude-sonnet-4-20250514",
+            "openai": "gpt-4o",
+            "gemini": "gemini-3-flash-preview",
+            "mock": "mock",
+        }
+        if self.model == "gemini-3-flash-preview" and self.provider != "gemini":
+            # User changed provider but forgot to change model
+            self.model = default_models.get(self.provider, self.model)
+
+
+class LLMToolExecutor:
+    """Execute tools including LLM-based ones with token tracking.
+
+    Routes tool calls to either MossAPI (structural tools) or LLM
+    (generation/reasoning tools). Tracks tokens from LLM responses.
+
+    LLM tools are prefixed with "llm." and include:
+    - llm.generate: Generate code/text from prompt
+    - llm.critique: Review and critique code
+    - llm.decide: Make a decision based on context
+
+    Example:
+        config = LLMConfig(provider="anthropic", model="claude-sonnet-4-20250514")
+        executor = LLMToolExecutor(config)
+
+        # Run a loop that uses both structural and LLM tools
+        runner = AgentLoopRunner(executor)
+        result = await runner.run(critic_loop(), initial_input)
+
+        # Check token usage
+        print(f"LLM calls: {result.metrics.llm_calls}")
+        print(f"Tokens: {result.metrics.llm_tokens_in + result.metrics.llm_tokens_out}")
+    """
+
+    def __init__(
+        self,
+        config: LLMConfig | None = None,
+        moss_executor: MossToolExecutor | None = None,
+        root: Any = None,
+    ):
+        """Initialize the executor.
+
+        Args:
+            config: LLM configuration (uses defaults if None)
+            moss_executor: Executor for structural tools (created if None)
+            root: Project root for MossToolExecutor
+        """
+        self.config = config or LLMConfig()
+        self.moss_executor = moss_executor or MossToolExecutor(root)
+        self._client: Any = None
+
+    def _get_client(self) -> Any:
+        """Get or create the LLM client (lazy initialization)."""
+        if self._client is not None:
+            return self._client
+
+        if self.config.provider == "mock":
+            self._client = None
+            return None
+
+        if self.config.provider == "anthropic":
+            try:
+                import anthropic
+
+                api_key = None
+                if self.config.api_key_env:
+                    import os
+
+                    api_key = os.environ.get(self.config.api_key_env)
+                self._client = anthropic.Anthropic(api_key=api_key)
+            except ImportError as e:
+                raise ImportError(
+                    "anthropic package required. Install with: pip install anthropic"
+                ) from e
+
+        elif self.config.provider == "openai":
+            try:
+                import openai
+
+                api_key = None
+                if self.config.api_key_env:
+                    import os
+
+                    api_key = os.environ.get(self.config.api_key_env)
+                self._client = openai.OpenAI(api_key=api_key)
+            except ImportError as e:
+                raise ImportError(
+                    "openai package required. Install with: pip install openai"
+                ) from e
+
+        elif self.config.provider == "gemini":
+            try:
+                from google import genai
+
+                api_key = None
+                if self.config.api_key_env:
+                    import os
+
+                    api_key = os.environ.get(self.config.api_key_env)
+                self._client = genai.Client(api_key=api_key)
+            except ImportError as e:
+                raise ImportError(
+                    "google-genai package required. Install with: pip install google-genai"
+                ) from e
+
+        else:
+            raise ValueError(f"Unknown LLM provider: {self.config.provider}")
+
+        return self._client
+
+    async def execute(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
+        """Execute a tool and return (output, tokens_in, tokens_out).
+
+        Routes to LLM for "llm.*" tools, otherwise uses MossToolExecutor.
+        """
+        if tool_name.startswith("llm."):
+            return await self._execute_llm(tool_name, input_data)
+        else:
+            return await self.moss_executor.execute(tool_name, input_data)
+
+    async def _execute_llm(self, tool_name: str, input_data: Any) -> tuple[Any, int, int]:
+        """Execute an LLM-based tool."""
+        # Extract the specific LLM operation
+        operation = tool_name.split(".", 1)[1] if "." in tool_name else tool_name
+
+        # Build the prompt based on operation
+        prompt = self._build_prompt(operation, input_data)
+
+        # Mock mode - return placeholder
+        if self.config.provider == "mock":
+            mock_response = f"[MOCK {operation}]: {str(input_data)[:100]}"
+            # Estimate tokens (4 chars per token)
+            tokens_in = len(prompt) // 4
+            tokens_out = len(mock_response) // 4
+            return mock_response, tokens_in, tokens_out
+
+        # Real LLM call
+        client = self._get_client()
+
+        if self.config.provider == "anthropic":
+            return await self._call_anthropic(client, prompt)
+        elif self.config.provider == "openai":
+            return await self._call_openai(client, prompt)
+        elif self.config.provider == "gemini":
+            return await self._call_gemini(client, prompt)
+        else:
+            raise ValueError(f"Unknown provider: {self.config.provider}")
+
+    def _build_prompt(self, operation: str, input_data: Any) -> str:
+        """Build a prompt for the given LLM operation."""
+        # Convert input to string if needed
+        if isinstance(input_data, dict):
+            context = "\n".join(f"{k}: {v}" for k, v in input_data.items())
+        else:
+            context = str(input_data)
+
+        prompts = {
+            "generate": f"Generate code based on the following context:\n\n{context}",
+            "critique": (
+                "Review and critique the following code. "
+                f"Identify issues and suggest improvements:\n\n{context}"
+            ),
+            "decide": f"Based on the following context, make a decision:\n\n{context}",
+            "needs_more_context": (
+                "Given this code skeleton, do you need to see the full implementation "
+                f"to make changes? Answer YES or NO with brief explanation:\n\n{context}"
+            ),
+        }
+
+        return prompts.get(operation, f"Process the following:\n\n{context}")
+
+    async def _call_anthropic(self, client: Any, prompt: str) -> tuple[str, int, int]:
+        """Make an Anthropic API call."""
+        import asyncio
+
+        # Anthropic client is sync, run in thread pool
+        def _sync_call() -> tuple[str, int, int]:
+            messages = [{"role": "user", "content": prompt}]
+
+            kwargs: dict[str, Any] = {
+                "model": self.config.model,
+                "max_tokens": self.config.max_tokens,
+                "messages": messages,
+            }
+            if self.config.temperature > 0:
+                kwargs["temperature"] = self.config.temperature
+            if self.config.system_prompt:
+                kwargs["system"] = self.config.system_prompt
+
+            response = client.messages.create(**kwargs)
+
+            # Extract text and token counts
+            text = response.content[0].text if response.content else ""
+            tokens_in = response.usage.input_tokens
+            tokens_out = response.usage.output_tokens
+
+            return text, tokens_in, tokens_out
+
+        return await asyncio.to_thread(_sync_call)
+
+    async def _call_openai(self, client: Any, prompt: str) -> tuple[str, int, int]:
+        """Make an OpenAI API call."""
+        import asyncio
+
+        def _sync_call() -> tuple[str, int, int]:
+            messages: list[dict[str, str]] = []
+            if self.config.system_prompt:
+                messages.append({"role": "system", "content": self.config.system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            response = client.chat.completions.create(
+                model=self.config.model,
+                messages=messages,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
+            )
+
+            # Extract text and token counts
+            text = response.choices[0].message.content or ""
+            tokens_in = response.usage.prompt_tokens if response.usage else 0
+            tokens_out = response.usage.completion_tokens if response.usage else 0
+
+            return text, tokens_in, tokens_out
+
+        return await asyncio.to_thread(_sync_call)
+
+    async def _call_gemini(self, client: Any, prompt: str) -> tuple[str, int, int]:
+        """Make a Google Gemini API call."""
+        import asyncio
+
+        def _sync_call() -> tuple[str, int, int]:
+            # Build config with system instruction if provided
+            config: dict[str, Any] = {}
+            if self.config.system_prompt:
+                config["system_instruction"] = self.config.system_prompt
+            if self.config.max_tokens:
+                config["max_output_tokens"] = self.config.max_tokens
+            if self.config.temperature > 0:
+                config["temperature"] = self.config.temperature
+
+            response = client.models.generate_content(
+                model=self.config.model,
+                contents=prompt,
+                config=config if config else None,
+            )
+
+            # Extract text and token counts
+            text = response.text or ""
+
+            # Token counts from usage_metadata
+            tokens_in = 0
+            tokens_out = 0
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                tokens_in = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+                tokens_out = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+
+            return text, tokens_in, tokens_out
+
+        return await asyncio.to_thread(_sync_call)
+
+
 async def run_simple_loop(file_path: str, patch_spec: dict[str, Any]) -> LoopResult:
     """Convenience function to run a simple edit loop.
 

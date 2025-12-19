@@ -93,6 +93,9 @@ anthropic = [
 openai = [
     "openai>=1.0.0",
 ]
+gemini = [
+    "google-genai>=1.0.0",
+]
 llm-lib = [
     "llm>=0.13.0",
 ]
@@ -112,7 +115,7 @@ eval = [
 ]
 # Meta-group: install all optional features
 all = [
-    "moss[server,mcp,lsp,llm,anthropic,openai,tree-sitter,chroma,tui]",
+    "moss[server,mcp,lsp,llm,anthropic,openai,gemini,tree-sitter,chroma,tui]",
 ]
 
 [build-system]

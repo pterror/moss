@@ -8,10 +8,11 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 **For next session:**
 
-1. **Add LLM executor** (medium) - Complete the loop system
-   - LLMToolExecutor that wraps API calls
-   - Track tokens from actual LLM responses
-   - Wire into critic_loop
+1. **Add LLM executor** (medium) - ✅ Done
+   - LLMConfig with provider support (gemini, anthropic, openai, mock)
+   - LLMToolExecutor that routes to moss tools OR LLM
+   - Token tracking from actual API responses
+   - Default provider: Gemini 3 Flash (free tier available)
 
 2. **Research A2A protocol** (small) - ✅ Done
    - See `docs/prior-art.md` for full notes
@@ -43,6 +44,10 @@ See `~/git/prose/moss/` for full synthesis design documents.
   - ADK: Google's "batteries-included" multi-agent framework
   - LangGraph: Graph-based fine-grained control (LangChain)
   - Both validate need for structured loops; moss differentiates via structural awareness
+- [x] **Add LLM executor** - ✅ LLMConfig + LLMToolExecutor with Gemini/Anthropic/OpenAI support
+  - Routes llm.* tools to LLM, others to MossToolExecutor
+  - Tracks tokens from API responses
+  - Mock mode for testing without API key
 
 **Previously completed:**
 - [x] **Composable Loop primitives** - ✅ LoopStep, AgentLoop, AgentLoopRunner, LoopMetrics
