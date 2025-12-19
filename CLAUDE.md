@@ -52,16 +52,10 @@ Context Reset (before `/exit`):
 
 **ALWAYS try moss tools first.** Generic tools (Read, Grep, Glob) burn tokens on syntax when you need semantics.
 
-| Task | Use This | Not This |
-|------|----------|----------|
-| Understand file structure | `skeleton_format` | Reading full file |
-| Get codebase overview | `health_summarize` | Manual exploration |
-| Find complex code | `complexity_analyze` | Grepping for patterns |
-| Check project health | `health_check` | Multiple grep/read calls |
-| See file tree | `tree_format` | `ls -R` or Glob |
-| Find symbols | `search_find_symbols` | Grep for "def foo" |
-| Resolve file name | `search_resolve_file` | Guessing paths |
-| Find the right tool | `dwim_analyze_intent` | Guessing |
+Principles:
+- **Fuzzy matching for all lookups** - files, symbols, tools. Use `resolve_file`, `find_symbols`, `dwim_resolve_tool`
+- **Skeleton before read** - understand structure first, read only what's needed
+- **Check before create** - resolve similar names before writing new files
 
 Token savings: skeleton is 87% smaller than full file. This compounds over a session.
 

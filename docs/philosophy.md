@@ -74,6 +74,14 @@ Make it easy to get started:
 - Progressive disclosure: simple things simple, complex things possible
 - Clear error messages that guide users toward solutions
 
+### DWIM (Do What I Mean)
+
+Agents make mistakes - typos, wrong conventions, forgotten paths. Every lookup should be forgiving:
+- Fuzzy file resolution: `prior_art` finds `prior-art.md`
+- Symbol search tolerates partial names and typos
+- Tool selection handles aliases and misspellings
+- Pattern: try exact → try fuzzy → try corrections → ask for clarification
+
 ### Works on Messy Codebases
 
 Real-world code is often messy. Moss should:
