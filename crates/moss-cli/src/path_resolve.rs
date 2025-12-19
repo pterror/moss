@@ -14,7 +14,7 @@ pub struct PathMatch {
 
 /// Get all files in the repository (uses index if available)
 pub fn all_files(root: &Path) -> Vec<PathMatch> {
-    get_all_paths(root)
+    get_paths_for_query(root, "")
         .into_iter()
         .map(|(path, is_dir)| PathMatch {
             path,
@@ -37,19 +37,27 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
         return resolve(file_part, root);
     }
 
-    // Try to use index if available
-    let all_paths = get_all_paths(root);
+    // Get candidate paths (uses LIKE for fast filtering when possible)
+    let all_paths = get_paths_for_query(root, query);
 
     resolve_from_paths(query, &all_paths)
 }
 
-/// Get all paths, using index if available, falling back to filesystem walk
-fn get_all_paths(root: &Path) -> Vec<(String, bool)> {
-    // Try index first
+/// Get paths matching query using LIKE, fallback to all files
+fn get_paths_for_query(root: &Path, query: &str) -> Vec<(String, bool)> {
     if let Ok(mut index) = FileIndex::open(root) {
         if index.needs_refresh() {
             let _ = index.refresh();
         }
+        // Try LIKE first for faster queries
+        if !query.is_empty() {
+            if let Ok(files) = index.find_like(query) {
+                if !files.is_empty() {
+                    return files.into_iter().map(|f| (f.path, f.is_dir)).collect();
+                }
+            }
+        }
+        // Fall back to all files for empty query or no LIKE matches
         if let Ok(files) = index.all_files() {
             return files.into_iter().map(|f| (f.path, f.is_dir)).collect();
         }

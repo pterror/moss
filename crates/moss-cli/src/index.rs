@@ -222,6 +222,46 @@ impl FileIndex {
     pub fn count(&self) -> rusqlite::Result<usize> {
         self.conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
     }
+
+    /// Find files matching a query using LIKE (fast pre-filter)
+    /// Splits query by whitespace/separators and requires all parts to match
+    pub fn find_like(&self, query: &str) -> rusqlite::Result<Vec<IndexedFile>> {
+        // Normalize query: split on whitespace and common separators
+        let parts: Vec<&str> = query
+            .split(|c: char| c.is_whitespace() || c == '_' || c == '-' || c == '.')
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build WHERE clause: LOWER(path) LIKE '%part1%' AND LOWER(path) LIKE '%part2%' ...
+        let conditions: Vec<String> = (0..parts.len())
+            .map(|i| format!("LOWER(path) LIKE ?{}", i + 1))
+            .collect();
+        let sql = format!(
+            "SELECT path, is_dir, mtime FROM files WHERE {} LIMIT 50",
+            conditions.join(" AND ")
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let patterns: Vec<String> = parts.iter().map(|p| format!("%{}%", p.to_lowercase())).collect();
+
+        // Bind all parameters
+        let params: Vec<&dyn rusqlite::ToSql> = patterns.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        let files = stmt
+            .query_map(params.as_slice(), |row| {
+                Ok(IndexedFile {
+                    path: row.get(0)?,
+                    is_dir: row.get::<_, i64>(1)? != 0,
+                    mtime: row.get(2)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(files)
+    }
 }
 
 #[cfg(test)]
