@@ -45,7 +45,7 @@ impl FileIndex {
         // Check schema version
         let version: i64 = conn
             .query_row(
-                "SELECT value FROM meta WHERE key = 'schema_version'",
+                "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'schema_version'",
                 [],
                 |row| row.get(0),
             )
@@ -68,10 +68,19 @@ impl FileIndex {
 
     /// Check if index needs refresh based on .moss directory mtime
     pub fn needs_refresh(&self) -> bool {
+        // Check if index is empty
+        let file_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
+            .unwrap_or(0);
+        if file_count == 0 {
+            return true;
+        }
+
         let last_indexed: i64 = self
             .conn
             .query_row(
-                "SELECT value FROM meta WHERE key = 'last_indexed'",
+                "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'last_indexed'",
                 [],
                 |row| row.get(0),
             )
@@ -84,7 +93,8 @@ impl FileIndex {
 
         // Check if any common directories have changed
         // This is a heuristic - check src/, lib/, etc.
-        for dir in &["src", "lib", "crates", "."] {
+        // Note: "." changes too often, skip it
+        for dir in &["src", "lib", "crates"] {
             let path = self.root.join(dir);
             if path.exists() {
                 if let Ok(meta) = path.metadata() {

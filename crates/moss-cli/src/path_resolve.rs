@@ -54,7 +54,6 @@ fn get_all_paths(root: &Path) -> Vec<(String, bool)> {
             return files.into_iter().map(|f| (f.path, f.is_dir)).collect();
         }
     }
-
     // Fall back to filesystem walk
     let mut all_paths: Vec<(String, bool)> = Vec::new();
     let walker = WalkBuilder::new(root)
