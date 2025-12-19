@@ -25,6 +25,12 @@
             nodejs_22
             nodePackages.npm
             nodePackages.typescript
+            # Rust toolchain for moss-cli
+            rustc
+            cargo
+            rust-analyzer
+            clippy
+            rustfmt
           ];
 	  LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath buildInputs}:$LD_LIBRARY_PATH";
         };

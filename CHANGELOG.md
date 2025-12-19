@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.6.8
+
+### Tree Commands & Performance
+
+**New CLI Commands**
+- `moss path <query>` - Fuzzy path/symbol resolution
+- `moss view <target>` - View node in codebase tree
+- `moss search-tree <query>` - Search symbols in tree
+- `moss expand <target>` - Show full source of symbol
+- `moss callers <target>` - Find callers of a function
+- `moss callees <target>` - Find what a function calls
+
+**MCP DWIM Routing**
+- All tree commands wired to MCP single-tool interface
+- DWIM semantic matching for natural language queries
+- Aliases: `expand` → `cli_expand`, `callers`, `callees`, etc.
+
+**Performance (4x faster file lookups)**
+- `os.walk` with in-place pruning (37x faster than `rglob`)
+- Lazy AST parsing - only parse when symbols needed
+- File lookups: 914ms → 222ms
+- Symbol lookups still require parsing (~800ms)
+
 ## v0.6.7
 
 ### Single-Tool MCP Server

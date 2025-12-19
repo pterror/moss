@@ -4,10 +4,20 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Dogfood new tree commands** - Test `path`, `view`, `search-tree`, `expand`, `callers`, `callees` in real work
-2. **Wire tree commands to MCP** - Add DWIM routing for new commands
-3. **Proper reference tracing** - AST-based callers/callees like GitHub (current impl is string matching)
-4. **Indexing for tree** - Speed up `search-tree` and `callers` with persistent index
+1. **Rust CLI infrastructure** - Fast startup for hot paths
+   - Create `crates/moss-cli/` with Cargo workspace
+   - Implement `moss path` in Rust with SQLite index
+   - Benchmark against Python (~220ms → ~5ms target)
+2. **Daemon + index architecture**
+   - `mossd` daemon: keeps index hot, watches filesystem (inotify)
+   - SQLite index: files (path, mtime), symbols (name, kind, line, parent)
+   - Smart invalidation: mtime check on query, proactive via watcher
+   - Unix socket IPC, auto-start/shutdown
+3. **Migrate tree commands to Rust**
+   - `path`, `view`, `search-tree`, `expand`, `callers`, `callees`
+   - tree-sitter for parsing (Rust-native)
+   - Python CLI shells to Rust for these commands
+4. **Proper reference tracing** - AST-based callers/callees (in Rust with tree-sitter)
 
 ## Active Backlog
 
