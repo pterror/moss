@@ -5,9 +5,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 1. **Rust CLI infrastructure** - Fast startup for hot paths
-   - Create `crates/moss-cli/` with Cargo workspace
-   - Implement `moss path` in Rust with SQLite index
-   - Benchmark against Python (~220ms → ~5ms target)
+   - [x] Create `crates/moss-cli/` with Cargo workspace
+   - [x] Implement `moss path` in Rust with fuzzy matching (~27ms, 10x faster than Python)
+   - [ ] Add SQLite index for file caching (target: ~5ms)
 2. **Daemon + index architecture**
    - `mossd` daemon: keeps index hot, watches filesystem (inotify)
    - SQLite index: files (path, mtime), symbols (name, kind, line, parent)
@@ -26,6 +26,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Multiple agents concurrently - no requirement to join back to main stream
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
 - [ ] Revisit CLAUDE.md dogfooding section - tools should be self-evident, not need instructions
+- [ ] MCP response ephemeral handling - large responses should stream/page instead of filling context
 - [x] MCP DWIM: route natural language to `dwim` command, only use exact CLI syntax as fallback
 - [x] Tune DWIM: "structure" → `summarize` first, `skeleton` for details
 

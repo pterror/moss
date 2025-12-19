@@ -23,6 +23,7 @@ htmlcov/
 
 # build output
 dist/
+target/
 # generated types
 .astro/
 
