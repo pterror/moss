@@ -8,16 +8,13 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 **For next session:**
 
-1. **Add WebAPI to MCP tools** (small) - Expose web.fetch/search via MCP
-   - Run `moss gen --target=mcp` after adding to introspect.py
-   - Test with Claude Code
-
-2. **Add skeleton expand to MCP** (small) - Expose expand_symbol via MCP
-   - Useful for getting full enum definitions when skeleton isn't enough
-
-3. **Recursive self-improvement for moss workflows** (medium) - Loops that improve other loops
+1. **Recursive self-improvement for moss workflows** (medium) - Loops that improve other loops
    - Critic loop reviewing loop definitions for inefficiencies
    - Start with a simple example: optimize a docstring loop
+
+2. **Codebase search API** - Dogfood moss search instead of raw grep/glob
+
+3. **Test guessability metrics** - Can you guess module names from functionality?
 
 **Continue autonomously** - Keep picking up tasks from Backlog.
 
@@ -36,6 +33,20 @@ See `~/git/prose/moss/` for full synthesis design documents.
   - Subagents proposing step reordering, tool substitutions
   - Works for LLM-heavy and tool-heavy workflows alike
   - Requires careful human review to avoid runaway changes
+- [ ] **Codebase search API** - Moss's own search for dogfooding
+  - We use raw grep/glob but should dogfood moss search
+  - Semantic search via RAG, structural search via skeleton/anchors
+  - Goal: replace Grep/Glob usage with moss tools
+- [ ] **Guessability metrics** - Evaluate codebase structure quality
+  - Can you guess module names from functionality?
+  - Test: describe function → guess location → measure accuracy
+  - Poor guessability = poor structure / naming
+- [ ] **Module name DWIM** - Fuzzy matching for module/file names
+  - `moss find-module "web search"` → suggests `moss/web.py`
+  - Typo correction, abbreviation expansion
+- [ ] **Model-agnostic naming** - Don't over-fit to specific LLM conventions
+  - Different models have different naming preferences
+  - Structure should be discoverable by any model
 
 **Deferred:**
 - Add missing CLI APIs → after loop work validates architecture
@@ -44,9 +55,16 @@ See `~/git/prose/moss/` for full synthesis design documents.
 ---
 
 **Completed this session (Dec 19, 2025):**
-- [x] **Skeleton expand symbol** - `expand_symbol()` and `get_enum_values()` functions
-  - Added to `src/moss/skeleton.py` and exposed via `SkeletonAPI.expand()`
-  - Addresses blind spot: skeleton shows enum names but not values
+- [x] **WebAPI to MCP** - Exposed web.fetch/search/extract_content/clear_cache via MCP
+  - 64 total MCP tools now (was 60)
+- [x] **Skeleton expand to MCP** - skeleton_expand, skeleton_get_enum_values tools
+- [x] **Skeleton expand symbol** - `expand_symbol()` and `get_enum_values()` in SkeletonAPI
+
+**Dogfooding observations:**
+- `skeleton_format` / `skeleton_expand` - Very useful for quick file understanding
+- **Missed opportunities**: Used `ls` instead of `tree_format`, `Grep` instead of RAG
+- **Ideas**: Add more DWIM aliases, create `moss search` dogfoodable API
+
 - [x] **Token-efficient web search** - `src/moss/web.py` module
   - `WebFetcher` - Fetch with HTML extraction, caching
   - `WebSearcher` - DuckDuckGo search with token-efficient results

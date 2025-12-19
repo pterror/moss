@@ -250,6 +250,7 @@ def introspect_api() -> list[SubAPI]:
         TreeAPI,
         ValidationAPI,
         WeaknessesAPI,
+        WebAPI,
     )
 
     # Map of property name to API class
@@ -275,6 +276,7 @@ def introspect_api() -> list[SubAPI]:
         "external_deps": ExternalDepsAPI,
         "weaknesses": WeaknessesAPI,
         "rag": RAGAPI,
+        "web": WebAPI,
     }
 
     results = []

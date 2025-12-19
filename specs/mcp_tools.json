@@ -937,5 +937,81 @@
       "type": "object"
     },
     "name": "rag_stats"
+  },
+  {
+    "description": "Clear the web content cache. Number of cached items cleared",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "web_clear_cache"
+  },
+  {
+    "description": "Extract clean content from HTML string. Dict with title, text, token_estimate, metadata",
+    "inputSchema": {
+      "properties": {
+        "html": {
+          "description": "Raw HTML content",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "description": "Optional URL for metadata",
+          "type": "string"
+        }
+      },
+      "required": [
+        "html"
+      ],
+      "type": "object"
+    },
+    "name": "web_extract_content"
+  },
+  {
+    "description": "Fetch and extract content from URL. Dict with url, title, text, token_estimate, metadata",
+    "inputSchema": {
+      "properties": {
+        "extract_main": {
+          "default": true,
+          "description": "Extract main content vs full page (default: True)",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "URL to fetch",
+          "type": "string"
+        },
+        "use_cache": {
+          "default": true,
+          "description": "Check cache first (default: True)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "name": "web_fetch"
+  },
+  {
+    "description": "Search the web with token-efficient results. Dict with query, results list, and compact string representation",
+    "inputSchema": {
+      "properties": {
+        "max_results": {
+          "default": 5,
+          "description": "Maximum number of results (default: 5)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "web_search"
   }
 ]

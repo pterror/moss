@@ -84,9 +84,11 @@ Real-world code is often messy. Moss should:
 
 ### Accelerate Vibe Coding
 
-Minimize friction in the creative flow:
+Maximize useful work per token. Minimize friction in the creative flow:
 - **Token efficiency**: Never send full code when a skeleton suffices. Compress context. Use structured output parsing instead of free-form text
 - **Minimal LLM calls**: Use structural tools (AST, grep, validation) for deterministic tasks. LLM only for judgment
 - **Parallelism**: Run independent operations concurrently. Batch when possible
 - **Fast feedback loops**: Validation before commit, not after. Catch errors early
+- **Minimize error rate**: Avoid wasted retry cycles. Get it right the first time
+- **Usefulness per token**: Avoid busywork. Every action should move toward the goal
 - **Future goal**: Diff-based editing to avoid sending unchanged code

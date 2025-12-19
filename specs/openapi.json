@@ -1708,6 +1708,139 @@
           "weaknesses"
         ]
       }
+    },
+    "/web/clear-cache": {
+      "post": {
+        "description": "Clear the web content cache. Number of cached items cleared",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Clear the web content cache",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/web/extract-content": {
+      "post": {
+        "description": "Extract clean content from HTML string. Dict with title, text, token_estimate, metadata",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "html": {
+                    "description": "Raw HTML content",
+                    "type": "string"
+                  },
+                  "url": {
+                    "default": "",
+                    "description": "Optional URL for metadata",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "html"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Extract clean content from HTML string",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/web/fetch": {
+      "post": {
+        "description": "Fetch and extract content from URL. Dict with url, title, text, token_estimate, metadata",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "extract_main": {
+                    "default": true,
+                    "description": "Extract main content vs full page (default: True)",
+                    "type": "boolean"
+                  },
+                  "url": {
+                    "description": "URL to fetch",
+                    "type": "string"
+                  },
+                  "use_cache": {
+                    "default": true,
+                    "description": "Check cache first (default: True)",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Fetch and extract content from URL",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/web/search": {
+      "post": {
+        "description": "Search the web with token-efficient results. Dict with query, results list, and compact string representation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "max_results": {
+                    "default": 5,
+                    "description": "Maximum number of results (default: 5)",
+                    "type": "integer"
+                  },
+                  "query": {
+                    "description": "Search query",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Search the web with token-efficient results",
+        "tags": [
+          "web"
+        ]
+      }
     }
   },
   "tags": [
@@ -1790,6 +1923,10 @@
     {
       "description": "API for RAG (Retrieval-Augmented Generation) semantic search. Provides semantic code search capabilities using vector embeddings. Index your codebase once, then search with natural language queries.",
       "name": "rag"
+    },
+    {
+      "description": "API for token-efficient web fetching and search. Provides web content extraction optimized for LLM context. Strips HTML noise, extracts main content, caches results. api = MossAPI.for_project(\".\") content = await api.web.fetch(\"https://docs.python.org/3/\") print(f\"Tokens: ~{content.token_estimate}\") results = await api.web.search(\"python asyncio tutorial\") print(results.to_compact())",
+      "name": "web"
     }
   ]
 }
