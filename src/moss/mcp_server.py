@@ -18,7 +18,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import shlex
 from io import StringIO
 from typing import Any
@@ -73,6 +72,7 @@ def _execute_command(command: str) -> dict[str, Any]:
     from contextlib import redirect_stderr, redirect_stdout
 
     from moss.cli import main as cli_main
+    from moss.output import reset_output
 
     # Parse command string into args
     try:
@@ -94,6 +94,9 @@ def _execute_command(command: str) -> dict[str, Any]:
         # Set up argv as if called from CLI
         sys.argv = ["moss", *args]
 
+        # Reset global output so it picks up redirected stdout
+        reset_output()
+
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             try:
                 exit_code = cli_main() or 0
@@ -105,6 +108,7 @@ def _execute_command(command: str) -> dict[str, Any]:
 
     finally:
         sys.argv = original_argv
+        reset_output()  # Reset again so future calls get fresh stdout
 
     stdout_text = stdout_capture.getvalue()
     stderr_text = stderr_capture.getvalue()
@@ -148,23 +152,28 @@ def create_server() -> Any:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """Handle tool calls."""
         if name != "moss":
-            return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+            return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
         command = arguments.get("command", "")
         if not command:
-            return [TextContent(type="text", text=json.dumps({"error": "No command provided"}))]
+            return [TextContent(type="text", text="No command provided")]
 
         result = _execute_command(command)
 
-        # Format output for LLM consumption
-        if result.get("exit_code", 0) == 0 and "output" in result:
-            # Success - return output directly (most common case)
-            text = _truncate_output(result["output"])
-        else:
-            # Error or mixed output - return structured result
-            text = json.dumps(result, separators=(",", ":"))
+        # Always return plain strings
+        output = result.get("output", "")
+        error = result.get("error", "")
 
-        return [TextContent(type="text", text=text)]
+        if error and output:
+            text = f"{output}\n{error}"
+        elif error:
+            text = error
+        elif output:
+            text = output
+        else:
+            text = "(no output)"
+
+        return [TextContent(type="text", text=_truncate_output(text))]
 
     return server
 
