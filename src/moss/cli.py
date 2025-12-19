@@ -353,8 +353,7 @@ def cmd_distros(args: Namespace) -> int:
 
 def cmd_skeleton(args: Namespace) -> int:
     """Extract code skeleton from a file or directory."""
-    from moss.plugins import get_registry
-    from moss.views import ViewOptions, ViewTarget
+    from moss import MossAPI
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -363,8 +362,7 @@ def cmd_skeleton(args: Namespace) -> int:
         output.error(f"Path {path} does not exist")
         return 1
 
-    results = []
-    registry = get_registry()
+    api = MossAPI.for_project(path if path.is_dir() else path.parent)
 
     if path.is_file():
         files = [path]
@@ -372,59 +370,36 @@ def cmd_skeleton(args: Namespace) -> int:
         pattern = args.pattern or "**/*.py"
         files = list(path.glob(pattern))
 
-    # Determine if we should include private symbols
-    include_private = not getattr(args, "public_only", False)
-    options = ViewOptions(include_private=include_private)
+    results = []
+    include_docstrings = not getattr(args, "no_docstrings", False)
 
-    async def render_file(file_path: Path) -> dict | None:
-        """Render skeleton for a single file."""
-        target = ViewTarget(path=file_path)
-        plugin = registry.find_plugin(target, "skeleton")
-
-        if plugin is None:
-            return {"file": str(file_path), "error": "No plugin found for this file type"}
-
-        view = await plugin.render(target, options)
-
-        if "error" in view.metadata:
-            return {"file": str(file_path), "error": view.metadata["error"]}
-
-        return {
-            "file": str(file_path),
-            "content": view.content,
-            "symbols": view.metadata.get("symbols", []),
-        }
-
-    # Run async rendering
-    async def render_all() -> list[dict]:
-        render_results = []
-        for file_path in files:
-            result = await render_file(file_path)
-            if result:
-                render_results.append(result)
-        return render_results
-
-    rendered = asyncio.run(render_all())
-
-    for result in rendered:
-        if "error" in result:
-            if getattr(args, "json", False):
-                results.append({"file": result["file"], "error": result["error"]})
-            else:
-                output.error(f"Error in {result['file']}: {result['error']}")
+    for file_path in files:
+        if wants_json(args):
+            # For JSON, extract symbols as structured data
+            try:
+                symbols = api.skeleton.extract(file_path)
+                results.append(
+                    {
+                        "file": str(file_path),
+                        "symbols": [s.to_dict() for s in symbols],
+                    }
+                )
+            except Exception as e:
+                results.append({"file": str(file_path), "error": str(e)})
         else:
-            if getattr(args, "json", False):
-                results.append({"file": result["file"], "symbols": result["symbols"]})
+            # For text output, use formatted skeleton
+            content = api.skeleton.format(file_path, include_docstrings=include_docstrings)
+            if content.startswith("Error:") or content.startswith("File not found:"):
+                output.error(f"{file_path}: {content}")
             else:
                 if len(files) > 1:
-                    output.header(result["file"])
-                content = result["content"]
+                    output.header(str(file_path))
                 if content:
                     output.print(content)
                 else:
                     output.verbose("(no symbols found)")
 
-    if getattr(args, "json", False):
+    if wants_json(args):
         output_result(results if len(results) > 1 else results[0] if results else {}, args)
 
     return 0
@@ -2325,7 +2300,7 @@ def cmd_mutate(args: Namespace) -> int:
 
 def cmd_check_refs(args: Namespace) -> int:
     """Check bidirectional references between code and docs."""
-    from moss.check_refs import RefChecker
+    from moss import MossAPI
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -2335,12 +2310,12 @@ def cmd_check_refs(args: Namespace) -> int:
         return 1
 
     staleness_days = getattr(args, "staleness_days", 30)
-    checker = RefChecker(root, staleness_days=staleness_days)
+    api = MossAPI.for_project(root)
 
     output.info(f"Checking references in {root.name}...")
 
     try:
-        result = checker.check()
+        result = api.ref_check.check(staleness_days=staleness_days)
     except Exception as e:
         output.error(f"Failed to check references: {e}")
         return 1
@@ -2365,7 +2340,7 @@ def cmd_check_refs(args: Namespace) -> int:
 
 def cmd_external_deps(args: Namespace) -> int:
     """Analyze external dependencies from pyproject.toml/requirements.txt."""
-    from moss.external_deps import ExternalDependencyAnalyzer
+    from moss import MossAPI
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -2374,7 +2349,7 @@ def cmd_external_deps(args: Namespace) -> int:
         output.error(f"Directory not found: {root}")
         return 1
 
-    analyzer = ExternalDependencyAnalyzer(root)
+    api = MossAPI.for_project(root)
     resolve = getattr(args, "resolve", False)
     warn_weight = getattr(args, "warn_weight", 0)
     check_vulns = getattr(args, "check_vulns", False)
@@ -2383,7 +2358,7 @@ def cmd_external_deps(args: Namespace) -> int:
     output.info(f"Analyzing dependencies in {root.name}...")
 
     try:
-        result = analyzer.analyze(
+        result = api.external_deps.analyze(
             resolve=resolve, check_vulns=check_vulns, check_licenses=check_licenses
         )
     except Exception as e:
@@ -2635,7 +2610,7 @@ def cmd_diff_preferences(args: Namespace) -> int:
 
 def cmd_git_hotspots(args: Namespace) -> int:
     """Find frequently changed files in git history."""
-    from moss.git_hotspots import analyze_hotspots
+    from moss import MossAPI
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -2647,8 +2622,9 @@ def cmd_git_hotspots(args: Namespace) -> int:
 
     output.info(f"Analyzing git history for {root.name} (last {days} days)...")
 
+    api = MossAPI.for_project(root)
     try:
-        analysis = analyze_hotspots(root, days=days)
+        analysis = api.git_hotspots.analyze(days=days)
     except Exception as e:
         output.error(f"Failed to analyze git history: {e}")
         return 1
@@ -3022,7 +2998,8 @@ def cmd_complexity(args: Namespace) -> int:
 
 def cmd_clones(args: Namespace) -> int:
     """Detect structural clones via AST hashing."""
-    from moss.clones import ElisionLevel, detect_clones, format_clone_analysis
+    from moss import MossAPI
+    from moss.clones import format_clone_analysis
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3035,8 +3012,9 @@ def cmd_clones(args: Namespace) -> int:
 
     output.info(f"Detecting clones in {root.name} (level {level})...")
 
+    api = MossAPI.for_project(root)
     try:
-        analysis = detect_clones(root, level=ElisionLevel(level), min_lines=min_lines)
+        analysis = api.clones.detect(level=level, min_lines=min_lines)
     except Exception as e:
         output.error(f"Failed to detect clones: {e}")
         return 1
@@ -3052,7 +3030,8 @@ def cmd_clones(args: Namespace) -> int:
 
 def cmd_security(args: Namespace) -> int:
     """Run security analysis with multiple tools."""
-    from moss.security import analyze_security, format_security_analysis
+    from moss import MossAPI
+    from moss.security import format_security_analysis
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3068,8 +3047,9 @@ def cmd_security(args: Namespace) -> int:
 
     output.info(f"Running security analysis on {root.name}...")
 
+    api = MossAPI.for_project(root)
     try:
-        analysis = analyze_security(root, tools=tools, min_severity=min_severity)
+        analysis = api.security.analyze(tools=tools, min_severity=min_severity)
     except Exception as e:
         output.error(f"Security analysis failed: {e}")
         return 1
@@ -3121,9 +3101,8 @@ def cmd_patterns(args: Namespace) -> int:
 
 def cmd_weaknesses(args: Namespace) -> int:
     """Identify architectural weaknesses and gaps in the codebase."""
+    from moss import MossAPI
     from moss.weaknesses import (
-        analyze_weaknesses,
-        format_weakness_analysis,
         format_weakness_fixes,
         get_fixable_weaknesses,
         weaknesses_to_sarif,
@@ -3146,8 +3125,9 @@ def cmd_weaknesses(args: Namespace) -> int:
 
     output.info(f"Analyzing architectural weaknesses in {root.name}...")
 
+    api = MossAPI.for_project(root)
     try:
-        analysis = analyze_weaknesses(root, categories=categories)
+        analysis = api.weaknesses.analyze(categories=categories)
     except Exception as e:
         output.error(f"Weakness analysis failed: {e}")
         return 1
@@ -3184,7 +3164,7 @@ def cmd_weaknesses(args: Namespace) -> int:
                 }
             )
         else:
-            output.print(format_weakness_analysis(analysis))
+            output.print(api.weaknesses.format(analysis))
             output.print("")
             output.print(format_weakness_fixes(fixes))
         return 0
@@ -3193,7 +3173,7 @@ def cmd_weaknesses(args: Namespace) -> int:
     if wants_json(args):
         output.data(analysis.to_dict())
     else:
-        output.print(format_weakness_analysis(analysis))
+        output.print(api.weaknesses.format(analysis))
 
     # Return non-zero if high severity issues found
     high_count = len(
@@ -3211,7 +3191,8 @@ def cmd_rag(args: Namespace) -> int:
     """Semantic search with RAG indexing."""
     import asyncio
 
-    from moss.rag import RAGIndex, format_search_results
+    from moss import MossAPI
+    from moss.rag import format_search_results
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3221,13 +3202,13 @@ def cmd_rag(args: Namespace) -> int:
         output.error(f"Directory not found: {root}")
         return 1
 
-    rag = RAGIndex(root)
+    api = MossAPI.for_project(root)
 
     if action == "index":
         output.info(f"Indexing {root.name}...")
         force = getattr(args, "force", False)
         try:
-            count = asyncio.run(rag.index(force=force))
+            count = asyncio.run(api.rag.index(force=force))
             output.success(f"Indexed {count} chunks")
             return 0
         except Exception as e:
@@ -3244,7 +3225,7 @@ def cmd_rag(args: Namespace) -> int:
         mode = getattr(args, "mode", "hybrid")
 
         try:
-            results = asyncio.run(rag.search(query, limit=limit, mode=mode))
+            results = asyncio.run(api.rag.search(query, limit=limit, mode=mode))
         except Exception as e:
             output.error(f"Search failed: {e}")
             return 1
@@ -3258,7 +3239,7 @@ def cmd_rag(args: Namespace) -> int:
 
     elif action == "stats":
         try:
-            stats = asyncio.run(rag.stats())
+            stats = asyncio.run(api.rag.stats())
         except Exception as e:
             output.error(f"Failed to get stats: {e}")
             return 1
@@ -3276,7 +3257,7 @@ def cmd_rag(args: Namespace) -> int:
 
     elif action == "clear":
         try:
-            asyncio.run(rag.clear())
+            asyncio.run(api.rag.clear())
             output.success("Index cleared")
             return 0
         except Exception as e:
@@ -3473,32 +3454,18 @@ def cmd_health(args: Namespace) -> int:
 
     output.info(f"Analyzing {root.name}...")
 
+    # Get filter args
+    focus = getattr(args, "focus", "all")
+    if focus == "all":
+        focus = None
+    severity = getattr(args, "severity", "low")
+
     try:
         api = MossAPI.for_project(root)
-        status = api.health.check()
+        status = api.health.check(focus=focus, severity=severity)
     except Exception as e:
         output.error(f"Failed to analyze project: {e}")
         return 1
-
-    # Filter by focus area
-    focus = getattr(args, "focus", "all")
-    if focus != "all":
-        focus_category_map = {
-            "deps": ["dependencies"],
-            "tests": ["tests"],
-            "complexity": ["complexity"],
-            "api": ["api"],
-        }
-        allowed = focus_category_map.get(focus, [])
-        status.weak_spots = [w for w in status.weak_spots if w.category in allowed]
-
-    # Filter by severity
-    severity = getattr(args, "severity", "low")
-    severity_order = {"low": 0, "medium": 1, "high": 2}
-    min_severity = severity_order.get(severity, 0)
-    status.weak_spots = [
-        w for w in status.weak_spots if severity_order.get(w.severity, 0) >= min_severity
-    ]
 
     # Output format
     compact = getattr(args, "compact", False)
@@ -3576,28 +3543,31 @@ def cmd_dwim(args: Namespace) -> int:
 
     DWIM = Do What I Mean. Describe what you want to do and get tool suggestions.
     """
-    from moss.dwim import analyze_intent, get_tool_info
+    from moss import MossAPI
 
     output = setup_output(args)
     query = getattr(args, "query", None)
     tool_name = getattr(args, "tool", None)
     top_k = getattr(args, "top", 5)
 
+    # DWIMAPI doesn't need a project root, but MossAPI requires one
+    api = MossAPI.for_project(Path.cwd())
+
     # Info mode: show details about a specific tool
     if tool_name:
-        info = get_tool_info(tool_name)
+        info = api.dwim.get_tool_info(tool_name)
         if info is None:
             output.error(f"Tool not found: {tool_name}")
             return 1
-        output.info(f"Tool: {info['name']}")
-        output.info(f"Description: {info['description']}")
-        if info.get("keywords"):
-            output.info(f"Keywords: {', '.join(info['keywords'])}")
-        if info.get("aliases"):
-            output.info(f"Aliases: {', '.join(info['aliases'])}")
-        if info.get("parameters"):
+        output.info(f"Tool: {info.name}")
+        output.info(f"Description: {info.description}")
+        if info.keywords:
+            output.info(f"Keywords: {', '.join(info.keywords)}")
+        if info.aliases:
+            output.info(f"Aliases: {', '.join(info.aliases)}")
+        if info.parameters:
             output.info("Parameters:")
-            for p in info["parameters"]:
+            for p in info.parameters:
                 output.info(f"  - {p}")
         return 0
 
@@ -3610,7 +3580,7 @@ def cmd_dwim(args: Namespace) -> int:
         output.info("  moss dwim --tool skeleton")
         return 1
 
-    results = analyze_intent(query)[:top_k]
+    results = api.dwim.analyze_intent(query, top_k=top_k)
 
     if not results:
         output.warning(f"No tools match: {query}")

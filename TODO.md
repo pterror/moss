@@ -6,15 +6,14 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 1. **Continue CLI Migration** - Migrate remaining CLI commands to MossAPI
    - Pattern: Replace `from moss.X import Y` with `MossAPI.for_project()`
-   - Priority: commonly used commands first
-   - 3 done (tree, complexity, health), ~50 remaining
+   - 12 done (tree, complexity, health, skeleton, clones, security, check_refs, git_hotspots, external_deps, weaknesses, rag, dwim)
+   - Priority next: anchors, cfg, deps, context
 
-2. **Filtering in API** - Move CLI filtering logic into HealthAPI
-   - `check(focus=..., severity=...)` parameters
-   - Reduces CLI complexity, enables generated CLI
+2. **find_related_files** - What files does a given file interact with?
+   - Use dependency graph + imports to find related modules
 
-3. **explain_symbol** - Show callers/callees for a function
-   - Use dependency analysis + search to find usages
+3. **Module summary** - "What does this module do?"
+   - Extract docstrings, public exports, key classes/functions
 
 ## Active Backlog
 
@@ -82,13 +81,12 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ### Dogfooding Observations (Dec 2025)
 - `skeleton_format` / `skeleton_expand` - very useful, genuinely saves tokens
 - `complexity_get_high_risk` - instant actionable data in one call
-- `search_find_symbols` - returns class names but misses functions with matching keywords (e.g., "fuzzy" found TestFuzzyMatching but not the fuzzy matching functions)
+- `search_find_symbols` - now recursively finds methods inside classes (fixed Dec 2025)
+- `explain_symbol` - shows callers/callees for a function (added Dec 2025)
 - Prompting issue: CLAUDE.md dogfooding section doesn't push hard enough for moss-first approach
 - `guessability_score` - evaluate codebase structure quality
 
 **Missing/wanted:**
-- `resolve_file` - DWIM for file names (added!)
-- `explain_symbol` - show callers/callees for a function
 - `find_related_files` - what files does this file interact with?
 - `search_by_keyword` - semantic search across functions, not just name matching
 - Module-level summary - "what does this module do?"

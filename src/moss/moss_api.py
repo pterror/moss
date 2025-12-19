@@ -17,7 +17,7 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -781,16 +781,52 @@ class HealthAPI:
 
     root: Path
 
-    def check(self) -> ProjectStatus:
-        """Run full health analysis on the project.
+    def check(
+        self,
+        focus: str | None = None,
+        severity: str = "low",
+    ) -> ProjectStatus:
+        """Run health analysis on the project.
+
+        Args:
+            focus: Filter weak spots by category. Valid values:
+                   "deps" - dependency issues only
+                   "tests" - test coverage issues only
+                   "complexity" - complexity issues only
+                   "api" - API surface issues only
+                   None or "all" - show all categories
+            severity: Minimum severity level to include. Valid values:
+                      "low" (default) - show all issues
+                      "medium" - show medium and high severity only
+                      "high" - show only high severity issues
 
         Returns:
-            ProjectStatus with health score, grade, and detailed metrics
+            ProjectStatus with health score, grade, and filtered weak spots
         """
         from moss.status import StatusChecker
 
         checker = StatusChecker(self.root)
-        return checker.check()
+        status = checker.check()
+
+        # Filter by focus area
+        if focus and focus != "all":
+            focus_category_map = {
+                "deps": ["dependencies"],
+                "tests": ["tests"],
+                "complexity": ["complexity"],
+                "api": ["api"],
+            }
+            allowed = focus_category_map.get(focus, [])
+            status.weak_spots = [w for w in status.weak_spots if w.category in allowed]
+
+        # Filter by severity
+        severity_order = {"low": 0, "medium": 1, "high": 2}
+        min_severity = severity_order.get(severity, 0)
+        status.weak_spots = [
+            w for w in status.weak_spots if severity_order.get(w.severity, 0) >= min_severity
+        ]
+
+        return status
 
     def summarize(self) -> ProjectSummary:
         """Generate a project summary.
@@ -1678,6 +1714,95 @@ class GrepResult:
 
 
 @dataclass
+class SymbolReference:
+    """A reference to a symbol (caller or callee).
+
+    Attributes:
+        name: The symbol name
+        file_path: File containing the reference
+        line_number: Line number of the reference
+        context: The line of code containing the reference
+    """
+
+    name: str
+    file_path: str
+    line_number: int
+    context: str
+
+    def to_compact(self) -> str:
+        """Return a compact string representation."""
+        return f"{self.file_path}:{self.line_number}: {self.context.strip()}"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return as dictionary."""
+        return {
+            "name": self.name,
+            "file": self.file_path,
+            "line": self.line_number,
+            "context": self.context.strip(),
+        }
+
+
+@dataclass
+class SymbolExplanation:
+    """Explanation of a symbol including its relationships.
+
+    Attributes:
+        name: Symbol name
+        kind: Symbol kind (function, class, method)
+        file_path: File where symbol is defined
+        line_number: Line number of definition
+        signature: Function/method signature if applicable
+        docstring: First line of docstring if present
+        callers: Places that call this symbol
+        callees: Symbols that this symbol calls
+    """
+
+    name: str
+    kind: str
+    file_path: str
+    line_number: int
+    signature: str | None = None
+    docstring: str | None = None
+    callers: list[SymbolReference] = field(default_factory=list)
+    callees: list[SymbolReference] = field(default_factory=list)
+
+    def to_compact(self) -> str:
+        """Return a compact string representation."""
+        lines = [f"{self.kind} {self.name} ({self.file_path}:{self.line_number})"]
+        if self.signature:
+            lines.append(f"  {self.signature}")
+        if self.docstring:
+            lines.append(f'  "{self.docstring}"')
+        if self.callers:
+            lines.append(f"  Called by ({len(self.callers)}):")
+            for c in self.callers[:5]:
+                lines.append(f"    - {c.to_compact()}")
+            if len(self.callers) > 5:
+                lines.append(f"    ... and {len(self.callers) - 5} more")
+        if self.callees:
+            lines.append(f"  Calls ({len(self.callees)}):")
+            for c in self.callees[:5]:
+                lines.append(f"    - {c.name}")
+            if len(self.callees) > 5:
+                lines.append(f"    ... and {len(self.callees) - 5} more")
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return as dictionary."""
+        return {
+            "name": self.name,
+            "kind": self.kind,
+            "file": self.file_path,
+            "line": self.line_number,
+            "signature": self.signature,
+            "docstring": self.docstring,
+            "callers": [c.to_dict() for c in self.callers],
+            "callees": [c.to_dict() for c in self.callees],
+        }
+
+
+@dataclass
 class FileMatch:
     """Result of resolving a file name with DWIM.
 
@@ -1738,6 +1863,45 @@ class SearchAPI:
         results: list[SymbolMatch] = []
         pattern = name.lower()
 
+        def check_symbol(sym: Any, rel_path: str) -> bool:
+            """Check if symbol matches and add to results. Returns True if limit reached."""
+            sym_name_lower = sym.name.lower()
+
+            # Check match
+            if fuzzy:
+                in_name = pattern in sym_name_lower
+                matched = in_name or fnmatch.fnmatch(sym_name_lower, f"*{pattern}*")
+            else:
+                matched = sym_name_lower == pattern
+
+            if matched:
+                # Filter by kind if specified
+                if not kind or sym.kind == kind:
+                    sig = ""
+                    if sym.kind in ("function", "method") and sym.signature:
+                        sig = sym.signature
+
+                    results.append(
+                        SymbolMatch(
+                            name=sym.name,
+                            kind=sym.kind,
+                            file_path=rel_path,
+                            line=sym.lineno,
+                            signature=sig,
+                        )
+                    )
+
+                    if len(results) >= limit:
+                        return True
+
+            # Recurse into children (methods in classes, nested functions)
+            if sym.children:
+                for child in sym.children:
+                    if check_symbol(child, rel_path):
+                        return True
+
+            return False
+
         # Find all Python files
         for py_file in self.root.rglob("*.py"):
             # Skip hidden dirs, venv, etc
@@ -1752,41 +1916,12 @@ class SearchAPI:
             except Exception:
                 continue
 
+            rel_path = str(py_file.relative_to(self.root))
             for sym in symbols:
-                sym_name_lower = sym.name.lower()
-
-                # Check match
-                if fuzzy:
-                    in_name = pattern in sym_name_lower
-                    matched = in_name or fnmatch.fnmatch(sym_name_lower, f"*{pattern}*")
-                else:
-                    matched = sym_name_lower == pattern
-
-                if not matched:
-                    continue
-
-                # Filter by kind if specified
-                if kind and sym.kind != kind:
-                    continue
-
-                # Build signature for functions/methods
-                sig = ""
-                if sym.kind in ("function", "method") and sym.signature:
-                    sig = sym.signature
-
-                rel_path = str(py_file.relative_to(self.root))
-                results.append(
-                    SymbolMatch(
-                        name=sym.name,
-                        kind=sym.kind,
-                        file_path=rel_path,
-                        line=sym.lineno,
-                        signature=sig,
-                    )
-                )
-
-                if len(results) >= limit:
-                    return results
+                if check_symbol(sym, rel_path):
+                    break
+            if len(results) >= limit:
+                break
 
         # Sort by relevance: exact matches first, then by name length
         results.sort(key=lambda m: (m.name.lower() != pattern, len(m.name), m.name))
@@ -2088,6 +2223,147 @@ class SearchAPI:
             return FileMatch(path=best_match, confidence=best_score, message=msg)
 
         return FileMatch(path=name, confidence=0.0, message="no match found")
+
+    def explain_symbol(
+        self,
+        name: str,
+        file_path: str | None = None,
+    ) -> SymbolExplanation | None:
+        """Explain a symbol: show its definition, callers, and callees.
+
+        Finds where a symbol is defined, what calls it, and what it calls.
+        Useful for understanding code relationships and impact of changes.
+
+        Args:
+            name: Symbol name to explain (function, class, or method)
+            file_path: Optional file path to narrow down the search
+
+        Returns:
+            SymbolExplanation with callers and callees, or None if not found
+
+        Example:
+            explanation = api.search.explain_symbol("process_request")
+            print(f"Called by: {len(explanation.callers)} functions")
+            print(f"Calls: {len(explanation.callees)} functions")
+        """
+        import ast
+
+        # Find the symbol definition
+        definitions = self.find_definitions(name)
+        if file_path:
+            definitions = [d for d in definitions if d.file_path == file_path]
+
+        if not definitions:
+            return None
+
+        # Use first definition (could enhance to handle multiple)
+        defn = definitions[0]
+
+        # Read the source file to get more info
+        source_path = self._resolve_path(defn.file_path)
+        try:
+            source = source_path.read_text()
+        except (OSError, UnicodeDecodeError):
+            source = ""
+
+        # Extract signature and docstring from AST
+        signature = None
+        docstring = None
+        callees: list[SymbolReference] = []
+
+        if source:
+            try:
+                tree = ast.parse(source)
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        if node.name == name:
+                            # Build signature
+                            args = []
+                            for arg in node.args.args:
+                                args.append(arg.arg)
+                            signature = f"def {name}({', '.join(args)})"
+
+                            # Get docstring
+                            ds = ast.get_docstring(node)
+                            if ds:
+                                docstring = ds.split("\n")[0]
+
+                            # Find callees (function calls within this function)
+                            for child in ast.walk(node):
+                                if isinstance(child, ast.Call):
+                                    callee_name = None
+                                    if isinstance(child.func, ast.Name):
+                                        callee_name = child.func.id
+                                    elif isinstance(child.func, ast.Attribute):
+                                        callee_name = child.func.attr
+
+                                    if callee_name and callee_name != name:
+                                        callees.append(
+                                            SymbolReference(
+                                                name=callee_name,
+                                                file_path=defn.file_path,
+                                                line_number=child.lineno,
+                                                context=f"calls {callee_name}",
+                                            )
+                                        )
+                            break
+                    elif isinstance(node, ast.ClassDef):
+                        if node.name == name:
+                            signature = f"class {name}"
+                            ds = ast.get_docstring(node)
+                            if ds:
+                                docstring = ds.split("\n")[0]
+                            break
+            except SyntaxError:
+                pass
+
+        # Deduplicate callees by name
+        seen_callees: set[str] = set()
+        unique_callees: list[SymbolReference] = []
+        for c in callees:
+            if c.name not in seen_callees:
+                seen_callees.add(c.name)
+                unique_callees.append(c)
+
+        # Find callers (usages of this symbol, excluding definition)
+        callers: list[SymbolReference] = []
+        usages = self.find_usages(name, exclude_definitions=True, limit=50)
+
+        for match in usages.matches:
+            # Try to identify the containing function
+            caller_name = "unknown"
+            try:
+                caller_path = self._resolve_path(match.file_path)
+                caller_source = caller_path.read_text()
+                caller_tree = ast.parse(caller_source)
+
+                for node in ast.walk(caller_tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        if node.lineno <= match.line_number <= node.end_lineno:
+                            caller_name = node.name
+                            break
+            except (OSError, SyntaxError, UnicodeDecodeError):
+                pass
+
+            callers.append(
+                SymbolReference(
+                    name=caller_name,
+                    file_path=match.file_path,
+                    line_number=match.line_number,
+                    context=match.line_content,
+                )
+            )
+
+        return SymbolExplanation(
+            name=name,
+            kind=defn.kind,
+            file_path=defn.file_path,
+            line_number=defn.line,
+            signature=signature,
+            docstring=docstring,
+            callers=callers,
+            callees=unique_callees,
+        )
 
     def _resolve_path(self, file_path: str | Path) -> Path:
         """Resolve a file path relative to the project root."""

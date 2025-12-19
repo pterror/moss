@@ -912,13 +912,35 @@
     },
     "/health/check": {
       "get": {
-        "description": "Run full health analysis on the project. ProjectStatus with health score, grade, and detailed metrics",
+        "description": "Run health analysis on the project. ProjectStatus with health score, grade, and filtered weak spots",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "focus": {
+                    "description": "Filter weak spots by category. Valid values: \"deps\" - dependency issues only \"tests\" - test coverage issues only \"complexity\" - complexity issues only \"api\" - API surface issues only None or \"all\" - show all categories",
+                    "type": "string"
+                  },
+                  "severity": {
+                    "default": "low",
+                    "description": "Minimum severity level to include. Valid values: \"low\" (default) - show all issues \"medium\" - show medium and high severity only \"high\" - show only high severity issues",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful response"
           }
         },
-        "summary": "Run full health analysis on the project",
+        "summary": "Run health analysis on the project",
         "tags": [
           "health"
         ]
@@ -1265,6 +1287,43 @@
         "summary": "Check only documentation-to-code references",
         "tags": [
           "ref_check"
+        ]
+      }
+    },
+    "/search/explain-symbol": {
+      "post": {
+        "description": "Explain a symbol: show its definition, callers, and callees. Finds where a symbol is defined, what calls it, and what it calls. Useful for understanding code relationships and impact of changes. SymbolExplanation with callers and callees, or None if not found explanation = api.search.explain_symbol(\"process_request\") print(f\"Called by: {len(explanation.callers)} functions\") print(f\"Calls: {len(explanation.callees)} functions\")",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "file_path": {
+                    "description": "Optional file path to narrow down the search",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Symbol name to explain (function, class, or method)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Explain a symbol: show its definition, callers, and callees",
+        "tags": [
+          "search"
         ]
       }
     },

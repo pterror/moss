@@ -2,18 +2,29 @@
 
 ## v0.6.5
 
-### Phase 34: Module DWIM, CLI Migration
+### Phase 34: Module DWIM, CLI Migration, explain_symbol
 
 **SearchAPI** (Dec 2025)
 - `search_resolve_file` - DWIM for file names with fuzzy matching
+- `search_explain_symbol` - Show callers/callees for any symbol
+- `search_find_symbols` - Now recursively finds methods inside classes
 - Handles: typos, missing extensions, partial paths, case-insensitive
 - Prefers non-test files and shorter paths
 
+**HealthAPI Filtering**
+- `health_check(focus=..., severity=...)` - Filter weak spots in API
+- Moved filtering logic from CLI into HealthAPI
+- Enables targeted health checks (e.g., only high-severity deps issues)
+
 **CLI Migration to MossAPI**
-- Started migrating CLI commands to use MossAPI
-- Migrated: `cmd_tree`, `cmd_complexity`, `cmd_health`
+- 12 commands now use MossAPI (was 3)
+- Newly migrated: skeleton, clones, security, check_refs, git_hotspots, external_deps, weaknesses, rag, dwim
 - Pattern: Replace direct imports with `MossAPI.for_project()`
 - Reduces duplication, enables generated CLI
+
+**Working Style Convention**
+- Added CLAUDE.md guidance: work through ALL "Next Up" items by default
+- Sessions should complete the full roadmap section
 
 **MCP Server Improvements**
 - Lists with `to_compact()` items now call it (was losing info)

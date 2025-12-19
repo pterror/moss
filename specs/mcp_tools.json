@@ -504,7 +504,17 @@
   {
     "description": "Show project health and what needs attention. Example: moss health",
     "inputSchema": {
-      "properties": {},
+      "properties": {
+        "focus": {
+          "description": "Filter weak spots by category. Valid values: \"deps\" - dependency issues only \"tests\" - test coverage issues only \"complexity\" - complexity issues only \"api\" - API surface issues only None or \"all\" - show all categories",
+          "type": "string"
+        },
+        "severity": {
+          "default": "low",
+          "description": "Minimum severity level to include. Valid values: \"low\" (default) - show all issues \"medium\" - show medium and high severity only \"high\" - show only high severity issues",
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "name": "health_check"
@@ -1013,6 +1023,26 @@
       "type": "object"
     },
     "name": "web_search"
+  },
+  {
+    "description": "Explain a symbol: show its definition, callers, and callees. Finds where a symbol is defined, what calls it, and what it calls. Useful for understanding code relationships and impact of changes. SymbolExplanation with callers and callees, or None if not found explanation = api.search.explain_symbol(\"process_request\") print(f\"Called by: {len(explanation.callers)} functions\") print(f\"Calls: {len(explanation.callees)} functions\")",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Optional file path to narrow down the search",
+          "type": "string"
+        },
+        "name": {
+          "description": "Symbol name to explain (function, class, or method)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "search_explain_symbol"
   },
   {
     "description": "Find where a symbol is defined. Shortcut for find_symbols with exact matching. List of SymbolMatch objects for definitions",

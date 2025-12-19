@@ -88,7 +88,8 @@ Keep TODO.md lean (<100 lines). Move completed items to CHANGELOG.md.
 
 ### Working Style
 
-Start by checking TODO.md. Propose a work queue, get confirmation, work autonomously.
+Start by checking TODO.md. Default: work through ALL items in "Next Up" unless user specifies otherwise.
+Propose work queue, get confirmation, then work autonomously through all tasks.
 
 Agentic by default - continue through tasks unless:
 - Genuinely blocked and need clarification
