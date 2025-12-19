@@ -4,10 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Tune DWIM keywords** - "structure" should → `summarize`, not `skeleton`
-2. **Test MCP dogfooding** - Use moss MCP in real tasks, note friction points
-3. **Skeleton levels** - Consider `--compact` flag or tiered output
-4. **Continue CLI Migration** - Migrate remaining CLI commands to MossAPI
+1. **Test MCP dogfooding** - Use moss MCP in real tasks, note friction points
+2. **Skeleton levels** - Consider `--compact` flag or tiered output
+3. **Continue CLI Migration** - Migrate remaining CLI commands to MossAPI
 
 ## Active Backlog
 
@@ -17,7 +16,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
 - [ ] Revisit CLAUDE.md dogfooding section - tools should be self-evident, not need instructions
 - [x] MCP DWIM: route natural language to `dwim` command, only use exact CLI syntax as fallback
-- [ ] Tune DWIM: "structure" → `summarize` first, `skeleton` for details
+- [x] Tune DWIM: "structure" → `summarize` first, `skeleton` for details
 
 **Medium:**
 - [ ] Compact tool encoding for moss agent - bypass JSON Schema overhead
