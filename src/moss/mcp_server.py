@@ -139,12 +139,7 @@ def create_server() -> Any:
                 ),
                 inputSchema={
                     "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "The moss command to run (without 'moss' prefix)",
-                        },
-                    },
+                    "properties": {"command": {"type": "string"}},
                     "required": ["command"],
                 },
             )
