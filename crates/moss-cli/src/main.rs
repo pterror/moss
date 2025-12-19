@@ -11,6 +11,7 @@ mod health;
 mod index;
 mod path_resolve;
 mod skeleton;
+mod summarize;
 mod symbols;
 mod tree;
 
@@ -271,6 +272,16 @@ enum Commands {
         #[arg(short, long)]
         root: Option<PathBuf>,
     },
+
+    /// Summarize what a module does
+    Summarize {
+        /// File to summarize
+        file: String,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -327,6 +338,7 @@ fn main() {
         }
         Commands::Daemon { action, root } => cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Health { root } => cmd_health(root.as_deref(), cli.json, &mut profiler),
+        Commands::Summarize { file, root } => cmd_summarize(&file, root.as_deref(), cli.json),
     };
 
     profiler.mark("done");
@@ -1351,6 +1363,64 @@ fn cmd_health(root: Option<&Path>, json: bool, profiler: &mut Profiler) -> i32 {
         );
     } else {
         println!("{}", report.format());
+    }
+
+    0
+}
+
+fn cmd_summarize(file: &str, root: Option<&Path>, json: bool) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    // Resolve the file
+    let matches = path_resolve::resolve(file, &root);
+    let file_match = match matches.iter().find(|m| m.kind == "file") {
+        Some(m) => m,
+        None => {
+            eprintln!("File not found: {}", file);
+            return 1;
+        }
+    };
+
+    let file_path = root.join(&file_match.path);
+    let content = match std::fs::read_to_string(&file_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading file: {}", e);
+            return 1;
+        }
+    };
+
+    let summary = summarize::summarize_module(&file_path, &content);
+
+    if json {
+        let exports: Vec<_> = summary
+            .main_exports
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "name": e.name,
+                    "kind": e.kind,
+                    "signature": e.signature,
+                    "docstring": e.docstring
+                })
+            })
+            .collect();
+
+        println!(
+            "{}",
+            serde_json::json!({
+                "file": file_match.path,
+                "module_name": summary.module_name,
+                "purpose": summary.purpose,
+                "exports": exports,
+                "dependencies": summary.dependencies,
+                "line_count": summary.line_count
+            })
+        );
+    } else {
+        println!("{}", summary.format());
     }
 
     0
