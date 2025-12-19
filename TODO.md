@@ -14,11 +14,10 @@ See `~/git/prose/moss/` for full synthesis design documents.
    - Requires LLM output parsing (FUNC:name|docstring format)
    - File: `src/moss/agent_loop.py`
 
-2. **Multi-LLM rotation** (small) - Add provider rotation to LLMConfig
+2. ~~**Multi-LLM rotation**~~ ✅ - Added to LLMConfig
    - `models: list[str]` field for rotation pool
    - `rotation: "round_robin" | "random" | None` field
-   - Implement in LLMToolExecutor._call_litellm
-   - Test with Gemini + GPT-4
+   - 5 new tests (46 total)
 
 3. **MCP client for loops** (medium) - Let loops call external MCP servers
    - Would enable loops to use filesystem, git, browser tools
@@ -45,14 +44,9 @@ See `~/git/prose/moss/` for full synthesis design documents.
   - Subagents proposing step reordering, tool substitutions
   - Works for LLM-heavy and tool-heavy workflows alike
   - Requires careful human review to avoid runaway changes
-- [ ] **Multi-LLM rotation to reduce bias** - Switch providers periodically
-  - Model-specific biases accumulate when using one LLM exclusively
-  - Rotate between Claude/Gemini/GPT for different tasks or sessions
-  - Applies at multiple levels: main agent, sub-agents, critic loops
-  - Could be random, round-robin, or task-type based
-  - Option to pin a single model when consistency matters
-  - litellm already supports this - just need rotation logic
-  - See MCP client SDK: https://modelcontextprotocol.io/
+- [x] ~~**Multi-LLM rotation to reduce bias**~~ ✅ - Implemented in LLMConfig
+  - `models: list[str]` + `rotation: "round_robin" | "random" | None`
+  - 5 tests covering rotation strategies
 
 **Deferred:**
 - Add missing CLI APIs → after loop work validates architecture
