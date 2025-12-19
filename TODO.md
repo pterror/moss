@@ -8,17 +8,9 @@ See `~/git/prose/moss/` for full synthesis design documents.
 
 **For next session:**
 
-1. **Token-efficient web search** (small) - Reduce tokens when doing research
-   - Current approach burns context on search results
-   - Consider: summarize in smaller chunks, cache results, extract key facts only
-
-2. **Loop serialization** (small) - Save/load loops as YAML/JSON
-   - Enable sharing loop definitions
-   - Allow loops to be version controlled
-
-3. **Hybrid loop example** (small) - Demo using CompositeToolExecutor
-   - Create a loop that uses both MossAPI and external MCP tools
-   - Document the pattern in docs/
+1. **Recursive self-improvement for moss workflows** (medium) - Loops that improve other loops
+   - Not just CLAUDE.md - any workflow can be a target
+   - Critic loop reviewing loop definitions for inefficiencies
 
 **Continue autonomously** - Keep picking up tasks from Backlog.
 
@@ -30,9 +22,7 @@ See `~/git/prose/moss/` for full synthesis design documents.
   - Tested E2E with moss MCP server (58 tools accessible)
 - [x] ~~**Multi-LLM rotation to reduce bias**~~ ✅ - Implemented in LLMConfig
   - `models: list[str]` + `rotation: "round_robin" | "random" | None`
-- [ ] **Token-efficient web search** - Reduce tokens when doing research
-  - Current approach burns context on search results
-  - Consider: summarize in smaller chunks, cache results, extract key facts only
+- [x] ~~**Token-efficient web search**~~ ✅ - `src/moss/web.py` module with caching, content extraction
 - [ ] **Recursive self-improvement for moss workflows** - Loops that improve other loops
   - Not just CLAUDE.md - any workflow can be a target
   - Critic loop reviewing loop definitions for inefficiencies
@@ -47,6 +37,24 @@ See `~/git/prose/moss/` for full synthesis design documents.
 ---
 
 **Completed this session (Dec 19, 2025):**
+- [x] **Skeleton expand symbol** - `expand_symbol()` and `get_enum_values()` functions
+  - Added to `src/moss/skeleton.py` and exposed via `SkeletonAPI.expand()`
+  - Addresses blind spot: skeleton shows enum names but not values
+- [x] **Token-efficient web search** - `src/moss/web.py` module
+  - `WebFetcher` - Fetch with HTML extraction, caching
+  - `WebSearcher` - DuckDuckGo search with token-efficient results
+  - `ContentExtractor` - Strip nav/footer/script, extract main content
+  - `WebAPI` added to MossAPI for integration
+  - 11 tests in `tests/test_web.py`
+- [x] **Hybrid loop example** - Demo using CompositeToolExecutor
+  - `examples/hybrid_loop.py` - Working example with MossAPI + LLM tools
+  - `docs/hybrid-loops.md` - Documentation for the pattern
+  - Shows prefix-based routing, MCP integration, serialization
+- [x] **Loop serialization** - Save/load loops as YAML/JSON
+  - `LoopStep.to_dict()`/`from_dict()`, `AgentLoop.to_dict()`/`from_dict()`
+  - `LLMConfig` and `MCPServerConfig` serialization
+  - Top-level `dump_loop_json/yaml()` and `load_loop_json/yaml()` functions
+  - 15 new tests (93 total in test_agent_loop.py)
 - [x] **Loop tests** - 78 tests in `tests/test_agent_loop.py`
 - [x] **CLI integration** - `moss loop list/run/benchmark` commands
 - [x] **E2E loops** - analysis + docstring loops working with real Gemini

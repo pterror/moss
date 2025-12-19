@@ -6,9 +6,11 @@ Track them separately and optimize for fewer LLM calls.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -48,6 +50,35 @@ class LoopStep:
     def __post_init__(self) -> None:
         if self.on_error == ErrorAction.GOTO and not self.goto_target:
             raise ValueError("GOTO action requires goto_target")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "tool": self.tool,
+            "step_type": self.step_type.name.lower(),
+            "input_from": self.input_from,
+            "on_error": self.on_error.name.lower(),
+            "goto_target": self.goto_target,
+            "max_retries": self.max_retries,
+            "timeout_seconds": self.timeout_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LoopStep:
+        """Create from dictionary."""
+        step_type_str = data.get("step_type", "tool")
+        on_error_str = data.get("on_error", "abort")
+        return cls(
+            name=data["name"],
+            tool=data["tool"],
+            step_type=StepType[step_type_str.upper()],
+            input_from=data.get("input_from"),
+            on_error=ErrorAction[on_error_str.upper()],
+            goto_target=data.get("goto_target"),
+            max_retries=data.get("max_retries", 3),
+            timeout_seconds=data.get("timeout_seconds"),
+        )
 
 
 @dataclass
@@ -90,6 +121,31 @@ class AgentLoop:
         for step in self.steps:
             if step.goto_target and step.goto_target not in name_set:
                 raise ValueError(f"GOTO target '{step.goto_target}' not found")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "steps": [s.to_dict() for s in self.steps],
+            "entry": self.entry,
+            "exit_conditions": self.exit_conditions,
+            "max_steps": self.max_steps,
+            "token_budget": self.token_budget,
+            "timeout_seconds": self.timeout_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AgentLoop:
+        """Create from dictionary."""
+        return cls(
+            name=data["name"],
+            steps=[LoopStep.from_dict(s) for s in data["steps"]],
+            entry=data.get("entry"),
+            exit_conditions=data.get("exit_conditions", []),
+            max_steps=data.get("max_steps", 10),
+            token_budget=data.get("token_budget"),
+            timeout_seconds=data.get("timeout_seconds"),
+        )
 
 
 @dataclass
@@ -934,6 +990,25 @@ class MCPServerConfig:
     cwd: str | None = None
     env: dict[str, str] | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "command": self.command,
+            "args": self.args,
+            "cwd": self.cwd,
+            "env": self.env,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MCPServerConfig:
+        """Create from dictionary."""
+        return cls(
+            command=data["command"],
+            args=data.get("args", []),
+            cwd=data.get("cwd"),
+            env=data.get("env"),
+        )
+
 
 class MCPToolExecutor(ToolExecutor):
     """Execute tools via MCP client connections.
@@ -1164,6 +1239,36 @@ class LLMConfig:
         "For analysis: short bullet points, max 5 items, no code."
     )
     mock: bool = False  # Set True for testing without API calls
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "model": self.model,
+            "models": self.models,
+            "rotation": self.rotation,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "system_prompt": self.system_prompt,
+            "mock": self.mock,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LLMConfig:
+        """Create from dictionary."""
+        return cls(
+            model=data.get("model", "gemini/gemini-3-flash-preview"),
+            models=data.get("models", []),
+            rotation=data.get("rotation"),
+            temperature=data.get("temperature", 0.0),
+            max_tokens=data.get("max_tokens"),
+            system_prompt=data.get(
+                "system_prompt",
+                "Be terse. No preamble, no summary, no markdown formatting. "
+                "Plain text only - no bold, no headers, no code blocks unless asked. "
+                "For analysis: short bullet points, max 5 items, no code.",
+            ),
+            mock=data.get("mock", False),
+        )
 
 
 def _load_dotenv() -> bool:
@@ -1577,3 +1682,104 @@ def print_comparison(results: list[BenchmarkResult]) -> str:
     lines.append(f"Winner (fewest LLM calls): **{sorted_results[0].loop_name}**")
 
     return "\n".join(lines)
+
+
+# ============================================================================
+# Loop Serialization (YAML/JSON)
+# ============================================================================
+
+
+def dump_loop_json(loop: AgentLoop, path: str | Path | None = None) -> str:
+    """Serialize a loop to JSON.
+
+    Args:
+        loop: The loop to serialize
+        path: Optional file path to write to
+
+    Returns:
+        JSON string representation
+    """
+    data = loop.to_dict()
+    json_str = json.dumps(data, indent=2)
+    if path:
+        Path(path).write_text(json_str)
+    return json_str
+
+
+def load_loop_json(source: str | Path) -> AgentLoop:
+    """Load a loop from JSON.
+
+    Args:
+        source: JSON string or path to JSON file
+
+    Returns:
+        AgentLoop instance
+    """
+    # If it's a Path object, read from file
+    if isinstance(source, Path):
+        data = json.loads(source.read_text())
+    # If it's a string that looks like a path (no newlines, exists)
+    elif "\n" not in source and len(source) < 500:
+        path = Path(source)
+        if path.exists():
+            data = json.loads(path.read_text())
+        else:
+            data = json.loads(source)
+    else:
+        data = json.loads(source)
+    return AgentLoop.from_dict(data)
+
+
+def dump_loop_yaml(loop: AgentLoop, path: str | Path | None = None) -> str:
+    """Serialize a loop to YAML.
+
+    Requires PyYAML (optional dependency).
+
+    Args:
+        loop: The loop to serialize
+        path: Optional file path to write to
+
+    Returns:
+        YAML string representation
+    """
+    try:
+        import yaml
+    except ImportError as e:
+        raise ImportError("PyYAML required for YAML serialization: pip install pyyaml") from e
+
+    data = loop.to_dict()
+    yaml_str = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    if path:
+        Path(path).write_text(yaml_str)
+    return yaml_str
+
+
+def load_loop_yaml(source: str | Path) -> AgentLoop:
+    """Load a loop from YAML.
+
+    Requires PyYAML (optional dependency).
+
+    Args:
+        source: YAML string or path to YAML file
+
+    Returns:
+        AgentLoop instance
+    """
+    try:
+        import yaml
+    except ImportError as e:
+        raise ImportError("PyYAML required for YAML serialization: pip install pyyaml") from e
+
+    # If it's a Path object, read from file
+    if isinstance(source, Path):
+        data = yaml.safe_load(source.read_text())
+    # If it's a string that looks like a path (no newlines, exists)
+    elif "\n" not in source and len(source) < 500:
+        path = Path(source)
+        if path.exists():
+            data = yaml.safe_load(path.read_text())
+        else:
+            data = yaml.safe_load(source)
+    else:
+        data = yaml.safe_load(source)
+    return AgentLoop.from_dict(data)

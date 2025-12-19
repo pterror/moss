@@ -121,6 +121,50 @@ class SkeletonAPI:
             # No running loop - just use asyncio.run
             return asyncio.run(render())
 
+    def expand(self, file_path: str | Path, symbol_name: str) -> str | None:
+        """Get the full source code of a named symbol.
+
+        Useful for getting complete enum definitions, class bodies, or function
+        implementations when the skeleton isn't enough.
+
+        Args:
+            file_path: Path to the Python file
+            symbol_name: Name of the symbol to expand (e.g., "StepType", "my_function")
+
+        Returns:
+            Full source code of the symbol, or None if not found
+
+        Example:
+            # Get full enum definition
+            content = api.skeleton.expand("src/agent_loop.py", "StepType")
+            # Returns complete enum with all values
+        """
+        from moss.skeleton import expand_symbol
+
+        path = self._resolve_path(file_path)
+        source = path.read_text()
+        return expand_symbol(source, symbol_name)
+
+    def get_enum_values(self, file_path: str | Path, enum_name: str) -> list[str] | None:
+        """Extract enum member names from an Enum class.
+
+        Args:
+            file_path: Path to the Python file
+            enum_name: Name of the Enum class
+
+        Returns:
+            List of enum member names, or None if not found
+
+        Example:
+            values = api.skeleton.get_enum_values("src/agent_loop.py", "StepType")
+            # Returns: ["TOOL", "LLM", "HYBRID"]
+        """
+        from moss.skeleton import get_enum_values
+
+        path = self._resolve_path(file_path)
+        source = path.read_text()
+        return get_enum_values(source, enum_name)
+
     def _resolve_path(self, file_path: str | Path) -> Path:
         path = Path(file_path)
         if not path.is_absolute():
@@ -1316,6 +1360,125 @@ class WeaknessesAPI:
 
 
 @dataclass
+class WebAPI:
+    """API for token-efficient web fetching and search.
+
+    Provides web content extraction optimized for LLM context.
+    Strips HTML noise, extracts main content, caches results.
+
+    Example:
+        api = MossAPI.for_project(".")
+        content = await api.web.fetch("https://docs.python.org/3/")
+        print(f"Tokens: ~{content.token_estimate}")
+
+        results = await api.web.search("python asyncio tutorial")
+        print(results.to_compact())
+    """
+
+    root: Path
+    _fetcher: Any = None
+    _searcher: Any = None
+
+    def _get_fetcher(self) -> Any:
+        """Get or create the web fetcher."""
+        if self._fetcher is None:
+            from moss.web import WebFetcher
+
+            self._fetcher = WebFetcher()
+        return self._fetcher
+
+    def _get_searcher(self) -> Any:
+        """Get or create the web searcher."""
+        if self._searcher is None:
+            from moss.web import WebSearcher
+
+            self._searcher = WebSearcher()
+        return self._searcher
+
+    async def fetch(
+        self,
+        url: str,
+        *,
+        use_cache: bool = True,
+        extract_main: bool = True,
+    ) -> dict[str, Any]:
+        """Fetch and extract content from URL.
+
+        Args:
+            url: URL to fetch
+            use_cache: Check cache first (default: True)
+            extract_main: Extract main content vs full page (default: True)
+
+        Returns:
+            Dict with url, title, text, token_estimate, metadata
+        """
+        fetcher = self._get_fetcher()
+        content = await fetcher.fetch(url, use_cache=use_cache, extract_main=extract_main)
+        return {
+            "url": content.url,
+            "title": content.title,
+            "text": content.text,
+            "token_estimate": content.token_estimate,
+            "metadata": content.metadata,
+        }
+
+    async def search(
+        self,
+        query: str,
+        max_results: int = 5,
+    ) -> dict[str, Any]:
+        """Search the web with token-efficient results.
+
+        Args:
+            query: Search query
+            max_results: Maximum number of results (default: 5)
+
+        Returns:
+            Dict with query, results list, and compact string representation
+        """
+        from moss.web import WebSearcher
+
+        searcher = WebSearcher(max_results=max_results)
+        results = await searcher.search(query)
+        return {
+            "query": results.query,
+            "results": [r.to_dict() for r in results.results],
+            "total": results.total,
+            "compact": results.to_compact(),
+            "token_estimate": results.token_estimate,
+        }
+
+    def extract_content(self, html: str, url: str = "") -> dict[str, Any]:
+        """Extract clean content from HTML string.
+
+        Args:
+            html: Raw HTML content
+            url: Optional URL for metadata
+
+        Returns:
+            Dict with title, text, token_estimate, metadata
+        """
+        from moss.web import extract_content
+
+        content = extract_content(html, url)
+        return {
+            "url": content.url,
+            "title": content.title,
+            "text": content.text,
+            "token_estimate": content.token_estimate,
+            "metadata": content.metadata,
+        }
+
+    def clear_cache(self) -> int:
+        """Clear the web content cache.
+
+        Returns:
+            Number of cached items cleared
+        """
+        fetcher = self._get_fetcher()
+        return fetcher.cache.clear()
+
+
 class RAGAPI:
     """API for RAG (Retrieval-Augmented Generation) semantic search.
 
@@ -1635,6 +1798,7 @@ class MossAPI:
     _external_deps: ExternalDepsAPI | None = None
     _weaknesses: WeaknessesAPI | None = None
     _rag: RAGAPI | None = None
+    _web: WebAPI | None = None
 
     @classmethod
     def for_project(cls, path: str | Path) -> MossAPI:
@@ -1787,6 +1951,13 @@ class MossAPI:
         if self._rag is None:
             self._rag = RAGAPI(root=self.root)
         return self._rag
+
+    @property
+    def web(self) -> WebAPI:
+        """Access token-efficient web fetching and search."""
+        if self._web is None:
+            self._web = WebAPI(root=self.root)
+        return self._web
 
 
 # Convenience alias

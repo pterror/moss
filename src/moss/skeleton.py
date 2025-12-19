@@ -248,6 +248,89 @@ def extract_python_skeleton(source: str, include_private: bool = False) -> list[
     return extractor.symbols
 
 
+def expand_symbol(source: str, symbol_name: str) -> str | None:
+    """Get the full source code of a named symbol.
+
+    Useful for getting complete enum definitions, class bodies, or function
+    implementations when the skeleton isn't enough.
+
+    Args:
+        source: Python source code
+        symbol_name: Name of the symbol to expand (e.g., "StepType", "my_function")
+
+    Returns:
+        Full source code of the symbol, or None if not found
+
+    Example:
+        # Get full enum definition
+        content = expand_symbol(source, "StepType")
+        # Returns:
+        # class StepType(Enum):
+        #     TOOL = auto()
+        #     LLM = auto()
+        #     HYBRID = auto()
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+
+    lines = source.splitlines()
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name == symbol_name:
+                start = node.lineno - 1
+                end = node.end_lineno or node.lineno
+                return "\n".join(lines[start:end])
+
+    return None
+
+
+def get_enum_values(source: str, enum_name: str) -> list[str] | None:
+    """Extract enum member names from an Enum class.
+
+    Args:
+        source: Python source code
+        enum_name: Name of the Enum class
+
+    Returns:
+        List of enum member names, or None if not found
+
+    Example:
+        values = get_enum_values(source, "StepType")
+        # Returns: ["TOOL", "LLM", "HYBRID"]
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == enum_name:
+            # Check if it's an Enum (inherits from Enum)
+            is_enum = any(
+                (isinstance(b, ast.Name) and b.id == "Enum")
+                or (isinstance(b, ast.Attribute) and b.attr == "Enum")
+                for b in node.bases
+            )
+            if not is_enum:
+                return None
+
+            # Extract enum values (assignments in class body)
+            values = []
+            for item in node.body:
+                if isinstance(item, ast.Assign):
+                    for target in item.targets:
+                        if isinstance(target, ast.Name):
+                            values.append(target.id)
+                elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                    values.append(item.target.id)
+            return values
+
+    return None
+
+
 # =============================================================================
 # Plugin Wrapper
 # =============================================================================

@@ -1052,3 +1052,198 @@ class TestCompositeToolExecutor:
 
         assert result_a == "A:foo"
         assert result_b == "B:bar"
+
+
+class TestLoopSerialization:
+    """Tests for loop serialization (JSON/YAML)."""
+
+    def test_step_to_dict(self):
+        from moss.agent_loop import ErrorAction, LoopStep, StepType
+
+        step = LoopStep(
+            name="test",
+            tool="skeleton.format",
+            step_type=StepType.LLM,
+            input_from="prev",
+            on_error=ErrorAction.RETRY,
+            max_retries=5,
+        )
+        d = step.to_dict()
+        assert d["name"] == "test"
+        assert d["tool"] == "skeleton.format"
+        assert d["step_type"] == "llm"
+        assert d["input_from"] == "prev"
+        assert d["on_error"] == "retry"
+        assert d["max_retries"] == 5
+
+    def test_step_from_dict(self):
+        from moss.agent_loop import ErrorAction, LoopStep, StepType
+
+        d = {
+            "name": "test",
+            "tool": "patch.apply",
+            "step_type": "hybrid",
+            "on_error": "skip",
+        }
+        step = LoopStep.from_dict(d)
+        assert step.name == "test"
+        assert step.tool == "patch.apply"
+        assert step.step_type == StepType.HYBRID
+        assert step.on_error == ErrorAction.SKIP
+        assert step.max_retries == 3  # default
+
+    def test_loop_to_dict(self):
+        loop = simple_loop()
+        d = loop.to_dict()
+        assert d["name"] == "simple"
+        assert len(d["steps"]) == 3
+        assert d["entry"] == "understand"
+        assert "validate.success" in d["exit_conditions"]
+
+    def test_loop_from_dict(self):
+        d = {
+            "name": "custom",
+            "steps": [
+                {"name": "s1", "tool": "tool1"},
+                {"name": "s2", "tool": "tool2", "input_from": "s1"},
+            ],
+            "max_steps": 20,
+        }
+        loop = AgentLoop.from_dict(d)
+        assert loop.name == "custom"
+        assert len(loop.steps) == 2
+        assert loop.max_steps == 20
+        assert loop.entry == "s1"  # default to first step
+
+    def test_loop_roundtrip(self):
+        original = critic_loop()
+        d = original.to_dict()
+        loaded = AgentLoop.from_dict(d)
+
+        assert original.name == loaded.name
+        assert len(original.steps) == len(loaded.steps)
+        assert original.entry == loaded.entry
+        for orig_step, loaded_step in zip(original.steps, loaded.steps, strict=True):
+            assert orig_step.name == loaded_step.name
+            assert orig_step.tool == loaded_step.tool
+            assert orig_step.step_type == loaded_step.step_type
+
+    def test_dump_load_json(self):
+        from moss.agent_loop import dump_loop_json, load_loop_json
+
+        loop = simple_loop()
+        json_str = dump_loop_json(loop)
+        loaded = load_loop_json(json_str)
+
+        assert loop.name == loaded.name
+        assert len(loop.steps) == len(loaded.steps)
+
+    def test_dump_load_yaml(self):
+        from moss.agent_loop import dump_loop_yaml, load_loop_yaml
+
+        loop = analysis_loop()
+        yaml_str = dump_loop_yaml(loop)
+        loaded = load_loop_yaml(yaml_str)
+
+        assert loop.name == loaded.name
+        assert len(loop.steps) == len(loaded.steps)
+
+    def test_dump_json_to_file(self, tmp_path):
+        from moss.agent_loop import dump_loop_json, load_loop_json
+
+        loop = simple_loop()
+        path = tmp_path / "loop.json"
+        dump_loop_json(loop, path)
+
+        assert path.exists()
+        loaded = load_loop_json(path)
+        assert loop.name == loaded.name
+
+    def test_dump_yaml_to_file(self, tmp_path):
+        from moss.agent_loop import dump_loop_yaml, load_loop_yaml
+
+        loop = critic_loop()
+        path = tmp_path / "loop.yaml"
+        dump_loop_yaml(loop, path)
+
+        assert path.exists()
+        loaded = load_loop_yaml(path)
+        assert loop.name == loaded.name
+
+
+class TestConfigSerialization:
+    """Tests for config serialization."""
+
+    def test_llm_config_to_dict(self):
+        config = LLMConfig(
+            model="test-model",
+            temperature=0.5,
+            models=["m1", "m2"],
+            rotation="round_robin",
+        )
+        d = config.to_dict()
+        assert d["model"] == "test-model"
+        assert d["temperature"] == 0.5
+        assert d["models"] == ["m1", "m2"]
+        assert d["rotation"] == "round_robin"
+
+    def test_llm_config_from_dict(self):
+        d = {"model": "custom", "temperature": 0.7, "mock": True}
+        config = LLMConfig.from_dict(d)
+        assert config.model == "custom"
+        assert config.temperature == 0.7
+        assert config.mock is True
+        assert config.models == []  # default
+
+    def test_llm_config_roundtrip(self):
+        original = LLMConfig(
+            model="test",
+            models=["a", "b"],
+            rotation="random",
+            temperature=0.3,
+            max_tokens=100,
+        )
+        d = original.to_dict()
+        loaded = LLMConfig.from_dict(d)
+
+        assert original.model == loaded.model
+        assert original.models == loaded.models
+        assert original.rotation == loaded.rotation
+        assert original.temperature == loaded.temperature
+        assert original.max_tokens == loaded.max_tokens
+
+    def test_mcp_config_to_dict(self):
+        config = MCPServerConfig(
+            command="uv",
+            args=["run", "test"],
+            cwd="/tmp",
+            env={"KEY": "value"},
+        )
+        d = config.to_dict()
+        assert d["command"] == "uv"
+        assert d["args"] == ["run", "test"]
+        assert d["cwd"] == "/tmp"
+        assert d["env"] == {"KEY": "value"}
+
+    def test_mcp_config_from_dict(self):
+        d = {"command": "npx", "args": ["@test/server"]}
+        config = MCPServerConfig.from_dict(d)
+        assert config.command == "npx"
+        assert config.args == ["@test/server"]
+        assert config.cwd is None
+        assert config.env is None
+
+    def test_mcp_config_roundtrip(self):
+        original = MCPServerConfig(
+            command="python",
+            args=["-m", "server"],
+            cwd="/app",
+            env={"DEBUG": "1"},
+        )
+        d = original.to_dict()
+        loaded = MCPServerConfig.from_dict(d)
+
+        assert original.command == loaded.command
+        assert original.args == loaded.args
+        assert original.cwd == loaded.cwd
+        assert original.env == loaded.env

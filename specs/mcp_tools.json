@@ -1,5 +1,26 @@
 [
   {
+    "description": "Get the full source code of a named symbol. Useful for getting complete enum definitions, class bodies, or function implementations when the skeleton isn't enough. Full source code of the symbol, or None if not found # Get full enum definition content = api.skeleton.expand(\"src/agent_loop.py\", \"StepType\") # Returns complete enum with all values",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the Python file",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Name of the symbol to expand (e.g., \"StepType\", \"my_function\")",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path",
+        "symbol_name"
+      ],
+      "type": "object"
+    },
+    "name": "skeleton_expand"
+  },
+  {
     "description": "Extract code skeleton (functions, classes, methods). Example: moss skeleton src/main.py",
     "inputSchema": {
       "properties": {
@@ -35,6 +56,27 @@
       "type": "object"
     },
     "name": "skeleton_format"
+  },
+  {
+    "description": "Extract enum member names from an Enum class. List of enum member names, or None if not found values = api.skeleton.get_enum_values(\"src/agent_loop.py\", \"StepType\") # Returns: [\"TOOL\", \"LLM\", \"HYBRID\"]",
+    "inputSchema": {
+      "properties": {
+        "enum_name": {
+          "description": "Name of the Enum class",
+          "type": "string"
+        },
+        "file_path": {
+          "description": "Path to the Python file",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path",
+        "enum_name"
+      ],
+      "type": "object"
+    },
+    "name": "skeleton_get_enum_values"
   },
   {
     "description": "Show git-aware file tree. Example: moss tree",
