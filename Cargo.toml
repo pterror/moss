@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/moss-cli"]
+members = ["crates/moss-cli", "crates/moss-daemon"]
 
 [workspace.package]
 version = "0.1.0"
@@ -23,6 +23,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # File system
 walkdir = "2"
 ignore = "0.4"  # gitignore-aware walking
+notify = "7"    # filesystem watching
 
 # Fuzzy matching
 nucleo-matcher = "0.3"

@@ -78,12 +78,31 @@ fn get_all_paths(root: &Path) -> Vec<(String, bool)> {
     all_paths
 }
 
-/// Normalize string for comparison: lowercase, separators become spaces
+/// Normalize a char for comparison
+#[inline]
+fn normalize_char(c: char) -> char {
+    match c {
+        '-' | '.' | '_' => ' ',
+        c => c.to_ascii_lowercase(),
+    }
+}
+
+/// Compare two strings with normalization (no allocation)
+fn eq_normalized(a: &str, b: &str) -> bool {
+    let mut a_chars = a.chars().map(normalize_char);
+    let mut b_chars = b.chars().map(normalize_char);
+    loop {
+        match (a_chars.next(), b_chars.next()) {
+            (Some(ac), Some(bc)) if ac == bc => continue,
+            (None, None) => return true,
+            _ => return false,
+        }
+    }
+}
+
+/// Normalize string for comparison (used for filename matching)
 fn normalize_for_match(s: &str) -> String {
-    s.to_lowercase()
-        .chars()
-        .map(|c| if c == '-' || c == '.' || c == '_' { ' ' } else { c })
-        .collect()
+    s.chars().map(normalize_char).collect()
 }
 
 /// Resolve from a pre-loaded list of paths
@@ -91,9 +110,9 @@ fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatc
     let query_lower = query.to_lowercase();
     let query_normalized = normalize_for_match(query);
 
-    // Try exact match first
+    // Try exact match first, then normalized match (no allocation)
     for (path, is_dir) in all_paths {
-        if path == query {
+        if path == query || eq_normalized(path, query) {
             return vec![PathMatch {
                 path: path.clone(),
                 kind: if *is_dir { "directory" } else { "file" }.to_string(),
@@ -206,6 +225,11 @@ mod tests {
 
         // hyphen query should also work
         let matches = resolve("prior-art", dir.path());
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].path, "docs/prior-art.md");
+
+        // full path with underscores should match hyphenated path
+        let matches = resolve("docs/prior_art.md", dir.path());
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "docs/prior-art.md");
     }

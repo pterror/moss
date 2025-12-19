@@ -11,7 +11,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
    - [x] Add `view`, `search-tree`, `reindex` commands
    - [x] Add tree-sitter parsing for Python/Rust
    - [x] Add `symbols`, `expand`, `callers`, `callees` commands
-   - [ ] Fix `callers` to search all files (not just fuzzy matches)
+   - [x] Fix `callers` to search all files (not just fuzzy matches)
 2. **Daemon + index architecture**
    - `mossd` daemon: keeps index hot, watches filesystem (inotify)
    - SQLite index: files (path, mtime), symbols (name, kind, line, parent)
