@@ -4,34 +4,12 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Performance profiling** - measure hot paths in CLI, daemon, Python components
-2. **Compact tool encoding** - bypass JSON Schema overhead for moss agent
-
-## Completed (move to CHANGELOG)
-
-- **Index reliability** - Robust handling of index issues
-  - Graceful degradation: `imports` command falls back to direct parsing when index unavailable
-  - Error recovery: Automatic database rebuild on corruption detection
-  - Incremental refresh: `incremental_refresh()` and `incremental_call_graph_refresh()` for faster updates
-  - File watching: Daemon auto-reindexes on file changes (via inotify/watchfiles)
-
-- **Rust CLI** - 18 commands: path, view, search-tree, symbols, expand, callers, callees, tree, skeleton, anchors, deps, cfg, complexity, health, summarize, daemon (status/shutdown/start), reindex
-- **Daemon** - Unix socket IPC, idle timeout, chunked streaming
-- **Call graph** - SQLite index, 29,000x faster callers lookup (0.6ms vs 17.5s)
-- **Reference tracing** - Complete cross-file resolution
-  - Import tracking (SQLite table: file → module, name, alias)
-  - `moss imports <file>` command to query imports from index
-  - `moss imports <file>:<name> --resolve` to trace name to source module
-  - Cross-file resolution via import alias JOIN for callers/callees
-  - Qualified names (module.func vs func) with callee_qualifier
-  - Wildcard import resolution (from X import * → check X's exports)
-  - Method call resolution (self.method() → Class.method)
-- **Benchmark suite** - CI integration with regression detection thresholds
+1. **Python grep → ripgrep** - replace pure-Python file scan with subprocess to rg (9.7s → ~50ms expected)
+2. **Rust health parallelization** - use rayon for parallel file parsing (500ms → ~150ms expected)
 
 ## Active Backlog
 
 **Small:**
-- [ ] Profiling infrastructure - measure hot paths in CLI, daemon, and Python components
 - [ ] Model-agnostic naming - don't over-fit to specific LLM conventions
 - [ ] Multiple agents concurrently - no requirement to join back to main stream
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
@@ -40,8 +18,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Agent sandboxing - restrict bash/shell access, security-conscious CLI wrappers
 
 **Medium:**
-- [ ] Compact tool encoding for moss agent - bypass JSON Schema overhead
-  - For moss loop, we control both sides - can use terse function signatures
 - [ ] Study Goose's context revision (`crates/goose/src/`)
 - [ ] Port `context` command to Rust (if context extraction becomes hot path)
 - [ ] Port `overview` command to Rust (fast codebase overview)
@@ -104,12 +80,30 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - **86.9% token reduction** using skeleton vs full file (dwim.py: 3,890 vs 29,748 chars)
 - **12x output token reduction** with terse prompts (1421 → 112 tokens)
 - **90.2% token savings** in composable loops E2E tests
+- **93% token reduction** in tool definitions using compact encoding (8K → 558 tokens)
 
-### CLI Benchmark Baselines (Dec 2025)
-Fast (3-4ms): path, expand, callers, callees, search-tree, tree --depth 2
-Medium (32-37ms): symbols, skeleton, complexity, deps, anchors
-Slow (58ms): summarize (tree-sitter full parse)
-Slowest (503ms): health (full codebase scan)
+### Performance Profiling (Dec 2025)
+
+**Rust CLI (indexed, warmed):**
+- Fast (3-14ms): path, tree --depth 2, search-tree, callers, expand
+- Medium (40-46ms): symbols, skeleton, callees, complexity, deps, anchors
+- Slow (66ms): summarize (tree-sitter full parse)
+- Slowest (500ms): health (full codebase scan, 3561 files)
+
+**Python API (unindexed):**
+- skeleton: 53ms (single file tree-sitter)
+- find_symbols: 723ms (scans all Python files)
+- grep: 9,700ms (pure Python file scan - major bottleneck)
+
+**Hot Path Analysis:**
+- `health`: 99.9% in `analyze_health()` - iterates all files sequentially
+- `grep`: uses `pathlib.glob` + pure Python regex - no parallelism, no ripgrep
+- `find_symbols`: rebuilds symbol index per call (no caching)
+
+**Optimization Opportunities:**
+1. Python grep: shell out to `rg` - expected 200x speedup
+2. Rust health: parallelize with rayon - expected 3-4x speedup
+3. Python find_symbols: use Rust index via daemon - expected 50x speedup
 
 ### Dogfooding Observations (Dec 2025)
 - `skeleton_format` / `skeleton_expand` - very useful, genuinely saves tokens

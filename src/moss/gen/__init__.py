@@ -2,6 +2,7 @@
 
 This module provides automatic interface generation from the MossAPI:
 - CLI: Generate argparse commands from API methods
+- Compact: Token-efficient tool signatures for LLM consumption (93% smaller than MCP)
 - gRPC: Generate Protocol Buffers and servicer implementations
 - HTTP: Generate FastAPI routes from API methods
 - LSP: Generate workspace commands for Language Server Protocol
@@ -11,6 +12,10 @@ This module provides automatic interface generation from the MossAPI:
 """
 
 from moss.gen.cli import CLIGenerator, generate_cli
+from moss.gen.compact import (
+    generate_compact_by_category,
+    generate_compact_tools,
+)
 from moss.gen.grpc import GRPCGenerator, generate_proto, generate_servicer_code
 from moss.gen.http import HTTPGenerator, generate_http, generate_openapi
 from moss.gen.introspect import (
@@ -34,6 +39,8 @@ __all__ = [
     "SubAPI",
     "TUIGenerator",
     "generate_cli",
+    "generate_compact_by_category",
+    "generate_compact_tools",
     "generate_http",
     "generate_lsp_commands",
     "generate_mcp",

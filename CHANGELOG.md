@@ -23,6 +23,40 @@
 - Uses `notify` crate for cross-platform file system events
 - Skips `.moss` directory to avoid infinite loops
 
+### Rust CLI Expansion
+
+**18 Commands**
+- path, view, search-tree, symbols, expand, callers, callees
+- tree, skeleton, anchors, deps, cfg, complexity, health, summarize
+- daemon (status/shutdown/start), reindex
+
+### Daemon Architecture
+
+- Unix socket IPC for fast local communication
+- Idle timeout for automatic resource cleanup
+- Chunked streaming for large responses
+
+### Call Graph
+
+- SQLite index for persistent call relationship storage
+- 29,000x faster callers lookup (0.6ms vs 17.5s)
+
+### Reference Tracing
+
+**Cross-file Resolution**
+- Import tracking (SQLite table: file → module, name, alias)
+- `moss imports <file>` command to query imports from index
+- `moss imports <file>:<name> --resolve` to trace name to source module
+- Cross-file resolution via import alias JOIN for callers/callees
+- Qualified names (module.func vs func) with callee_qualifier
+- Wildcard import resolution (from X import * → check X's exports)
+- Method call resolution (self.method() → Class.method)
+
+### Benchmark Suite
+
+- CI integration with regression detection thresholds
+- Automated performance tracking across commits
+
 ## v0.6.8
 
 ### Tree Commands & Performance
