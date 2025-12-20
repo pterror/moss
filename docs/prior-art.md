@@ -196,13 +196,68 @@ Configurable mid-session via `/mode` command or settings.
 - `large_response_handler.rs` - Manages oversized outputs
 - `retry.rs` - Error recovery
 
+**Context Revision Deep Dive** (`crates/goose/src/context_mgmt/`):
+
+Goose's context revision is sophisticated and worth studying:
+
+1. **Threshold-based auto-compaction**: Default 80% of context limit triggers compaction (`DEFAULT_COMPACTION_THRESHOLD = 0.8`). Configurable via `GOOSE_AUTO_COMPACT_THRESHOLD`.
+
+2. **Dual visibility metadata**: Messages have `agent_visible` and `user_visible` flags:
+   - After compaction, original messages become `user_visible=true, agent_visible=false`
+   - Summary message becomes `agent_visible=true, user_visible=false`
+   - This keeps full history for user while agent only sees summary
+
+3. **LLM summarization with structured sections** (`summarize_oneshot.md`):
+   - User Intent, Technical Concepts, Files + Code, Errors + Fixes
+   - Problem Solving, User Messages, Pending Tasks, Current Work, Next Step
+   - Analysis tags for chain-of-thought reasoning
+   - Key: "This summary will only be read by you so it is ok to make it much longer than a normal summary"
+
+4. **Progressive tool response removal**: When context still exceeds limits after summarization:
+   - Try removing 0%, 10%, 20%, 50%, 100% of tool responses
+   - Removes from the middle ("middle-out") to keep recent and oldest context
+   - Graceful degradation if summarization itself hits context limits
+
+5. **Continuation text injection**: Invisible assistant messages instruct the model:
+   - "Do not mention that you read a summary or that conversation summarization occurred"
+   - Different text for conversation continuation vs tool loop continuation
+
+6. **Token counting**: tiktoken with caching (`o200k_base` tokenizer, 10K cache limit):
+   - Hash-based cache for text strings
+   - Special handling for tool definitions (FUNC_INIT, PROP_KEY, ENUM_ITEM constants)
+   - Counts both message tokens and tool schema tokens
+
+7. **Conversation validation/fixing**: Sophisticated repair pipeline:
+   - Merge consecutive same-role messages
+   - Remove orphaned tool requests/responses
+   - Remove leading/trailing assistant messages
+   - Shadow map pattern preserves non-visible messages during fixes
+
 **Moss Observations:**
 - **MCP alignment**: Goose validates MCP as the right protocol choice - they're all-in
 - **Trust model similarity**: Their 4 permission modes map almost exactly to our Smart Trust Levels design
-- **Context Revision**: Their token optimization via "removing outdated info" aligns with moss's context_memory.py approach
+- **Context Revision**: Their token optimization is more sophisticated than moss's current approach
 - **Extension security**: Malware scanning is interesting - moss could add similar checks for MCP servers
 - **Skills directory**: `.goose/skills` pattern similar to Claude Code's - could adopt for moss
 - **Rust + MCP**: Proves Rust is viable for agent infrastructure (we're Python, but could learn from their patterns)
+
+**Context Revision Takeaways for Moss:**
+
+Goose uses multi-turn conversation with accumulated context. Moss uses a different paradigm:
+**composable loops with structured data handoffs** (`LoopContext`). Each LLM call is single-shot.
+
+What applies to moss:
+- [x] Tool responses ephemeral by design (each LLM call is fresh, no history)
+- [x] Smart context selection (skeleton > full file) already core philosophy
+- [ ] Structured summary sections for prompt building (User Intent, Technical, Pending Tasks)
+
+What doesn't apply (different architecture):
+- Auto-compaction: moss doesn't accumulate conversation, no need to compress
+- Dual visibility: no persistent conversation to hide from agent
+- Progressive tool removal: tool outputs don't persist between steps
+
+Key insight: Goose's context revision is reactive (compress when full).
+Moss's approach is proactive (include only what's needed, structured views by default).
 
 **Key Differentiator vs Moss:**
 - Goose is more "general agent" (terminal, web, files), moss is more "structural awareness"

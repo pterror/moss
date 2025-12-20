@@ -4,9 +4,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Study Goose's context revision (`crates/goose/src/`)
-2. Port `context` command to Rust (if context extraction becomes hot path)
-3. Port `overview` command to Rust (fast codebase overview)
+1. Structured LLM summarization for loop steps (see Goose's approach in `docs/prior-art.md`)
+   - Goose uses sections: User Intent, Technical Concepts, Pending Tasks, Current Work
+   - Apply to `_build_prompt()` when digesting complex context between steps
+2. Port `overview` command to Rust (fast codebase overview)
+3. Wire Rust `context` command to Python CLI (completed in Rust, needs Python integration)
 
 ## Active Backlog
 
