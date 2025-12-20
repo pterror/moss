@@ -4,9 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Add ephemeral cache integration (reuse `src/moss/cache.py:EphemeralCache`)
-2. Improve DWIMLoop: better "done" detection for read-only tasks
-3. Multi-file expand support: "expand TaskNode src/moss/task_tree.py"
+1. Improve DWIMLoop: better "done" detection for read-only tasks
+2. Multi-file expand support: "expand TaskNode src/moss/task_tree.py"
+3. Test DWIMLoop on more complex multi-step tasks
 
 ## Recently Completed
 
@@ -15,6 +15,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Added stall detection (repeated command exits)
   - Added recursion guard in tool execution
   - Improved system prompt for "done" signaling
+  - Integrated EphemeralCache for result caching with TTL
 - **Plugin consolidation** (Dec 2025):
   - LLM providers: removed anthropic.py and openai.py, use litellm for all providers
   - Linter plugins: existing architecture already good (SARIFAdapter + per-tool plugins)
