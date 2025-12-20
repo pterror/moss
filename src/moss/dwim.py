@@ -240,6 +240,150 @@ def unregister_tool(name: str) -> bool:
     return False
 
 
+def register_mcp_tool(
+    name: str,
+    description: str,
+    prefix: str = "mcp",
+    input_schema: dict | None = None,
+) -> ToolInfo:
+    """Register an MCP tool into the DWIM registry.
+
+    Extracts keywords from the tool name and description to enable
+    natural language routing.
+
+    Args:
+        name: MCP tool name (e.g., "read_file", "search")
+        description: Tool description from MCP
+        prefix: Prefix for the registered tool name (default: "mcp")
+        input_schema: Optional JSON schema for parameters
+
+    Returns:
+        The created ToolInfo
+    """
+    # Create prefixed name to avoid collisions with local tools
+    full_name = f"{prefix}_{name}" if prefix else name
+
+    # Extract keywords from name and description
+    keywords = _extract_keywords_from_mcp(name, description)
+
+    # Extract parameter names from schema
+    parameters: list[str] = []
+    if input_schema and "properties" in input_schema:
+        parameters = list(input_schema["properties"].keys())
+
+    tool = ToolInfo(
+        name=full_name,
+        description=description,
+        keywords=keywords,
+        parameters=parameters,
+    )
+    register_tool(tool)
+
+    # Also add alias from unprefixed name to prefixed name
+    if prefix:
+        TOOL_ALIASES[name.lower()] = full_name
+
+    return tool
+
+
+def _extract_keywords_from_mcp(name: str, description: str) -> list[str]:
+    """Extract keywords from MCP tool name and description.
+
+    Uses simple heuristics:
+    - Split name on underscores
+    - Extract significant words from description
+    - Skip common stopwords
+    """
+    stopwords = {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "to",
+        "from",
+        "for",
+        "with",
+        "on",
+        "in",
+        "of",
+        "and",
+        "or",
+        "this",
+        "that",
+        "it",
+        "be",
+        "as",
+        "by",
+        "at",
+        "can",
+        "will",
+        "may",
+        "should",
+        "would",
+        "could",
+        "must",
+        "has",
+        "have",
+        "had",
+        "do",
+        "does",
+        "did",
+        "not",
+        "but",
+        "if",
+        "then",
+        "else",
+        "when",
+        "where",
+        "what",
+        "which",
+        "who",
+        "how",
+        "all",
+        "each",
+        "every",
+        "any",
+        "some",
+    }
+
+    keywords = set()
+
+    # Add parts of the tool name
+    name_parts = name.lower().replace("-", "_").split("_")
+    keywords.update(p for p in name_parts if p and len(p) > 2)
+
+    # Extract words from description
+    desc_words = description.lower().split()
+    for word in desc_words:
+        # Clean punctuation
+        clean = word.strip(".,;:!?()[]{}\"'")
+        if clean and len(clean) > 3 and clean not in stopwords:
+            keywords.add(clean)
+
+    return list(keywords)[:20]  # Limit keywords
+
+
+def unregister_mcp_tools(prefix: str = "mcp") -> int:
+    """Unregister all MCP tools with the given prefix.
+
+    Args:
+        prefix: Prefix used when registering (default: "mcp")
+
+    Returns:
+        Number of tools unregistered
+    """
+    prefix_with_underscore = f"{prefix}_"
+    to_remove = [name for name in _TOOLS if name.startswith(prefix_with_underscore)]
+    for name in to_remove:
+        unregister_tool(name)
+        # Also remove aliases
+        original = name[len(prefix_with_underscore) :]
+        if original.lower() in TOOL_ALIASES:
+            del TOOL_ALIASES[original.lower()]
+    return len(to_remove)
+
+
 def get_tool(name: str) -> ToolInfo | None:
     """Get a tool by name.
 
@@ -633,6 +777,7 @@ PARAM_ALIASES: dict[str, str] = {
 
 # Confidence thresholds
 AUTO_CORRECT_THRESHOLD = 0.85  # Auto-correct if confidence >= this
+CLARIFY_THRESHOLD = 0.6  # Below this, ask for clarification (but still suggest)
 SUGGEST_THRESHOLD = 0.3  # Suggest if confidence >= this (lowered from 0.5 for better NL support)
 
 
@@ -752,11 +897,20 @@ def resolve_tool(tool_name: str) -> ToolMatch:
             message=f"'{tool_name}' → '{best_match}' (auto-corrected)",
         )
 
-    if best_match and best_score >= SUGGEST_THRESHOLD:
+    if best_match and best_score >= CLARIFY_THRESHOLD:
+        # Confident enough to execute but note uncertainty
         return ToolMatch(
             tool=best_match,
             confidence=best_score,
-            message=f"Unknown tool '{tool_name}'. Did you mean '{best_match}'?",
+            message=f"Matched '{tool_name}' → '{best_match}' (confidence: {best_score:.0%})",
+        )
+
+    if best_match and best_score >= SUGGEST_THRESHOLD:
+        # Low confidence - suggest clarification
+        return ToolMatch(
+            tool=best_match,
+            confidence=best_score,
+            message=f"Unclear: '{tool_name}'. Did you mean '{best_match}'? Be more specific.",
         )
 
     return ToolMatch(tool=tool_name, confidence=0.0, message=f"Unknown tool: {tool_name}")
@@ -1051,7 +1205,10 @@ def get_tool_info(tool_name: str) -> dict | None:
 
 
 __all__ = [
+    "AUTO_CORRECT_THRESHOLD",
+    "CLARIFY_THRESHOLD",
     "PARAM_ALIASES",
+    "SUGGEST_THRESHOLD",
     "TOOL_ALIASES",
     "TOOL_REGISTRY",
     "ToolInfo",
@@ -1064,10 +1221,12 @@ __all__ = [
     "list_tool_names",
     "list_tools",
     "normalize_parameters",
+    "register_mcp_tool",
     "register_tool",
     "resolve_parameter",
     "resolve_tool",
     "suggest_tool",
     "suggest_tools",
+    "unregister_mcp_tools",
     "unregister_tool",
 ]

@@ -16,6 +16,8 @@ from moss.output import Output, Verbosity, configure_output, get_output
 if TYPE_CHECKING:
     from argparse import Namespace
 
+    from moss.codebase import Node
+
 
 def get_version() -> str:
     """Get the moss version."""
@@ -100,6 +102,92 @@ def output_result(data: Any, args: Namespace) -> None:
     """Output result in appropriate format."""
     output = get_output()
     output.data(data)
+
+
+def rank_matches(nodes: list[Node], query: str) -> list[Node]:
+    """Rank matches by relevance.
+
+    Scoring:
+    - Exact name match: +100
+    - Shorter path: +10 per level difference from longest
+    - Function/method over class: +20
+    - Stem match (query matches file stem): +30
+    """
+    if not nodes:
+        return nodes
+
+    query_lower = query.lower()
+    scored: list[tuple[int, Node]] = []
+
+    max_depth = max(n.full_path.count("/") + n.full_path.count(":") for n in nodes)
+
+    for node in nodes:
+        score = 0
+        # Exact name match
+        if node.name.lower() == query_lower:
+            score += 100
+        # Path depth (shorter = better)
+        depth = node.full_path.count("/") + node.full_path.count(":")
+        score += (max_depth - depth) * 10
+        # Function/method preference for code viewing
+        if node.kind.value in ("function", "method"):
+            score += 20
+        # Stem match
+        if "/" in node.full_path:
+            file_part = node.full_path.split(":")[0]
+            stem = Path(file_part).stem.lower()
+            if stem == query_lower or query_lower in stem:
+                score += 30
+        scored.append((score, node))
+
+    scored.sort(key=lambda x: -x[0])
+    return [n for _, n in scored]
+
+
+def select_match(
+    nodes: list[Node], query: str, select_arg: str | None, output: Output
+) -> Node | None:
+    """Handle multiple matches with selection logic.
+
+    Args:
+        nodes: List of matching nodes
+        query: Original query string
+        select_arg: --select argument ("1", "2", "best", or None)
+        output: Output handler
+
+    Returns:
+        Selected node, or None if user should see list
+    """
+    if not nodes:
+        return None
+
+    if len(nodes) == 1:
+        return nodes[0]
+
+    # Rank matches
+    ranked = rank_matches(nodes, query)
+
+    # Handle --select argument
+    if select_arg is not None:
+        if select_arg == "best":
+            return ranked[0]
+        # Try to parse as number
+        try:
+            idx = int(select_arg)
+            if 1 <= idx <= len(ranked):
+                return ranked[idx - 1]
+            output.error(f"Invalid selection: {idx} (valid: 1-{len(ranked)})")
+            return None
+        except ValueError:
+            output.error(f"Invalid selection: {select_arg} (use 1-{len(ranked)} or 'best')")
+            return None
+
+    # Show numbered list
+    output.print(f"Multiple matches for '{query}':")
+    for i, node in enumerate(ranked, 1):
+        output.print(f"  [{i}] {node.full_path} ({node.kind.value})")
+    output.print("\nUse --select N to pick a match, or --select best for auto-selection")
+    return None
 
 
 def cmd_init(args: Namespace) -> int:
@@ -595,13 +683,11 @@ def cmd_expand(args: Namespace) -> int:
         output.error(f"No matches for: {target}")
         return 1
 
-    if len(nodes) > 1:
-        output.print(f"Multiple matches for '{target}':")
-        for n in nodes:
-            output.print(f"  {n.full_path} ({n.kind.value})")
-        return 0
-
-    node = nodes[0]
+    # Handle multiple matches
+    select_arg = getattr(args, "select", None)
+    node = select_match(nodes, target, select_arg, output)
+    if node is None:
+        return 0  # List was shown, user needs to re-run with --select
 
     # Can only expand symbols with line numbers
     if node.lineno == 0:
@@ -636,7 +722,13 @@ def cmd_callers(args: Namespace) -> int:
         output.error(f"No matches for: {target}")
         return 1
 
-    symbol_name = nodes[0].name
+    # Handle multiple matches
+    select_arg = getattr(args, "select", None)
+    node = select_match(nodes, target, select_arg, output)
+    if node is None:
+        return 0  # List was shown
+
+    symbol_name = node.name
     refs = tree.find_references(symbol_name)
 
     if not refs:
@@ -670,7 +762,12 @@ def cmd_callees(args: Namespace) -> int:
         output.error(f"No matches for: {target}")
         return 1
 
-    node = nodes[0]
+    # Handle multiple matches
+    select_arg = getattr(args, "select", None)
+    node = select_match(nodes, target, select_arg, output)
+    if node is None:
+        return 0  # List was shown
+
     if node.kind.value not in ("function", "method"):
         output.error(f"Can only find callees of functions/methods, not {node.kind.value}")
         return 1
@@ -4755,6 +4852,11 @@ def create_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Symbol to expand (supports: symbol, file:symbol, file symbol)",
     )
+    expand_parser.add_argument(
+        "--select",
+        "-s",
+        help="Select match by number (1-indexed) or 'best' for auto-selection",
+    )
     expand_parser.set_defaults(func=cmd_expand)
 
     # callers command (new codebase tree)
@@ -4764,6 +4866,11 @@ def create_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Symbol to find callers of (supports: symbol, file:symbol, file symbol)",
     )
+    callers_parser.add_argument(
+        "--select",
+        "-s",
+        help="Select match by number (1-indexed) or 'best' for auto-selection",
+    )
     callers_parser.set_defaults(func=cmd_callers)
 
     # callees command (new codebase tree)
@@ -4772,6 +4879,11 @@ def create_parser() -> argparse.ArgumentParser:
         "target",
         nargs="+",
         help="Symbol to find callees of (supports: symbol, file:symbol, file symbol)",
+    )
+    callees_parser.add_argument(
+        "--select",
+        "-s",
+        help="Select match by number (1-indexed) or 'best' for auto-selection",
     )
     callees_parser.set_defaults(func=cmd_callees)
 

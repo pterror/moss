@@ -114,14 +114,14 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ### DWIM Improvements
 - [x] Terse command parsing - "expand Patch" → cli_expand, not patch tools (done Dec 2025)
-- [ ] MCP tool discovery - auto-register MCP server tools into DWIM registry
+- [x] Confidence thresholds - three zones: auto-correct (>=85%), execute (60-85%), clarify (<60%) (done Dec 2025)
+- [x] MCP tool discovery - auto-register MCP server tools into DWIM registry (done Dec 2025)
 - [ ] Custom tool semantics - plugin architecture for user-defined intent→tool mappings
-- [ ] Confidence thresholds - when to ask for clarification vs just do it
 
 ### CLI UX Improvements
 - [x] `moss expand` - flexible arg syntax: `symbol`, `file:symbol`, `file symbol` (done Dec 2025)
 - [x] `moss agent --dry-run` - show task classification and tool suggestions (done Dec 2025)
-- [ ] `moss expand` - when multiple matches, pick best or show numbered list
+- [x] `moss expand/callers/callees` - numbered list + `--select N/best` for multiple matches (done Dec 2025)
 - [ ] Smart TOML navigation - parse to JSON, use jq-like filtering for config exploration
 
 ### Workflow Collaboration

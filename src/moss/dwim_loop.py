@@ -22,7 +22,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from moss.cache import EphemeralCache
-from moss.dwim import ToolMatch, analyze_intent, resolve_tool
+from moss.dwim import CLARIFY_THRESHOLD, ToolMatch, analyze_intent, resolve_tool
 from moss.task_tree import NoteExpiry, TaskTree
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ class LoopConfig:
 
     max_turns: int = 50
     stall_threshold: int = 5  # Max turns without progress
-    confidence_threshold: float = 0.3  # Below this, ask for clarification
+    confidence_threshold: float = CLARIFY_THRESHOLD  # Below this, ask for clarification
     model: str = "gemini/gemini-2.0-flash"
     temperature: float = 0.0
     system_prompt: str = ""
@@ -716,6 +716,24 @@ Do NOT repeat the same command. Never output prose."""
                 # Build and execute tool call
                 tool_name, params = build_tool_call(intent, self.api)
                 tool_match = resolve_tool(tool_name) if tool_name != "done" else None
+
+                # Check confidence - ask for clarification if low
+                if tool_match and tool_match.confidence < self.config.confidence_threshold:
+                    # Low confidence - return clarification message instead of executing
+                    output = None
+                    error = tool_match.message or f"Unclear command: {intent.raw}"
+                    self._last_result = f"Clarification needed: {error}"
+                    duration = int((datetime.now(UTC) - turn_start).total_seconds() * 1000)
+                    self._turns.append(
+                        TurnResult(
+                            intent=intent,
+                            tool_match=tool_match,
+                            tool_output=None,
+                            error=error,
+                            duration_ms=duration,
+                        )
+                    )
+                    continue
 
                 try:
                     output = await self._execute_tool(tool_name, params)

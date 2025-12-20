@@ -1372,8 +1372,35 @@ class MCPToolExecutor(ToolExecutor):
         tools_result = await self._session.list_tools()
         self._tools = {t.name: t for t in tools_result.tools}
 
+        # Auto-register tools into DWIM for natural language routing
+        self._register_dwim_tools()
+
+    def _register_dwim_tools(self) -> None:
+        """Register MCP tools into DWIM registry for natural language routing."""
+        from moss.dwim import register_mcp_tool
+
+        for tool in self._tools.values():
+            # Extract description and schema from MCP tool
+            description = getattr(tool, "description", "") or tool.name
+            input_schema = getattr(tool, "inputSchema", None)
+            register_mcp_tool(
+                name=tool.name,
+                description=description,
+                prefix="mcp",
+                input_schema=input_schema,
+            )
+
+    def _unregister_dwim_tools(self) -> None:
+        """Unregister MCP tools from DWIM registry."""
+        from moss.dwim import unregister_mcp_tools
+
+        unregister_mcp_tools(prefix="mcp")
+
     async def disconnect(self) -> None:
         """Disconnect from the MCP server."""
+        # Unregister DWIM tools before disconnecting
+        self._unregister_dwim_tools()
+
         if self._session_cm:
             await self._session_cm.__aexit__(None, None, None)
         if self._stdio_cm:
