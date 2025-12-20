@@ -537,8 +537,8 @@ fn cmd_reindex(root: Option<&Path>, call_graph: bool) -> i32 {
                     // Optionally rebuild call graph
                     if call_graph {
                         match idx.refresh_call_graph() {
-                            Ok((symbols, calls)) => {
-                                println!("Indexed {} symbols, {} calls", symbols, calls);
+                            Ok((symbols, calls, imports)) => {
+                                println!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
                             }
                             Err(e) => {
                                 eprintln!("Error indexing call graph: {}", e);
@@ -691,7 +691,7 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
 
     // Try index first (fast path)
     if let Ok(idx) = index::FileIndex::open(&root) {
-        let (symbols, calls) = idx.call_graph_stats().unwrap_or((0, 0));
+        let (_, calls, _) = idx.call_graph_stats().unwrap_or((0, 0, 0));
         if calls > 0 {
             // Determine file path
             let file_path = if let Some(file) = file {
@@ -722,7 +722,7 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
                     }
                 }
             }
-            eprintln!("No callees found for: {} (index: {} symbols, {} calls)", symbol, symbols, calls);
+            eprintln!("No callees found for: {} (index has {} calls)", symbol, calls);
             return 1;
         }
     }
@@ -738,8 +738,8 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
             }
         }
         match idx.refresh_call_graph() {
-            Ok((symbols, calls)) => {
-                eprintln!("Indexed {} symbols, {} calls", symbols, calls);
+            Ok((symbols, calls, imports)) => {
+                eprintln!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
 
                 // Retry with index
                 let file_path = if let Some(file) = file {
@@ -792,7 +792,7 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
         profiler.mark("open_index");
 
         // Check if call graph is populated
-        let (symbols, calls) = idx.call_graph_stats().unwrap_or((0, 0));
+        let (_, calls, _) = idx.call_graph_stats().unwrap_or((0, 0, 0));
         if calls > 0 {
             // Index is populated - use it exclusively (don't fall back to slow scan)
             if let Ok(callers) = idx.find_callers(symbol) {
@@ -814,7 +814,7 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
                 }
             }
             // Index populated but no results - symbol not called anywhere
-            eprintln!("No callers found for: {} (index: {} symbols, {} calls)", symbol, symbols, calls);
+            eprintln!("No callers found for: {} (index has {} calls)", symbol, calls);
             return 1;
         }
     }
@@ -835,8 +835,8 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
 
         // Now build call graph
         match idx.refresh_call_graph() {
-            Ok((symbols, calls)) => {
-                eprintln!("Indexed {} symbols, {} calls", symbols, calls);
+            Ok((symbols, calls, imports)) => {
+                eprintln!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
                 profiler.mark("call_graph");
 
                 // Retry the query

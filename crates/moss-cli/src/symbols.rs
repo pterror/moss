@@ -10,6 +10,19 @@ pub struct Symbol {
     pub parent: Option<String>,
 }
 
+/// An import statement (from X import Y as Z)
+#[derive(Debug, Clone)]
+pub struct Import {
+    /// The module being imported from (None for "import X")
+    pub module: Option<String>,
+    /// The name being imported
+    pub name: String,
+    /// Alias if present (from X import Y as Z -> alias = Z)
+    pub alias: Option<String>,
+    /// Line number
+    pub line: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolKind {
     Function,
@@ -78,6 +91,142 @@ impl SymbolParser {
         self.collect_python_symbols(&mut cursor, content, &mut symbols, None);
 
         symbols
+    }
+
+    /// Parse Python imports from a file
+    pub fn parse_python_imports(&mut self, content: &str) -> Vec<Import> {
+        let tree = match self.python_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut imports = Vec::new();
+        let root = tree.root_node();
+
+        let mut cursor = root.walk();
+        self.collect_python_imports(&mut cursor, content, &mut imports);
+
+        imports
+    }
+
+    fn collect_python_imports(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        imports: &mut Vec<Import>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                // import os, import json as j
+                "import_statement" => {
+                    // Iterate through children looking for dotted_name or aliased_import
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            match child.kind() {
+                                "dotted_name" => {
+                                    let name = &content[child.byte_range()];
+                                    imports.push(Import {
+                                        module: None,
+                                        name: name.to_string(),
+                                        alias: None,
+                                        line: child.start_position().row + 1,
+                                    });
+                                }
+                                "aliased_import" => {
+                                    let name = child
+                                        .child_by_field_name("name")
+                                        .map(|n| content[n.byte_range()].to_string());
+                                    let alias = child
+                                        .child_by_field_name("alias")
+                                        .map(|n| content[n.byte_range()].to_string());
+                                    if let Some(name) = name {
+                                        imports.push(Import {
+                                            module: None,
+                                            name,
+                                            alias,
+                                            line: child.start_position().row + 1,
+                                        });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // from pathlib import Path, from moss.gen import serialize as ser
+                "import_from_statement" => {
+                    // Get the module name
+                    let module = node
+                        .child_by_field_name("module_name")
+                        .map(|n| content[n.byte_range()].to_string());
+
+                    // Find import items
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            match child.kind() {
+                                "dotted_name" | "identifier" => {
+                                    // Skip the module name itself (already captured)
+                                    if child.start_byte()
+                                        > node
+                                            .children(&mut node.walk())
+                                            .find(|c| c.kind() == "import")
+                                            .map(|c| c.end_byte())
+                                            .unwrap_or(0)
+                                    {
+                                        let name = &content[child.byte_range()];
+                                        imports.push(Import {
+                                            module: module.clone(),
+                                            name: name.to_string(),
+                                            alias: None,
+                                            line: child.start_position().row + 1,
+                                        });
+                                    }
+                                }
+                                "aliased_import" => {
+                                    let name = child
+                                        .child_by_field_name("name")
+                                        .map(|n| content[n.byte_range()].to_string());
+                                    let alias = child
+                                        .child_by_field_name("alias")
+                                        .map(|n| content[n.byte_range()].to_string());
+                                    if let Some(name) = name {
+                                        imports.push(Import {
+                                            module: module.clone(),
+                                            name,
+                                            alias,
+                                            line: child.start_position().row + 1,
+                                        });
+                                    }
+                                }
+                                "wildcard_import" => {
+                                    imports.push(Import {
+                                        module: module.clone(),
+                                        name: "*".to_string(),
+                                        alias: None,
+                                        line: child.start_position().row + 1,
+                                    });
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            // Recurse into children
+            if cursor.goto_first_child() {
+                self.collect_python_imports(cursor, content, imports);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
 
     fn collect_python_symbols(

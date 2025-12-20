@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use ignore::WalkBuilder;
 
-use crate::symbols::{Symbol, SymbolParser};
+use crate::symbols::{Import, Symbol, SymbolParser};
 
 // Not yet public - just delete .moss/index.sqlite on schema changes
 const SCHEMA_VERSION: i64 = 1;
@@ -64,6 +64,21 @@ impl FileIndex {
             );
             CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
             CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
+
+            -- Import tracking for cross-file resolution
+            -- module = source module (e.g. 'pathlib', 'moss.gen.serialize')
+            -- name = imported name (e.g. 'Path', 'emit_tool_definition', or '*' for wildcard)
+            -- alias = local name if aliased (e.g. 'emit' for 'as emit')
+            CREATE TABLE IF NOT EXISTS imports (
+                file TEXT NOT NULL,
+                module TEXT,
+                name TEXT NOT NULL,
+                alias TEXT,
+                line INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_imports_file ON imports(file);
+            CREATE INDEX IF NOT EXISTS idx_imports_name ON imports(name);
+            CREATE INDEX IF NOT EXISTS idx_imports_module ON imports(module);
             "
         )?;
 
@@ -81,6 +96,7 @@ impl FileIndex {
             conn.execute("DELETE FROM files", [])?;
             conn.execute("DELETE FROM calls", []).ok();
             conn.execute("DELETE FROM symbols", []).ok();
+            conn.execute("DELETE FROM imports", []).ok();
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
                 params![SCHEMA_VERSION.to_string()],
@@ -346,19 +362,92 @@ impl FileIndex {
     }
 
     /// Get call graph stats
-    pub fn call_graph_stats(&self) -> rusqlite::Result<(usize, usize)> {
+    pub fn call_graph_stats(&self) -> rusqlite::Result<(usize, usize, usize)> {
         let symbol_count: usize = self.conn.query_row(
             "SELECT COUNT(*) FROM symbols", [], |row| row.get(0)
         )?;
         let call_count: usize = self.conn.query_row(
             "SELECT COUNT(*) FROM calls", [], |row| row.get(0)
         )?;
-        Ok((symbol_count, call_count))
+        let import_count: usize = self.conn.query_row(
+            "SELECT COUNT(*) FROM imports", [], |row| row.get(0)
+        ).unwrap_or(0);
+        Ok((symbol_count, call_count, import_count))
+    }
+
+    /// Get imports for a file
+    pub fn get_imports(&self, file: &str) -> rusqlite::Result<Vec<Import>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT module, name, alias, line FROM imports WHERE file = ?1"
+        )?;
+        let imports = stmt
+            .query_map(params![file], |row| {
+                Ok(Import {
+                    module: row.get(0)?,
+                    name: row.get(1)?,
+                    alias: row.get(2)?,
+                    line: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(imports)
+    }
+
+    /// Resolve a name in a file's context to its source module
+    /// Returns: (source_module, original_name) if found
+    pub fn resolve_import(&self, file: &str, name: &str) -> rusqlite::Result<Option<(String, String)>> {
+        // Check for direct import or alias
+        let mut stmt = self.conn.prepare(
+            "SELECT module, name FROM imports WHERE file = ?1 AND (name = ?2 OR alias = ?2)"
+        )?;
+        let result: Option<(Option<String>, String)> = stmt
+            .query_row(params![file, name], |row| Ok((row.get(0)?, row.get(1)?)))
+            .ok();
+
+        if let Some((module, orig_name)) = result {
+            if let Some(module) = module {
+                return Ok(Some((module, orig_name)));
+            } else {
+                // Plain import (import X), module is the name
+                return Ok(Some((orig_name.clone(), orig_name)));
+            }
+        }
+
+        // Check for wildcard imports - name could come from any of them
+        let mut stmt = self.conn.prepare(
+            "SELECT module FROM imports WHERE file = ?1 AND name = '*'"
+        )?;
+        let wildcards: Vec<String> = stmt
+            .query_map(params![file], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // For wildcard imports, we'd need to check if the source module exports this name
+        // For now, just return the first wildcard source as a possibility
+        if !wildcards.is_empty() {
+            return Ok(Some((wildcards[0].clone(), name.to_string())));
+        }
+
+        Ok(None)
+    }
+
+    /// Find which files import a given module
+    pub fn find_importers(&self, module: &str) -> rusqlite::Result<Vec<(String, String, usize)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT file, name, line FROM imports WHERE module = ?1 OR module LIKE ?2"
+        )?;
+        let pattern = format!("{}%", module);
+        let importers = stmt
+            .query_map(params![module, pattern], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(importers)
     }
 
     /// Refresh the call graph by parsing all Python/Rust files
     /// This is more expensive than file refresh since it parses every file
-    pub fn refresh_call_graph(&mut self) -> rusqlite::Result<(usize, usize)> {
+    pub fn refresh_call_graph(&mut self) -> rusqlite::Result<(usize, usize, usize)> {
         // Get all indexed Python/Rust files BEFORE starting transaction
         let files: Vec<String> = {
             let mut stmt = self.conn.prepare(
@@ -376,10 +465,12 @@ impl FileIndex {
         let tx = self.conn.transaction()?;
         tx.execute("DELETE FROM symbols", [])?;
         tx.execute("DELETE FROM calls", [])?;
+        tx.execute("DELETE FROM imports", [])?;
 
         let mut parser = SymbolParser::new();
         let mut symbol_count = 0;
         let mut call_count = 0;
+        let mut import_count = 0;
 
         for file_path in files {
             let full_path = self.root.join(&file_path);
@@ -412,15 +503,27 @@ impl FileIndex {
                     }
                 }
             }
+
+            // Index imports for Python files
+            if file_path.ends_with(".py") {
+                let imports = parser.parse_python_imports(&content);
+                for imp in imports {
+                    tx.execute(
+                        "INSERT INTO imports (file, module, name, alias, line) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![file_path, imp.module, imp.name, imp.alias, imp.line],
+                    )?;
+                    import_count += 1;
+                }
+            }
         }
 
         tx.commit()?;
-        Ok((symbol_count, call_count))
+        Ok((symbol_count, call_count, import_count))
     }
 
     /// Check if call graph needs refresh
     pub fn needs_call_graph_refresh(&self) -> bool {
-        let (symbols, _) = self.call_graph_stats().unwrap_or((0, 0));
+        let (symbols, _, _) = self.call_graph_stats().unwrap_or((0, 0, 0));
         symbols == 0
     }
 

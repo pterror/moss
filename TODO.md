@@ -5,7 +5,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 1. **Reference tracing** - Complete cross-file resolution
-   - [ ] Cross-file reference resolution (import tracking)
+   - [x] Import tracking (SQLite table: file → module, name, alias)
+   - [ ] Resolve callee names via imports (foo() → find source module)
+   - [ ] Wildcard import resolution (from X import * → check X's exports)
    - [ ] Handle method calls (obj.method() → Class.method)
    - [ ] Handle qualified names (module.func vs func)
 
