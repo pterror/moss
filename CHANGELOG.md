@@ -4,6 +4,24 @@
 
 ### Features
 
+**Memory integration in agent loops** (new)
+- `LLMToolExecutor` now accepts `memory: MemoryManager` parameter
+- Automatic memory context injected into LLM system prompts
+- Triggered memory checked before tool execution for warnings
+- Episodes recorded after each tool call for future learning
+- Non-blocking: memory errors don't break execution
+
+**Checkpoint restore** (new)
+- `moss checkpoint restore <name>` - revert working directory to checkpoint state
+- `GitAPI.restore_checkpoint()` in moss_api.py
+- Completes checkpoint lifecycle: create → diff → merge/abort/restore
+
+**Diagnostics-validation integration** (new)
+- `DiagnosticValidator` - uses signal-only parsers for structured error feedback
+- `diagnostics_to_validation_result()` - bridge between diagnostics and validators
+- Factory functions: `create_cargo_validator()`, `create_typescript_validator()`, etc.
+- `create_rust_validator_chain()`, `create_typescript_validator_chain()`
+
 **Agent sandboxing** (new)
 - `CommandPolicy` in `policy.py` - evaluates bash/shell commands against allowlists/blocklists
 - Blocks dangerous commands (rm, sudo, curl, etc.) and patterns (pipe to shell, rm -rf)

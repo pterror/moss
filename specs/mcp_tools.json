@@ -527,6 +527,22 @@
     "name": "git_merge_checkpoint"
   },
   {
+    "description": "Restore working directory to a checkpoint state. This checks out the checkpoint branch, reverting all files to the state captured when the checkpoint was created. Dict with 'branch' name and 'commit' SHA of restored state",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Checkpoint branch name to restore",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "git_restore_checkpoint"
+  },
+  {
     "description": "Compile context for the given files. CompiledContext with rendered views",
     "inputSchema": {
       "properties": {

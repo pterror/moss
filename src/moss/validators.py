@@ -260,6 +260,131 @@ class PytestValidator(Validator):
         )
 
 
+def diagnostics_to_validation_result(
+    diagnostic_set: Any,
+    success: bool | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ValidationResult:
+    """Convert a DiagnosticSet to ValidationResult.
+
+    This bridges the signal-only diagnostics module with the validation
+    infrastructure, enabling structured error parsing for all validators.
+
+    Args:
+        diagnostic_set: DiagnosticSet from moss.diagnostics
+        success: Override success status (defaults to no errors)
+        metadata: Additional metadata to include
+
+    Returns:
+        ValidationResult with converted issues
+    """
+    from moss.diagnostics import Severity
+
+    issues = []
+    for diag in diagnostic_set.diagnostics:
+        # Map Severity to ValidationSeverity
+        if diag.severity == Severity.ERROR:
+            sev = ValidationSeverity.ERROR
+        elif diag.severity == Severity.WARNING:
+            sev = ValidationSeverity.WARNING
+        else:
+            sev = ValidationSeverity.INFO
+
+        issues.append(
+            ValidationIssue(
+                message=diag.message,
+                severity=sev,
+                file=diag.location.file if diag.location else None,
+                line=diag.location.line if diag.location else None,
+                column=diag.location.column if diag.location else None,
+                code=diag.code,
+                source=diag.source or diagnostic_set.source,
+            )
+        )
+
+    if success is None:
+        success = diagnostic_set.error_count == 0
+
+    return ValidationResult(
+        success=success,
+        issues=issues,
+        metadata=metadata or {},
+    )
+
+
+class DiagnosticValidator(Validator):
+    """Validator that uses signal-only diagnostics for structured error parsing.
+
+    This validator runs a command with structured output flags and parses
+    the result using the appropriate diagnostic parser. This extracts
+    clean signal (error code, message, location, suggestion) and discards
+    noise (ASCII art, color codes, formatting).
+
+    Supported tools: cargo, rustc, tsc, eslint, ruff, gcc, clang
+
+    Example:
+        # Create a cargo validator
+        validator = DiagnosticValidator(
+            name="cargo",
+            command=["cargo", "check", "--message-format=json"],
+        )
+    """
+
+    def __init__(
+        self,
+        name: str,
+        command: list[str],
+        parser: str | None = None,
+        success_codes: list[int] | None = None,
+    ):
+        """Create a diagnostic validator.
+
+        Args:
+            name: Validator name
+            command: Command to run (should include structured output flags)
+            parser: Parser name to use (auto-detected if None)
+            success_codes: Exit codes that indicate success
+        """
+        self._name = name
+        self.command = command
+        self.parser = parser
+        self.success_codes = success_codes or [0]
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    async def validate(self, path: Path) -> ValidationResult:
+        from moss.diagnostics import parse_diagnostics
+
+        # Substitute {path} in command
+        cmd = [arg.replace("{path}", str(path)) for arg in self.command]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        # Combine stdout and stderr for parsing (some tools output to stderr)
+        output = stdout.decode() + stderr.decode()
+
+        # Parse using diagnostics module
+        diagnostic_set = parse_diagnostics(output, parser=self.parser)
+
+        # Convert to ValidationResult
+        success = proc.returncode in self.success_codes
+        return diagnostics_to_validation_result(
+            diagnostic_set,
+            success=success,
+            metadata={
+                "returncode": proc.returncode,
+                "raw_output": output[:2000],  # Truncate for metadata
+            },
+        )
+
+
 class CommandValidator(Validator):
     """Generic validator that runs a shell command."""
 
@@ -506,8 +631,82 @@ _register_builtin_validators()
 _discover_entry_points()
 
 
+# ============================================================================
+# Diagnostic Validator Factories
+# ============================================================================
+
+
+def create_cargo_validator() -> DiagnosticValidator:
+    """Create a Cargo/Rust validator with structured diagnostics.
+
+    Uses --message-format=json for clean error parsing.
+    """
+    return DiagnosticValidator(
+        name="cargo",
+        command=["cargo", "check", "--message-format=json"],
+        parser="cargo",
+    )
+
+
+def create_typescript_validator(path: str = "{path}") -> DiagnosticValidator:
+    """Create a TypeScript validator with structured diagnostics.
+
+    Uses --pretty false for parseable output.
+    """
+    return DiagnosticValidator(
+        name="typescript",
+        command=["tsc", "--noEmit", "--pretty", "false", path],
+        parser="typescript",
+    )
+
+
+def create_eslint_validator(path: str = "{path}") -> DiagnosticValidator:
+    """Create an ESLint validator with structured diagnostics.
+
+    Uses --format json for structured output.
+    """
+    return DiagnosticValidator(
+        name="eslint",
+        command=["eslint", "--format", "json", path],
+        parser="eslint",
+    )
+
+
+def create_gcc_validator(path: str = "{path}") -> DiagnosticValidator:
+    """Create a GCC/Clang validator with structured diagnostics."""
+    return DiagnosticValidator(
+        name="gcc",
+        command=["gcc", "-fsyntax-only", "-fdiagnostics-format=json", path],
+        parser="gcc",
+    )
+
+
+def create_rust_validator_chain() -> ValidatorChain:
+    """Create a Rust validator chain with structured diagnostics.
+
+    Returns:
+        ValidatorChain with cargo check
+    """
+    chain = ValidatorChain()
+    chain.add(create_cargo_validator())
+    return chain
+
+
+def create_typescript_validator_chain() -> ValidatorChain:
+    """Create a TypeScript/JavaScript validator chain.
+
+    Returns:
+        ValidatorChain with tsc + eslint
+    """
+    chain = ValidatorChain()
+    chain.add(create_typescript_validator())
+    chain.add(create_eslint_validator())
+    return chain
+
+
 __all__ = [
     "CommandValidator",
+    "DiagnosticValidator",
     "LinterValidatorAdapter",
     "PytestValidator",
     "RuffValidator",
@@ -517,7 +716,14 @@ __all__ = [
     "ValidationSeverity",
     "Validator",
     "ValidatorChain",
+    "create_cargo_validator",
+    "create_eslint_validator",
+    "create_gcc_validator",
     "create_python_validator_chain",
+    "create_rust_validator_chain",
+    "create_typescript_validator",
+    "create_typescript_validator_chain",
+    "diagnostics_to_validation_result",
     "get_all_validators",
     "get_validator",
     "list_validators",

@@ -2986,6 +2986,7 @@ def cmd_checkpoint(args: Namespace) -> int:
     - diff: Show changes in a checkpoint
     - merge: Merge checkpoint changes into base branch
     - abort: Abandon a checkpoint
+    - restore: Revert working directory to checkpoint state
     """
     import asyncio
 
@@ -3062,6 +3063,18 @@ def cmd_checkpoint(args: Namespace) -> int:
                 output.success(f"Aborted checkpoint: {name}")
             except Exception as e:
                 output.error(f"Failed to abort: {e}")
+                return 1
+
+        elif action == "restore":
+            if not name:
+                output.error("Checkpoint name required for restore")
+                return 1
+            try:
+                result = await api.git.restore_checkpoint(name)
+                output.success(f"Restored checkpoint: {name}")
+                output.info(f"Now at commit: {result['commit'][:8]}")
+            except Exception as e:
+                output.error(f"Failed to restore: {e}")
                 return 1
 
         else:
@@ -5486,7 +5499,7 @@ def create_parser() -> argparse.ArgumentParser:
         "action",
         nargs="?",
         default="list",
-        choices=["create", "list", "diff", "merge", "abort"],
+        choices=["create", "list", "diff", "merge", "abort", "restore"],
         help="Action to perform (default: list)",
     )
     checkpoint_parser.add_argument(

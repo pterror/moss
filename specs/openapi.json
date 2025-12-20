@@ -902,6 +902,39 @@
         ]
       }
     },
+    "/git/restore-checkpoint": {
+      "post": {
+        "description": "Restore working directory to a checkpoint state. This checks out the checkpoint branch, reverting all files to the state captured when the checkpoint was created. Dict with 'branch' name and 'commit' SHA of restored state",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "description": "Checkpoint branch name to restore",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Restore working directory to a checkpoint state",
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/git_hotspots/analyze": {
       "get": {
         "description": "Analyze git history for hot spots. GitHotspotAnalysis with frequently changed files",

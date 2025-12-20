@@ -764,6 +764,25 @@ class GitAPI:
         await git.abort(branch)
         return {"success": True}
 
+    async def restore_checkpoint(self, name: str) -> dict[str, str]:
+        """Restore working directory to a checkpoint state.
+
+        This checks out the checkpoint branch, reverting all files to the
+        state captured when the checkpoint was created.
+
+        Args:
+            name: Checkpoint branch name to restore
+
+        Returns:
+            Dict with 'branch' name and 'commit' SHA of restored state
+        """
+        git = self.init()
+        # Checkout the checkpoint branch
+        await git._run_git("checkout", name)
+        # Get the current commit SHA
+        result = await git._run_git("rev-parse", "HEAD")
+        return {"branch": name, "commit": result.stdout.strip()}
+
 
 @dataclass
 class ContextAPI:

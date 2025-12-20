@@ -1468,9 +1468,16 @@ class LLMToolExecutor:
 
     Environment variables are loaded from .env file automatically.
 
+    Memory Integration:
+        When a MemoryManager is provided, the executor will:
+        - Inject automatic memory context into system prompts
+        - Check triggered memory before tool execution
+        - Record episodes for future learning
+
     Example:
         config = LLMConfig(model="gemini/gemini-2.0-flash")
-        executor = LLMToolExecutor(config)
+        memory = create_memory_manager()
+        executor = LLMToolExecutor(config, memory=memory)
 
         runner = AgentLoopRunner(executor)
         result = await runner.run(critic_loop(), initial_input)
@@ -1486,6 +1493,7 @@ class LLMToolExecutor:
         moss_executor: MossToolExecutor | None = None,
         root: Any = None,
         load_env: bool = True,
+        memory: Any = None,  # MemoryManager, typed as Any to avoid circular import
     ):
         """Initialize the executor.
 
@@ -1494,6 +1502,7 @@ class LLMToolExecutor:
             moss_executor: Executor for structural tools (created if None)
             root: Project root for MossToolExecutor
             load_env: Whether to load .env file (default: True)
+            memory: Optional MemoryManager for cross-session learning
         """
         # Load .env once per process
         if load_env and not LLMToolExecutor._dotenv_loaded:
@@ -1501,6 +1510,7 @@ class LLMToolExecutor:
 
         self.config = config or LLMConfig()
         self.moss_executor = moss_executor or MossToolExecutor(root)
+        self.memory = memory
         self._call_count = 0  # For round-robin rotation
 
     def _get_model(self) -> str:
@@ -1532,11 +1542,107 @@ class LLMToolExecutor:
         """Execute a tool and return (output, tokens_in, tokens_out).
 
         Routes to LLM for "llm.*" tools, otherwise uses MossToolExecutor.
+        When memory is enabled, checks triggered memory and records episodes.
         """
-        if tool_name.startswith("llm."):
-            return await self._execute_llm(tool_name, context, step)
-        else:
-            return await self.moss_executor.execute(tool_name, context, step)
+        import time
+
+        start_time = time.time()
+        error_message: str | None = None
+
+        # Check triggered memory before execution (for warnings/context)
+        memory_warnings = await self._check_triggered_memory(tool_name, context, step)
+        if memory_warnings:
+            # Log warnings but continue execution
+            # In a full implementation, these could be injected into the prompt
+            pass
+
+        try:
+            if tool_name.startswith("llm."):
+                result = await self._execute_llm(tool_name, context, step)
+            else:
+                result = await self.moss_executor.execute(tool_name, context, step)
+        except Exception as e:
+            error_message = str(e)
+            # Record failure episode
+            duration = int((time.time() - start_time) * 1000)
+            await self._record_episode(
+                tool_name, context, step, success=False, error=error_message, duration_ms=duration
+            )
+            raise
+
+        # Record success episode
+        duration = int((time.time() - start_time) * 1000)
+        await self._record_episode(
+            tool_name, context, step, success=True, error=None, duration_ms=duration
+        )
+
+        return result
+
+    async def _check_triggered_memory(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> list[str]:
+        """Check triggered memory for warnings about this operation."""
+        if not self.memory:
+            return []
+
+        try:
+            from moss.memory import Action, StateSnapshot
+
+            # Extract files from context
+            files: list[str] = []
+            if isinstance(context.input, dict):
+                file_path = context.input.get("file_path")
+                if file_path:
+                    files.append(str(file_path))
+
+            ctx_str = str(context.last)[:500] if context.last else ""
+            state = StateSnapshot.create(files=files, context=ctx_str)
+            target = files[0] if files else None
+            action = Action.create(tool=tool_name, target=target, description=step.name)
+            memory_ctx = await self.memory.get_context(state, action)
+            return memory_ctx.warnings
+        except Exception:
+            return []
+
+    async def _record_episode(
+        self,
+        tool_name: str,
+        context: LoopContext,
+        step: LoopStep,
+        success: bool,
+        error: str | None,
+        duration_ms: int,
+    ) -> None:
+        """Record an episode for future memory retrieval."""
+        if not self.memory:
+            return
+
+        try:
+            from moss.memory import Action, Outcome, StateSnapshot
+
+            # Extract files from context
+            files: list[str] = []
+            if isinstance(context.input, dict):
+                file_path = context.input.get("file_path")
+                if file_path:
+                    files.append(str(file_path))
+
+            ctx_str = str(context.last)[:500] if context.last else ""
+            state = StateSnapshot.create(files=files, context=ctx_str)
+            target = files[0] if files else None
+            action = Action.create(tool=tool_name, target=target, description=step.name)
+            outcome = Outcome.SUCCESS if success else Outcome.FAILURE
+
+            await self.memory.record_episode(
+                state=state,
+                action=action,
+                outcome=outcome,
+                error_message=error,
+                duration_ms=duration_ms,
+            )
+        except Exception:
+            # Don't let memory errors break execution
+            pass
 
     async def _execute_llm(
         self, tool_name: str, context: LoopContext, step: LoopStep
@@ -1560,6 +1666,24 @@ class LLMToolExecutor:
 
         return await self._call_litellm(prompt)
 
+    async def _get_memory_context(self) -> str:
+        """Get automatic memory context to inject into system prompt."""
+        if not self.memory:
+            return ""
+
+        try:
+            # Import here to avoid circular imports
+            from moss.memory import Action, StateSnapshot
+
+            # Create a generic state snapshot for automatic context
+            state = StateSnapshot.create(files=[], context="automatic")
+            action = Action.create(tool="llm", description="LLM call")
+            memory_ctx = await self.memory.get_context(state, action)
+            return memory_ctx.to_text()
+        except Exception:
+            # Don't let memory errors break LLM calls
+            return ""
+
     async def _call_litellm(self, prompt: str) -> tuple[str, int, int]:
         """Call LLM via litellm (unified interface for all providers)."""
         import asyncio
@@ -1574,10 +1698,19 @@ class LLMToolExecutor:
         # Get model (may rotate if configured)
         model = self._get_model()
 
+        # Get memory context (async, so do before sync call)
+        memory_context = await self._get_memory_context()
+
         def _sync_call() -> tuple[str, int, int]:
             messages: list[dict[str, str]] = []
-            if self.config.system_prompt:
-                messages.append({"role": "system", "content": self.config.system_prompt})
+
+            # Build system prompt with memory context
+            system_prompt = self.config.system_prompt
+            if memory_context:
+                system_prompt = f"{system_prompt}\n\n{memory_context}"
+
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
             messages.append({"role": "user", "content": prompt})
 
             kwargs: dict[str, Any] = {

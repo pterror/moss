@@ -4,9 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Wire `MemoryLayer` into `LLMToolExecutor` (see Memory System backlog)
-2. Add `moss checkpoint --restore` CLI for session resumption
-3. Integrate diagnostics with validation loop for structured error feedback
+1. Implement "Syntax Repair Engine" system prompt when errors present
+2. Add Peek-First Policy: agent cannot edit symbol only seen as skeleton
+3. Wrap tree-sitter parse in Result for degraded mode fallback
 
 ## Active Backlog
 
@@ -15,9 +15,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ### Strict Harness (guardrails for all agents)
 
-**Signal-Only Diagnostics:** (done - see `src/moss/diagnostics.py`)
+**Signal-Only Diagnostics:** (done - see `src/moss/diagnostics.py`, `src/moss/validators.py`)
 - [x] Parse `cargo check --message-format=json` instead of raw stderr
 - [x] Extract: error code, message, file/line, suggestion - discard ASCII art
+- [x] Integrate with validation loop via `DiagnosticValidator`
 - [ ] "Syntax Repair Engine" system prompt when errors present
 
 **Degraded Mode (AST fallback):**
@@ -83,9 +84,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] `moss localize <test>` - find buggy code from failing test
 
 ### Memory System
-- [ ] Wire `MemoryLayer` into `LLMToolExecutor` (automatic layer)
+- [x] Wire `MemoryLayer` into `LLMToolExecutor` (automatic layer) - done
+- [x] Add `check_triggers()` before risky steps (triggered layer) - done
 - [ ] Expose `memory.recall()` as agent tool (on-demand layer)
-- [ ] Add `check_triggers()` before risky steps (triggered layer)
 - [ ] Plugin loading from `.moss/memory/`
 - [ ] Config schema in `.moss/config.toml`
 
