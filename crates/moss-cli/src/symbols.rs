@@ -391,7 +391,12 @@ impl SymbolParser {
     }
 
     /// Extract the source code for a symbol
-    pub fn extract_symbol_source(&mut self, path: &Path, content: &str, name: &str) -> Option<String> {
+    pub fn extract_symbol_source(
+        &mut self,
+        path: &Path,
+        content: &str,
+        name: &str,
+    ) -> Option<String> {
         let symbol = self.find_symbol(path, content, name)?;
         let lines: Vec<&str> = content.lines().collect();
         let start = symbol.start_line.saturating_sub(1);
@@ -469,7 +474,12 @@ impl SymbolParser {
     /// Returns: (callee_name, line, Option<qualifier>)
     /// For foo.bar(), returns ("bar", line, Some("foo"))
     /// For bar(), returns ("bar", line, None)
-    pub fn find_callees_with_lines(&mut self, path: &Path, content: &str, symbol_name: &str) -> Vec<(String, usize, Option<String>)> {
+    pub fn find_callees_with_lines(
+        &mut self,
+        path: &Path,
+        content: &str,
+        symbol_name: &str,
+    ) -> Vec<(String, usize, Option<String>)> {
         let symbol = match self.find_symbol(path, content, symbol_name) {
             Some(s) => s,
             None => return Vec::new(),
@@ -488,7 +498,11 @@ impl SymbolParser {
         }
     }
 
-    fn find_python_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize, Option<String>)> {
+    fn find_python_calls_with_lines(
+        &mut self,
+        source: &str,
+        base_line: usize,
+    ) -> Vec<(String, usize, Option<String>)> {
         let tree = match self.python_parser.parse(source, None) {
             Some(t) => t,
             None => return Vec::new(),
@@ -537,7 +551,11 @@ impl SymbolParser {
         }
     }
 
-    fn find_rust_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize, Option<String>)> {
+    fn find_rust_calls_with_lines(
+        &mut self,
+        source: &str,
+        base_line: usize,
+    ) -> Vec<(String, usize, Option<String>)> {
         let tree = match self.rust_parser.parse(source, None) {
             Some(t) => t,
             None => return Vec::new(),
@@ -567,7 +585,11 @@ impl SymbolParser {
                     // Parse qualifier::name, qualifier.name, or just name
                     // For Rust: foo::bar() or foo.bar() or bar()
                     if let Some(sep_pos) = func_text.rfind("::").or_else(|| func_text.rfind('.')) {
-                        let sep_len = if func_text[sep_pos..].starts_with("::") { 2 } else { 1 };
+                        let sep_len = if func_text[sep_pos..].starts_with("::") {
+                            2
+                        } else {
+                            1
+                        };
                         let qualifier = &func_text[..sep_pos];
                         let name = &func_text[sep_pos + sep_len..];
                         calls.push((name.to_string(), line, Some(qualifier.to_string())));

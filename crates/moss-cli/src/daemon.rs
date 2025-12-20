@@ -16,7 +16,10 @@ pub enum Request {
     #[serde(rename = "callees")]
     Callees { symbol: String, file: String },
     #[serde(rename = "expand")]
-    Expand { symbol: String, file: Option<String> },
+    Expand {
+        symbol: String,
+        file: Option<String>,
+    },
     #[serde(rename = "status")]
     Status,
     #[serde(rename = "shutdown")]
@@ -39,7 +42,10 @@ impl DaemonClient {
     pub fn new(root: &Path) -> Self {
         let socket_path = root.join(".moss/daemon.sock").to_string_lossy().to_string();
         let root_path = root.to_path_buf();
-        Self { socket_path, root_path }
+        Self {
+            socket_path,
+            root_path,
+        }
     }
 
     pub fn is_available(&self) -> bool {
@@ -108,12 +114,8 @@ impl DaemonClient {
 
         // Use reasonable per-operation timeouts - these reset on each read/write
         // For truly long operations, chunked responses handle progress
-        stream
-            .set_read_timeout(Some(Duration::from_secs(120)))
-            .ok();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(10)))
-            .ok();
+        stream.set_read_timeout(Some(Duration::from_secs(120))).ok();
+        stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
 
         let request_json = serde_json::to_string(request)
             .map_err(|e| format!("Failed to serialize request: {}", e))?;
@@ -139,11 +141,14 @@ impl DaemonClient {
             return self.read_chunked_response(&mut stream, &response_line);
         }
 
-        serde_json::from_str(&response_line)
-            .map_err(|e| format!("Failed to parse response: {}", e))
+        serde_json::from_str(&response_line).map_err(|e| format!("Failed to parse response: {}", e))
     }
 
-    fn read_chunked_response(&self, stream: &mut UnixStream, header: &str) -> Result<Response, String> {
+    fn read_chunked_response(
+        &self,
+        stream: &mut UnixStream,
+        header: &str,
+    ) -> Result<Response, String> {
         // Parse header to get total size
         #[derive(Deserialize)]
         struct ChunkedHeader {
@@ -185,17 +190,20 @@ impl DaemonClient {
             data.extend_from_slice(&chunk);
         }
 
-        let response_str = String::from_utf8(data)
-            .map_err(|e| format!("Invalid UTF-8 in response: {}", e))?;
+        let response_str =
+            String::from_utf8(data).map_err(|e| format!("Invalid UTF-8 in response: {}", e))?;
 
-        serde_json::from_str(&response_str)
-            .map_err(|e| format!("Failed to parse response: {}", e))
+        serde_json::from_str(&response_str).map_err(|e| format!("Failed to parse response: {}", e))
     }
 
     pub fn path_query(&self, query: &str) -> Result<Vec<PathMatch>, String> {
-        let response = self.query(&Request::Path { query: query.to_string() })?;
+        let response = self.query(&Request::Path {
+            query: query.to_string(),
+        })?;
         if !response.ok {
-            return Err(response.error.unwrap_or_else(|| "Unknown error".to_string()));
+            return Err(response
+                .error
+                .unwrap_or_else(|| "Unknown error".to_string()));
         }
         let data = response.data.ok_or("No data in response")?;
         serde_json::from_value(data).map_err(|e| format!("Failed to parse path matches: {}", e))
@@ -204,7 +212,9 @@ impl DaemonClient {
     pub fn status(&self) -> Result<DaemonStatus, String> {
         let response = self.query(&Request::Status)?;
         if !response.ok {
-            return Err(response.error.unwrap_or_else(|| "Unknown error".to_string()));
+            return Err(response
+                .error
+                .unwrap_or_else(|| "Unknown error".to_string()));
         }
         let data = response.data.ok_or("No data in response")?;
         serde_json::from_value(data).map_err(|e| format!("Failed to parse status: {}", e))
@@ -213,7 +223,9 @@ impl DaemonClient {
     pub fn shutdown(&self) -> Result<(), String> {
         let response = self.query(&Request::Shutdown)?;
         if !response.ok {
-            return Err(response.error.unwrap_or_else(|| "Unknown error".to_string()));
+            return Err(response
+                .error
+                .unwrap_or_else(|| "Unknown error".to_string()));
         }
         Ok(())
     }

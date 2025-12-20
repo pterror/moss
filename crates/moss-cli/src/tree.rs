@@ -106,13 +106,13 @@ pub fn generate_tree(root: &Path, max_depth: Option<usize>, dirs_only: bool) -> 
 fn render_tree(node: &TreeNode, prefix: &str, lines: &mut Vec<String>, dirs_only: bool) {
     // Sort children: directories first, then alphabetically
     let mut children: Vec<_> = node.children.iter().collect();
-    children.sort_by(|(a_name, a_node), (b_name, b_node)| {
-        match (b_node.is_dir, a_node.is_dir) {
+    children.sort_by(
+        |(a_name, a_node), (b_name, b_node)| match (b_node.is_dir, a_node.is_dir) {
             (true, false) => std::cmp::Ordering::Greater,
             (false, true) => std::cmp::Ordering::Less,
             _ => a_name.to_lowercase().cmp(&b_name.to_lowercase()),
-        }
-    });
+        },
+    );
 
     let count = children.len();
     for (i, (name, child)) in children.into_iter().enumerate() {

@@ -4,8 +4,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Python grep → ripgrep** - replace pure-Python file scan with subprocess to rg (9.7s → ~50ms expected)
-2. **Rust health parallelization** - use rayon for parallel file parsing (500ms → ~150ms expected)
+(See CHANGELOG.md v0.6.10 for recent completions)
 
 ## Active Backlog
 
@@ -85,25 +84,22 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ### Performance Profiling (Dec 2025)
 
 **Rust CLI (indexed, warmed):**
-- Fast (3-14ms): path, tree --depth 2, search-tree, callers, expand
+- Fast (3-14ms): path, tree --depth 2, search-tree, callers, expand, grep
 - Medium (40-46ms): symbols, skeleton, callees, complexity, deps, anchors
 - Slow (66ms): summarize (tree-sitter full parse)
-- Slowest (500ms): health (full codebase scan, 3561 files)
+- Slowest (95ms): health (parallel codebase scan, 3561 files)
 
 **Python API (unindexed):**
 - skeleton: 53ms (single file tree-sitter)
 - find_symbols: 723ms (scans all Python files)
-- grep: 9,700ms (pure Python file scan - major bottleneck)
+- grep: ~4ms with Rust CLI, 9.7s fallback (pure Python)
 
-**Hot Path Analysis:**
-- `health`: 99.9% in `analyze_health()` - iterates all files sequentially
-- `grep`: uses `pathlib.glob` + pure Python regex - no parallelism, no ripgrep
-- `find_symbols`: rebuilds symbol index per call (no caching)
+**Completed Optimizations:**
+1. ✅ Rust CLI grep with ripgrep - 9.7s → 4ms (2400x speedup)
+2. ✅ Rust health with rayon - 500ms → 95ms (5x speedup)
 
-**Optimization Opportunities:**
-1. Python grep: shell out to `rg` - expected 200x speedup
-2. Rust health: parallelize with rayon - expected 3-4x speedup
-3. Python find_symbols: use Rust index via daemon - expected 50x speedup
+**Remaining Opportunities:**
+- Python find_symbols: use Rust index via daemon - expected 50x speedup
 
 ### Dogfooding Observations (Dec 2025)
 - `skeleton_format` / `skeleton_expand` - very useful, genuinely saves tokens

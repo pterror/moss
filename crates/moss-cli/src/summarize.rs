@@ -40,13 +40,14 @@ impl ModuleSummary {
         if !self.main_exports.is_empty() {
             lines.push("## Exports".to_string());
             for exp in &self.main_exports {
-                let doc = exp
-                    .docstring
-                    .as_ref()
-                    .and_then(|d| {
-                        let first = d.lines().next().unwrap_or("");
-                        if first.is_empty() { None } else { Some(first.to_string()) }
-                    });
+                let doc = exp.docstring.as_ref().and_then(|d| {
+                    let first = d.lines().next().unwrap_or("");
+                    if first.is_empty() {
+                        None
+                    } else {
+                        Some(first.to_string())
+                    }
+                });
 
                 // Format based on kind
                 let line = match exp.kind.as_str() {
@@ -55,7 +56,8 @@ impl ModuleSummary {
                         // Extract just args from signature if present
                         if let Some(sig) = &exp.signature {
                             if sig.contains('(') {
-                                let args = sig.split_once('(')
+                                let args = sig
+                                    .split_once('(')
                                     .map(|(_, rest)| format!("({}", rest))
                                     .unwrap_or_default();
                                 format!("  {} {}{}", exp.kind, exp.name, args)

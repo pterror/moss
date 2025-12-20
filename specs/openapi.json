@@ -1832,7 +1832,7 @@
     },
     "/search/grep": {
       "post": {
-        "description": "Search for text patterns in files. Uses regex pattern matching to find text in files. Similar to grep/ripgrep but integrated with Moss. GrepResult with matches and statistics",
+        "description": "Search for text patterns in files. Uses the Rust CLI for fast pattern matching if available, falls back to pure Python otherwise. GrepResult with matches and statistics",
         "requestBody": {
           "content": {
             "application/json": {

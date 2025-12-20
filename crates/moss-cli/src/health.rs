@@ -4,6 +4,9 @@
 //! complexity summary, and structural metrics.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use rayon::prelude::*;
 
 use crate::complexity::ComplexityAnalyzer;
 use crate::path_resolve;
@@ -46,7 +49,11 @@ impl HealthReport {
         let health_score = self.calculate_health_score();
         let grade = self.grade();
         lines.push(String::new());
-        lines.push(format!("## Score: {} ({:.0}%)", grade, health_score * 100.0));
+        lines.push(format!(
+            "## Score: {} ({:.0}%)",
+            grade,
+            health_score * 100.0
+        ));
 
         lines.join("\n")
     }
@@ -109,50 +116,97 @@ impl HealthReport {
     }
 }
 
+/// Per-file analysis result for parallel aggregation
+struct FileStats {
+    lines: usize,
+    functions: usize,
+    complexity_sum: usize,
+    max_complexity: usize,
+    high_risk: usize,
+}
+
 pub fn analyze_health(root: &Path) -> HealthReport {
     let all_files = path_resolve::all_files(root);
+    let files: Vec<_> = all_files.iter().filter(|f| f.kind == "file").collect();
 
-    let mut python_files = 0;
-    let mut rust_files = 0;
-    let mut other_files = 0;
-    let mut total_lines = 0;
+    // Atomic counters for file type counts (simple, fast updates)
+    let python_files = AtomicUsize::new(0);
+    let rust_files = AtomicUsize::new(0);
+    let other_files = AtomicUsize::new(0);
 
-    let mut total_functions = 0;
-    let mut total_complexity: usize = 0;
-    let mut max_complexity: usize = 0;
-    let mut high_risk_functions = 0;
+    // Process files in parallel
+    let stats: Vec<FileStats> = files
+        .par_iter()
+        .filter_map(|file| {
+            let path = root.join(&file.path);
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-    let mut analyzer = ComplexityAnalyzer::new();
+            // Count file types
+            match ext {
+                "py" => python_files.fetch_add(1, Ordering::Relaxed),
+                "rs" => rust_files.fetch_add(1, Ordering::Relaxed),
+                _ => other_files.fetch_add(1, Ordering::Relaxed),
+            };
 
-    for file in all_files.iter().filter(|f| f.kind == "file") {
-        let path = root.join(&file.path);
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            let content = std::fs::read_to_string(&path).ok()?;
+            let lines = content.lines().count();
 
-        match ext {
-            "py" => python_files += 1,
-            "rs" => rust_files += 1,
-            _ => other_files += 1,
-        }
+            // Skip complexity analysis for non-code files
+            if ext != "py" && ext != "rs" {
+                return Some(FileStats {
+                    lines,
+                    functions: 0,
+                    complexity_sum: 0,
+                    max_complexity: 0,
+                    high_risk: 0,
+                });
+            }
 
-        // Count lines
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            total_lines += content.lines().count();
+            // Create thread-local analyzer
+            let mut analyzer = ComplexityAnalyzer::new();
+            let report = analyzer.analyze(&path, &content);
 
-            // Analyze complexity for Python/Rust
-            if ext == "py" || ext == "rs" {
-                let report = analyzer.analyze(&path, &content);
-                for func in &report.functions {
-                    total_functions += 1;
-                    total_complexity += func.complexity;
-                    if func.complexity > max_complexity {
-                        max_complexity = func.complexity;
-                    }
-                    if func.complexity > 10 {
-                        high_risk_functions += 1;
-                    }
+            let mut functions = 0;
+            let mut complexity_sum = 0;
+            let mut max_complexity = 0;
+            let mut high_risk = 0;
+
+            for func in &report.functions {
+                functions += 1;
+                complexity_sum += func.complexity;
+                if func.complexity > max_complexity {
+                    max_complexity = func.complexity;
+                }
+                if func.complexity > 10 {
+                    high_risk += 1;
                 }
             }
+
+            Some(FileStats {
+                lines,
+                functions,
+                complexity_sum,
+                max_complexity,
+                high_risk,
+            })
+        })
+        .collect();
+
+    // Aggregate results
+    let mut total_lines = 0;
+    let mut total_functions = 0;
+    let mut total_complexity = 0;
+    let mut max_complexity = 0;
+    let mut high_risk_functions = 0;
+
+    for stat in stats {
+        total_lines += stat.lines;
+        total_functions += stat.functions;
+        total_complexity += stat.complexity_sum;
+        if stat.max_complexity > max_complexity {
+            max_complexity = stat.max_complexity;
         }
+        high_risk_functions += stat.high_risk;
     }
 
     let avg_complexity = if total_functions > 0 {
@@ -162,10 +216,12 @@ pub fn analyze_health(root: &Path) -> HealthReport {
     };
 
     HealthReport {
-        total_files: python_files + rust_files + other_files,
-        python_files,
-        rust_files,
-        other_files,
+        total_files: python_files.load(Ordering::Relaxed)
+            + rust_files.load(Ordering::Relaxed)
+            + other_files.load(Ordering::Relaxed),
+        python_files: python_files.load(Ordering::Relaxed),
+        rust_files: rust_files.load(Ordering::Relaxed),
+        other_files: other_files.load(Ordering::Relaxed),
         total_lines,
         avg_complexity,
         max_complexity,

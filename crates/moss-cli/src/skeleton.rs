@@ -426,7 +426,11 @@ impl SkeletonExtractor {
 
         Some(SkeletonSymbol {
             name,
-            kind: if impl_name.is_some() { "method" } else { "function" },
+            kind: if impl_name.is_some() {
+                "method"
+            } else {
+                "function"
+            },
             signature,
             docstring,
             start_line: node.start_position().row + 1,
@@ -435,7 +439,11 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_struct(&self, node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
+    fn extract_rust_struct(
+        &self,
+        node: &tree_sitter::Node,
+        content: &str,
+    ) -> Option<SkeletonSymbol> {
         let name_node = node.child_by_field_name("name")?;
         let name = content[name_node.byte_range()].to_string();
 
@@ -493,7 +501,11 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_trait(&self, node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
+    fn extract_rust_trait(
+        &self,
+        node: &tree_sitter::Node,
+        content: &str,
+    ) -> Option<SkeletonSymbol> {
         let name_node = node.child_by_field_name("name")?;
         let name = content[name_node.byte_range()].to_string();
 

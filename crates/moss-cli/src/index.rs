@@ -1,7 +1,7 @@
-use rusqlite::{Connection, params};
+use ignore::WalkBuilder;
+use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use ignore::WalkBuilder;
 
 use crate::symbols::{Import, Symbol, SymbolParser};
 
@@ -71,7 +71,7 @@ impl FileIndex {
         if integrity != "ok" {
             return Err(rusqlite::Error::SqliteFailure(
                 rusqlite::ffi::Error::new(11), // SQLITE_CORRUPT
-                Some(format!("Database integrity check failed: {}", integrity))
+                Some(format!("Database integrity check failed: {}", integrity)),
             ));
         }
 
@@ -127,7 +127,7 @@ impl FileIndex {
             CREATE INDEX IF NOT EXISTS idx_imports_file ON imports(file);
             CREATE INDEX IF NOT EXISTS idx_imports_name ON imports(name);
             CREATE INDEX IF NOT EXISTS idx_imports_module ON imports(module);
-            "
+            ",
         )?;
 
         // Check schema version
@@ -215,7 +215,9 @@ impl FileIndex {
         // Get all indexed files with their mtimes
         let mut indexed: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
         {
-            let mut stmt = self.conn.prepare("SELECT path, mtime FROM files WHERE is_dir = 0")?;
+            let mut stmt = self
+                .conn
+                .prepare("SELECT path, mtime FROM files WHERE is_dir = 0")?;
             let mut rows = stmt.query([])?;
             while let Some(row) = rows.next()? {
                 let path: String = row.get(0)?;
@@ -393,9 +395,9 @@ impl FileIndex {
     /// Search files by exact name match
     pub fn find_by_name(&self, name: &str) -> rusqlite::Result<Vec<IndexedFile>> {
         let pattern = format!("%/{}", name);
-        let mut stmt = self.conn.prepare(
-            "SELECT path, is_dir, mtime FROM files WHERE path LIKE ?1 OR path = ?2"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, is_dir, mtime FROM files WHERE path LIKE ?1 OR path = ?2")?;
         let files = stmt
             .query_map(params![pattern, name], |row| {
                 Ok(IndexedFile {
@@ -411,9 +413,9 @@ impl FileIndex {
     /// Search files by stem (filename without extension)
     pub fn find_by_stem(&self, stem: &str) -> rusqlite::Result<Vec<IndexedFile>> {
         let pattern = format!("%/{}%", stem);
-        let mut stmt = self.conn.prepare(
-            "SELECT path, is_dir, mtime FROM files WHERE path LIKE ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, is_dir, mtime FROM files WHERE path LIKE ?1")?;
         let files = stmt
             .query_map(params![pattern], |row| {
                 Ok(IndexedFile {
@@ -428,11 +430,17 @@ impl FileIndex {
 
     /// Count indexed files
     pub fn count(&self) -> rusqlite::Result<usize> {
-        self.conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
+        self.conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
     }
 
     /// Index symbols and call graph for a file
-    pub fn index_file_symbols(&self, path: &str, symbols: &[Symbol], calls: &[(String, String, usize)]) -> rusqlite::Result<()> {
+    pub fn index_file_symbols(
+        &self,
+        path: &str,
+        symbols: &[Symbol],
+        calls: &[(String, String, usize)],
+    ) -> rusqlite::Result<()> {
         // Insert symbols
         for sym in symbols {
             self.conn.execute(
@@ -456,7 +464,10 @@ impl FileIndex {
     /// Resolves through imports: if file A imports X as Y and calls Y(), finds that as a caller of X
     /// Also handles qualified calls: if file A does `import foo` and calls `foo.bar()`, finds caller of `bar`
     /// Also handles method calls: `self.method()` is resolved to the containing class's method
-    pub fn find_callers(&self, symbol_name: &str) -> rusqlite::Result<Vec<(String, String, usize)>> {
+    pub fn find_callers(
+        &self,
+        symbol_name: &str,
+    ) -> rusqlite::Result<Vec<(String, String, usize)>> {
         // Handle Class.method format - split and search for method within class
         let (class_filter, method_name) = if symbol_name.contains('.') {
             let parts: Vec<&str> = symbol_name.splitn(2, '.').collect();
@@ -471,7 +482,7 @@ impl FileIndex {
                 "SELECT c.caller_file, c.caller_symbol, c.line
                  FROM calls c
                  JOIN symbols s ON c.caller_file = s.file AND c.caller_symbol = s.name
-                 WHERE c.callee_name = ?1 AND c.callee_qualifier = 'self' AND s.parent = ?2"
+                 WHERE c.callee_name = ?1 AND c.callee_qualifier = 'self' AND s.parent = ?2",
             )?;
             let callers: Vec<(String, String, usize)> = stmt
                 .query_map(params![method_name, class_name], |row| {
@@ -550,9 +561,13 @@ impl FileIndex {
     }
 
     /// Find callees of a symbol (what it calls)
-    pub fn find_callees(&self, file: &str, symbol_name: &str) -> rusqlite::Result<Vec<(String, usize)>> {
+    pub fn find_callees(
+        &self,
+        file: &str,
+        symbol_name: &str,
+    ) -> rusqlite::Result<Vec<(String, usize)>> {
         let mut stmt = self.conn.prepare(
-            "SELECT callee_name, line FROM calls WHERE caller_file = ?1 AND caller_symbol = ?2"
+            "SELECT callee_name, line FROM calls WHERE caller_file = ?1 AND caller_symbol = ?2",
         )?;
         let callees = stmt
             .query_map(params![file, symbol_name], |row| {
@@ -564,7 +579,11 @@ impl FileIndex {
 
     /// Find callees with resolved import info (name, line, source_module)
     /// Returns: (local_name, line, Option<(source_module, original_name)>)
-    pub fn find_callees_resolved(&self, file: &str, symbol_name: &str) -> rusqlite::Result<Vec<(String, usize, Option<(String, String)>)>> {
+    pub fn find_callees_resolved(
+        &self,
+        file: &str,
+        symbol_name: &str,
+    ) -> rusqlite::Result<Vec<(String, usize, Option<(String, String)>)>> {
         let callees = self.find_callees(file, symbol_name)?;
         let mut resolved = Vec::with_capacity(callees.len());
 
@@ -578,9 +597,9 @@ impl FileIndex {
 
     /// Find a symbol by name
     pub fn find_symbol(&self, name: &str) -> rusqlite::Result<Vec<(String, String, usize, usize)>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT file, kind, start_line, end_line FROM symbols WHERE name = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT file, kind, start_line, end_line FROM symbols WHERE name = ?1")?;
         let symbols = stmt
             .query_map(params![name], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
@@ -591,23 +610,24 @@ impl FileIndex {
 
     /// Get call graph stats
     pub fn call_graph_stats(&self) -> rusqlite::Result<(usize, usize, usize)> {
-        let symbol_count: usize = self.conn.query_row(
-            "SELECT COUNT(*) FROM symbols", [], |row| row.get(0)
-        )?;
-        let call_count: usize = self.conn.query_row(
-            "SELECT COUNT(*) FROM calls", [], |row| row.get(0)
-        )?;
-        let import_count: usize = self.conn.query_row(
-            "SELECT COUNT(*) FROM imports", [], |row| row.get(0)
-        ).unwrap_or(0);
+        let symbol_count: usize =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM symbols", [], |row| row.get(0))?;
+        let call_count: usize = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM calls", [], |row| row.get(0))?;
+        let import_count: usize = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM imports", [], |row| row.get(0))
+            .unwrap_or(0);
         Ok((symbol_count, call_count, import_count))
     }
 
     /// Get imports for a file
     pub fn get_imports(&self, file: &str) -> rusqlite::Result<Vec<Import>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT module, name, alias, line FROM imports WHERE file = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT module, name, alias, line FROM imports WHERE file = ?1")?;
         let imports = stmt
             .query_map(params![file], |row| {
                 Ok(Import {
@@ -635,13 +655,16 @@ impl FileIndex {
         }
 
         // Filter to files that exist in index
-        candidates.into_iter().filter(|path| {
-            self.conn.query_row(
-                "SELECT 1 FROM files WHERE path = ?1",
-                params![path],
-                |_| Ok(())
-            ).is_ok()
-        }).collect()
+        candidates
+            .into_iter()
+            .filter(|path| {
+                self.conn
+                    .query_row("SELECT 1 FROM files WHERE path = ?1", params![path], |_| {
+                        Ok(())
+                    })
+                    .is_ok()
+            })
+            .collect()
     }
 
     /// Check if a file exports (defines) a given symbol
@@ -650,17 +673,21 @@ impl FileIndex {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM symbols WHERE file = ?1 AND name = ?2 AND parent IS NULL",
             params![file, symbol],
-            |row| row.get(0)
+            |row| row.get(0),
         )?;
         Ok(count > 0)
     }
 
     /// Resolve a name in a file's context to its source module
     /// Returns: (source_module, original_name) if found
-    pub fn resolve_import(&self, file: &str, name: &str) -> rusqlite::Result<Option<(String, String)>> {
+    pub fn resolve_import(
+        &self,
+        file: &str,
+        name: &str,
+    ) -> rusqlite::Result<Option<(String, String)>> {
         // Check for direct import or alias
         let mut stmt = self.conn.prepare(
-            "SELECT module, name FROM imports WHERE file = ?1 AND (name = ?2 OR alias = ?2)"
+            "SELECT module, name FROM imports WHERE file = ?1 AND (name = ?2 OR alias = ?2)",
         )?;
         let result: Option<(Option<String>, String)> = stmt
             .query_row(params![file, name], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -676,9 +703,9 @@ impl FileIndex {
         }
 
         // Check for wildcard imports - name could come from any of them
-        let mut stmt = self.conn.prepare(
-            "SELECT module FROM imports WHERE file = ?1 AND name = '*'"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT module FROM imports WHERE file = ?1 AND name = '*'")?;
         let wildcards: Vec<String> = stmt
             .query_map(params![file], |row| row.get(0))?
             .filter_map(|r: Result<Option<String>, _>| r.ok().flatten())
@@ -705,9 +732,9 @@ impl FileIndex {
 
     /// Find which files import a given module
     pub fn find_importers(&self, module: &str) -> rusqlite::Result<Vec<(String, String, usize)>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT file, name, line FROM imports WHERE module = ?1 OR module LIKE ?2"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT file, name, line FROM imports WHERE module = ?1 OR module LIKE ?2")?;
         let pattern = format!("{}%", module);
         let importers = stmt
             .query_map(params![module, pattern], |row| {
@@ -799,12 +826,14 @@ impl FileIndex {
         let (new_files, modified_files, deleted_files) = self.get_changed_files()?;
 
         // Only process Python/Rust files
-        let changed_files: Vec<String> = new_files.into_iter()
+        let changed_files: Vec<String> = new_files
+            .into_iter()
             .chain(modified_files.into_iter())
             .filter(|f| f.ends_with(".py") || f.ends_with(".rs"))
             .collect();
 
-        let deleted_source_files: Vec<String> = deleted_files.into_iter()
+        let deleted_source_files: Vec<String> = deleted_files
+            .into_iter()
             .filter(|f| f.ends_with(".py") || f.ends_with(".rs"))
             .collect();
 
@@ -901,10 +930,14 @@ impl FileIndex {
         );
 
         let mut stmt = self.conn.prepare(&sql)?;
-        let patterns: Vec<String> = parts.iter().map(|p| format!("%{}%", p.to_lowercase())).collect();
+        let patterns: Vec<String> = parts
+            .iter()
+            .map(|p| format!("%{}%", p.to_lowercase()))
+            .collect();
 
         // Bind all parameters
-        let params: Vec<&dyn rusqlite::ToSql> = patterns.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            patterns.iter().map(|p| p as &dyn rusqlite::ToSql).collect();
         let files = stmt
             .query_map(params.as_slice(), |row| {
                 Ok(IndexedFile {
@@ -922,8 +955,8 @@ impl FileIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_index_creation() {
@@ -963,11 +996,23 @@ mod tests {
         let dir = tempdir().unwrap();
         fs::create_dir_all(dir.path().join("src/mylib")).unwrap();
         // Module that exports MyClass
-        fs::write(dir.path().join("src/mylib/exports.py"), "class MyClass: pass").unwrap();
+        fs::write(
+            dir.path().join("src/mylib/exports.py"),
+            "class MyClass: pass",
+        )
+        .unwrap();
         // Module that exports OtherThing
-        fs::write(dir.path().join("src/mylib/other.py"), "def OtherThing(): pass").unwrap();
+        fs::write(
+            dir.path().join("src/mylib/other.py"),
+            "def OtherThing(): pass",
+        )
+        .unwrap();
         // Consumer with wildcard imports
-        fs::write(dir.path().join("src/consumer.py"), "from mylib.exports import *\nfrom mylib.other import *\nMyClass()").unwrap();
+        fs::write(
+            dir.path().join("src/consumer.py"),
+            "from mylib.exports import *\nfrom mylib.other import *\nMyClass()",
+        )
+        .unwrap();
 
         let mut index = FileIndex::open(dir.path()).unwrap();
         index.refresh().unwrap();
@@ -984,7 +1029,9 @@ mod tests {
         assert_eq!(name, "MyClass");
 
         // Resolve OtherThing - should find it in mylib.other
-        let result = index.resolve_import("src/consumer.py", "OtherThing").unwrap();
+        let result = index
+            .resolve_import("src/consumer.py", "OtherThing")
+            .unwrap();
         assert!(result.is_some(), "Should resolve OtherThing");
         let (module, name) = result.unwrap();
         assert_eq!(module, "mylib.other");
@@ -1018,11 +1065,20 @@ class MyClass:
         assert!(!callers.is_empty(), "Should find callers of method_b");
 
         let caller_names: Vec<&str> = callers.iter().map(|(_, name, _)| name.as_str()).collect();
-        assert!(caller_names.contains(&"method_a"), "method_a should call method_b");
-        assert!(caller_names.contains(&"method_c"), "method_c should call method_b");
+        assert!(
+            caller_names.contains(&"method_a"),
+            "method_a should call method_b"
+        );
+        assert!(
+            caller_names.contains(&"method_c"),
+            "method_c should call method_b"
+        );
 
         // Find callers of MyClass.method_b - more specific
         let callers = index.find_callers("MyClass.method_b").unwrap();
-        assert!(!callers.is_empty(), "Should find callers of MyClass.method_b");
+        assert!(
+            !callers.is_empty(),
+            "Should find callers of MyClass.method_b"
+        );
     }
 }

@@ -7,6 +7,7 @@ mod cfg;
 mod complexity;
 mod daemon;
 mod deps;
+mod grep;
 mod health;
 mod index;
 mod path_resolve;
@@ -45,10 +46,19 @@ impl Profiler {
         let mut prev = std::time::Duration::ZERO;
         for (name, elapsed) in &self.events {
             let delta = *elapsed - prev;
-            eprintln!("  {:20} {:>8.2}ms (+{:.2}ms)", name, elapsed.as_secs_f64() * 1000.0, delta.as_secs_f64() * 1000.0);
+            eprintln!(
+                "  {:20} {:>8.2}ms (+{:.2}ms)",
+                name,
+                elapsed.as_secs_f64() * 1000.0,
+                delta.as_secs_f64() * 1000.0
+            );
             prev = *elapsed;
         }
-        eprintln!("  {:20} {:>8.2}ms", "total", self.start.elapsed().as_secs_f64() * 1000.0);
+        eprintln!(
+            "  {:20} {:>8.2}ms",
+            "total",
+            self.start.elapsed().as_secs_f64() * 1000.0
+        );
     }
 }
 
@@ -300,6 +310,28 @@ enum Commands {
         #[arg(short, long)]
         root: Option<PathBuf>,
     },
+
+    /// Search for text patterns in files (fast ripgrep-based search)
+    Grep {
+        /// Regex pattern to search for
+        pattern: String,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Glob pattern to filter files (e.g., "*.py")
+        #[arg(short, long)]
+        glob: Option<String>,
+
+        /// Maximum number of matches to return
+        #[arg(short, long, default_value = "100")]
+        limit: usize,
+
+        /// Case-insensitive search
+        #[arg(short = 'i', long)]
+        ignore_case: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -346,10 +378,14 @@ fn main() {
     profiler.mark("parsed_args");
 
     let exit_code = match cli.command {
-        Commands::Path { query, root } => cmd_path(&query, root.as_deref(), cli.json, &mut profiler),
-        Commands::View { target, root, line_numbers } => {
-            cmd_view(&target, root.as_deref(), line_numbers, cli.json)
+        Commands::Path { query, root } => {
+            cmd_path(&query, root.as_deref(), cli.json, &mut profiler)
         }
+        Commands::View {
+            target,
+            root,
+            line_numbers,
+        } => cmd_view(&target, root.as_deref(), line_numbers, cli.json),
         Commands::SearchTree { query, root, limit } => {
             cmd_search_tree(&query, root.as_deref(), limit, cli.json)
         }
@@ -357,37 +393,74 @@ fn main() {
         Commands::Expand { symbol, file, root } => {
             cmd_expand(&symbol, file.as_deref(), root.as_deref(), cli.json)
         }
-        Commands::Symbols { file, root } => cmd_symbols(&file, root.as_deref(), cli.json, &mut profiler),
+        Commands::Symbols { file, root } => {
+            cmd_symbols(&file, root.as_deref(), cli.json, &mut profiler)
+        }
         Commands::Callees { symbol, file, root } => {
             // Support file:symbol, file::symbol, or file#symbol syntax
             let (actual_file, actual_symbol) = parse_file_symbol(&symbol, file);
-            cmd_callees(&actual_symbol, actual_file.as_deref(), root.as_deref(), cli.json)
+            cmd_callees(
+                &actual_symbol,
+                actual_file.as_deref(),
+                root.as_deref(),
+                cli.json,
+            )
         }
-        Commands::Callers { symbol, root } => cmd_callers(&symbol, root.as_deref(), cli.json, &mut profiler),
-        Commands::Tree { path, root, depth, dirs_only } => {
-            cmd_tree(&path, root.as_deref(), depth, dirs_only, cli.json)
+        Commands::Callers { symbol, root } => {
+            cmd_callers(&symbol, root.as_deref(), cli.json, &mut profiler)
         }
-        Commands::Skeleton { file, root, docstrings } => {
-            cmd_skeleton(&file, root.as_deref(), docstrings, cli.json, &mut profiler)
-        }
+        Commands::Tree {
+            path,
+            root,
+            depth,
+            dirs_only,
+        } => cmd_tree(&path, root.as_deref(), depth, dirs_only, cli.json),
+        Commands::Skeleton {
+            file,
+            root,
+            docstrings,
+        } => cmd_skeleton(&file, root.as_deref(), docstrings, cli.json, &mut profiler),
         Commands::Anchors { file, root, query } => {
             cmd_anchors(&file, root.as_deref(), query.as_deref(), cli.json)
         }
-        Commands::Deps { file, root, imports_only, exports_only } => {
-            cmd_deps(&file, root.as_deref(), imports_only, exports_only, cli.json)
-        }
-        Commands::Imports { query, root, resolve } => {
-            cmd_imports(&query, root.as_deref(), resolve, cli.json)
-        }
-        Commands::Complexity { file, root, threshold } => {
-            cmd_complexity(&file, root.as_deref(), threshold, cli.json)
-        }
-        Commands::Cfg { file, root, function } => {
-            cmd_cfg(&file, root.as_deref(), function.as_deref(), cli.json)
-        }
+        Commands::Deps {
+            file,
+            root,
+            imports_only,
+            exports_only,
+        } => cmd_deps(&file, root.as_deref(), imports_only, exports_only, cli.json),
+        Commands::Imports {
+            query,
+            root,
+            resolve,
+        } => cmd_imports(&query, root.as_deref(), resolve, cli.json),
+        Commands::Complexity {
+            file,
+            root,
+            threshold,
+        } => cmd_complexity(&file, root.as_deref(), threshold, cli.json),
+        Commands::Cfg {
+            file,
+            root,
+            function,
+        } => cmd_cfg(&file, root.as_deref(), function.as_deref(), cli.json),
         Commands::Daemon { action, root } => cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Health { root } => cmd_health(root.as_deref(), cli.json, &mut profiler),
         Commands::Summarize { file, root } => cmd_summarize(&file, root.as_deref(), cli.json),
+        Commands::Grep {
+            pattern,
+            root,
+            glob,
+            limit,
+            ignore_case,
+        } => cmd_grep(
+            &pattern,
+            root.as_deref(),
+            glob.as_deref(),
+            limit,
+            ignore_case,
+            cli.json,
+        ),
     };
 
     profiler.mark("done");
@@ -555,7 +628,10 @@ fn cmd_reindex(root: Option<&Path>, call_graph: bool) -> i32 {
                     if call_graph {
                         match idx.refresh_call_graph() {
                             Ok((symbols, calls, imports)) => {
-                                println!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
+                                println!(
+                                    "Indexed {} symbols, {} calls, {} imports",
+                                    symbols, calls, imports
+                                );
                             }
                             Err(e) => {
                                 eprintln!("Error indexing call graph: {}", e);
@@ -597,10 +673,7 @@ fn cmd_expand(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool)
         // Search all Python/Rust files
         path_resolve::all_files(&root)
             .into_iter()
-            .filter(|m| {
-                m.kind == "file"
-                    && (m.path.ends_with(".py") || m.path.ends_with(".rs"))
-            })
+            .filter(|m| m.kind == "file" && (m.path.ends_with(".py") || m.path.ends_with(".rs")))
             .map(|m| root.join(&m.path))
             .collect()
     };
@@ -714,10 +787,15 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
             let file_path = if let Some(file) = file {
                 // Resolve provided file
                 let matches = path_resolve::resolve(file, &root);
-                matches.iter().find(|m| m.kind == "file").map(|m| m.path.clone())
+                matches
+                    .iter()
+                    .find(|m| m.kind == "file")
+                    .map(|m| m.path.clone())
             } else {
                 // Find file from symbol
-                idx.find_symbol(symbol).ok().and_then(|syms| syms.first().map(|(f, _, _, _)| f.clone()))
+                idx.find_symbol(symbol)
+                    .ok()
+                    .and_then(|syms| syms.first().map(|(f, _, _, _)| f.clone()))
             };
 
             if let Some(file_path) = file_path {
@@ -739,7 +817,10 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
                     }
                 }
             }
-            eprintln!("No callees found for: {} (index has {} calls)", symbol, calls);
+            eprintln!(
+                "No callees found for: {} (index has {} calls)",
+                symbol, calls
+            );
             return 1;
         }
     }
@@ -756,14 +837,22 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
         }
         match idx.refresh_call_graph() {
             Ok((symbols, calls, imports)) => {
-                eprintln!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
+                eprintln!(
+                    "Indexed {} symbols, {} calls, {} imports",
+                    symbols, calls, imports
+                );
 
                 // Retry with index
                 let file_path = if let Some(file) = file {
                     let matches = path_resolve::resolve(file, &root);
-                    matches.iter().find(|m| m.kind == "file").map(|m| m.path.clone())
+                    matches
+                        .iter()
+                        .find(|m| m.kind == "file")
+                        .map(|m| m.path.clone())
                 } else {
-                    idx.find_symbol(symbol).ok().and_then(|syms| syms.first().map(|(f, _, _, _)| f.clone()))
+                    idx.find_symbol(symbol)
+                        .ok()
+                        .and_then(|syms| syms.first().map(|(f, _, _, _)| f.clone()))
                 };
 
                 if let Some(file_path) = file_path {
@@ -831,7 +920,10 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
                 }
             }
             // Index populated but no results - symbol not called anywhere
-            eprintln!("No callers found for: {} (index has {} calls)", symbol, calls);
+            eprintln!(
+                "No callers found for: {} (index has {} calls)",
+                symbol, calls
+            );
             return 1;
         }
     }
@@ -853,7 +945,10 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
         // Now build call graph
         match idx.refresh_call_graph() {
             Ok((symbols, calls, imports)) => {
-                eprintln!("Indexed {} symbols, {} calls, {} imports", symbols, calls, imports);
+                eprintln!(
+                    "Indexed {} symbols, {} calls, {} imports",
+                    symbols, calls, imports
+                );
                 profiler.mark("call_graph");
 
                 // Retry the query
@@ -888,7 +983,13 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
     1
 }
 
-fn cmd_tree(path: &str, root: Option<&Path>, depth: Option<usize>, dirs_only: bool, json: bool) -> i32 {
+fn cmd_tree(
+    path: &str,
+    root: Option<&Path>,
+    depth: Option<usize>,
+    dirs_only: bool,
+    json: bool,
+) -> i32 {
     let root = root
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap());
@@ -930,13 +1031,22 @@ fn cmd_tree(path: &str, root: Option<&Path>, depth: Option<usize>, dirs_only: bo
             println!("{}", line);
         }
         println!();
-        println!("{} directories, {} files", result.dir_count, result.file_count);
+        println!(
+            "{} directories, {} files",
+            result.dir_count, result.file_count
+        );
     }
 
     0
 }
 
-fn cmd_skeleton(file: &str, root: Option<&Path>, include_docstrings: bool, json: bool, profiler: &mut Profiler) -> i32 {
+fn cmd_skeleton(
+    file: &str,
+    root: Option<&Path>,
+    include_docstrings: bool,
+    json: bool,
+    profiler: &mut Profiler,
+) -> i32 {
     let root = root
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap());
@@ -1081,7 +1191,13 @@ fn cmd_anchors(file: &str, root: Option<&Path>, query: Option<&str>, json: bool)
     0
 }
 
-fn cmd_deps(file: &str, root: Option<&Path>, imports_only: bool, exports_only: bool, json: bool) -> i32 {
+fn cmd_deps(
+    file: &str,
+    root: Option<&Path>,
+    imports_only: bool,
+    exports_only: bool,
+    json: bool,
+) -> i32 {
     let root = root
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap());
@@ -1110,27 +1226,35 @@ fn cmd_deps(file: &str, root: Option<&Path>, imports_only: bool, exports_only: b
 
     if json {
         let imports_json: Vec<_> = if !exports_only {
-            result.imports.iter().map(|i| {
-                serde_json::json!({
-                    "module": i.module,
-                    "names": i.names,
-                    "alias": i.alias,
-                    "line": i.line,
-                    "is_relative": i.is_relative
+            result
+                .imports
+                .iter()
+                .map(|i| {
+                    serde_json::json!({
+                        "module": i.module,
+                        "names": i.names,
+                        "alias": i.alias,
+                        "line": i.line,
+                        "is_relative": i.is_relative
+                    })
                 })
-            }).collect()
+                .collect()
         } else {
             Vec::new()
         };
 
         let exports_json: Vec<_> = if !imports_only {
-            result.exports.iter().map(|e| {
-                serde_json::json!({
-                    "name": e.name,
-                    "kind": e.kind,
-                    "line": e.line
+            result
+                .exports
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "name": e.name,
+                        "kind": e.kind,
+                        "line": e.line
+                    })
                 })
-            }).collect()
+                .collect()
         } else {
             Vec::new()
         };
@@ -1156,7 +1280,11 @@ fn cmd_deps(file: &str, root: Option<&Path>, imports_only: bool, exports_only: b
                 };
 
                 if imp.names.is_empty() {
-                    let alias = imp.alias.as_ref().map(|a| format!(" as {}", a)).unwrap_or_default();
+                    let alias = imp
+                        .alias
+                        .as_ref()
+                        .map(|a| format!(" as {}", a))
+                        .unwrap_or_default();
                     println!("  import {}{}", prefix, alias);
                 } else {
                     println!("  from {} import {}", prefix, imp.names.join(", "));
@@ -1182,7 +1310,8 @@ fn cmd_imports(query: &str, root: Option<&Path>, resolve: bool, json: bool) -> i
 
     // Try index first, but fall back to direct parsing if not available
     let idx = index::FileIndex::open(&root).ok();
-    let import_count = idx.as_ref()
+    let import_count = idx
+        .as_ref()
         .and_then(|i| i.call_graph_stats().ok())
         .map(|(_, _, imports)| imports)
         .unwrap_or(0);
@@ -1190,7 +1319,9 @@ fn cmd_imports(query: &str, root: Option<&Path>, resolve: bool, json: bool) -> i
     // For resolve mode, we need the index - no direct fallback possible
     if resolve {
         if import_count == 0 {
-            eprintln!("Import resolution requires indexed call graph. Run: moss reindex --call-graph");
+            eprintln!(
+                "Import resolution requires indexed call graph. Run: moss reindex --call-graph"
+            );
             return 1;
         }
         let idx = idx.unwrap();
@@ -1215,11 +1346,14 @@ fn cmd_imports(query: &str, root: Option<&Path>, resolve: bool, json: bool) -> i
         match idx.resolve_import(file_path, name) {
             Ok(Some((module, orig_name))) => {
                 if json {
-                    println!("{}", serde_json::json!({
-                        "name": name,
-                        "module": module,
-                        "original_name": orig_name
-                    }));
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "name": name,
+                            "module": module,
+                            "original_name": orig_name
+                        })
+                    );
                 } else {
                     if name == orig_name {
                         println!("{} <- {}", name, module);
@@ -1282,25 +1416,32 @@ fn cmd_imports(query: &str, root: Option<&Path>, resolve: bool, json: bool) -> i
         let result = extractor.extract(&full_path, &content);
 
         // Convert deps::Import to symbols::Import format for output
-        let imports: Vec<symbols::Import> = result.imports.iter().flat_map(|imp| {
-            if imp.names.is_empty() {
-                // "import x" or "import x as y"
-                vec![symbols::Import {
-                    module: None,
-                    name: imp.module.clone(),
-                    alias: imp.alias.clone(),
-                    line: imp.line,
-                }]
-            } else {
-                // "from x import a, b, c"
-                imp.names.iter().map(|name| symbols::Import {
-                    module: Some(imp.module.clone()),
-                    name: name.clone(),
-                    alias: None,
-                    line: imp.line,
-                }).collect()
-            }
-        }).collect();
+        let imports: Vec<symbols::Import> = result
+            .imports
+            .iter()
+            .flat_map(|imp| {
+                if imp.names.is_empty() {
+                    // "import x" or "import x as y"
+                    vec![symbols::Import {
+                        module: None,
+                        name: imp.module.clone(),
+                        alias: imp.alias.clone(),
+                        line: imp.line,
+                    }]
+                } else {
+                    // "from x import a, b, c"
+                    imp.names
+                        .iter()
+                        .map(|name| symbols::Import {
+                            module: Some(imp.module.clone()),
+                            name: name.clone(),
+                            alias: None,
+                            line: imp.line,
+                        })
+                        .collect()
+                }
+            })
+            .collect();
 
         output_imports(&imports, file_path, json)
     }
@@ -1332,7 +1473,11 @@ fn output_imports(imports: &[symbols::Import], file_path: &str, json: bool) -> i
     } else {
         println!("# Imports in {}", file_path);
         for imp in imports {
-            let alias = imp.alias.as_ref().map(|a| format!(" as {}", a)).unwrap_or_default();
+            let alias = imp
+                .alias
+                .as_ref()
+                .map(|a| format!(" as {}", a))
+                .unwrap_or_default();
             if let Some(module) = &imp.module {
                 println!("  from {} import {}{}", module, imp.name, alias);
             } else {
@@ -1372,7 +1517,11 @@ fn cmd_complexity(file: &str, root: Option<&Path>, threshold: Option<usize>, jso
 
     // Filter by threshold if specified
     let functions: Vec<_> = if let Some(t) = threshold {
-        report.functions.into_iter().filter(|f| f.complexity >= t).collect()
+        report
+            .functions
+            .into_iter()
+            .filter(|f| f.complexity >= t)
+            .collect()
     } else {
         report.functions
     };
@@ -1416,10 +1565,15 @@ fn cmd_complexity(file: &str, root: Option<&Path>, threshold: Option<usize>, jso
         println!("# {} - Complexity Analysis", file_match.path);
 
         if functions.is_empty() {
-            println!("\nNo functions found{}",
-                threshold.map(|t| format!(" above threshold {}", t)).unwrap_or_default());
+            println!(
+                "\nNo functions found{}",
+                threshold
+                    .map(|t| format!(" above threshold {}", t))
+                    .unwrap_or_default()
+            );
         } else {
-            let avg = functions.iter().map(|f| f.complexity).sum::<usize>() as f64 / functions.len() as f64;
+            let avg = functions.iter().map(|f| f.complexity).sum::<usize>() as f64
+                / functions.len() as f64;
             let max = functions.iter().map(|f| f.complexity).max().unwrap_or(0);
             let high_risk = functions.iter().filter(|f| f.complexity > 10).count();
 
@@ -1435,7 +1589,11 @@ fn cmd_complexity(file: &str, root: Option<&Path>, threshold: Option<usize>, jso
 
             println!("\n## Functions (by complexity)");
             for f in &sorted {
-                let parent = f.parent.as_ref().map(|p| format!("{}.", p)).unwrap_or_default();
+                let parent = f
+                    .parent
+                    .as_ref()
+                    .map(|p| format!("{}.", p))
+                    .unwrap_or_default();
                 println!(
                     "  {:3} [{}] {}{} (lines {}-{})",
                     f.complexity,
@@ -1611,7 +1769,10 @@ fn cmd_daemon(action: DaemonAction, root: Option<&Path>, json: bool) -> i32 {
         DaemonAction::Shutdown => {
             if !client.is_available() {
                 if json {
-                    println!("{}", serde_json::json!({"success": false, "error": "daemon not running"}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"success": false, "error": "daemon not running"})
+                    );
                 } else {
                     eprintln!("Daemon is not running");
                 }
@@ -1647,7 +1808,10 @@ fn cmd_daemon(action: DaemonAction, root: Option<&Path>, json: bool) -> i32 {
         DaemonAction::Start => {
             if client.is_available() {
                 if json {
-                    println!("{}", serde_json::json!({"success": false, "error": "daemon already running"}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"success": false, "error": "daemon already running"})
+                    );
                 } else {
                     eprintln!("Daemon is already running");
                 }
@@ -1664,7 +1828,10 @@ fn cmd_daemon(action: DaemonAction, root: Option<&Path>, json: bool) -> i32 {
                 0
             } else {
                 if json {
-                    println!("{}", serde_json::json!({"success": false, "error": "failed to start daemon"}));
+                    println!(
+                        "{}",
+                        serde_json::json!({"success": false, "error": "failed to start daemon"})
+                    );
                 } else {
                     eprintln!("Failed to start daemon");
                 }
@@ -1762,4 +1929,42 @@ fn cmd_summarize(file: &str, root: Option<&Path>, json: bool) -> i32 {
     }
 
     0
+}
+
+fn cmd_grep(
+    pattern: &str,
+    root: Option<&Path>,
+    glob_pattern: Option<&str>,
+    limit: usize,
+    ignore_case: bool,
+    json: bool,
+) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    match grep::grep(pattern, &root, glob_pattern, limit, ignore_case) {
+        Ok(result) => {
+            if json {
+                println!("{}", serde_json::to_string(&result).unwrap());
+            } else {
+                if result.matches.is_empty() {
+                    eprintln!("No matches found for: {}", pattern);
+                    return 1;
+                }
+                for m in &result.matches {
+                    println!("{}:{}:{}", m.file, m.line, m.content);
+                }
+                eprintln!(
+                    "\n{} matches in {} files",
+                    result.total_matches, result.files_searched
+                );
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            1
+        }
+    }
 }

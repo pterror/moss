@@ -184,7 +184,12 @@ impl CfgBuilder {
         }
     }
 
-    fn new_node(&mut self, node_type: NodeType, statement: Option<String>, start_line: Option<usize>) -> CfgNode {
+    fn new_node(
+        &mut self,
+        node_type: NodeType,
+        statement: Option<String>,
+        start_line: Option<usize>,
+    ) -> CfgNode {
         let id = self.node_counter;
         self.node_counter += 1;
         CfgNode {
@@ -256,7 +261,11 @@ impl CfgBuilder {
         let mut edges = Vec::new();
 
         // Entry node
-        let entry = self.new_node(NodeType::Entry, Some("ENTRY".to_string()), Some(func_node.start_position().row + 1));
+        let entry = self.new_node(
+            NodeType::Entry,
+            Some("ENTRY".to_string()),
+            Some(func_node.start_position().row + 1),
+        );
         nodes.push(entry);
 
         // Exit node
@@ -342,12 +351,19 @@ impl CfgBuilder {
 
                     // True branch (consequence)
                     if let Some(consequence) = node.child_by_field_name("consequence") {
-                        let true_exits =
-                            self.process_python_body(&consequence, content, branch_id, nodes, edges);
+                        let true_exits = self.process_python_body(
+                            &consequence,
+                            content,
+                            branch_id,
+                            nodes,
+                            edges,
+                        );
 
                         // Mark first edge as true branch
                         for edge in edges.iter_mut().rev() {
-                            if edge.source == branch_id && edge.edge_type as u8 == EdgeType::Sequential as u8 {
+                            if edge.source == branch_id
+                                && edge.edge_type as u8 == EdgeType::Sequential as u8
+                            {
                                 edge.edge_type = EdgeType::ConditionalTrue;
                                 break;
                             }
@@ -358,12 +374,19 @@ impl CfgBuilder {
 
                     // False branch (alternative - else/elif)
                     if let Some(alternative) = node.child_by_field_name("alternative") {
-                        let false_exits =
-                            self.process_python_body(&alternative, content, branch_id, nodes, edges);
+                        let false_exits = self.process_python_body(
+                            &alternative,
+                            content,
+                            branch_id,
+                            nodes,
+                            edges,
+                        );
 
                         // Mark edge as false branch
                         for edge in edges.iter_mut().rev() {
-                            if edge.source == branch_id && edge.edge_type as u8 == EdgeType::Sequential as u8 {
+                            if edge.source == branch_id
+                                && edge.edge_type as u8 == EdgeType::Sequential as u8
+                            {
                                 edge.edge_type = EdgeType::ConditionalFalse;
                                 break;
                             }
@@ -557,7 +580,11 @@ impl CfgBuilder {
         let mut edges = Vec::new();
 
         // Entry node
-        let entry = self.new_node(NodeType::Entry, Some("ENTRY".to_string()), Some(func_node.start_position().row + 1));
+        let entry = self.new_node(
+            NodeType::Entry,
+            Some("ENTRY".to_string()),
+            Some(func_node.start_position().row + 1),
+        );
         nodes.push(entry);
 
         // Exit node
@@ -643,7 +670,9 @@ impl CfgBuilder {
                         let true_exits =
                             self.process_rust_body(&consequence, content, branch_id, nodes, edges);
                         for edge in edges.iter_mut().rev() {
-                            if edge.source == branch_id && edge.edge_type as u8 == EdgeType::Sequential as u8 {
+                            if edge.source == branch_id
+                                && edge.edge_type as u8 == EdgeType::Sequential as u8
+                            {
                                 edge.edge_type = EdgeType::ConditionalTrue;
                                 break;
                             }
@@ -656,7 +685,9 @@ impl CfgBuilder {
                         let false_exits =
                             self.process_rust_body(&alternative, content, branch_id, nodes, edges);
                         for edge in edges.iter_mut().rev() {
-                            if edge.source == branch_id && edge.edge_type as u8 == EdgeType::Sequential as u8 {
+                            if edge.source == branch_id
+                                && edge.edge_type as u8 == EdgeType::Sequential as u8
+                            {
                                 edge.edge_type = EdgeType::ConditionalFalse;
                                 break;
                             }

@@ -45,7 +45,11 @@ impl DepsResult {
                 };
 
                 if imp.names.is_empty() {
-                    let alias = imp.alias.as_ref().map(|a| format!(" as {}", a)).unwrap_or_default();
+                    let alias = imp
+                        .alias
+                        .as_ref()
+                        .map(|a| format!(" as {}", a))
+                        .unwrap_or_default();
                     lines.push(format!("import {}{}", prefix, alias));
                 } else {
                     lines.push(format!("from {} import {}", prefix, imp.names.join(", ")));
@@ -151,7 +155,8 @@ impl DepsExtractor {
                                 let alias_node = child.child_by_field_name("alias");
                                 if let Some(name) = name_node {
                                     let module = content[name.byte_range()].to_string();
-                                    let alias = alias_node.map(|a| content[a.byte_range()].to_string());
+                                    let alias =
+                                        alias_node.map(|a| content[a.byte_range()].to_string());
                                     imports.push(Import {
                                         module,
                                         names: Vec::new(),
@@ -279,10 +284,7 @@ impl DepsExtractor {
                 "use_declaration" => {
                     let text = &content[node.byte_range()];
                     // Extract module path (simplified)
-                    let module = text
-                        .trim_start_matches("use ")
-                        .trim_end_matches(';')
-                        .trim();
+                    let module = text.trim_start_matches("use ").trim_end_matches(';').trim();
 
                     // Extract names if it's a use with braces
                     let mut names = Vec::new();
@@ -300,7 +302,9 @@ impl DepsExtractor {
                                 names,
                                 alias: None,
                                 line: node.start_position().row + 1,
-                                is_relative: prefix.starts_with("crate") || prefix.starts_with("self") || prefix.starts_with("super"),
+                                is_relative: prefix.starts_with("crate")
+                                    || prefix.starts_with("self")
+                                    || prefix.starts_with("super"),
                             });
                         }
                     } else {
@@ -309,7 +313,9 @@ impl DepsExtractor {
                             names: Vec::new(),
                             alias: None,
                             line: node.start_position().row + 1,
-                            is_relative: module.starts_with("crate") || module.starts_with("self") || module.starts_with("super"),
+                            is_relative: module.starts_with("crate")
+                                || module.starts_with("self")
+                                || module.starts_with("super"),
                         });
                     }
                 }

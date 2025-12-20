@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.6.10
+
+### Performance Improvements
+
+**Rust CLI grep command** (new)
+- `moss grep <pattern>` - fast text search using ripgrep's grep crate
+- JSON output mode with `--json` for programmatic use
+- Supports glob patterns (`--glob "*.py"`), case-insensitive (`-i`), result limits (`-l`)
+- ~4ms for codebase-wide searches (was 9.7s with pure Python)
+- Python API now calls Rust CLI when available
+
+**Parallel health analysis**
+- `moss health` now uses rayon for parallel file processing
+- ~95ms down from ~500ms (5x faster)
+- File counting and complexity analysis run concurrently
+
 ## v0.6.9
 
 ### Index Reliability

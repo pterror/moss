@@ -2539,8 +2539,8 @@ class SearchAPI:
     ) -> GrepResult:
         """Search for text patterns in files.
 
-        Uses regex pattern matching to find text in files.
-        Similar to grep/ripgrep but integrated with Moss.
+        Uses the Rust CLI for fast pattern matching if available,
+        falls back to pure Python otherwise.
 
         Args:
             pattern: Regex pattern to search for
@@ -2553,11 +2553,88 @@ class SearchAPI:
         Returns:
             GrepResult with matches and statistics
         """
-        import re
-
         search_path = Path(path) if path else self.root
         if not search_path.is_absolute():
             search_path = self.root / search_path
+
+        # Try Rust CLI first
+        result = self._grep_rust_cli(pattern, search_path, glob, limit, ignore_case)
+        if result is not None:
+            return result
+
+        # Fallback to pure Python
+        return self._grep_python(pattern, search_path, glob, limit, ignore_case)
+
+    def _grep_rust_cli(
+        self,
+        pattern: str,
+        search_path: Path,
+        glob: str | None,
+        limit: int,
+        ignore_case: bool,
+    ) -> GrepResult | None:
+        """Search using Rust CLI. Returns None if not available."""
+        import json
+        import shutil
+        import subprocess
+
+        moss_path = shutil.which("moss")
+        if not moss_path:
+            return None
+
+        cmd = [moss_path, "grep", "--json", "-l", str(limit)]
+        if ignore_case:
+            cmd.append("-i")
+        if glob:
+            cmd.extend(["--glob", glob])
+        cmd.extend([pattern, "-r", str(search_path)])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+
+        if result.returncode != 0:
+            # Command not found or failed - fall back
+            return None
+
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return None
+
+        matches = [
+            GrepMatch(
+                file_path=m["file"],
+                line_number=m["line"],
+                line_content=m["content"],
+                match_start=m.get("start", 0),
+                match_end=m.get("end", 0),
+            )
+            for m in data.get("matches", [])
+        ]
+
+        return GrepResult(
+            matches=matches,
+            total_matches=data.get("total_matches", len(matches)),
+            files_searched=data.get("files_searched", 0),
+        )
+
+    def _grep_python(
+        self,
+        pattern: str,
+        search_path: Path,
+        glob: str | None,
+        limit: int,
+        ignore_case: bool,
+    ) -> GrepResult:
+        """Pure Python fallback for grep."""
+        import re
 
         flags = re.IGNORECASE if ignore_case else 0
         try:
@@ -2569,7 +2646,6 @@ class SearchAPI:
         files_searched = 0
         total_matches = 0
 
-        # Determine file pattern
         file_pattern = glob or "**/*"
 
         for file_path in search_path.glob(file_pattern):

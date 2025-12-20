@@ -142,8 +142,11 @@ fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatc
         let name_normalized = normalize_for_match(&name);
         let stem_normalized = normalize_for_match(&stem);
 
-        if name == query_lower || stem == query_lower
-            || name_normalized == query_normalized || stem_normalized == query_normalized {
+        if name == query_lower
+            || stem == query_lower
+            || name_normalized == query_normalized
+            || stem_normalized == query_normalized
+        {
             exact_matches.push(PathMatch {
                 path: path.clone(),
                 kind: if *is_dir { "directory" } else { "file" }.to_string(),
@@ -164,7 +167,9 @@ fn resolve_from_paths(query: &str, all_paths: &[(String, bool)]) -> Vec<PathMatc
 
     for (path, is_dir) in all_paths {
         let mut buf = Vec::new();
-        if let Some(score) = pattern.score(nucleo_matcher::Utf32Str::new(path, &mut buf), &mut matcher) {
+        if let Some(score) =
+            pattern.score(nucleo_matcher::Utf32Str::new(path, &mut buf), &mut matcher)
+        {
             fuzzy_matches.push(PathMatch {
                 path: path.clone(),
                 kind: if *is_dir { "directory" } else { "file" }.to_string(),

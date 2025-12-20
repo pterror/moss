@@ -52,7 +52,11 @@ impl ComplexityReport {
     }
 
     pub fn max_complexity(&self) -> usize {
-        self.functions.iter().map(|f| f.complexity).max().unwrap_or(0)
+        self.functions
+            .iter()
+            .map(|f| f.complexity)
+            .max()
+            .unwrap_or(0)
     }
 
     pub fn high_risk_count(&self) -> usize {
@@ -146,7 +150,12 @@ impl ComplexityAnalyzer {
 
                         // Recurse into class body
                         if cursor.goto_first_child() {
-                            self.collect_python_functions(cursor, content, functions, Some(&class_name));
+                            self.collect_python_functions(
+                                cursor,
+                                content,
+                                functions,
+                                Some(&class_name),
+                            );
                             cursor.goto_parent();
                         }
                         if cursor.goto_next_sibling() {
@@ -191,8 +200,8 @@ impl ComplexityAnalyzer {
                 "with_statement" => *complexity += 1,
                 "assert_statement" => *complexity += 1,
                 "conditional_expression" => *complexity += 1, // ternary
-                "boolean_operator" => *complexity += 1, // and/or
-                "if_clause" => *complexity += 1, // comprehension conditions
+                "boolean_operator" => *complexity += 1,       // and/or
+                "if_clause" => *complexity += 1,              // comprehension conditions
                 _ => {}
             }
 
@@ -270,7 +279,12 @@ impl ComplexityAnalyzer {
                         if let Some(body) = node.child_by_field_name("body") {
                             let mut body_cursor = body.walk();
                             if body_cursor.goto_first_child() {
-                                self.collect_rust_functions(&mut body_cursor, content, functions, Some(&impl_name));
+                                self.collect_rust_functions(
+                                    &mut body_cursor,
+                                    content,
+                                    functions,
+                                    Some(&impl_name),
+                                );
                             }
                         }
                     }
@@ -389,13 +403,25 @@ def with_loop(items):
 "#;
         let report = analyzer.analyze(&PathBuf::from("test.py"), content);
 
-        let simple = report.functions.iter().find(|f| f.name == "simple").unwrap();
+        let simple = report
+            .functions
+            .iter()
+            .find(|f| f.name == "simple")
+            .unwrap();
         assert_eq!(simple.complexity, 1);
 
-        let with_if = report.functions.iter().find(|f| f.name == "with_if").unwrap();
+        let with_if = report
+            .functions
+            .iter()
+            .find(|f| f.name == "with_if")
+            .unwrap();
         assert_eq!(with_if.complexity, 2); // 1 base + 1 if
 
-        let with_loop = report.functions.iter().find(|f| f.name == "with_loop").unwrap();
+        let with_loop = report
+            .functions
+            .iter()
+            .find(|f| f.name == "with_loop")
+            .unwrap();
         assert_eq!(with_loop.complexity, 3); // 1 base + 1 for + 1 if
     }
 
@@ -424,13 +450,33 @@ fn with_match(x: Option<i32>) -> i32 {
 "#;
         let report = analyzer.analyze(&PathBuf::from("test.rs"), content);
 
-        let simple = report.functions.iter().find(|f| f.name == "simple").unwrap();
+        let simple = report
+            .functions
+            .iter()
+            .find(|f| f.name == "simple")
+            .unwrap();
         assert_eq!(simple.complexity, 1);
 
-        let with_if = report.functions.iter().find(|f| f.name == "with_if").unwrap();
-        assert!(with_if.complexity >= 2, "with_if should have complexity >= 2, got {}", with_if.complexity);
+        let with_if = report
+            .functions
+            .iter()
+            .find(|f| f.name == "with_if")
+            .unwrap();
+        assert!(
+            with_if.complexity >= 2,
+            "with_if should have complexity >= 2, got {}",
+            with_if.complexity
+        );
 
-        let with_match = report.functions.iter().find(|f| f.name == "with_match").unwrap();
-        assert!(with_match.complexity >= 1, "with_match should have complexity >= 1, got {}", with_match.complexity);
+        let with_match = report
+            .functions
+            .iter()
+            .find(|f| f.name == "with_match")
+            .unwrap();
+        assert!(
+            with_match.complexity >= 1,
+            "with_match should have complexity >= 1, got {}",
+            with_match.complexity
+        );
     }
 }
