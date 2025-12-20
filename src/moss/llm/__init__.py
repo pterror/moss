@@ -18,13 +18,11 @@ Example:
     response = complete("Summarize this text: ...")
 
     # Specify provider explicitly
-    provider = get_provider("anthropic", model="claude-sonnet-4-20250514")
+    provider = get_provider("litellm", model="claude-sonnet-4-20250514")
 
 Available providers (when dependencies installed):
 - cli: Shell out to llm/claude/gemini CLI tools (zero dependencies)
-- anthropic: Direct Anthropic SDK
-- openai: Direct OpenAI SDK
-- litellm: LiteLLM multi-provider gateway
+- litellm: LiteLLM multi-provider gateway (100+ providers including Anthropic, OpenAI)
 - llm: Simon Willison's llm library
 - bifrost: Bifrost high-performance gateway
 - llamacpp: llama.cpp local inference
@@ -154,22 +152,6 @@ def _register_builtin_providers() -> None:
     from moss.llm.providers.cli import CLIProvider
 
     register_provider("cli", CLIProvider)
-
-    # Anthropic SDK
-    try:
-        from moss.llm.providers.anthropic import AnthropicProvider
-
-        register_provider("anthropic", AnthropicProvider)
-    except ImportError:
-        pass
-
-    # OpenAI SDK
-    try:
-        from moss.llm.providers.openai import OpenAIProvider
-
-        register_provider("openai", OpenAIProvider)
-    except ImportError:
-        pass
 
     # LiteLLM
     try:

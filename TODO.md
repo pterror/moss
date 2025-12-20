@@ -10,6 +10,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Recently Completed
 
+- **Plugin consolidation** (Dec 2025):
+  - LLM providers: removed anthropic.py and openai.py, use litellm for all providers
+  - Linter plugins: existing architecture already good (SARIFAdapter + per-tool plugins)
 - **TaskTree implementation** (`src/moss/task_tree.py`):
   - Hierarchical task state with arbitrary depth
   - Path-based context (chain from root to current leaf)
@@ -137,14 +140,8 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] `moss review` - PR analysis using rules + LLM
 
 ### Plugin Simplification
-- [ ] LLM providers: choose consistent approach
-  - Option A: keep direct SDKs → add gemini.py for parity
-  - Option B: litellm only → remove anthropic.py, openai.py
-  - Evaluate: does direct SDK offer anything litellm doesn't?
-- [ ] Linter plugins: evaluate generic SARIF runner vs per-tool plugins
-  - Tools with SARIF → generic runner
-  - Tools with custom JSON → minimal parser
-  - Special invocation needs → keep plugin
+- [x] LLM providers: consolidated to litellm-only (Dec 2025)
+- [x] Linter plugins: existing SARIFAdapter + per-tool plugins is correct design
 
 ### Dependency Introspection
 - [ ] `moss external-deps` improvements - filtering, show which features include a dep

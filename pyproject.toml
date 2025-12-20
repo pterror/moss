@@ -89,13 +89,7 @@ lsp = [
 llm = [
     "litellm>=1.0.0",
 ]
-anthropic = [
-    "anthropic>=0.18.0",
-]
-openai = [
-    "openai>=1.0.0",
-]
-# gemini: use litellm instead (no direct provider)
+# anthropic/openai: use litellm instead (consolidated Dec 2025)
 dotenv = [
     "python-dotenv>=1.0.0",
 ]
@@ -116,7 +110,7 @@ eval = [
 # Meta-group: common optional features for most users
 # Excludes: dev, docs, eval (swebench), llm-lib, local-llm
 all = [
-    "moss[server,mcp,lsp,llm,anthropic,openai,dotenv,tree-sitter,chroma,tui]",
+    "moss[server,mcp,lsp,llm,dotenv,tree-sitter,chroma,tui]",
 ]
 
 [build-system]
