@@ -54,6 +54,8 @@ Few orthogonal primitives beat many overlapping features. Lua got this right wit
 
 Nothing good appears from scratch. Iterate. CLAUDE.md grew through 20+ commits, not upfront investment. Features emerge from use, not design documents. Start minimal, capture what you learn, repeat.
 
+Put smarts in the tool, not the schema. Tool definitions cost context. One DWIM tool with runtime intent parsing beats N specialized tools with N schema definitions. The grammar lives in moss, not the protocol layer.
+
 ### Hyper-Modular Architecture
 
 Prefer many small, focused modules over fewer large ones:
