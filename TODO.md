@@ -8,10 +8,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
    - [x] Import tracking (SQLite table: file → module, name, alias)
    - [x] `moss imports <file>` command to query imports from index
    - [x] `moss imports <file>:<name> --resolve` to trace name to source module
-   - [ ] Use imports in callers/callees (cross-file resolution)
+   - [x] Use imports in callers/callees (cross-file resolution via import alias JOIN)
+   - [x] Handle qualified names (module.func vs func) - store callee_qualifier, JOIN on imports
    - [ ] Wildcard import resolution (from X import * → check X's exports)
    - [ ] Handle method calls (obj.method() → Class.method)
-   - [ ] Handle qualified names (module.func vs func)
 
 2. **Index reliability**
    - [ ] Index invalidation (inotify/file watching for auto-refresh)
@@ -37,6 +37,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
 - [ ] Revisit CLAUDE.md dogfooding section - tools should be self-evident, not need instructions
 - [ ] MCP response ephemeral handling - large responses should stream/page instead of filling context
+- [ ] Agent sandboxing - restrict bash/shell access, security-conscious CLI wrappers
 
 **Medium:**
 - [ ] Compact tool encoding for moss agent - bypass JSON Schema overhead

@@ -466,7 +466,10 @@ impl SymbolParser {
     }
 
     /// Find callees with line numbers (for call graph indexing)
-    pub fn find_callees_with_lines(&mut self, path: &Path, content: &str, symbol_name: &str) -> Vec<(String, usize)> {
+    /// Returns: (callee_name, line, Option<qualifier>)
+    /// For foo.bar(), returns ("bar", line, Some("foo"))
+    /// For bar(), returns ("bar", line, None)
+    pub fn find_callees_with_lines(&mut self, path: &Path, content: &str, symbol_name: &str) -> Vec<(String, usize, Option<String>)> {
         let symbol = match self.find_symbol(path, content, symbol_name) {
             Some(s) => s,
             None => return Vec::new(),
@@ -485,7 +488,7 @@ impl SymbolParser {
         }
     }
 
-    fn find_python_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize)> {
+    fn find_python_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize, Option<String>)> {
         let tree = match self.python_parser.parse(source, None) {
             Some(t) => t,
             None => return Vec::new(),
@@ -502,7 +505,7 @@ impl SymbolParser {
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
         base_line: usize,
-        calls: &mut Vec<(String, usize)>,
+        calls: &mut Vec<(String, usize, Option<String>)>,
     ) {
         loop {
             let node = cursor.node();
@@ -510,9 +513,16 @@ impl SymbolParser {
             if node.kind() == "call" {
                 if let Some(func_node) = node.child_by_field_name("function") {
                     let func_text = &content[func_node.byte_range()];
-                    let name = func_text.split('.').last().unwrap_or(func_text);
                     let line = node.start_position().row + base_line;
-                    calls.push((name.to_string(), line));
+
+                    // Parse qualifier.name or just name
+                    if let Some(dot_pos) = func_text.rfind('.') {
+                        let qualifier = &func_text[..dot_pos];
+                        let name = &func_text[dot_pos + 1..];
+                        calls.push((name.to_string(), line, Some(qualifier.to_string())));
+                    } else {
+                        calls.push((func_text.to_string(), line, None));
+                    }
                 }
             }
 
@@ -527,7 +537,7 @@ impl SymbolParser {
         }
     }
 
-    fn find_rust_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize)> {
+    fn find_rust_calls_with_lines(&mut self, source: &str, base_line: usize) -> Vec<(String, usize, Option<String>)> {
         let tree = match self.rust_parser.parse(source, None) {
             Some(t) => t,
             None => return Vec::new(),
@@ -544,7 +554,7 @@ impl SymbolParser {
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
         base_line: usize,
-        calls: &mut Vec<(String, usize)>,
+        calls: &mut Vec<(String, usize, Option<String>)>,
     ) {
         loop {
             let node = cursor.node();
@@ -552,15 +562,18 @@ impl SymbolParser {
             if node.kind() == "call_expression" {
                 if let Some(func_node) = node.child_by_field_name("function") {
                     let func_text = &content[func_node.byte_range()];
-                    let name = func_text
-                        .split("::")
-                        .last()
-                        .unwrap_or(func_text)
-                        .split('.')
-                        .last()
-                        .unwrap_or(func_text);
                     let line = node.start_position().row + base_line;
-                    calls.push((name.to_string(), line));
+
+                    // Parse qualifier::name, qualifier.name, or just name
+                    // For Rust: foo::bar() or foo.bar() or bar()
+                    if let Some(sep_pos) = func_text.rfind("::").or_else(|| func_text.rfind('.')) {
+                        let sep_len = if func_text[sep_pos..].starts_with("::") { 2 } else { 1 };
+                        let qualifier = &func_text[..sep_pos];
+                        let name = &func_text[sep_pos + sep_len..];
+                        calls.push((name.to_string(), line, Some(qualifier.to_string())));
+                    } else {
+                        calls.push((func_text.to_string(), line, None));
+                    }
                 }
             }
 

@@ -6,7 +6,7 @@ use ignore::WalkBuilder;
 use crate::symbols::{Import, Symbol, SymbolParser};
 
 // Not yet public - just delete .moss/index.sqlite on schema changes
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Clone)]
 pub struct IndexedFile {
@@ -44,14 +44,17 @@ impl FileIndex {
             CREATE INDEX IF NOT EXISTS idx_files_name ON files(path);
 
             -- Call graph for fast caller/callee lookups
+            -- callee_qualifier: for foo.bar(), this is 'foo'; for bar(), this is NULL
             CREATE TABLE IF NOT EXISTS calls (
                 caller_file TEXT NOT NULL,
                 caller_symbol TEXT NOT NULL,
                 callee_name TEXT NOT NULL,
+                callee_qualifier TEXT,
                 line INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_calls_callee ON calls(callee_name);
             CREATE INDEX IF NOT EXISTS idx_calls_caller ON calls(caller_file, caller_symbol);
+            CREATE INDEX IF NOT EXISTS idx_calls_qualifier ON calls(callee_qualifier);
 
             -- Symbol definitions for fast symbol lookups
             CREATE TABLE IF NOT EXISTS symbols (
@@ -288,11 +291,25 @@ impl FileIndex {
     }
 
     /// Find callers of a symbol by name (from call graph)
-    /// Uses case-insensitive matching and supports partial matches
+    /// Resolves through imports: if file A imports X as Y and calls Y(), finds that as a caller of X
+    /// Also handles qualified calls: if file A does `import foo` and calls `foo.bar()`, finds caller of `bar`
     pub fn find_callers(&self, symbol_name: &str) -> rusqlite::Result<Vec<(String, String, usize)>> {
-        // Try exact match first
+        // Combined query: direct calls + calls via import aliases + qualified calls via module imports
+        // 1. Direct calls where callee_name matches
+        // 2. Calls where the callee_name matches an import alias/name that refers to our symbol
+        // 3. Qualified calls (foo.bar()) where foo is an imported module containing bar
         let mut stmt = self.conn.prepare(
-            "SELECT caller_file, caller_symbol, line FROM calls WHERE callee_name = ?1"
+            "SELECT caller_file, caller_symbol, line FROM calls WHERE callee_name = ?1
+             UNION
+             SELECT c.caller_file, c.caller_symbol, c.line
+             FROM calls c
+             JOIN imports i ON c.caller_file = i.file AND c.callee_name = COALESCE(i.alias, i.name)
+             WHERE i.name = ?1
+             UNION
+             SELECT c.caller_file, c.caller_symbol, c.line
+             FROM calls c
+             JOIN imports i ON c.caller_file = i.file AND c.callee_qualifier = COALESCE(i.alias, i.name)
+             WHERE c.callee_name = ?1 AND i.module IS NULL"
         )?;
         let callers: Vec<(String, String, usize)> = stmt
             .query_map(params![symbol_name], |row| {
@@ -305,7 +322,7 @@ impl FileIndex {
             return Ok(callers);
         }
 
-        // Try case-insensitive match
+        // Try case-insensitive match (direct only for simplicity)
         let mut stmt = self.conn.prepare(
             "SELECT caller_file, caller_symbol, line FROM calls WHERE LOWER(callee_name) = LOWER(?1)"
         )?;
@@ -346,6 +363,20 @@ impl FileIndex {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(callees)
+    }
+
+    /// Find callees with resolved import info (name, line, source_module)
+    /// Returns: (local_name, line, Option<(source_module, original_name)>)
+    pub fn find_callees_resolved(&self, file: &str, symbol_name: &str) -> rusqlite::Result<Vec<(String, usize, Option<(String, String)>)>> {
+        let callees = self.find_callees(file, symbol_name)?;
+        let mut resolved = Vec::with_capacity(callees.len());
+
+        for (callee_name, line) in callees {
+            let source = self.resolve_import(file, &callee_name)?;
+            resolved.push((callee_name, line, source));
+        }
+
+        Ok(resolved)
     }
 
     /// Find a symbol by name
@@ -494,10 +525,10 @@ impl FileIndex {
                 let kind = sym.kind.as_str();
                 if kind == "function" || kind == "method" {
                     let calls = parser.find_callees_with_lines(&full_path, &content, &sym.name);
-                    for (callee_name, line) in calls {
+                    for (callee_name, line, qualifier) in calls {
                         tx.execute(
-                            "INSERT INTO calls (caller_file, caller_symbol, callee_name, line) VALUES (?1, ?2, ?3, ?4)",
-                            params![file_path, sym.name, callee_name, line],
+                            "INSERT INTO calls (caller_file, caller_symbol, callee_name, callee_qualifier, line) VALUES (?1, ?2, ?3, ?4, ?5)",
+                            params![file_path, sym.name, callee_name, qualifier, line],
                         )?;
                         call_count += 1;
                     }
