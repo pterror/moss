@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
+from moss.cache import EphemeralCache
 from moss.dwim import ToolMatch, analyze_intent, resolve_tool
 from moss.task_tree import NoteExpiry, TaskTree
 
@@ -299,8 +300,11 @@ class DWIMLoop:
         self._turns: list[TurnResult] = []
         self._task_tree: TaskTree | None = None
         self._last_result: str | None = None
-        self._result_cache: dict[str, str] = {}  # id -> full result
-        self._result_counter: int = 0
+        self._ephemeral_cache = EphemeralCache(
+            max_entries=50,
+            default_ttl=600.0,  # 10 minutes for agent session
+            preview_lines=30,
+        )
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt for terse agent mode."""
@@ -329,18 +333,22 @@ Do NOT repeat the same command. Never output prose."""
     def _preview_result(self, result: str) -> tuple[str, str | None]:
         """Create preview of result, cache full if large.
 
+        Uses EphemeralCache for TTL-based storage and proper preview generation.
+
         Returns:
             (preview_text, result_id or None)
         """
         if len(result) <= RESULT_PREVIEW_LIMIT:
             return result, None
 
-        # Store full result, return preview
-        self._result_counter += 1
-        result_id = f"r{self._result_counter:04d}"
-        self._result_cache[result_id] = result
-
-        preview = result[:RESULT_PREVIEW_LIMIT] + f"... [{result_id}]"
+        # Store in ephemeral cache, get preview
+        result_id = self._ephemeral_cache.store(result)
+        preview = self._ephemeral_cache.generate_preview(result, RESULT_PREVIEW_LIMIT)
+        # Add result ID reference
+        preview = preview.replace(
+            "available via resource link",
+            f"fetch {result_id}",
+        )
         return preview, result_id
 
     def _build_turn_context(self) -> str:
@@ -463,9 +471,10 @@ Do NOT repeat the same command. Never output prose."""
         # fetch: result_id - expand cached result
         if verb == "fetch" and intent.target:
             result_id = intent.target
-            if result_id in self._result_cache:
-                return self._result_cache[result_id]
-            return f"Unknown result ID: {result_id}"
+            content = self._ephemeral_cache.get_content(result_id)
+            if content:
+                return content
+            return f"Unknown or expired result ID: {result_id}"
 
         return None
 
@@ -499,8 +508,7 @@ Do NOT repeat the same command. Never output prose."""
         self._turns = []
         self._task_tree = TaskTree(task)
         self._last_result = None
-        self._result_cache = {}
-        self._result_counter = 0
+        self._ephemeral_cache.clear()  # Fresh cache for new run
         start_time = datetime.now(UTC)
 
         try:
