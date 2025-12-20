@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- **Vanilla Agent Loop**: Minimal agent loop option (LLM + Tools + TaskTree only) for testing/baseline
 - **Editing Tools**: Add native editing tools to Moss (essential for agentic loops)
 - **TUI Interface**: Interactive TUI for Moss (needs careful UX planning)
 
 ## Recently Completed
+
+- **Vanilla Agent Loop** (Dec 2025):
+  - Minimal agent loop implementation with `TaskTree`, LLM, and Tools
+  - Uses token-efficient terse intents (DWIM-style) for communication
+  - Integrated into `MossAPI` via `AgentAPI`
+  - Unit tests in `tests/test_vanilla_loop.py`
 
 - **Docs Site Styling** (Dec 2025):
   - Added glassmorphism effects with backdrop-filter
