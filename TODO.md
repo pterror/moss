@@ -64,6 +64,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Natural language → tree operation mapping
 - [ ] "what's in X" → view, "show me Y" → view, "full code of Z" → expand
 
+### Workflow Collaboration
+- [ ] Pattern detection - heuristic (frequency, similarity, rapid re-runs) + LLM for judgment
+- [ ] Workflow self-creation - agent creates workflows from detected patterns autonomously
+- [ ] Workflow discovery - surface candidates from Makefile/package.json/CI, agent or user picks
+- [ ] Prompt header - minimal "available: test, lint, ci" announcement in agent prompts
+- [ ] Scaffold command - `moss workflow new <name>` with templates + optional LLM assist
+
 ### Skills System
 - [ ] `TriggerMode` protocol for plugin-extensible triggers
 - [ ] `.moss/skills/` directory for user-defined skills
