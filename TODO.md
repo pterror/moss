@@ -13,11 +13,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 **Large:**
 - [ ] Memory system - layered memory for cross-session learning (see `docs/memory-system.md`)
-- [ ] Externalize LLM prompts from `agent_loop.py` - prompts are text, not code
-  - Move `REPAIR_ENGINE_PROMPT`, `LLMConfig.system_prompt`, `_build_prompt()` templates to external files
-  - Data-driven loop definitions (YAML/TOML) instead of Python classes
-  - Separate prompt engineering from execution logic
-  - Enables iteration without code changes, follows "Structure > Text"
+- [ ] Workflow/prompt externalization - plugin architecture for agent definitions
+  - Data-driven format (YAML/TOML) as default plugin, Python workflows remain for complex logic
+  - Move prompts to external files, load at runtime
+  - Enables: workflow composition, agent manipulation, user-defined workflows in `.moss/workflows/`
+  - Tooling opportunities: visualizers, validators, graph editors
 
 ### Strict Harness (guardrails for all agents)
 
