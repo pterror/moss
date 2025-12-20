@@ -4,6 +4,13 @@
 
 ### Features
 
+**Workflow externalization** (new)
+- Design doc for TOML-based workflow/prompt format (`docs/workflow-format.md`)
+- Prompt loader with user override support (`src/moss/prompts/`)
+- `load_prompt(name)` checks `.moss/prompts/` then built-ins
+- `REPAIR_ENGINE_PROMPT` externalized as proof of concept
+- Integration test for hunk-level rollback with verification failure
+
 **Memory integration in agent loops** (new)
 - `LLMToolExecutor` now accepts `memory: MemoryManager` parameter
 - Automatic memory context injected into LLM system prompts

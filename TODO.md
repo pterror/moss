@@ -4,9 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Design workflow externalization format (TOML schema for loops/prompts)
-2. Move REPAIR_ENGINE_PROMPT to external file as proof of concept
-3. Add integration test for hunk-level rollback with verification failure
+1. Implement workflow loader (parse TOML, resolve @references)
+2. Extract LLMConfig.system_prompt to external file
+3. Add `.moss/prompts/` user override example to docs
 
 ## Active Backlog
 
