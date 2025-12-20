@@ -4,10 +4,15 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- **Editing Tools**: Add native editing tools to Moss (essential for agentic loops)
 - **TUI Interface**: Interactive TUI for Moss (needs careful UX planning)
 
 ## Recently Completed
+
+- **Editing Tools** (Dec 2025):
+  - Added `EditAPI` for direct file manipulation (write, replace, insert)
+  - Integrated native editing tools into `MossAPI` and `DWIMLoop`
+  - Added `write`, `replace`, and `insert` verbs to agentic loops
+  - Full test coverage in `tests/test_edit.py`
 
 - **Vanilla Agent Loop** (Dec 2025):
   - Minimal agent loop implementation with `TaskTree`, LLM, and Tools
