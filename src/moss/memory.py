@@ -704,6 +704,52 @@ class PatternMatcher:
         return []
 
 
+class PatternTriggeredPlugin:
+    """Plugin that triggers memories based on file patterns.
+
+    Configured via [memory.patterns] in moss.toml.
+    """
+
+    def __init__(self, patterns: dict[str, str | list[str]] | None = None):
+        self._patterns = patterns or {}
+
+    @property
+    def name(self) -> str:
+        return "pattern_triggers"
+
+    @property
+    def layer(self) -> Literal["automatic", "triggered", "on_demand"]:
+        return "triggered"
+
+    async def get_context(self, state: StateSnapshot) -> str | None:
+        """Check if any file in state matches patterns."""
+        if not state.files:
+            return None
+
+        import fnmatch
+
+        triggers = []
+        for pattern, action in self._patterns.items():
+            for file_path in state.files:
+                if fnmatch.fnmatch(file_path, pattern):
+                    if isinstance(action, list):
+                        triggers.extend(action)
+                    else:
+                        triggers.append(action)
+                    break  # Match found for this pattern
+
+        if not triggers:
+            return None
+
+        return "\n".join(triggers)
+
+    def configure(self, config: dict[str, Any]) -> None:
+        """Configure patterns from config."""
+        # This plugin is usually configured via constructor from MemoryConfig.patterns,
+        # but supports additional config if needed.
+        pass
+
+
 @dataclass
 class MemoryContext:
     """Context injected from memory into prompts."""
@@ -986,6 +1032,7 @@ class MemoryLayer:
         plugins: Sequence[MemoryPlugin] | None = None,
         memory_manager: MemoryManager | None = None,
         max_episodes: int = 10000,
+        patterns: dict[str, str | list[str]] | None = None,
     ):
         """Initialize the memory layer.
 
@@ -993,6 +1040,7 @@ class MemoryLayer:
             plugins: Pre-loaded plugins (if None, discovery is run)
             memory_manager: MemoryManager for built-in episodic/semantic stores
             max_episodes: Maximum episodes to store in episodic memory
+            patterns: Trigger patterns from config
         """
         self._plugins: list[MemoryPlugin] = list(plugins) if plugins else []
         self._by_layer: dict[str, list[MemoryPlugin]] = {
@@ -1005,6 +1053,10 @@ class MemoryLayer:
         )
         self._config: dict[str, dict[str, Any]] = {}
 
+        # Add pattern triggers if configured
+        if patterns:
+            self._plugins.append(PatternTriggeredPlugin(patterns))
+
         for plugin in self._plugins:
             self._by_layer[plugin.layer].append(plugin)
 
@@ -1012,7 +1064,25 @@ class MemoryLayer:
     def default(cls, project_dir: Path | None = None, max_episodes: int = 10000) -> MemoryLayer:
         """Create a MemoryLayer with discovered plugins and defaults."""
         plugins = discover_plugins(project_dir)
-        return cls(plugins=plugins, max_episodes=max_episodes)
+        patterns = None
+
+        # Try to load config patterns
+        if project_dir:
+            try:
+                from moss.toml_config import find_config_file, load_toml_config
+
+                config_path = find_config_file(project_dir)
+                if config_path:
+                    config = load_toml_config(config_path)
+                    patterns = config.memory.patterns
+                    if config.memory.max_episodes:
+                        max_episodes = config.memory.max_episodes
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning("Failed to load memory config: %s", e)
+
+        return cls(plugins=plugins, max_episodes=max_episodes, patterns=patterns)
 
     def add_plugin(self, plugin: MemoryPlugin) -> None:
         """Add a plugin to the layer."""

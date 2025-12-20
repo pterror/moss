@@ -210,6 +210,8 @@ def _build_config_from_dict(data: dict[str, Any], project_root: Path) -> MossCon
             config.memory.max_episodes = memory["max_episodes"]
         if "plugins" in memory:
             config.memory.plugins = memory["plugins"]
+        if "patterns" in memory:
+            config.memory.patterns = memory["patterns"]
 
     # Static context paths
     if "static_context" in data:
@@ -281,6 +283,7 @@ def merge_configs(base: MossConfig, override: MossConfig) -> MossConfig:
     # Memory - override wins
     merged.memory.max_episodes = override.memory.max_episodes
     merged.memory.plugins = {**base.memory.plugins, **override.memory.plugins}
+    merged.memory.patterns = {**base.memory.patterns, **override.memory.patterns}
 
     # View providers - combine both
     merged.view_providers = base.view_providers + override.view_providers
@@ -398,6 +401,16 @@ def config_to_toml(config: MossConfig) -> str:
                     val_str = str(value).lower() if isinstance(value, bool) else value
                     lines.append(f"{key} = {val_str}")
             lines.append("")
+
+    if config.memory.patterns:
+        lines.append("")
+        lines.append("[memory.patterns]")
+        for pattern, action in config.memory.patterns.items():
+            if isinstance(action, list):
+                actions_str = ", ".join(f'"{a}"' for a in action)
+                lines.append(f'"{pattern}" = [{actions_str}]')
+            else:
+                lines.append(f'"{pattern}" = "{action}"')
     lines.append("")
 
     # Static context

@@ -484,6 +484,53 @@ Do NOT repeat the same command. Never output prose."""
         if tool_name == "done":
             return None
 
+        # Check triggers before execution
+        triggers = await self._check_memory_triggers(tool_name, params)
+
+        result = await self._run_tool_logic(tool_name, params, _depth)
+
+        # Append triggers to result if any
+        if triggers and isinstance(result, str):
+            result += f"\n\n[Memory Triggers]\n{triggers}"
+
+        return result
+
+    async def _check_memory_triggers(self, tool_name: str, params: dict[str, Any]) -> str | None:
+        """Check for memory triggers based on tool and params."""
+        try:
+            # Extract files from params
+            files = []
+            if "file_path" in params:
+                files.append(str(params["file_path"]))
+            if "file_paths" in params:
+                files.extend(str(p) for p in params["file_paths"])
+            if "path" in params:
+                path_str = str(params["path"])
+                if path_str.endswith(".py") or "/" in path_str:
+                    files.append(path_str)
+
+            if not files:
+                return None
+
+            from moss.memory import StateSnapshot
+
+            # Create minimal state
+            state = StateSnapshot.create(files=files, context="")
+
+            # Check triggers on memory layer
+            # Access memory_layer from api (added in previous step)
+            if hasattr(self.api, "memory_layer"):
+                warnings = await self.api.memory_layer.check_triggers(state)
+                if warnings:
+                    return "\n".join(warnings)
+
+            return None
+        except Exception as e:
+            logger.warning("Failed to check memory triggers: %s", e)
+            return None
+
+    async def _run_tool_logic(self, tool_name: str, params: dict[str, Any], _depth: int) -> Any:
+        """Core logic to run the tool (extracted from _execute_tool)."""
         # Handle multi-file/search expand
         if tool_name == "skeleton.expand_search":
             return self._expand_search(params.get("symbol_name", ""))

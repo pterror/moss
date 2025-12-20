@@ -4,13 +4,18 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Triggered memory configuration (patterns in toml)
 - Workflow argument passing improvement
 - **Mistake Detection**: Detect when an LLM *maybe* made a mistake (Critic loop enhancement)
 - **Shadow Git Access**: Give LLM first-class access to 'Shadow Git' (diffs, rollback, "what did I break?")
 - **User Feedback Story**: Improve interruptibility and feedback loops (client-side interrupts, agent "check mail" steps) to handle mid-task corrections.
 
 ## Recently Completed
+
+- **Triggered memory configuration** (Dec 2025):
+  - Added `patterns` to `MemoryConfig` and `[memory.patterns]` support in TOML
+  - Implemented `PatternTriggeredPlugin` for file-pattern based triggers
+  - Integrated into `MemoryLayer` and `MossAPI`
+  - Updated `DWIMLoop` to check triggers and append warnings to tool output
 
 - **Workflow scaffolding** (Dec 2025):
   - `moss workflow new <name>` command

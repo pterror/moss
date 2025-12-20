@@ -3540,6 +3540,7 @@ class MossAPI:
     _search: SearchAPI | None = None
     _guessability: GuessabilityAPI | None = None
     _lessons: LessonsAPI | None = None
+    _memory_layer: Any | None = None  # MemoryLayer
     _toml: TomlAPI | None = None
 
     @classmethod
@@ -3721,6 +3722,15 @@ class MossAPI:
         if self._lessons is None:
             self._lessons = LessonsAPI(root=self.root)
         return self._lessons
+
+    @property
+    def memory_layer(self) -> Any:  # MemoryLayer
+        """Access the memory layer."""
+        if self._memory_layer is None:
+            from moss.memory import MemoryLayer
+
+            self._memory_layer = MemoryLayer.default(project_dir=self.root)
+        return self._memory_layer
 
     @property
     def toml(self) -> TomlAPI:

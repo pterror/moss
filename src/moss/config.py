@@ -137,6 +137,7 @@ class MemoryConfig:
 
     max_episodes: int = 10000
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
+    patterns: dict[str, str | list[str]] = field(default_factory=dict)
 
 
 @dataclass
