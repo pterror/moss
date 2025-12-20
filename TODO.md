@@ -7,11 +7,17 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 1. Hunk-level rollback for shadow_git
 2. Expose memory.recall() as agent tool (on-demand layer)
 3. Add skeleton.expand to MCP tool definitions
+4. Fix MCP resource reading bug (`'TextResourceContents' object has no attribute 'content'`)
 
 ## Active Backlog
 
 **Large:**
 - [ ] Memory system - layered memory for cross-session learning (see `docs/memory-system.md`)
+- [ ] Externalize LLM prompts from `agent_loop.py` - prompts are text, not code
+  - Move `REPAIR_ENGINE_PROMPT`, `LLMConfig.system_prompt`, `_build_prompt()` templates to external files
+  - Data-driven loop definitions (YAML/TOML) instead of Python classes
+  - Separate prompt engineering from execution logic
+  - Enables iteration without code changes, follows "Structure > Text"
 
 ### Strict Harness (guardrails for all agents)
 
