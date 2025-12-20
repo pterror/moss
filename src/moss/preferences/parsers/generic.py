@@ -9,6 +9,40 @@ from moss.preferences.parsers.base import BaseParser
 from moss.preferences.parsing import LogFormat, ParsedSession, Turn
 
 
+def extract_turns_from_entries(entries: list[dict]) -> list[Turn]:
+    """Extract turns from JSONL-style entries.
+
+    Handles common role names (user/human/assistant/ai/bot) and content
+    formats (string, list of text items).
+    """
+    turns: list[Turn] = []
+
+    for entry in entries:
+        role = entry.get("role") or entry.get("type") or entry.get("sender") or entry.get("from")
+
+        if role in ("user", "human", "User", "Human"):
+            role = "user"
+        elif role in ("assistant", "ai", "bot", "Assistant", "AI", "model"):
+            role = "assistant"
+        else:
+            continue
+
+        content = entry.get("content") or entry.get("text") or entry.get("message") or ""
+
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    parts.append(item.get("text", str(item)))
+                else:
+                    parts.append(str(item))
+            content = "\n".join(parts)
+
+        turns.append(Turn(role=role, content=str(content)))
+
+    return turns
+
+
 class GenericJSONLParser(BaseParser):
     """Parse generic JSONL chat logs."""
 
@@ -35,34 +69,7 @@ class GenericJSONLParser(BaseParser):
         return False
 
     def _extract_turns(self, entries: list[dict]) -> list[Turn]:
-        turns: list[Turn] = []
-
-        for entry in entries:
-            role = (
-                entry.get("role") or entry.get("type") or entry.get("sender") or entry.get("from")
-            )
-
-            if role in ("user", "human", "User", "Human"):
-                role = "user"
-            elif role in ("assistant", "ai", "bot", "Assistant", "AI", "model"):
-                role = "assistant"
-            else:
-                continue
-
-            content = entry.get("content") or entry.get("text") or entry.get("message") or ""
-
-            if isinstance(content, list):
-                parts = []
-                for item in content:
-                    if isinstance(item, dict):
-                        parts.append(item.get("text", str(item)))
-                    else:
-                        parts.append(str(item))
-                content = "\n".join(parts)
-
-            turns.append(Turn(role=role, content=str(content)))
-
-        return turns
+        return extract_turns_from_entries(entries)
 
 
 class GenericChatParser(BaseParser):
@@ -93,34 +100,7 @@ class GenericChatParser(BaseParser):
         return True
 
     def _extract_from_jsonl(self, entries: list[dict]) -> list[Turn]:
-        turns: list[Turn] = []
-
-        for entry in entries:
-            role = (
-                entry.get("role") or entry.get("type") or entry.get("sender") or entry.get("from")
-            )
-
-            if role in ("user", "human", "User", "Human"):
-                role = "user"
-            elif role in ("assistant", "ai", "bot", "Assistant", "AI", "model"):
-                role = "assistant"
-            else:
-                continue
-
-            content = entry.get("content") or entry.get("text") or entry.get("message") or ""
-
-            if isinstance(content, list):
-                parts = []
-                for item in content:
-                    if isinstance(item, dict):
-                        parts.append(item.get("text", str(item)))
-                    else:
-                        parts.append(str(item))
-                content = "\n".join(parts)
-
-            turns.append(Turn(role=role, content=str(content)))
-
-        return turns
+        return extract_turns_from_entries(entries)
 
     def _extract_from_text(self, content: str) -> list[Turn]:
         turns: list[Turn] = []

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from moss.gen.base import LazyAPIExecutor
 from moss.gen.introspect import APIMethod, APIParameter, SubAPI, introspect_api
 from moss.gen.serialize import serialize
 
@@ -104,7 +105,7 @@ class HTTPRouter:
     endpoints: list[HTTPEndpoint] = field(default_factory=list)
 
 
-class HTTPExecutor:
+class HTTPExecutor(LazyAPIExecutor):
     """Executor for HTTP API calls.
 
     Provides a clean interface for executing MossAPI methods via HTTP-style
@@ -114,24 +115,6 @@ class HTTPExecutor:
         executor = HTTPExecutor()
         result = executor.execute("skeleton.extract", {"file_path": "src/main.py"})
     """
-
-    def __init__(self, root: str | Path = "."):
-        """Initialize the executor.
-
-        Args:
-            root: Project root directory (default: current directory)
-        """
-        self._root = Path(root).resolve()
-        self._api = None
-
-    @property
-    def api(self):
-        """Lazy-initialize and cache the MossAPI instance."""
-        if self._api is None:
-            from moss import MossAPI
-
-            self._api = MossAPI.for_project(self._root)
-        return self._api
 
     def execute(
         self,

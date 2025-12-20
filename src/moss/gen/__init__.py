@@ -11,6 +11,7 @@ This module provides automatic interface generation from the MossAPI:
 - OpenAPI: Generate OpenAPI specification from API
 """
 
+from moss.gen.base import LazyAPIExecutor
 from moss.gen.cli import CLIGenerator, generate_cli
 from moss.gen.compact import (
     generate_compact_by_category,
@@ -35,6 +36,7 @@ __all__ = [
     "GRPCGenerator",
     "HTTPGenerator",
     "LSPGenerator",
+    "LazyAPIExecutor",
     "MCPGenerator",
     "SubAPI",
     "TUIGenerator",

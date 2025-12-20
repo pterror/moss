@@ -29,12 +29,16 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from moss.synthesis.plugins.libraries.base import (
+    BaseLibrary,
+    extract_keywords,
+    types_compatible,
+)
 from moss.synthesis.plugins.protocols import (
     Abstraction,
     LibraryMetadata,
@@ -299,7 +303,7 @@ class SolutionRecord:
     timestamp: float = 0.0
 
 
-class LearnedLibrary:
+class LearnedLibrary(BaseLibrary):
     """Library that learns abstractions from synthesis history.
 
     Uses frequency-based pattern detection to identify common code
@@ -344,11 +348,6 @@ class LearnedLibrary:
         # Load from persistence if available
         if persistence_path and persistence_path.exists():
             self._load()
-
-    @property
-    def metadata(self) -> LibraryMetadata:
-        """Return library metadata."""
-        return self._metadata
 
     def get_abstractions(self) -> list[Abstraction]:
         """Get all learned abstractions."""
@@ -451,12 +450,6 @@ class LearnedLibrary:
             if count >= threshold
         ]
 
-    def _extract_keywords(self, text: str) -> set[str]:
-        """Extract keywords from text for matching."""
-        words = re.findall(r"\w+", text.lower())
-        stopwords = {"a", "an", "the", "is", "are", "to", "for", "of", "in", "on", "and", "or"}
-        return {w for w in words if len(w) > 2 and w not in stopwords}
-
     def search_abstractions(
         self,
         spec: Specification,
@@ -480,9 +473,9 @@ class LearnedLibrary:
         if not self._abstractions:
             return []
 
-        spec_keywords = self._extract_keywords(spec.description)
+        spec_keywords = extract_keywords(spec.description)
         if spec.type_signature:
-            spec_keywords.update(self._extract_keywords(spec.type_signature))
+            spec_keywords.update(extract_keywords(spec.type_signature))
 
         results: list[tuple[Abstraction, float]] = []
 
@@ -490,8 +483,8 @@ class LearnedLibrary:
             score = 0.0
 
             # Keyword overlap
-            abs_keywords = self._extract_keywords(abstraction.description)
-            abs_keywords.update(self._extract_keywords(abstraction.name))
+            abs_keywords = extract_keywords(abstraction.description)
+            abs_keywords.update(extract_keywords(abstraction.name))
 
             if spec_keywords and abs_keywords:
                 overlap = len(spec_keywords & abs_keywords)
@@ -501,7 +494,7 @@ class LearnedLibrary:
             if spec.type_signature and abstraction.type_signature:
                 if spec.type_signature == abstraction.type_signature:
                     score += 0.5
-                elif self._types_compatible(spec.type_signature, abstraction.type_signature):
+                elif types_compatible(spec.type_signature, abstraction.type_signature):
                     score += 0.25
 
             # Boost for frequently used
@@ -517,20 +510,6 @@ class LearnedLibrary:
 
         results.sort(key=lambda x: x[1], reverse=True)
         return results
-
-    def _types_compatible(self, type1: str, type2: str) -> bool:
-        """Check if two type signatures are compatible."""
-
-        def get_return_type(sig: str) -> str | None:
-            match = re.search(r"->\s*(\S+)", sig)
-            return match.group(1) if match else None
-
-        ret1 = get_return_type(type1)
-        ret2 = get_return_type(type2)
-
-        if ret1 and ret2:
-            return ret1.lower() == ret2.lower()
-        return False
 
     async def learn_abstraction(
         self,
@@ -693,10 +672,6 @@ class LearnedLibrary:
         self._pattern_examples.clear()
         self._solution_history.clear()
         self._persist()
-
-    def __len__(self) -> int:
-        """Return number of abstractions."""
-        return len(self._abstractions)
 
     # =========================================================================
     # Persistence

@@ -9,9 +9,13 @@ For learning capabilities, see LearnedLibrary (future).
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
+from moss.synthesis.plugins.libraries.base import (
+    BaseLibrary,
+    extract_keywords,
+    types_compatible,
+)
 from moss.synthesis.plugins.protocols import (
     Abstraction,
     LibraryMetadata,
@@ -22,7 +26,7 @@ if TYPE_CHECKING:
     from moss.synthesis.types import Context, Specification
 
 
-class MemoryLibrary:
+class MemoryLibrary(BaseLibrary):
     """In-memory abstraction library.
 
     Simple implementation that stores abstractions in memory and
@@ -44,11 +48,6 @@ class MemoryLibrary:
             supports_learning=False,
             persistence_type="memory",
         )
-
-    @property
-    def metadata(self) -> LibraryMetadata:
-        """Return library metadata."""
-        return self._metadata
 
     def get_abstractions(self) -> list[Abstraction]:
         """Get all abstractions in the library."""
@@ -73,14 +72,6 @@ class MemoryLibrary:
         """
         return self._abstractions.pop(name, None) is not None
 
-    def _extract_keywords(self, text: str) -> set[str]:
-        """Extract keywords from text for matching."""
-        # Simple word extraction
-        words = re.findall(r"\w+", text.lower())
-        # Filter common words
-        stopwords = {"a", "an", "the", "is", "are", "to", "for", "of", "in", "on", "and", "or"}
-        return {w for w in words if len(w) > 2 and w not in stopwords}
-
     def search_abstractions(
         self,
         spec: Specification,
@@ -104,9 +95,9 @@ class MemoryLibrary:
             return []
 
         # Extract keywords from spec
-        spec_keywords = self._extract_keywords(spec.description)
+        spec_keywords = extract_keywords(spec.description)
         if spec.type_signature:
-            spec_keywords.update(self._extract_keywords(spec.type_signature))
+            spec_keywords.update(extract_keywords(spec.type_signature))
 
         results: list[tuple[Abstraction, float]] = []
 
@@ -114,8 +105,8 @@ class MemoryLibrary:
             score = 0.0
 
             # Keyword overlap
-            abs_keywords = self._extract_keywords(abstraction.description)
-            abs_keywords.update(self._extract_keywords(abstraction.name))
+            abs_keywords = extract_keywords(abstraction.description)
+            abs_keywords.update(extract_keywords(abstraction.name))
 
             if spec_keywords and abs_keywords:
                 overlap = len(spec_keywords & abs_keywords)
@@ -125,7 +116,7 @@ class MemoryLibrary:
             if spec.type_signature and abstraction.type_signature:
                 if spec.type_signature == abstraction.type_signature:
                     score += 0.5
-                elif self._types_compatible(spec.type_signature, abstraction.type_signature):
+                elif types_compatible(spec.type_signature, abstraction.type_signature):
                     score += 0.25
 
             # Boost for frequently used abstractions
@@ -143,25 +134,6 @@ class MemoryLibrary:
         results.sort(key=lambda x: x[1], reverse=True)
 
         return results
-
-    def _types_compatible(self, type1: str, type2: str) -> bool:
-        """Check if two type signatures are compatible.
-
-        Simple heuristic: check if return types match.
-        """
-
-        # Extract return type (after ->)
-        def get_return_type(sig: str) -> str | None:
-            match = re.search(r"->\s*(\S+)", sig)
-            return match.group(1) if match else None
-
-        ret1 = get_return_type(type1)
-        ret2 = get_return_type(type2)
-
-        if ret1 and ret2:
-            return ret1.lower() == ret2.lower()
-
-        return False
 
     async def learn_abstraction(
         self,
@@ -194,10 +166,6 @@ class MemoryLibrary:
     def clear(self) -> None:
         """Clear all abstractions."""
         self._abstractions.clear()
-
-    def __len__(self) -> int:
-        """Return number of abstractions."""
-        return len(self._abstractions)
 
 
 # Protocol compliance check

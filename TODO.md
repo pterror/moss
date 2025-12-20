@@ -4,14 +4,17 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Fix remaining 14 clone groups (~30 clones total)
-  - `metadata` property clones across plugin generators (consider PluginMetadataMixin)
-  - `supports` method clones in skeleton.py/dependencies.py
-  - `api` property clones in lsp.py/http.py generators
 - Architect/Editor split - separate reasoning from editing in agent loop
 - Terminal subagent with persistent shell session
 
 ## Recently Completed
+
+- **Clone elimination round 2** (Dec 2025):
+  - Reduced clones from 30→18 (40% reduction)
+  - `BaseLibrary` class for shared library plugin functionality
+  - `LazyAPIExecutor` base class for executor pattern
+  - `extract_turns_from_entries()` shared function for parsers
+  - Remaining 8 groups are trivial 3-line properties or protocol implementations
 
 - **Clone elimination** (Dec 2025):
   - Reduced clones from 56→30 (46% reduction) using mixins and shared utilities

@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from moss.gen.base import LazyAPIExecutor
 from moss.gen.introspect import APIMethod, SubAPI, introspect_api
 from moss.gen.serialize import serialize
 
@@ -100,29 +101,11 @@ def subapi_to_commands(subapi: SubAPI) -> list[LSPCommand]:
     return [method_to_command(m, subapi.name) for m in subapi.methods]
 
 
-class LSPExecutor:
+class LSPExecutor(LazyAPIExecutor):
     """Executor for LSP commands.
 
     Handles command execution with parameter parsing and result serialization.
     """
-
-    def __init__(self, root: str | Path = "."):
-        """Initialize the executor.
-
-        Args:
-            root: Project root directory
-        """
-        self._root = Path(root).resolve()
-        self._api = None
-
-    @property
-    def api(self):
-        """Lazy-initialize and cache the MossAPI instance."""
-        if self._api is None:
-            from moss import MossAPI
-
-            self._api = MossAPI.for_project(self._root)
-        return self._api
 
     def execute(self, command: str, arguments: list[Any] | None = None) -> Any:
         """Execute a command and return serialized result.
