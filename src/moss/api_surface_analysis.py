@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from moss.dependency_analysis import find_source_dir
+
 
 @dataclass
 class PublicExport:
@@ -164,7 +166,7 @@ class APISurfaceAnalyzer:
         result = APISurfaceAnalysis()
 
         # Find source directory
-        src_dir = self._find_source_dir()
+        src_dir = find_source_dir(self.root)
         if not src_dir:
             return result
 
@@ -198,17 +200,6 @@ class APISurfaceAnalyzer:
         result.high_risk_exports.sort(key=lambda x: x.import_count, reverse=True)
 
         return result
-
-    def _find_source_dir(self) -> Path | None:
-        """Find the main source directory."""
-        for candidate in [self.root / "src", self.root / "lib", self.root]:
-            if candidate.exists():
-                for subdir in candidate.iterdir():
-                    if subdir.is_dir() and (subdir / "__init__.py").exists():
-                        return subdir
-                if list(candidate.glob("*.py")):
-                    return candidate
-        return None
 
     def _collect_import_counts(self, src_dir: Path) -> None:
         """Count how many modules import each name."""

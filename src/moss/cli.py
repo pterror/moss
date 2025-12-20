@@ -3299,7 +3299,7 @@ def cmd_clones(args: Namespace) -> int:
         output.data(analysis.to_dict())
     else:
         show_source = getattr(args, "source", False)
-        output.print(format_clone_analysis(analysis, show_source=show_source))
+        output.print(format_clone_analysis(analysis, show_source=show_source, root=root))
 
     return 0
 

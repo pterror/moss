@@ -483,8 +483,16 @@ class CloneDetector:
         return clones
 
 
-def format_clone_analysis(analysis: CloneAnalysis, show_source: bool = False) -> str:
-    """Format clone analysis results as markdown."""
+def format_clone_analysis(
+    analysis: CloneAnalysis, show_source: bool = False, root: Path | None = None
+) -> str:
+    """Format clone analysis results as markdown.
+
+    Args:
+        analysis: Clone analysis results
+        show_source: Whether to include source code snippets
+        root: Project root for computing relative paths (defaults to showing file names only)
+    """
     lines = ["## Clone Analysis", ""]
 
     # Summary
@@ -514,7 +522,13 @@ def format_clone_analysis(analysis: CloneAnalysis, show_source: bool = False) ->
         lines.append(f"**Group {i}** ({group.count} clones {file_desc}):")
 
         for clone in group.clones:
-            rel_path = clone.file.name
+            if root:
+                try:
+                    rel_path = str(clone.file.relative_to(root))
+                except ValueError:
+                    rel_path = clone.file.name
+            else:
+                rel_path = clone.file.name
             line_range = (
                 f"{clone.lineno}-{clone.end_lineno}" if clone.end_lineno else str(clone.lineno)
             )

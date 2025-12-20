@@ -29,6 +29,8 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from moss.mcp_server import _check_mcp, _should_use_ephemeral
+
 # Lazy import MCP to allow module to load without mcp installed
 _mcp_available = False
 Server: type = type(None)  # Placeholder
@@ -63,12 +65,6 @@ try:
     _mcp_available = True
 except ImportError:
     pass
-
-
-def _check_mcp() -> None:
-    """Check if MCP is available."""
-    if not _mcp_available:
-        raise ImportError("MCP SDK not installed. Install with: pip install 'moss[mcp]'")
 
 
 # =============================================================================
@@ -191,10 +187,8 @@ def _serialize_result(result: Any) -> str | dict[str, Any]:
     return {"result": serialized}
 
 
-# Threshold for inline responses - only errors and empty results stay inline
-# Everything else uses ResourceLink + ephemeral storage to preserve context
-MAX_INLINE_CHARS = 500  # Only short errors/messages inline
-MAX_OUTPUT_CHARS = 200_000  # Hard limit for ephemeral content truncation
+# Hard limit for ephemeral content truncation
+MAX_OUTPUT_CHARS = 200_000
 
 
 def _truncate_output(text: str) -> str:
@@ -209,11 +203,6 @@ def _truncate_output(text: str) -> str:
     truncation_msg = f"\n\n... [TRUNCATED: {omitted:,} chars omitted] ...\n\n"
 
     return text[:head_size] + truncation_msg + text[-tail_size:]
-
-
-def _should_use_ephemeral(text: str) -> bool:
-    """Check if response should use ephemeral storage."""
-    return len(text) > MAX_INLINE_CHARS
 
 
 # =============================================================================

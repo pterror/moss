@@ -384,22 +384,44 @@ def _path_to_module(path: Path) -> str | None:
 
 
 # =============================================================================
+# Base Class
+# =============================================================================
+
+# Default patterns to exclude from workspace operations
+DEFAULT_EXCLUDE_PATTERNS = [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/__pycache__/**",
+    "**/venv/**",
+    "**/.venv/**",
+]
+
+
+class WorkspaceRunner:
+    """Base class for running operations across a workspace."""
+
+    def __init__(self, workspace: Path, exclude_patterns: list[str] | None = None):
+        self.workspace = Path(workspace).resolve()
+        self.exclude_patterns = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
+
+    def _is_excluded(self, path: Path) -> bool:
+        """Check if path matches exclusion patterns."""
+        import fnmatch
+
+        path_str = str(path)
+        for pattern in self.exclude_patterns:
+            if fnmatch.fnmatch(path_str, pattern):
+                return True
+        return False
+
+
+# =============================================================================
 # Refactorer
 # =============================================================================
 
 
-class Refactorer:
+class Refactorer(WorkspaceRunner):
     """Applies refactoring operations across multiple files."""
-
-    def __init__(self, workspace: Path, exclude_patterns: list[str] | None = None):
-        self.workspace = Path(workspace).resolve()
-        self.exclude_patterns = exclude_patterns or [
-            "**/node_modules/**",
-            "**/.git/**",
-            "**/__pycache__/**",
-            "**/venv/**",
-            "**/.venv/**",
-        ]
 
     async def apply(self, refactoring: Refactoring, dry_run: bool = False) -> RefactoringResult:
         """Apply a refactoring operation.
@@ -454,16 +476,6 @@ class Refactorer:
                     files.append(path)
 
         return files
-
-    def _is_excluded(self, path: Path) -> bool:
-        """Check if path matches exclusion patterns."""
-        import fnmatch
-
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if fnmatch.fnmatch(path_str, pattern):
-                return True
-        return False
 
     def preview(self, refactoring: Refactoring) -> RefactoringResult:
         """Preview changes without applying them."""
@@ -942,18 +954,8 @@ class Codemod:
         return self
 
 
-class CodemodRunner:
+class CodemodRunner(WorkspaceRunner):
     """Runs codemods across files."""
-
-    def __init__(self, workspace: Path, exclude_patterns: list[str] | None = None):
-        self.workspace = Path(workspace).resolve()
-        self.exclude_patterns = exclude_patterns or [
-            "**/node_modules/**",
-            "**/.git/**",
-            "**/__pycache__/**",
-            "**/venv/**",
-            "**/.venv/**",
-        ]
 
     async def run(self, codemod: Codemod, dry_run: bool = False) -> RefactoringResult:
         """Run a codemod across the workspace."""
@@ -987,16 +989,6 @@ class CodemodRunner:
             result.success = False
 
         return result
-
-    def _is_excluded(self, path: Path) -> bool:
-        """Check if path matches exclusion patterns."""
-        import fnmatch
-
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if fnmatch.fnmatch(path_str, pattern):
-                return True
-        return False
 
 
 # =============================================================================

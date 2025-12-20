@@ -14,6 +14,31 @@ from pathlib import Path
 from typing import Any
 
 
+def find_source_dir(root: Path) -> Path | None:
+    """Find the main source directory in a project.
+
+    Looks for common source directory patterns:
+    - src/<package>/ with __init__.py
+    - lib/<package>/ with __init__.py
+    - <root>/<package>/ with __init__.py
+    - Any directory with .py files
+
+    Args:
+        root: Project root directory
+
+    Returns:
+        Path to the source directory, or None if not found
+    """
+    for candidate in [root / "src", root / "lib", root]:
+        if candidate.exists():
+            for subdir in candidate.iterdir():
+                if subdir.is_dir() and (subdir / "__init__.py").exists():
+                    return subdir
+            if list(candidate.glob("*.py")):
+                return candidate
+    return None
+
+
 @dataclass
 class CircularDependency:
     """A circular dependency chain."""
@@ -156,7 +181,7 @@ class DependencyAnalyzer:
         from moss.dependencies import build_dependency_graph
 
         # Find the source directory
-        src_dir = self._find_source_dir()
+        src_dir = find_source_dir(self.root)
         if not src_dir:
             return DependencyAnalysis()
 
@@ -198,24 +223,6 @@ class DependencyAnalyzer:
             total_modules=len(all_modules),
             total_edges=total_edges,
         )
-
-    def _find_source_dir(self) -> Path | None:
-        """Find the main source directory."""
-        # Check common locations
-        for candidate in [
-            self.root / "src",
-            self.root / "lib",
-            self.root,
-        ]:
-            if candidate.exists():
-                # Look for Python packages (directories with __init__.py)
-                for subdir in candidate.iterdir():
-                    if subdir.is_dir() and (subdir / "__init__.py").exists():
-                        return subdir
-                # Or just Python files
-                if list(candidate.glob("*.py")):
-                    return candidate
-        return None
 
     def _find_cycles(self, graph: dict[str, list[str]]) -> list[CircularDependency]:
         """Find all cycles in the dependency graph using DFS."""

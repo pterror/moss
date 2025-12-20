@@ -74,6 +74,19 @@ class Roadmap:
         return self.in_progress + self.future + self.completed
 
 
+def is_truly_incomplete(phase: Phase) -> bool:
+    """Check if a phase is truly incomplete.
+
+    A phase is incomplete if:
+    - Not marked as COMPLETE status
+    - Has tasks remaining (progress < 100%)
+    """
+    if phase.status == PhaseStatus.COMPLETE:
+        return False
+    completed, total = phase.progress
+    return total == 0 or completed < total
+
+
 def parse_todo_md(path: Path) -> Roadmap:
     """Parse TODO.md into a Roadmap structure.
 
@@ -212,13 +225,6 @@ def format_plain(roadmap: Roadmap, show_completed: bool = False, max_items: int 
     lines: list[str] = []
 
     # In Progress section - only incomplete phases (not marked complete and not 100%)
-    def is_truly_incomplete(p: Phase) -> bool:
-        if p.status == PhaseStatus.COMPLETE:
-            return False
-        # Also treat 100% progress as complete
-        completed, total = p.progress
-        return total == 0 or completed < total
-
     active_phases = [p for p in roadmap.in_progress if is_truly_incomplete(p)]
     if active_phases:
         lines.append("In Progress")
@@ -411,12 +417,6 @@ def format_tui(
     lines.append(box_separator())
 
     # In Progress section - show only incomplete phases (not marked complete and not 100%)
-    def is_truly_incomplete(p: Phase) -> bool:
-        if p.status == PhaseStatus.COMPLETE:
-            return False
-        completed, total = p.progress
-        return total == 0 or completed < total
-
     active_phases = [p for p in roadmap.in_progress if is_truly_incomplete(p)]
     if active_phases:
         section_title = f"{CYAN}▶ In Progress{RESET}" if use_color else "▶ In Progress"

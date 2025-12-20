@@ -6,9 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any
 
-from moss.events import EventBus, EventType
+from moss.events import EventBus, EventEmitterMixin, EventType
 from moss.patches import Patch, apply_patch
 from moss.shadow_git import CommitHandle, ShadowBranch, ShadowGit
 from moss.validators import ValidationResult, ValidatorChain
@@ -128,7 +127,7 @@ class LoopResult:
         return self.status == LoopStatus.SUCCESS
 
 
-class SilentLoop:
+class SilentLoop(EventEmitterMixin):
     """Orchestrates the draft → validate → fix → commit loop."""
 
     def __init__(
@@ -142,11 +141,6 @@ class SilentLoop:
         self.validators = validators
         self.event_bus = event_bus
         self.config = config or LoopConfig()
-
-    async def _emit(self, event_type: EventType, payload: dict[str, Any]) -> None:
-        """Emit an event if event bus is configured."""
-        if self.event_bus:
-            await self.event_bus.emit(event_type, payload)
 
     async def run(
         self,

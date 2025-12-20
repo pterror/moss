@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 
-from moss.events import EventBus, EventType
+from moss.events import EventBus, EventEmitterMixin, EventType
 from moss.handles import HandleRef
 from moss.shadow_git import CommitHandle, ShadowBranch, ShadowGit
 
@@ -152,7 +152,7 @@ class WorkerState:
     results: list[TicketResult] = field(default_factory=list)
 
 
-class Worker(ABC):
+class Worker(EventEmitterMixin, ABC):
     """Abstract base for worker agents.
 
     Workers are isolated agents that process tickets without access to
@@ -180,11 +180,6 @@ class Worker(ABC):
     @property
     def current_ticket(self) -> Ticket | None:
         return self._state.current_ticket
-
-    async def _emit(self, event_type: EventType, payload: dict[str, Any]) -> None:
-        """Emit an event if event bus is configured."""
-        if self.event_bus:
-            await self.event_bus.emit(event_type, payload)
 
     async def spawn(self, ticket: Ticket) -> None:
         """Initialize the worker with a ticket.
@@ -333,7 +328,7 @@ class MergeResult:
     error: str | None = None
 
 
-class Manager:
+class Manager(EventEmitterMixin):
     """Manages workers and coordinates ticket processing.
 
     The Manager acts as the orchestrator, delegating tasks to workers
@@ -359,11 +354,6 @@ class Manager:
         # Background tasks for fire-and-forget execution
         self._background_tasks: dict[str, asyncio.Task[TicketResult]] = {}
         self._callbacks: dict[str, list] = {}  # ticket_id -> [callbacks]
-
-    async def _emit(self, event_type: EventType, payload: dict[str, Any]) -> None:
-        """Emit an event if event bus is configured."""
-        if self.event_bus:
-            await self.event_bus.emit(event_type, payload)
 
     def create_ticket(
         self,

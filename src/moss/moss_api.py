@@ -45,8 +45,21 @@ if TYPE_CHECKING:
     from moss.weaknesses import WeaknessAnalysis
 
 
+class PathResolvingMixin:
+    """Mixin providing path resolution relative to project root."""
+
+    root: Path
+
+    def _resolve_path(self, file_path: str | Path) -> Path:
+        """Resolve a file path relative to the project root."""
+        path = Path(file_path)
+        if not path.is_absolute():
+            path = self.root / path
+        return path
+
+
 @dataclass
-class SkeletonAPI:
+class SkeletonAPI(PathResolvingMixin):
     """API for code skeleton extraction.
 
     Extracts structural summaries of code (classes, functions, signatures)
@@ -167,15 +180,9 @@ class SkeletonAPI:
         source = path.read_text()
         return get_enum_values(source, enum_name)
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class TreeAPI:
+class TreeAPI(PathResolvingMixin):
     """API for git-aware file tree visualization.
 
     Shows project structure with awareness of git tracking status.
@@ -227,15 +234,9 @@ class TreeAPI:
 
         return result.to_compact() if compact else result.to_text()
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class AnchorAPI:
+class AnchorAPI(PathResolvingMixin):
     """API for finding code locations using fuzzy anchors.
 
     Anchors identify code elements (functions, classes, variables) by name
@@ -310,15 +311,9 @@ class AnchorAPI:
         anchor = Anchor(type=type_map.get(anchor_type, AnchorType.FUNCTION), name=name)
         return resolve_anchor(source, anchor)
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class PatchAPI:
+class PatchAPI(PathResolvingMixin):
     """API for applying code patches.
 
     Supports AST-aware patching with automatic fallback to text-based
@@ -431,15 +426,9 @@ class PatchAPI:
             content=content,
         )
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class DependencyAPI:
+class DependencyAPI(PathResolvingMixin):
     """API for dependency analysis.
 
     Analyzes import/export relationships, detects circular dependencies,
@@ -544,15 +533,9 @@ class DependencyAPI:
         path = str(search_path) if search_path else str(self.root)
         return find_reverse_dependencies(target_module, path, pattern)
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class CFGAPI:
+class CFGAPI(PathResolvingMixin):
     """API for control flow graph analysis.
 
     Builds control flow graphs showing execution paths through functions.
@@ -575,15 +558,9 @@ class CFGAPI:
         source = path.read_text()
         return build_cfg(source)
 
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
-
 
 @dataclass
-class ValidationAPI:
+class ValidationAPI(PathResolvingMixin):
     """API for code validation.
 
     Runs validators (syntax, linting, tests) and reports issues.
@@ -613,12 +590,6 @@ class ValidationAPI:
         chain = self.create_chain()
         path = self._resolve_path(file_path)
         return await chain.validate(path)
-
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
 
 
 @dataclass
@@ -1871,7 +1842,7 @@ class GuessabilityAPI:
 
 
 @dataclass
-class TomlAPI:
+class TomlAPI(PathResolvingMixin):
     """API for navigating TOML configuration files.
 
     Provides jq-like querying for exploring config files
@@ -1953,13 +1924,6 @@ class TomlAPI:
         file_path = self._resolve_path(path)
         data = parse_toml(file_path)
         return summarize_toml(data)
-
-    def _resolve_path(self, path: str | Path) -> Path:
-        """Resolve path relative to project root."""
-        p = Path(path)
-        if p.is_absolute():
-            return p
-        return self.root / p
 
 
 @dataclass
@@ -2537,7 +2501,7 @@ class QueryMatch:
 
 
 @dataclass
-class SearchAPI:
+class SearchAPI(PathResolvingMixin):
     """API for codebase search operations.
 
     Provides unified search across the codebase using structural
@@ -3330,13 +3294,6 @@ class SearchAPI:
                 pass
 
         return results
-
-    def _resolve_path(self, file_path: str | Path) -> Path:
-        """Resolve a file path relative to the project root."""
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = self.root / path
-        return path
 
 
 @dataclass

@@ -29,6 +29,25 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Helpers
+# =============================================================================
+
+
+def get_base_name(node: ast.expr) -> str:
+    """Get the name from a base class expression.
+
+    Handles Name, Attribute, and Subscript nodes recursively.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Subscript):
+        return get_base_name(node.value)
+    return ""
+
+
+# =============================================================================
 # Data Types
 # =============================================================================
 
@@ -123,7 +142,7 @@ class ProtocolDetector(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         # Check if this is a Protocol definition
         for base in node.bases:
-            base_name = self._get_base_name(base)
+            base_name = get_base_name(base)
             if base_name == "Protocol":
                 self.protocols.append(
                     {
@@ -163,16 +182,6 @@ class ProtocolDetector(ast.NodeVisitor):
                             )
 
         self.generic_visit(node)
-
-    def _get_base_name(self, node: ast.expr) -> str:
-        """Get the name from a base class expression."""
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return node.attr
-        if isinstance(node, ast.Subscript):
-            return self._get_base_name(node.value)
-        return ""
 
     def _get_methods(self, node: ast.ClassDef) -> list[str]:
         """Get method names from a class."""
@@ -306,7 +315,7 @@ class StrategyDetector(ast.NodeVisitor):
         interface_type = None
 
         for base in node.bases:
-            base_name = self._get_base_name(base)
+            base_name = get_base_name(base)
             if base_name == "Protocol":
                 is_interface = True
                 interface_type = "Protocol"
@@ -328,7 +337,7 @@ class StrategyDetector(ast.NodeVisitor):
         else:
             # Check if it implements any known interface
             for base in node.bases:
-                base_name = self._get_base_name(base)
+                base_name = get_base_name(base)
                 if base_name not in self.implementations:
                     self.implementations[base_name] = []
                 self.implementations[base_name].append(
@@ -352,16 +361,6 @@ class StrategyDetector(ast.NodeVisitor):
                 )
 
         self.generic_visit(node)
-
-    def _get_base_name(self, node: ast.expr) -> str:
-        """Get the name from a base class expression."""
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return node.attr
-        if isinstance(node, ast.Subscript):
-            return self._get_base_name(node.value)
-        return ""
 
     def _get_abstract_methods(self, node: ast.ClassDef) -> list[str]:
         """Get abstract method names from a class."""

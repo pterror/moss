@@ -104,3 +104,17 @@ class EventBus:
     def clear_history(self) -> None:
         """Clear event history."""
         self._history.clear()
+
+
+class EventEmitterMixin:
+    """Mixin providing event emission capability.
+
+    Classes using this mixin should have an `event_bus: EventBus | None` attribute.
+    """
+
+    event_bus: EventBus | None
+
+    async def _emit(self, event_type: EventType, payload: dict[str, Any]) -> None:
+        """Emit an event if event bus is configured."""
+        if self.event_bus:
+            await self.event_bus.emit(event_type, payload)

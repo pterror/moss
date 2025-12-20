@@ -9,7 +9,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from moss.events import EventBus, EventType
+from moss.events import EventBus, EventEmitterMixin, EventType
 from moss.trust import Decision as TrustDecisionType
 from moss.trust import TrustDecision, TrustManager
 
@@ -908,7 +908,7 @@ class PolicyEngineResult:
         return [r for r in self.results if r.decision == PolicyDecision.WARN]
 
 
-class PolicyEngine:
+class PolicyEngine(EventEmitterMixin):
     """Evaluate policies before tool calls.
 
     Policies are evaluated in priority order (highest first).
@@ -948,11 +948,6 @@ class PolicyEngine:
     def policies(self) -> list[Policy]:
         """Get all policies (sorted by priority)."""
         return list(self._policies)
-
-    async def _emit(self, event_type: EventType, payload: dict[str, Any]) -> None:
-        """Emit an event if event bus is configured."""
-        if self.event_bus:
-            await self.event_bus.emit(event_type, payload)
 
     async def evaluate(self, context: ToolCallContext) -> PolicyEngineResult:
         """Evaluate all policies for a tool call.
