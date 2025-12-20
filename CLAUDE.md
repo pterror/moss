@@ -50,19 +50,17 @@ Context Reset (before `/exit`):
 
 ## Dogfooding
 
-**ALWAYS try moss tools first.** Generic tools (Read, Grep, Glob) burn tokens on syntax when you need semantics.
+**Use moss MCP tools for code intelligence.** They return structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens.
 
-Principles:
-- **Fuzzy matching for all lookups** - files, symbols, tools. Use `resolve_file`, `find_symbols`, `dwim_resolve_tool`
-- **Skeleton before read** - understand structure first, read only what's needed
-- **Check before create** - resolve similar names before writing new files
+Quick reference:
+- `skeleton_format` - understand file structure before reading
+- `search_find_symbols` - find function/class definitions
+- `complexity_get_high_risk` - identify problem areas
+- `explain_symbol` - show callers/callees
 
-Token savings: skeleton is 87% smaller than full file. This compounds over a session.
-
-Only fall back to Read/Grep when:
-- You need exact line content for editing
-- Moss tool doesn't exist for the task
-- Debugging moss itself (use CLI not MCP - MCP caches code at startup)
+Fall back to generic tools (Read/Grep) only for:
+- Exact line content needed for editing
+- Debugging moss itself (use CLI, MCP caches at startup)
 
 ## Conventions
 

@@ -13,7 +13,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Model-agnostic naming - don't over-fit to specific LLM conventions
 - [ ] Multiple agents concurrently - no requirement to join back to main stream
 - [ ] Graceful failure - handle errors without crashing, provide useful feedback
-- [ ] Revisit CLAUDE.md dogfooding section - tools should be self-evident, not need instructions
 - [ ] MCP response ephemeral handling - large responses should stream/page instead of filling context
 - [ ] Agent sandboxing - restrict bash/shell access, security-conscious CLI wrappers
 
@@ -105,7 +104,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - `complexity_get_high_risk` - instant actionable data in one call
 - `search_find_symbols` - now recursively finds methods inside classes (fixed Dec 2025)
 - `explain_symbol` - shows callers/callees for a function (added Dec 2025)
-- Prompting issue: CLAUDE.md dogfooding section doesn't push hard enough for moss-first approach
 - `guessability_score` - evaluate codebase structure quality
 
 **Missing/wanted:**
