@@ -354,7 +354,9 @@ def create_server() -> Any:
         if _should_use_ephemeral(text):
             cache = get_ephemeral_cache()
             entry_id = cache.store(text, mime_type="text/plain")
-            preview = cache.generate_preview(text, max_chars=2000)
+            # Minimal preview - just enough to know what's there
+            # Full content available via resource link
+            preview = cache.generate_preview(text, max_chars=200)
 
             return [
                 TextContent(

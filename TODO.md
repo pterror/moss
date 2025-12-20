@@ -5,7 +5,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 1. Implement Python workflow protocol for complex logic
-2. MCP preview size reduction - current preview is ~40 lines, should be 1 line
+2. Investigate MCP resource reading failure (ReadMcpResourceTool returns attribute error)
 3. Wire validate-fix workflow tools to executors
 
 ## Active Backlog
