@@ -86,19 +86,6 @@ pub fn grep(
             }
 
             let path = entry.path();
-
-            // Skip binary files by extension
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                let binary_exts = [
-                    "pyc", "pyo", "so", "dll", "exe", "bin", "jpg", "jpeg", "png", "gif", "pdf",
-                    "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "woff", "woff2", "ttf", "eot",
-                    "ico", "svg", "mp3", "mp4", "avi", "mov", "db", "sqlite", "lock",
-                ];
-                if binary_exts.contains(&ext.to_lowercase().as_str()) {
-                    return ignore::WalkState::Continue;
-                }
-            }
-
             files_searched.fetch_add(1, Ordering::Relaxed);
 
             let mut searcher = Searcher::new();
