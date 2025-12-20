@@ -212,6 +212,20 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Future Work
 
+### Agent Research & Optimization
+- [ ] **'Diffusion-like' methods for large-scale refactors**:
+  - Generate contracts/signatures at high levels first
+  - Parallelize implementation of components
+  - Explore reconciliation strategies for independent components
+- [ ] **Small/Local Model Brute Force**: Explore using smaller, faster local models with higher iteration/voting counts
+- [ ] **Fine-tuned Tiny Models**:
+  - Explore extreme optimization with models like 100M RWKV
+  - Benchmark model size vs. reliability
+  - High-frontier LLM generated tests for tiny model validation
+- [ ] **Pattern detection** - heuristic (frequency, similarity, rapid re-runs) + LLM for judgment
+- [ ] **Workflow self-creation** - agent creates workflows from detected patterns autonomously
+- [ ] **Workflow discovery** - surface candidates from Makefile/package.json/CI, agent or user picks
+
 ### Codebase Tree Consolidation (see `docs/codebase-tree.md`)
 
 **Phase 1: Python CLI delegates to Rust (remove Python implementations)**
