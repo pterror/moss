@@ -4,12 +4,17 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Evaluate agentic loop readiness** - how close to usable? what's missing?
-   - Validate current workflow execution end-to-end
-   - Identify blocking gaps (tool routing, error handling, etc.)
-   - Switching to agentic loop ASAP = major improvement
-2. Investigate MCP resource reading failure (ReadMcpResourceTool returns attribute error)
-3. Wire validate-fix workflow tools to executors
+1. **Fix workflow execution blockers** (found during evaluation):
+   - Tool name mismatch: `validator.run` vs `validation.validate` - align names
+   - LLM→Patch parsing: LLM returns text, `patch.apply` expects `Patch` object
+   - Missing step: parse LLM output into structured `Patch`
+2. **Design indefinite agentic loop** - DWIM-driven, not tool-schema-driven:
+   - LLM outputs terse intents: "skeleton foo.py", "fix: add null check", "done"
+   - DWIM parses intent → routes to tool → executes
+   - Results fed back to LLM for next decision
+   - No tool schemas in prompt - DWIM handles interpretation
+   - Already have: Session tracking, MossAPI, DWIM scaffolding, litellm
+3. Investigate MCP resource reading failure (ReadMcpResourceTool returns attribute error)
 
 ## Active Backlog
 
@@ -64,6 +69,19 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Natural language → tree operation mapping
 - [ ] "what's in X" → view, "show me Y" → view, "full code of Z" → expand
 
+### DWIM Improvements
+- [ ] Terse command parsing - "expand Patch" → skeleton_expand, not patch tools
+- [ ] MCP tool discovery - auto-register MCP server tools into DWIM registry
+- [ ] Custom tool semantics - plugin architecture for user-defined intent→tool mappings
+- [ ] Confidence thresholds - when to ask for clarification vs just do it
+
+### CLI UX Improvements
+- [ ] `moss expand` - support two args, order-independent: `file symbol` or `symbol file`
+- [ ] `moss expand` - also support `file:symbol` syntax
+- [ ] `moss expand` - when multiple matches, pick best or show numbered list
+- [ ] General pattern: all symbol-targeting commands (`expand`, `callers`, `callees`, `deps`) accept flexible args
+- [ ] DWIM for CLI args - detect file path vs symbol name automatically
+
 ### Workflow Collaboration
 - [ ] Pattern detection - heuristic (frequency, similarity, rapid re-runs) + LLM for judgment
 - [ ] Workflow self-creation - agent creates workflows from detected patterns autonomously
@@ -90,6 +108,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] `moss patterns` - detect architectural patterns
 - [ ] `moss refactor` - detect opportunities, apply with rope/libcst
 - [ ] `moss review` - PR analysis using rules + LLM
+
+### Dependency Introspection
+- [ ] `moss external-deps` improvements - filtering, show which features include a dep
+- [ ] Plugin architecture for package managers (pip, npm, cargo, go mod, etc.)
+- [ ] Unified interface: list deps, check updates, find conflicts
 
 ### LLM-Assisted Operations
 - [ ] `moss gen-tests` - generate tests for uncovered code
