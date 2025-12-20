@@ -3377,6 +3377,45 @@ class ToolListResult:
 
 
 @dataclass
+class AgentAPI:
+    """API for agent orchestration and loops.
+
+    Provides access to various agent loop implementations for
+    autonomous task execution.
+    """
+
+    root: Path
+
+    async def run_vanilla(
+        self,
+        task: str,
+        model: str = "gemini/gemini-2.0-flash",
+        max_turns: int = 20,
+    ) -> Any:
+        """Run a minimal vanilla agent loop on a task.
+
+        Uses TaskTree for state and terse intents for communication.
+
+        Args:
+            task: Task description
+            model: LLM model to use
+            max_turns: Maximum number of agent turns
+
+        Returns:
+            VanillaLoopResult with execution history and final output
+        """
+        from moss.agent_loop import LLMConfig, LLMToolExecutor
+        from moss.vanilla_loop import VanillaAgentLoop
+
+        api = MossAPI.for_project(self.root)
+        llm_config = LLMConfig(model=model)
+        executor = LLMToolExecutor(config=llm_config, root=self.root)
+        loop = VanillaAgentLoop(api, llm_config, executor, max_turns=max_turns)
+
+        return await loop.run(task)
+
+
+@dataclass
 class DWIMAPI:
     """START HERE - Tool discovery and routing for Moss.
 
@@ -3528,6 +3567,7 @@ class MossAPI:
     _health: HealthAPI | None = None
     _todo: TodoAPI | None = None
     _dwim: DWIMAPI | None = None
+    _agent: AgentAPI | None = None
     _complexity: ComplexityAPI | None = None
     _clones: ClonesAPI | None = None
     _security: SecurityAPI | None = None
@@ -3638,6 +3678,13 @@ class MossAPI:
         if self._dwim is None:
             self._dwim = DWIMAPI()
         return self._dwim
+
+    @property
+    def agent(self) -> AgentAPI:
+        """Access agent orchestration functionality."""
+        if self._agent is None:
+            self._agent = AgentAPI(root=self.root)
+        return self._agent
 
     @property
     def complexity(self) -> ComplexityAPI:
