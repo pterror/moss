@@ -96,10 +96,23 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Terminal subagent with persistent shell session
 - [ ] Dynamic prompts - external generators receive structured context object (intent, steps, files)
 
-### Evaluation
+### Evaluation & Debugging
 - [ ] SWE-bench harness - benchmark against standard tasks
 - [ ] Anchor patching comparison vs search/replace vs diff
 - [ ] Skeleton value measurement - does structural context help?
+
+**Agent Log Analysis:**
+- [ ] `moss analyze-session` improvements - detect failure patterns, wasted loops, recovery strategies
+- [ ] Token waste detection - find where context fills with low-value content
+- [ ] Tool effectiveness metrics - which tools help vs confuse the agent
+- [ ] Distill conventions - extract codebase-specific patterns from successful sessions
+- [ ] Auto-generate CLAUDE.md entries from repeated corrections
+
+**Moss Architecture Insights:**
+- [ ] Identify missing tools - what does the agent grep for that should be a tool?
+- [ ] Prompt improvement suggestions - where do agents misunderstand instructions
+- [ ] Compare loop strategies - which AgentLoop patterns work best for which tasks
+- [ ] Shadow branch analysis - how often do merges conflict, what causes them
 
 ### Reference Resolution (GitHub-level)
 - [ ] Full import graph with alias tracking (`from x import y as z`)
