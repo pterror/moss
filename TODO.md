@@ -7,6 +7,8 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - Triggered memory configuration (patterns in toml)
 - `moss workflow new` scaffold command
 - Workflow argument passing improvement
+- **Mistake Detection**: Detect when an LLM *maybe* made a mistake (Critic loop enhancement)
+- **Shadow Git Access**: Give LLM first-class access to 'Shadow Git' (diffs, rollback, "what did I break?")
 
 ## Recently Completed
 

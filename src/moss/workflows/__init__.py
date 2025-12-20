@@ -103,6 +103,7 @@ class WorkflowStep:
     tool: str
     type: str = "tool"  # "tool" or "llm"
     input_from: str | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
     prompt: str | None = None  # Resolved from @reference if present
     on_error: str | dict[str, Any] | None = None
     max_retries: int = 0
@@ -114,6 +115,7 @@ class WorkflowStep:
             "tool": self.tool,
             "type": self.type,
             "input_from": self.input_from,
+            "parameters": self.parameters,
             "prompt": self.prompt,
             "on_error": self.on_error,
             "max_retries": self.max_retries,
@@ -369,6 +371,7 @@ def load_workflow(
             tool=step_data["tool"],
             type=step_data.get("type", "tool"),
             input_from=step_data.get("input_from"),
+            parameters=step_data.get("parameters", {}),
             prompt=step_data.get("prompt"),
             on_error=step_data.get("on_error"),
             max_retries=step_data.get("max_retries", 0),
@@ -557,6 +560,7 @@ def workflow_to_agent_loop(
                 tool=wf_step.tool,
                 step_type=step_type,
                 input_from=wf_step.input_from,
+                parameters=wf_step.parameters,
                 on_error=on_error,
                 goto_target=goto_target,
                 max_retries=wf_step.max_retries,

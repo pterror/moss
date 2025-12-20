@@ -67,6 +67,7 @@ class LoopStep:
     tool: str  # Tool name (e.g., "skeleton.format", "patch.apply")
     step_type: StepType = StepType.TOOL
     input_from: str | None = None  # Previous step to get input from
+    parameters: dict[str, Any] = field(default_factory=dict)  # Static parameters
     on_error: ErrorAction = ErrorAction.ABORT
     goto_target: str | None = None  # For GOTO action
     max_retries: int = 3
@@ -83,6 +84,7 @@ class LoopStep:
             "tool": self.tool,
             "step_type": self.step_type.name.lower(),
             "input_from": self.input_from,
+            "parameters": self.parameters,
             "on_error": self.on_error.name.lower(),
             "goto_target": self.goto_target,
             "max_retries": self.max_retries,
@@ -99,6 +101,7 @@ class LoopStep:
             tool=data["tool"],
             step_type=StepType[step_type_str.upper()],
             input_from=data.get("input_from"),
+            parameters=data.get("parameters", {}),
             on_error=ErrorAction[on_error_str.upper()],
             goto_target=data.get("goto_target"),
             max_retries=data.get("max_retries", 3),
@@ -974,21 +977,38 @@ class MossToolExecutor:
 
         Priority:
         1. If step.input_from is set, use that step's output
-        2. Otherwise use context.input (original initial_input)
+        2. If step.parameters is set, use that
+        3. Otherwise use context.input (original initial_input)
         """
         if step.input_from and step.input_from in context.steps:
             return context.steps[step.input_from]
+        if step.parameters:
+            return step.parameters
         return context.input
 
     def _get_file_path(self, context: LoopContext, step: LoopStep) -> str:
-        """Extract file_path from context - always available from initial input."""
-        # Always get file_path from original input
+        """Extract file_path from context or step parameters."""
+        # 1. Check parameters
+        if step.parameters and "file_path" in step.parameters:
+            return step.parameters["file_path"]
+
+        # 2. Check input from previous step
+        if step.input_from and step.input_from in context.steps:
+            inp = context.steps[step.input_from]
+            if isinstance(inp, dict) and "file_path" in inp:
+                return inp["file_path"]
+            if isinstance(inp, str):
+                # Heuristic: assume string input might be a path if no other context
+                return inp
+
+        # 3. Check original input
         initial = context.input
         if isinstance(initial, dict) and "file_path" in initial:
             return initial["file_path"]
         if isinstance(initial, str):
             return initial
-        raise ValueError(f"Cannot extract file_path from context.input: {initial}")
+
+        raise ValueError(f"Cannot extract file_path from context or parameters. Input: {initial}")
 
     def _parse_docstring_output(self, llm_output: str) -> list[dict[str, str]]:
         """Parse LLM output in FUNC:name|docstring format.

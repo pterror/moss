@@ -123,17 +123,22 @@ class WorkflowGenerator:
                 description=f"Scaffold a new plugin for {system.name}",
                 steps=[
                     WorkflowStep(
+                        name="analyze",
+                        tool="skeleton.format",
+                        parameters={"file_path": system.file_path},
+                    ),
+                    WorkflowStep(
                         name="scaffold",
-                        tool="llm",
                         type="llm",
+                        tool="llm.generate",
+                        input_from="analyze",
                         prompt=f"""
 I need to create a new plugin for {system.name} (defined in {system.file_path}).
+The protocol definition is provided above.
 
-1. Analyze the protocol using `skeleton {system.file_path}`.
-2. Create a new class that implements this protocol.
-3. Save it to the file path provided in the input.
+Create a new class that implements this protocol.
 """,
-                    )
+                    ),
                 ],
             )
             workflows.append(wf)
