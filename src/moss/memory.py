@@ -635,6 +635,51 @@ class MemoryManager:
         )
         return self.semantic.add_rule(rule)
 
+    async def recall(self, query: str, limit: int = 5) -> str:
+        """Query memory for relevant past experiences.
+
+        On-demand memory layer - agent explicitly asks for memories.
+
+        Args:
+            query: Natural language query (e.g., "What happened last time I modified auth.py?")
+            limit: Maximum number of results to return
+
+        Returns:
+            Formatted string with relevant memories, or message if none found.
+        """
+        parts: list[str] = []
+
+        # Search episodic memory directly using the query
+        results = await self.episodic._index.search(query, limit=limit)
+        episodes = []
+        for ep_id, _score in results:
+            ep = await self.episodic.get(ep_id)
+            if ep:
+                episodes.append(ep)
+
+        if episodes:
+            parts.append("Past episodes:")
+            for ep in episodes:
+                outcome_str = "succeeded" if ep.outcome == Outcome.SUCCESS else "failed"
+                desc = ep.action.description or ep.action.tool
+                line = f"- {desc}: {outcome_str}"
+                if ep.error_message:
+                    line += f" ({ep.error_message})"
+                parts.append(line)
+
+        # Search semantic rules
+        rules = self.semantic.find_matching_rules(query)
+        if rules:
+            parts.append("")
+            parts.append("Learned patterns:")
+            for rule in rules[:limit]:
+                parts.append(f"- {rule.action} (confidence: {rule.confidence:.0%})")
+
+        if not parts:
+            return "No relevant memories found."
+
+        return "\n".join(parts)
+
 
 def create_memory_manager() -> MemoryManager:
     """Create a memory manager with default stores."""

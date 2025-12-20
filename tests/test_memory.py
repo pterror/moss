@@ -436,6 +436,35 @@ class TestMemoryManager:
         assert "Relevant learned rules" in text
         assert "Be careful!" in text
 
+    async def test_recall_returns_episodes(self, manager: MemoryManager):
+        # Record some episodes - use keywords that will match via word overlap
+        state = StateSnapshot.create(files=["auth.py"], context="auth login")
+        action = Action.create(tool="edit", target="auth.py", description="Modified auth flow")
+
+        await manager.record_episode(
+            state=state, action=action, outcome=Outcome.SUCCESS, duration_ms=50
+        )
+
+        # Query uses same keywords (SimpleVectorIndex does word-based matching)
+        result = await manager.recall("edit auth.py")
+
+        assert "Past episodes:" in result
+        assert "Modified auth flow" in result
+
+    async def test_recall_returns_rules(self, manager: MemoryManager):
+        # Pattern must match query words exactly
+        manager.add_rule(pattern="auth changes", action="Check permissions first", confidence=0.9)
+
+        result = await manager.recall("auth changes needed")
+
+        assert "Learned patterns:" in result
+        assert "Check permissions first" in result
+
+    async def test_recall_no_memories(self, manager: MemoryManager):
+        result = await manager.recall("completely unrelated query xyz")
+
+        assert result == "No relevant memories found."
+
 
 class TestCreateMemoryManager:
     """Tests for create_memory_manager."""

@@ -1637,6 +1637,8 @@ class LLMToolExecutor:
         try:
             if tool_name.startswith("llm."):
                 result = await self._execute_llm(tool_name, context, step)
+            elif tool_name.startswith("memory."):
+                result = await self._execute_memory(tool_name, context, step)
             else:
                 result = await self.moss_executor.execute(tool_name, context, step)
         except Exception as e:
@@ -1746,6 +1748,36 @@ class LLMToolExecutor:
             return mock_response, tokens_in, tokens_out
 
         return await self._call_litellm(prompt, repair_context)
+
+    async def _execute_memory(
+        self, tool_name: str, context: LoopContext, step: LoopStep
+    ) -> tuple[Any, int, int]:
+        """Execute a memory operation.
+
+        Memory tools are non-LLM, so tokens are always (0, 0).
+
+        Supported operations:
+        - memory.recall: Query memory for relevant past experiences
+        """
+        operation = tool_name.split(".", 1)[1] if "." in tool_name else tool_name
+
+        if not self.memory:
+            return "Memory not configured.", 0, 0
+
+        if operation == "recall":
+            # Extract query from step input or context
+            query = ""
+            if step.input_from and context.get(step.input_from):
+                query = str(context.get(step.input_from))
+            elif context.last:
+                query = str(context.last)
+            else:
+                query = step.name
+
+            result = await self.memory.recall(query)
+            return result, 0, 0
+        else:
+            return f"Unknown memory operation: {operation}", 0, 0
 
     async def _get_memory_context(self) -> str:
         """Get automatic memory context to inject into system prompt."""
