@@ -174,3 +174,50 @@ def rust_grep(
         return {"matches": [], "total_matches": 0, "files_searched": 0}
 
     return json.loads(output)
+
+
+def rust_context(file: str, root: str | None = None) -> dict | None:
+    """Get compiled context for a file using Rust CLI.
+
+    Returns {
+        "file": str,
+        "summary": {"lines", "classes", "functions", "methods", "imports", "exports"},
+        "symbols": [...],
+        "imports": [...],
+        "exports": [...]
+    } or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["context"]
+    if root:
+        args.extend(["-r", root])
+    args.append(file)
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)
+
+
+def rust_overview(root: str | None = None, compact: bool = False) -> dict | None:
+    """Get codebase overview using Rust CLI.
+
+    Returns comprehensive codebase metrics or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["overview"]
+    if root:
+        args.extend(["-r", root])
+    if compact:
+        args.append("--compact")
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)

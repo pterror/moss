@@ -1071,6 +1071,7 @@ def cmd_deps(args: Namespace) -> int:
 def cmd_context(args: Namespace) -> int:
     """Generate compiled context for a file (skeleton + deps + summary)."""
     from moss import MossAPI
+    from moss.rust_shim import rust_available, rust_context
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -1082,6 +1083,51 @@ def cmd_context(args: Namespace) -> int:
     if not path.is_file():
         output.error(f"{path} must be a file")
         return 1
+
+    # Try Rust CLI for speed (10-100x faster)
+    if rust_available():
+        result = rust_context(str(path), root=str(path.parent))
+        if result:
+            if getattr(args, "json", False):
+                output_result(result, args)
+            else:
+                # Format text output from Rust result
+                summary = result.get("summary", {})
+                output.header(path.name)
+                output.info(f"Lines: {summary.get('lines', 0)}")
+                output.info(
+                    f"Classes: {summary.get('classes', 0)}, "
+                    f"Functions: {summary.get('functions', 0)}, "
+                    f"Methods: {summary.get('methods', 0)}"
+                )
+                output.info(
+                    f"Imports: {summary.get('imports', 0)}, Exports: {summary.get('exports', 0)}"
+                )
+                output.blank()
+
+                # Print imports
+                imports = result.get("imports", [])
+                if imports:
+                    output.step("Imports")
+                    for imp in imports:
+                        module = imp.get("module", "")
+                        names = imp.get("names", [])
+                        if names:
+                            output.print(f"from {module} import {', '.join(names)}")
+                        else:
+                            output.print(f"import {module}")
+                    output.blank()
+
+                # Print skeleton
+                output.step("Skeleton")
+                symbols = result.get("symbols", [])
+                if symbols:
+                    for sym in symbols:
+                        sig = sym.get("signature", sym.get("name", ""))
+                        output.print(sig)
+                else:
+                    output.verbose("(no symbols)")
+            return 0
 
     api = MossAPI.for_project(path.parent)
 

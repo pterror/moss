@@ -10,6 +10,7 @@ mod deps;
 mod grep;
 mod health;
 mod index;
+mod overview;
 mod path_resolve;
 mod skeleton;
 mod summarize;
@@ -311,6 +312,17 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
+    /// Show comprehensive codebase overview
+    Overview {
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Compact one-line output
+        #[arg(short, long)]
+        compact: bool,
+    },
+
     /// Summarize what a module does
     Summarize {
         /// File to summarize
@@ -481,6 +493,9 @@ fn main() {
         } => cmd_cfg(&file, root.as_deref(), function.as_deref(), cli.json),
         Commands::Daemon { action, root } => cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Health { root } => cmd_health(root.as_deref(), cli.json, &mut profiler),
+        Commands::Overview { root, compact } => {
+            cmd_overview(root.as_deref(), compact, cli.json, &mut profiler)
+        }
         Commands::Summarize { file, root } => cmd_summarize(&file, root.as_deref(), cli.json),
         Commands::Grep {
             pattern,
@@ -2067,6 +2082,50 @@ fn cmd_health(root: Option<&Path>, json: bool, profiler: &mut Profiler) -> i32 {
                 "high_risk_functions": report.high_risk_functions,
             })
         );
+    } else {
+        println!("{}", report.format());
+    }
+
+    0
+}
+
+fn cmd_overview(root: Option<&Path>, compact: bool, json: bool, profiler: &mut Profiler) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    profiler.mark("resolved_root");
+
+    let report = overview::analyze_overview(&root);
+    profiler.mark("analyzed");
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "total_files": report.total_files,
+                "python_files": report.python_files,
+                "rust_files": report.rust_files,
+                "other_files": report.other_files,
+                "total_lines": report.total_lines,
+                "total_functions": report.total_functions,
+                "total_classes": report.total_classes,
+                "total_methods": report.total_methods,
+                "avg_complexity": (report.avg_complexity * 10.0).round() / 10.0,
+                "max_complexity": report.max_complexity,
+                "high_risk_functions": report.high_risk_functions,
+                "functions_with_docs": report.functions_with_docs,
+                "doc_coverage": (report.doc_coverage * 100.0).round() / 100.0,
+                "total_imports": report.total_imports,
+                "unique_modules": report.unique_modules,
+                "todo_count": report.todo_count,
+                "fixme_count": report.fixme_count,
+                "health_score": (report.health_score * 100.0).round() / 100.0,
+                "grade": report.grade
+            })
+        );
+    } else if compact {
+        println!("{}", report.format_compact());
     } else {
         println!("{}", report.format());
     }

@@ -4,18 +4,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Structured LLM summarization for loop steps (see Goose's approach in `docs/prior-art.md`)
-   - Goose uses sections: User Intent, Technical Concepts, Pending Tasks, Current Work
-   - Apply to `_build_prompt()` when digesting complex context between steps
-2. Port `overview` command to Rust (fast codebase overview)
-3. Wire Rust `context` command to Python CLI (completed in Rust, needs Python integration)
+1. MCP response ephemeral handling - large responses should stream/page instead of filling context
+2. Multiple agents concurrently - allow parallel agent execution without requiring join
+3. Graceful failure - handle errors without crashing, provide useful feedback
 
 ## Active Backlog
 
 **Small:**
-- [ ] Multiple agents concurrently - no requirement to join back to main stream
-- [ ] Graceful failure - handle errors without crashing, provide useful feedback
-- [ ] MCP response ephemeral handling - large responses should stream/page instead of filling context
 - [ ] Agent sandboxing - restrict bash/shell access, security-conscious CLI wrappers
 
 **Large:**
@@ -62,6 +57,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Configurable agent roles in `.moss/agents/`
 - [ ] Multi-subtree parallelism for independent work
 - [ ] Terminal subagent with persistent shell session
+- [ ] Dynamic prompts - external generators receive structured context object (intent, steps, files)
 
 ### Evaluation
 - [ ] SWE-bench harness - benchmark against standard tasks

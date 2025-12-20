@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Features
+
+**Structured LLM summarization in agent loops**
+- New `_build_structured_context()` method in `AgentLoopRunner`
+- Goose-inspired sections: User Intent, Completed Steps, Current Work
+- Better context preservation across multi-step loops
+- Additional prompts for meta-loop operations (analyze_loop, estimate_tokens, find_redundancy)
+
+**Rust CLI overview command** (new)
+- `moss overview` - comprehensive codebase overview in ~95ms
+- Aggregates health, docs, complexity, imports, TODOs/FIXMEs
+- Health score grading (A-F) based on complexity, risk, and doc coverage
+- Compact mode (`-c`) for single-line summaries
+- JSON output mode for programmatic use
+
+**Rust CLI context command wired to Python**
+- `moss context <file>` now delegates to Rust CLI when available
+- 10-100x faster than pure Python for large files
+- Falls back to Python implementation when Rust not found
+
 ### Bug Fixes
 
 - Add `Symbol.to_dict()` method for JSON serialization in skeleton/context commands

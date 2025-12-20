@@ -1598,6 +1598,58 @@ class LLMToolExecutor:
 
         return await asyncio.to_thread(_sync_call)
 
+    def _build_structured_context(self, context: LoopContext, step: LoopStep) -> str:
+        """Build structured context summary following Goose's approach.
+
+        Sections (inspired by Goose's summarize_oneshot.md):
+        - User Intent: What the user wants to accomplish
+        - Technical Context: Files, code structures, dependencies
+        - Current Work: What step we're on, what's been done
+        - Pending: What still needs to happen
+
+        This structured format helps LLMs maintain coherent understanding
+        across multi-step loops.
+        """
+        sections = []
+
+        # User Intent - extract from original input
+        if isinstance(context.input, dict):
+            task = context.input.get("task", "")
+            file_path = context.input.get("file_path", "")
+            if task:
+                sections.append(f"User Intent: {task}")
+            if file_path:
+                sections.append(f"Target: {file_path}")
+        elif isinstance(context.input, str) and context.input:
+            sections.append(f"User Intent: {context.input}")
+
+        # Technical Context - summarize completed steps
+        if context.steps:
+            completed = []
+            for name, output in context.steps.items():
+                # Summarize each step's output concisely
+                if isinstance(output, str):
+                    # Truncate long outputs
+                    summary = output[:200] + "..." if len(output) > 200 else output
+                    # Single line
+                    summary = summary.replace("\n", " ")[:100]
+                elif isinstance(output, dict):
+                    summary = ", ".join(f"{k}={v}" for k, v in list(output.items())[:3])
+                elif isinstance(output, list):
+                    summary = f"[{len(output)} items]"
+                else:
+                    summary = str(output)[:50]
+                completed.append(f"  {name}: {summary}")
+            if completed:
+                sections.append("Completed Steps:\n" + "\n".join(completed))
+
+        # Current Work - what step we're executing
+        sections.append(f"Current Step: {step.name} (tool: {step.tool})")
+        if step.input_from:
+            sections.append(f"Input From: {step.input_from}")
+
+        return "\n".join(sections)
+
     def _build_prompt(self, operation: str, context: LoopContext, step: LoopStep) -> str:
         """Build a prompt for the given LLM operation.
 
@@ -1606,6 +1658,8 @@ class LLMToolExecutor:
         - context.steps: All previous step outputs
         - context.last: Most recent step output
         - step.input_from: Which step's output to focus on
+
+        Uses structured context sections for complex multi-step loops.
         """
         # Get the primary input (what this step should focus on)
         if step.input_from and step.input_from in context.steps:
@@ -1619,48 +1673,80 @@ class LLMToolExecutor:
         else:
             focus_str = str(focus_input)
 
-        # Include original task context if available
-        task_context = ""
-        if isinstance(context.input, dict):
-            task = context.input.get("task", "")
-            file_path = context.input.get("file_path", "")
-            if task:
-                task_context = f"Task: {task}\n"
-            if file_path:
-                task_context += f"File: {file_path}\n"
-        if task_context:
-            task_context += "\n"
+        # Build structured context for complex operations
+        structured_context = self._build_structured_context(context, step)
 
+        # Operation-specific prompts
+        # Simple operations get minimal context, complex ones get structured
         prompts = {
             "generate": (
-                f"{task_context}Generate code based on the following context:\n\n{focus_str}"
+                f"{structured_context}\n\nGenerate code based on the following:\n{focus_str}"
             ),
             "critique": (
-                f"{task_context}Review and critique the following code. "
-                f"Identify issues and suggest improvements:\n\n{focus_str}"
+                f"{structured_context}\n\n"
+                f"Review and critique. Identify issues and suggest improvements:\n{focus_str}"
             ),
-            "decide": (
-                f"{task_context}Based on the following context, make a decision:\n\n{focus_str}"
-            ),
+            "decide": (f"{structured_context}\n\nMake a decision based on:\n{focus_str}"),
             "needs_more_context": (
-                f"{task_context}Given this code skeleton, do you need to see "
-                f"the full implementation to make changes? "
+                f"Given this skeleton, do you need full implementation to make changes? "
                 f"Answer YES or NO with brief explanation:\n\n{focus_str}"
             ),
             "add_docstrings": (
-                f"Given this code skeleton, identify functions without docstrings. "
-                f"For EACH function missing a docstring, output a line in this format:\n"
-                f"FUNC:function_name|One-line description of what the function does\n\n"
-                f"Only output functions that are MISSING docstrings. "
-                f"Be concise - one short sentence per function.\n\n"
+                f"Identify functions without docstrings. "
+                f"For EACH missing docstring, output:\n"
+                f"FUNC:function_name|One-line description\n\n"
+                f"Only functions MISSING docstrings. One sentence each.\n\n"
                 f"Skeleton:\n{focus_str}"
             ),
-            "analyze": (
-                f"{task_context}Analyze the following and provide insights:\n\n{focus_str}"
+            "analyze": (f"{structured_context}\n\nAnalyze and provide insights:\n{focus_str}"),
+            # Meta-loop operations for loop improvement
+            "analyze_loop": (
+                f"Analyze this loop definition. Identify:\n"
+                f"- Missing error handling\n"
+                f"- Potential infinite loops\n"
+                f"- Inefficient step ordering\n"
+                f"- Missing validation\n\n"
+                f"Loop:\n{focus_str}"
+            ),
+            "suggest_improvements": (
+                f"{structured_context}\n\n"
+                f"Based on analysis, suggest specific improvements.\n"
+                f"Format as before/after changes. Prioritize: safety > efficiency > clarity.\n\n"
+                f"Analysis:\n{focus_str}"
+            ),
+            "estimate_tokens": (
+                f"Estimate token usage for each step. Consider input/output size.\n"
+                f"Output JSON: {{step_name: estimated_tokens}}\n\n"
+                f"Loop:\n{focus_str}"
+            ),
+            "find_redundancy": (
+                f"Identify token waste:\n"
+                f"- Redundant LLM calls\n"
+                f"- Steps producing constant output\n"
+                f"- Duplicate validation\n\n"
+                f"Token estimates:\n{focus_str}"
+            ),
+            "rewrite_loop": (
+                f"Rewrite loop to reduce token usage. Apply identified optimizations.\n"
+                f"Output complete optimized loop as YAML.\n\n"
+                f"Current loop + waste analysis:\n{focus_str}"
+            ),
+            "critique_docstrings": (
+                f"Critique these docstrings:\n"
+                f"- Accurate?\n"
+                f"- Explain 'why' not just 'what'?\n"
+                f"- Args/returns documented?\n"
+                f"Score 1-10, list issues.\n\n"
+                f"Docstrings:\n{focus_str}"
+            ),
+            "improve_docstrings": (
+                f"Improve docstrings based on critique. Address each issue.\n"
+                f"Output improved docstrings.\n\n"
+                f"Critique:\n{focus_str}"
             ),
         }
 
-        default_prompt = f"{task_context}Process the following:\n\n{focus_str}"
+        default_prompt = f"{structured_context}\n\nProcess:\n{focus_str}"
         return prompts.get(operation, default_prompt)
 
 
