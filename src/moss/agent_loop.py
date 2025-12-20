@@ -1108,6 +1108,64 @@ class MossToolExecutor:
 
         return {"applied": applied, "skipped": skipped, "errors": errors}
 
+    def _parse_patch_output(self, llm_output: str) -> dict[str, Any]:
+        """Parse LLM output into Patch object.
+
+        Expected format (simple):
+            ANCHOR: function_name
+            TYPE: replace
+            CONTENT:
+            def function_name():
+                new implementation
+
+        Returns dict with 'patch' key containing the Patch object, or 'error' if parsing fails.
+        """
+        from moss.anchors import Anchor
+        from moss.patches import Patch, PatchType
+
+        lines = llm_output.strip().split("\n")
+        anchor_name: str | None = None
+        patch_type_str: str = "replace"
+        content_lines: list[str] = []
+        in_content = False
+
+        for line in lines:
+            line_stripped = line.strip()
+            upper = line_stripped.upper()
+
+            if upper.startswith("ANCHOR:"):
+                anchor_name = line_stripped[7:].strip()
+                in_content = False
+            elif upper.startswith("TYPE:"):
+                patch_type_str = line_stripped[5:].strip().lower()
+                in_content = False
+            elif upper.startswith("CONTENT:"):
+                in_content = True
+                # Check if there's content on the same line
+                rest = line_stripped[8:].strip()
+                if rest:
+                    content_lines.append(rest)
+            elif in_content:
+                content_lines.append(line)
+
+        if not anchor_name:
+            return {"error": "Missing ANCHOR: line in patch output"}
+
+        # Map type string to PatchType
+        type_map = {
+            "replace": PatchType.REPLACE,
+            "insert_before": PatchType.INSERT_BEFORE,
+            "insert_after": PatchType.INSERT_AFTER,
+            "delete": PatchType.DELETE,
+        }
+        patch_type = type_map.get(patch_type_str, PatchType.REPLACE)
+
+        content = "\n".join(content_lines)
+        anchor = Anchor(name=anchor_name)
+        patch = Patch(anchor=anchor, patch_type=patch_type, content=content)
+
+        return {"patch": patch}
+
     async def execute(
         self, tool_name: str, context: LoopContext, step: LoopStep
     ) -> tuple[Any, int, int]:
@@ -1135,7 +1193,7 @@ class MossToolExecutor:
             if result is not None:
                 result = {"content": result, "_expanded_symbol": f"{file_path}:{symbol_name}"}
 
-        elif tool_name == "validation.validate":
+        elif tool_name in ("validation.validate", "validator.run"):
             file_path = self._get_file_path(context, step)
             result = self.api.validation.validate(file_path)
 
@@ -1215,6 +1273,12 @@ class MossToolExecutor:
             if not isinstance(input_data, list):
                 raise ValueError(f"patch.docstrings expects list, got {type(input_data)}")
             result = self._apply_docstrings(file_path, input_data)
+
+        elif tool_name == "parse.patch":
+            # Parse LLM output into Patch object (ANCHOR/TYPE/CONTENT format)
+            if not isinstance(input_data, str):
+                input_data = str(input_data)
+            result = self._parse_patch_output(input_data)
 
         else:
             raise ValueError(f"Unknown tool: {tool_name}")

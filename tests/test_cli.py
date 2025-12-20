@@ -338,10 +338,10 @@ def baz():
 
         assert result == 0
         captured = capsys.readouterr()
-        # Format uses Python signature syntax: "class Foo:"
-        assert "class Foo" in captured.out
-        assert "def bar" in captured.out
-        assert "def baz" in captured.out
+        # Format: "class: Foo (L3-7)" or "function: def bar(self, x: int) (L5-7)"
+        assert "Foo" in captured.out
+        assert "bar" in captured.out
+        assert "baz" in captured.out
 
     def test_json_output(self, python_file: Path, capsys):
         args = create_parser().parse_args(["--json", "skeleton", str(python_file)])

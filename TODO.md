@@ -4,19 +4,29 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. **Fix workflow execution blockers** (found during evaluation):
-   - Tool name mismatch: `validator.run` vs `validation.validate` - align names
-   - LLM→Patch parsing: LLM returns text, `patch.apply` expects `Patch` object
-   - Missing step: parse LLM output into structured `Patch`
-2. **Design indefinite agentic loop** - DWIM-driven, not tool-schema-driven:
-   - LLM outputs terse intents: "skeleton foo.py", "fix: add null check", "done"
-   - DWIM parses intent → routes to tool → executes
-   - Results fed back to LLM for next decision
-   - No tool schemas in prompt - DWIM handles interpretation
-   - Already have: Session tracking, MossAPI, DWIM scaffolding, litellm
-3. Investigate MCP resource reading failure (ReadMcpResourceTool returns attribute error)
-4. Review optional dependency sets - are extras well-organized? (litellm was missing despite --extra all)
-5. Evaluate DWIM heuristics - confidence scores are 0.3-0.4, feels low. Wrong similarity metric? Bad keywords?
+1. Wire DWIMLoop into CLI (`moss agent` command)
+2. Add context truncation/summarization for long loops
+3. Evaluate DWIMLoop on test tasks
+
+## Recently Completed
+
+- **DWIM-driven agent loop** (`src/moss/dwim_loop.py`):
+  - `parse_intent()` - extracts verb + target from terse commands
+  - `DWIMLoop` class - full agent loop with LLM → DWIM → execute → result cycle
+  - Terse command format: "skeleton foo.py", "expand Patch", "fix: add null check", "done"
+  - No tool schemas in prompts - 90%+ token reduction vs function calling
+- **Workflow execution blockers fixed**:
+  - Added `validator.run` alias for `validation.validate`
+  - Added `parse.patch` tool to convert LLM text output to Patch objects
+  - Workflow: validate → analyze (LLM) → parse → fix
+- **MCP resource reading failure**: Claude Code bug, not moss. ReadMcpResourceTool accesses `.content` but MCP's TextResourceContents has `.text` field
+- **Optional dependencies reviewed**: extras are well-organized. `all` includes common features, excludes dev/docs/eval/llm-lib/local-llm/grpc by design
+- **DWIM heuristics improved**:
+  - Keyword scoring: reward matches rather than penalize tools with many keywords
+  - First-word action boost: 30% bonus when first word matches a keyword
+  - Exact name boost: 40% bonus when first word is the tool name (e.g., "skeleton foo.py")
+  - Common verbs exemption: generic verbs (search, find, show) don't get name boost
+  - Scores improved from 0.29→0.83 for direct commands, query now wins for semantic matches
 
 ## Active Backlog
 

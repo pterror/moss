@@ -30,8 +30,14 @@ input_from = "validate"
 prompt = "@prompts/repair-engine"
 
 [[workflow.steps]]
+name = "parse"
+tool = "parse.patch"
+type = "tool"
+input_from = "analyze"
+
+[[workflow.steps]]
 name = "fix"
 tool = "patch.apply"
 type = "tool"
-input_from = "analyze"
+input_from = "parse"
 max_retries = 3

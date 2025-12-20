@@ -650,40 +650,43 @@ def keyword_match_score(query: str, keywords: list[str]) -> float:
     """Score how well a query matches a list of keywords.
 
     Uses word form normalization so "summarize" matches "summary".
+    Optimized to reward matched keywords rather than penalize tools with many keywords.
     """
+    if not keywords:
+        return 0.0
+
     query_lower = query.lower()
-    query_words = set(query_lower.split())
+    query_words = query_lower.split()
+    query_words_set = set(query_words)
 
     # Normalize query words to canonical forms
-    query_canonical = {normalize_word(w) for w in query_words}
+    query_canonical = {normalize_word(w) for w in query_words_set}
 
     # Normalize keywords to canonical forms
     keyword_canonical = {normalize_word(kw) for kw in keywords}
 
-    # Direct word match (using normalized forms)
-    direct_matches = sum(
-        1 for kw in keyword_canonical if kw in query_lower or normalize_word(kw) in query_canonical
-    )
-
-    # Word overlap (using normalized forms)
+    # Overlap score: proportion of query words matched
     overlap = len(query_canonical & keyword_canonical)
+    overlap_score = overlap / len(query_words_set) if query_words_set else 0.0
 
-    # Partial matches (fuzzy string matching for typos)
+    # First word (action) bonus: if first word matches, it's very likely the right tool
+    first_word = normalize_word(query_words[0]) if query_words else ""
+    first_word_match = 0.3 if first_word in keyword_canonical else 0.0
+
+    # Best partial match score (for typo tolerance)
+    best_partial = 0.0
     if keywords:
-        partial = sum(max(string_similarity(qw, kw) for kw in keywords) for qw in query_words)
-    else:
-        partial = 0
+        for qw in query_words_set:
+            for kw in keywords:
+                sim = string_similarity(qw, kw)
+                if sim > best_partial:
+                    best_partial = sim
 
-    # Combine scores (weighted)
-    total_keywords = len(keywords)
-    if total_keywords == 0:
-        return 0.0
-
-    score = (
-        (direct_matches / total_keywords) * 0.5
-        + (overlap / max(len(query_words), 1)) * 0.3
-        + (partial / max(len(query_words), 1)) * 0.2
-    )
+    # Combine scores
+    # - Overlap: 50% weight (how many query words match keywords)
+    # - First word: 30% bonus if action word matches
+    # - Best partial: 20% for typo tolerance
+    score = overlap_score * 0.5 + first_word_match + best_partial * 0.2
 
     return min(score, 1.0)
 
@@ -837,6 +840,10 @@ class ToolRouter:
             if self._tool_names[idx] in tools
         }
 
+        # Extract first word (usually the action) for special handling
+        query_words = query.lower().split()
+        first_word = normalize_word(query_words[0]) if query_words else ""
+
         matches = []
         for tool_name in tools:
             if tool_name not in TOOL_REGISTRY:
@@ -844,21 +851,35 @@ class ToolRouter:
 
             tool_info = TOOL_REGISTRY[tool_name]
 
-            # TF-IDF cosine similarity (primary signal)
+            # TF-IDF cosine similarity
             tfidf_score = tfidf_scores.get(tool_name, 0.0)
 
-            # Keyword matching (secondary signal)
+            # Keyword matching (includes first-word bonus)
             keyword_score = keyword_match_score(query, tool_info.keywords)
 
             # Fuzzy string matching (for typos)
             name_score = string_similarity(query, tool_name)
             desc_score = string_similarity(query, tool_info.description)
 
+            # Exact name match boost: if first word IS the tool name, strong signal
+            # e.g., "skeleton foo.py" -> skeleton tool gets boost
+            # Common verbs like "search", "find" don't give boost because they're generic
+            common_verbs = {"search", "find", "show", "get", "list", "check", "run", "what"}
+            tool_base = tool_name.split("_")[0]  # "skeleton_format" -> "skeleton"
+            exact_name_boost = 0.0
+            if first_word == tool_base or first_word == tool_name:
+                if first_word not in common_verbs:
+                    exact_name_boost = 0.4  # Full boost for specific tool names
+            elif tool_base in query.lower() and tool_base not in common_verbs:
+                exact_name_boost = 0.2
+
             # Combined score (weighted)
-            # Keywords get higher weight since they use word form normalization
-            # TF-IDF provides broader semantic matching
             confidence = (
-                tfidf_score * 0.30 + keyword_score * 0.45 + desc_score * 0.15 + name_score * 0.10
+                tfidf_score * 0.20
+                + keyword_score * 0.40
+                + desc_score * 0.10
+                + name_score * 0.10
+                + exact_name_boost
             )
 
             if confidence > 0.1:  # Minimum threshold

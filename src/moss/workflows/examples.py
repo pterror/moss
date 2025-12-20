@@ -40,9 +40,14 @@ class ConditionalTestWorkflow(Workflow):
                 input_from="validate",
             ),
             WorkflowStep(
+                name="parse",
+                tool="parse.patch",
+                input_from="analyze",
+            ),
+            WorkflowStep(
                 name="fix",
                 tool="patch.apply",
-                input_from="analyze",
+                input_from="parse",
                 max_retries=3,
             ),
         ]
@@ -100,9 +105,14 @@ class LanguageAwareWorkflow(Workflow):
                 input_from="validate",
             ),
             WorkflowStep(
+                name="parse",
+                tool="parse.patch",
+                input_from="analyze",
+            ),
+            WorkflowStep(
                 name="fix",
                 tool="patch.apply",
-                input_from="analyze",
+                input_from="parse",
                 max_retries=3,
             ),
         ]

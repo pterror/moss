@@ -83,10 +83,11 @@ class TestLoadWorkflow:
         """Load the validate-fix workflow from built-in directory."""
         wf = load_workflow("validate-fix")
         assert wf.name == "validate-fix"
-        assert len(wf.steps) == 3
+        assert len(wf.steps) == 4
         assert wf.steps[0].name == "validate"
         assert wf.steps[1].name == "analyze"
-        assert wf.steps[2].name == "fix"
+        assert wf.steps[2].name == "parse"
+        assert wf.steps[3].name == "fix"
 
     def test_resolves_prompt_references(self):
         """@prompts/name references are resolved to prompt content."""
@@ -211,7 +212,7 @@ class TestWorkflowToAgentLoop:
         loop = workflow_to_agent_loop(wf)
 
         assert loop.name == "validate-fix"
-        assert len(loop.steps) == 3
+        assert len(loop.steps) == 4
         assert loop.max_steps == 10
         assert loop.token_budget == 50000
 
@@ -336,10 +337,11 @@ class TestPythonWorkflowProtocol:
         wf = load_workflow("validate-fix")
         steps = wf.build_steps()
 
-        assert len(steps) == 3
+        assert len(steps) == 4
         assert steps[0].name == "validate"
         assert steps[1].name == "analyze"
-        assert steps[2].name == "fix"
+        assert steps[2].name == "parse"
+        assert steps[3].name == "fix"
 
     def test_dynamic_workflow_with_context(self):
         """Dynamic workflow adapts steps based on context."""
@@ -351,13 +353,13 @@ class TestPythonWorkflowProtocol:
         # Without tests
         ctx_no_tests = WorkflowContext(has_tests=False)
         steps = wf.build_steps(ctx_no_tests)
-        assert len(steps) == 3
+        assert len(steps) == 4
         assert all(s.name != "test" for s in steps)
 
         # With tests
         ctx_with_tests = WorkflowContext(has_tests=True)
         steps = wf.build_steps(ctx_with_tests)
-        assert len(steps) == 4
+        assert len(steps) == 5
         assert steps[-1].name == "test"
 
     def test_language_aware_workflow(self):
