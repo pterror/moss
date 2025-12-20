@@ -232,6 +232,20 @@ enum Commands {
         exports_only: bool,
     },
 
+    /// Query imports from the index
+    Imports {
+        /// File to show imports for, or name to resolve
+        query: String,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Resolve a name in context of a file (what module does it come from?)
+        #[arg(short = 'R', long)]
+        resolve: bool,
+    },
+
     /// Calculate cyclomatic complexity
     Complexity {
         /// File to analyze
@@ -361,6 +375,9 @@ fn main() {
         }
         Commands::Deps { file, root, imports_only, exports_only } => {
             cmd_deps(&file, root.as_deref(), imports_only, exports_only, cli.json)
+        }
+        Commands::Imports { query, root, resolve } => {
+            cmd_imports(&query, root.as_deref(), resolve, cli.json)
         }
         Commands::Complexity { file, root, threshold } => {
             cmd_complexity(&file, root.as_deref(), threshold, cli.json)
@@ -1156,6 +1173,131 @@ fn cmd_deps(file: &str, root: Option<&Path>, imports_only: bool, exports_only: b
     }
 
     0
+}
+
+fn cmd_imports(query: &str, root: Option<&Path>, resolve: bool, json: bool) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    let idx = match index::FileIndex::open(&root) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("Error opening index: {}", e);
+            return 1;
+        }
+    };
+
+    // Check if index has imports
+    let (_, _, import_count) = idx.call_graph_stats().unwrap_or((0, 0, 0));
+    if import_count == 0 {
+        eprintln!("No imports indexed. Run: moss reindex --call-graph");
+        return 1;
+    }
+
+    if resolve {
+        // Query format: "file:name" - resolve what module a name comes from
+        let (file, name) = if let Some(idx) = query.find(':') {
+            (&query[..idx], &query[idx + 1..])
+        } else {
+            eprintln!("Resolve format: file:name (e.g., cli.py:serialize)");
+            return 1;
+        };
+
+        // Resolve the file first
+        let matches = path_resolve::resolve(file, &root);
+        let file_path = match matches.iter().find(|m| m.kind == "file") {
+            Some(m) => &m.path,
+            None => {
+                eprintln!("File not found: {}", file);
+                return 1;
+            }
+        };
+
+        match idx.resolve_import(file_path, name) {
+            Ok(Some((module, orig_name))) => {
+                if json {
+                    println!("{}", serde_json::json!({
+                        "name": name,
+                        "module": module,
+                        "original_name": orig_name
+                    }));
+                } else {
+                    if name == orig_name {
+                        println!("{} <- {}", name, module);
+                    } else {
+                        println!("{} <- {}.{}", name, module, orig_name);
+                    }
+                }
+                0
+            }
+            Ok(None) => {
+                if json {
+                    println!("{}", serde_json::json!({"name": name, "module": null}));
+                } else {
+                    eprintln!("Name '{}' not found in imports of {}", name, file_path);
+                }
+                1
+            }
+            Err(e) => {
+                eprintln!("Error resolving import: {}", e);
+                1
+            }
+        }
+    } else {
+        // Show all imports for a file
+        let matches = path_resolve::resolve(query, &root);
+        let file_path = match matches.iter().find(|m| m.kind == "file") {
+            Some(m) => &m.path,
+            None => {
+                eprintln!("File not found: {}", query);
+                return 1;
+            }
+        };
+
+        match idx.get_imports(file_path) {
+            Ok(imports) => {
+                if imports.is_empty() {
+                    if json {
+                        println!("[]");
+                    } else {
+                        println!("No imports found in {}", file_path);
+                    }
+                    return 0;
+                }
+
+                if json {
+                    let output: Vec<_> = imports
+                        .iter()
+                        .map(|i| {
+                            serde_json::json!({
+                                "module": i.module,
+                                "name": i.name,
+                                "alias": i.alias,
+                                "line": i.line
+                            })
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                } else {
+                    println!("# Imports in {}", file_path);
+                    for imp in imports {
+                        let alias = imp.alias.map(|a| format!(" as {}", a)).unwrap_or_default();
+                        if let Some(module) = imp.module {
+                            println!("  from {} import {}{}", module, imp.name, alias);
+                        } else {
+                            println!("  import {}{}", imp.name, alias);
+                        }
+                    }
+                }
+                0
+            }
+            Err(e) => {
+                eprintln!("Error getting imports: {}", e);
+                1
+            }
+        }
+    }
 }
 
 fn cmd_complexity(file: &str, root: Option<&Path>, threshold: Option<usize>, json: bool) -> i32 {
