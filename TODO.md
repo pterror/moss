@@ -20,6 +20,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 **Large:**
 - [ ] Sessions as first-class - resumable, observable work units
+- [ ] Memory system - layered memory for cross-session learning (see `docs/memory-system.md`)
 
 ## Future Work
 
@@ -48,6 +49,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] `moss document` - generate/update docstrings
 - [ ] `moss explain <symbol>` - explain any code construct
 - [ ] `moss localize <test>` - find buggy code from failing test
+
+### Memory System
+- [ ] Wire `MemoryLayer` into `LLMToolExecutor` (automatic layer)
+- [ ] Expose `memory.recall()` as agent tool (on-demand layer)
+- [ ] Add `check_triggers()` before risky steps (triggered layer)
+- [ ] Plugin loading from `.moss/memory/`
+- [ ] Config schema in `.moss/config.toml`
 
 ### Agent Infrastructure
 - [ ] Architect/Editor split - separate reasoning from editing
