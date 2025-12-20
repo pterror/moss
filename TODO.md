@@ -4,10 +4,15 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Architect/Editor split - separate reasoning from editing in agent loop
 - Terminal subagent with persistent shell session
 
 ## Recently Completed
+
+- **Architect/Editor split** (Dec 2025):
+  - Separated reasoning (planning what to change) from execution (making changes)
+  - `LLMArchitect` produces structured `EditPlan` with steps, context needs, risks
+  - `StructuredEditor` executes plans using anchor-based patches
+  - `ArchitectEditorLoop` orchestrates plan → execute → validate → revise cycle
 
 - **Clone elimination round 2** (Dec 2025):
   - Reduced clones from 30→18 (40% reduction)
