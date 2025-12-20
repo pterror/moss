@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum, auto
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from moss.cache import EphemeralCache
@@ -465,6 +466,70 @@ Do NOT repeat the same command. Never output prose."""
 
         return (response.choices[0].message.content or "").strip()
 
+    def _validate_sandbox_scope(
+        self, tool_name: str, params: dict[str, Any], scope: Path
+    ) -> str | None:
+        """Validate that tool parameters respect the sandbox scope.
+
+        Args:
+            tool_name: Name of tool being executed
+            params: Tool parameters
+            scope: Allowed sandbox path (must be absolute or relative to root)
+
+        Returns:
+            Error message if invalid, None if allowed
+        """
+        # Collect potential paths from params
+        paths_to_check = []
+
+        if "file_path" in params:
+            paths_to_check.append(str(params["file_path"]))
+        if "file_paths" in params:
+            paths_to_check.extend(str(p) for p in params["file_paths"])
+        if "path" in params:
+            paths_to_check.append(str(params["path"]))
+        if "target" in params:
+            # Check if target looks like a file path (has extension or separator)
+            target = str(params["target"])
+            if "/" in target or "." in target:
+                paths_to_check.append(target)
+
+        # Resolve scope to absolute path
+        try:
+            if scope.is_absolute():
+                abs_scope = scope.resolve()
+            else:
+                abs_scope = (self.api.root / scope).resolve()
+        except OSError as e:
+            return f"Invalid sandbox scope '{scope}': {e}"
+
+        for p_str in paths_to_check:
+            try:
+                # Handle relative paths (relative to api root)
+                path = Path(p_str)
+                if not path.is_absolute():
+                    path = self.api.root / path
+
+                # Resolve path
+                # Note: path.resolve() might fail if file doesn't exist.
+                # Use parent directory for non-existent files.
+                try:
+                    abs_path = path.resolve()
+                except OSError:
+                    # Fallback to resolving parent if file doesn't exist
+                    abs_path = path.parent.resolve() / path.name
+
+                if not str(abs_path).startswith(str(abs_scope)):
+                    return (
+                        f"Access denied: '{p_str}' is outside sandbox scope '{scope}' "
+                        f"(resolved: {abs_path})"
+                    )
+
+            except Exception as e:
+                return f"Path validation failed for '{p_str}': {e}"
+
+        return None
+
     async def _execute_tool(self, tool_name: str, params: dict[str, Any], _depth: int = 0) -> Any:
         """Execute a tool and return result.
 
@@ -483,6 +548,13 @@ Do NOT repeat the same command. Never output prose."""
         # Handle termination
         if tool_name == "done":
             return None
+
+        # Check sandbox scope
+        if self._task_tree and self._task_tree.current.sandbox_scope:
+            scope = self._task_tree.current.sandbox_scope
+            error = self._validate_sandbox_scope(tool_name, params, scope)
+            if error:
+                return f"Sandbox Error: {error}"
 
         # Check triggers before execution
         triggers = await self._check_memory_triggers(tool_name, params)

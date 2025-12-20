@@ -4,10 +4,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Workflow argument passing improvement
-- **Mistake Detection**: Detect when an LLM *maybe* made a mistake (Critic loop enhancement)
-- **Shadow Git Access**: Give LLM first-class access to 'Shadow Git' (diffs, rollback, "what did I break?")
-- **User Feedback Story**: Improve interruptibility and feedback loops (client-side interrupts, agent "check mail" steps) to handle mid-task corrections.
+- **Sandbox Scoping**: Subtasks should have their own 'sandbox' scope (default: inherited from parent)
+- **Docs Site Styling**: Modernize docs with glassmorphism, rounded borders, and new theme colors
+- **Vanilla Agent Loop**: Minimal agent loop option (LLM + Tools + TaskTree only) for testing/baseline
+- **Editing Tools**: Add native editing tools to Moss (essential for agentic loops)
+- **TUI Interface**: Interactive TUI for Moss (needs careful UX planning)
 
 ## Recently Completed
 
@@ -163,6 +164,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Scores improved from 0.29→0.83 for direct commands
 
 ## Active Backlog
+
+- Workflow argument passing improvement
+- **Mistake Detection**: Detect when an LLM *maybe* made a mistake (Critic loop enhancement)
+- **Shadow Git Access**: Give LLM first-class access to 'Shadow Git' (diffs, rollback, "what did I break?")
+- **User Feedback Story**: Improve interruptibility and feedback loops (client-side interrupts, agent "check mail" steps) to handle mid-task corrections.
 
 **Large:**
 - [ ] **Comprehensive Telemetry & Analysis**:

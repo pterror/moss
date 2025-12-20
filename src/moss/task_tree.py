@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 from typing import Any
 
 
@@ -82,10 +83,19 @@ class TaskNode:
     parent: TaskNode | None = field(default=None, repr=False)
     notes: list[Note] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    sandbox_scope: Path | None = None  # Restricted workspace for this task
 
-    def add_child(self, goal: str) -> TaskNode:
-        """Add a subtask."""
-        child = TaskNode(goal=goal, parent=self)
+    def add_child(self, goal: str, sandbox_scope: Path | None = None) -> TaskNode:
+        """Add a subtask.
+
+        Args:
+            goal: The subtask goal
+            sandbox_scope: Optional override for sandbox scope.
+                         If None, inherits from parent.
+        """
+        # Inherit scope if not explicitly provided
+        effective_scope = sandbox_scope if sandbox_scope is not None else self.sandbox_scope
+        child = TaskNode(goal=goal, parent=self, sandbox_scope=effective_scope)
         self.children.append(child)
         return child
 
@@ -175,6 +185,10 @@ class TaskNode:
                 line += f" ✓ ({node.summary})"
             elif is_current:
                 pass  # Already marked with [now]
+
+            # Add scope indicator if present
+            if node.sandbox_scope:
+                line += f" [scope: {node.sandbox_scope}]"
 
             lines.append(line)
 
@@ -308,6 +322,7 @@ class TaskTree:
                 for n in node.notes
             ],
             "metadata": node.metadata,
+            "sandbox_scope": str(node.sandbox_scope) if node.sandbox_scope else None,
         }
 
     @classmethod
@@ -321,6 +336,7 @@ class TaskTree:
     @classmethod
     def _node_from_dict(cls, data: dict, parent: TaskNode | None = None) -> TaskNode:
         """Deserialize a single node."""
+        scope = data.get("sandbox_scope")
         node = TaskNode(
             goal=data["goal"],
             status=TaskStatus[data["status"]],
@@ -328,6 +344,7 @@ class TaskTree:
             description=data.get("description"),
             parent=parent,
             metadata=data.get("metadata", {}),
+            sandbox_scope=Path(scope) if scope else None,
         )
         node.notes = [
             Note(

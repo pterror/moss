@@ -4,6 +4,13 @@
 
 ### Features
 
+**Sandbox Scoping** (new)
+- `TaskNode` now supports optional `sandbox_scope` attribute
+- Scopes are inherited from parent tasks by default
+- `TaskTree` serialization/deserialization includes scope
+- `DWIMLoop` validates tool access against the current task's scope
+- Blocks access to files outside the specified sandbox directory
+
 **Workflow externalization** (expanded)
 - Design doc for TOML-based workflow/prompt format (`docs/workflow-format.md`)
 - Prompt loader with user override support (`src/moss/prompts/`)
