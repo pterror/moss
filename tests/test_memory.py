@@ -899,3 +899,29 @@ class TestMemoryLayerDefault:
 
         assert layer is not None
         assert layer.manager is not None
+
+
+class TestMemoryConfiguration:
+    """Tests for memory configuration integration."""
+
+    def test_layer_init_with_config(self):
+        layer = MemoryLayer(max_episodes=5)
+        # Verify underlying store has correct capacity
+        episodic_store = layer.manager.episodic
+        assert episodic_store._episodes.capacity == 5
+
+    def test_default_factory_with_config(self, tmp_path):
+        layer = MemoryLayer.default(project_dir=tmp_path, max_episodes=50)
+
+        episodic_store = layer.manager.episodic
+        assert episodic_store._episodes.capacity == 50
+
+    def test_configure_plugins_from_config(self):
+        plugin = MockTriggeredPlugin()
+        layer = MemoryLayer(plugins=[plugin])
+
+        # Simulate config dict as loaded from TOML
+        config = {"mock_triggered": {"pattern": "critical"}}
+
+        layer.configure(config)
+        assert plugin.trigger_pattern == "critical"

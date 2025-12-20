@@ -3717,6 +3717,53 @@ def cmd_loop(args: Namespace) -> int:
         return 1
 
 
+def _dump_workflow_toml(data: dict[str, Any]) -> str:
+    """Dump workflow dictionary to TOML string."""
+    lines = []
+
+    def format_value(v: Any) -> str:
+        if isinstance(v, str):
+            return f'"{v}"'
+        elif isinstance(v, bool):
+            return str(v).lower()
+        elif isinstance(v, (int, float)):
+            return str(v)
+        elif isinstance(v, list):
+            return "[" + ", ".join(format_value(x) for x in v) + "]"
+        return str(v)
+
+    wf = data["workflow"]
+
+    lines.append("[workflow]")
+    for k, v in wf.items():
+        if k not in ("limits", "llm", "steps") and not isinstance(v, (dict, list)):
+            lines.append(f"{k} = {format_value(v)}")
+    lines.append("")
+
+    if "limits" in wf:
+        lines.append("[workflow.limits]")
+        for k, v in wf["limits"].items():
+            lines.append(f"{k} = {format_value(v)}")
+        lines.append("")
+
+    if "llm" in wf:
+        lines.append("[workflow.llm]")
+        for k, v in wf["llm"].items():
+            if v is not None:
+                lines.append(f"{k} = {format_value(v)}")
+        lines.append("")
+
+    if "steps" in wf:
+        for step in wf["steps"]:
+            lines.append("[[workflow.steps]]")
+            for k, v in step.items():
+                if v is not None and v != 0 and v != "":  # Skip defaults/empty
+                    lines.append(f"{k} = {format_value(v)}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def cmd_workflow(args: Namespace) -> int:
     """Manage and run TOML-based workflows.
 
@@ -3748,6 +3795,40 @@ def cmd_workflow(args: Namespace) -> int:
                 output.print(f"  {name}: {wf.description or '(no description)'}")
             except Exception as e:
                 output.print(f"  {name}: (error loading: {e})")
+        return 0
+
+    elif action == "generate":
+        from moss.workflows.generator import WorkflowGenerator
+
+        force = getattr(args, "force", False)
+        generator = WorkflowGenerator(project_root)
+        workflows = generator.generate()
+
+        if not workflows:
+            output.info("No workflows generated based on current project structure.")
+            return 0
+
+        workflow_dir = project_root / ".moss" / "workflows"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+
+        created_count = 0
+        for wf in workflows:
+            path = workflow_dir / f"{wf.name}.toml"
+            if path.exists() and not force:
+                output.warning(f"Workflow '{wf.name}' already exists. Use --force to overwrite.")
+                continue
+
+            # Serialize
+            data = {"workflow": wf.to_dict()}
+            content = _dump_workflow_toml(data)
+            path.write_text(content)
+            output.success(f"Created {path}")
+            created_count += 1
+
+        if created_count > 0:
+            output.info(f"Generated {created_count} workflows.")
+        else:
+            output.info("No new workflows created.")
         return 0
 
     elif action == "show":
@@ -6132,8 +6213,8 @@ def create_parser() -> argparse.ArgumentParser:
         "action",
         nargs="?",
         default="list",
-        choices=["list", "show", "run"],
-        help="Action: list (show workflows), show (details), run (execute)",
+        choices=["list", "show", "run", "generate"],
+        help="Action: list (show workflows), show (details), run (execute), generate (auto-create)",
     )
     workflow_parser.add_argument(
         "workflow_name",
@@ -6155,6 +6236,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--mock",
         action="store_true",
         help="Use mock LLM responses (for testing)",
+    )
+    workflow_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing workflows (for generate)",
     )
     workflow_parser.set_defaults(func=cmd_workflow)
 

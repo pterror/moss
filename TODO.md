@@ -4,10 +4,23 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Config schema in `.moss/config.toml` for memory system
-- Workflow self-creation from detected patterns
+- Triggered memory configuration (patterns in toml)
+- `moss workflow new` scaffold command
+- Workflow argument passing improvement
 
 ## Recently Completed
+
+- **Workflow self-creation** (Dec 2025):
+  - `moss workflow generate` command to auto-create workflows
+  - `WorkflowGenerator` analyzes project structure and patterns
+  - Creates `validate.toml` based on detected tools (ruff, pytest, mypy)
+  - Creates `create-plugin.toml` for detected Protocol definitions
+
+- **Memory configuration** (Dec 2025):
+  - `MemoryConfig` schema in `moss.config`
+  - TOML support for `[memory]` section (max_episodes, plugins)
+  - Integration with `MemoryLayer` and `EpisodicStore`
+  - Verified with tests in `tests/test_memory.py`
 
 - **Memory plugins with LRU caching** (Dec 2025):
   - `LRUCache[K, V]` generic class with O(1) operations

@@ -132,6 +132,14 @@ class LoopConfigWrapper:
 
 
 @dataclass
+class MemoryConfig:
+    """Configuration for memory system."""
+
+    max_episodes: int = 10000
+    plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
 class MossConfig:
     """Main configuration for Moss.
 
@@ -147,6 +155,7 @@ class MossConfig:
     validators: ValidatorConfig = field(default_factory=ValidatorConfig)
     policies: PolicyConfig = field(default_factory=PolicyConfig)
     loop: LoopConfigWrapper = field(default_factory=LoopConfigWrapper)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
 
     # View providers
     view_providers: list[ViewProvider] = field(default_factory=list)

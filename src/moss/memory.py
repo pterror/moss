@@ -985,12 +985,14 @@ class MemoryLayer:
         self,
         plugins: Sequence[MemoryPlugin] | None = None,
         memory_manager: MemoryManager | None = None,
+        max_episodes: int = 10000,
     ):
         """Initialize the memory layer.
 
         Args:
             plugins: Pre-loaded plugins (if None, discovery is run)
             memory_manager: MemoryManager for built-in episodic/semantic stores
+            max_episodes: Maximum episodes to store in episodic memory
         """
         self._plugins: list[MemoryPlugin] = list(plugins) if plugins else []
         self._by_layer: dict[str, list[MemoryPlugin]] = {
@@ -998,17 +1000,19 @@ class MemoryLayer:
             "triggered": [],
             "on_demand": [],
         }
-        self._manager = memory_manager or MemoryManager()
+        self._manager = memory_manager or MemoryManager(
+            episodic_store=EpisodicStore(max_episodes=max_episodes)
+        )
         self._config: dict[str, dict[str, Any]] = {}
 
         for plugin in self._plugins:
             self._by_layer[plugin.layer].append(plugin)
 
     @classmethod
-    def default(cls, project_dir: Path | None = None) -> MemoryLayer:
+    def default(cls, project_dir: Path | None = None, max_episodes: int = 10000) -> MemoryLayer:
         """Create a MemoryLayer with discovered plugins and defaults."""
         plugins = discover_plugins(project_dir)
-        return cls(plugins=plugins)
+        return cls(plugins=plugins, max_episodes=max_episodes)
 
     def add_plugin(self, plugin: MemoryPlugin) -> None:
         """Add a plugin to the layer."""

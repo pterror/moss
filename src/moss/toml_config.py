@@ -203,6 +203,14 @@ def _build_config_from_dict(data: dict[str, Any], project_root: Path) -> MossCon
         if "auto_commit" in loop:
             config.loop.auto_commit = loop["auto_commit"]
 
+    # Memory settings
+    if "memory" in data:
+        memory = data["memory"]
+        if "max_episodes" in memory:
+            config.memory.max_episodes = memory["max_episodes"]
+        if "plugins" in memory:
+            config.memory.plugins = memory["plugins"]
+
     # Static context paths
     if "static_context" in data:
         for path_str in data["static_context"]:
@@ -269,6 +277,10 @@ def merge_configs(base: MossConfig, override: MossConfig) -> MossConfig:
     merged.loop.oscillation_threshold = override.loop.oscillation_threshold
     merged.loop.timeout_seconds = override.loop.timeout_seconds
     merged.loop.auto_commit = override.loop.auto_commit
+
+    # Memory - override wins
+    merged.memory.max_episodes = override.memory.max_episodes
+    merged.memory.plugins = {**base.memory.plugins, **override.memory.plugins}
 
     # View providers - combine both
     merged.view_providers = base.view_providers + override.view_providers
@@ -370,6 +382,22 @@ def config_to_toml(config: MossConfig) -> str:
     lines.append(f"max_iterations = {config.loop.max_iterations}")
     lines.append(f"timeout_seconds = {config.loop.timeout_seconds}")
     lines.append(f"auto_commit = {str(config.loop.auto_commit).lower()}")
+    lines.append("")
+
+    # Memory section
+    lines.append("[memory]")
+    lines.append(f"max_episodes = {config.memory.max_episodes}")
+    if config.memory.plugins:
+        lines.append("")
+        for name, settings in config.memory.plugins.items():
+            lines.append(f"[memory.plugins.{name}]")
+            for key, value in settings.items():
+                if isinstance(value, str):
+                    lines.append(f'{key} = "{value}"')
+                else:
+                    val_str = str(value).lower() if isinstance(value, bool) else value
+                    lines.append(f"{key} = {val_str}")
+            lines.append("")
     lines.append("")
 
     # Static context
