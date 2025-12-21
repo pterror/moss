@@ -2506,6 +2506,12 @@ class LLMToolExecutor:
                 f"Implementations:\n{focus_str}\n\n"
                 f"Output the final merged code."
             ),
+            "score_importance": (
+                f"Score the importance of the following content relative to the current task.\n"
+                f"Task: {structured_context}\n\n"
+                f"Content:\n{focus_str}\n\n"
+                f"Output a single float from 0.0 (irrelevant) to 1.0 (critical)."
+            ),
         }
 
         default_prompt = f"{structured_context}\n\nProcess:\n{focus_str}"

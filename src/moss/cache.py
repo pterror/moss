@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -542,6 +543,53 @@ class EphemeralCache:
             "total_size_bytes": total_size,
             "total_size_human": f"{total_size / 1024:.1f}KB",
         }
+
+    def score_content(self, content: str, task_context: str = "") -> float:
+        """Heuristic importance scoring for adaptive pruning.
+
+        Args:
+            content: The content to score
+            task_context: Optional context about the current task
+
+        Returns:
+            Importance score from 0.0 to 1.0
+        """
+        if not content:
+            return 0.0
+
+        score = 0.5  # Base score
+
+        # Heuristic: Error signals are very important
+        error_patterns = [
+            r"error:",
+            r"exception:",
+            r"failed:",
+            r"traceback",
+            r"syntaxerror",
+            r"attributeerror",
+            r"typeerror",
+        ]
+        content_lower = content.lower()
+        if any(re.search(p, content_lower) for p in error_patterns):
+            score += 0.3
+
+        # Heuristic: Matches current task keywords
+        if task_context:
+            task_words = set(re.findall(r"\b\w{4,}\b", task_context.lower()))
+            content_words = set(re.findall(r"\b\w{4,}\b", content_lower))
+            overlap = len(task_words & content_words)
+            if overlap > 0:
+                score += min(0.2, overlap * 0.05)
+
+        # Heuristic: Structural changes (diffs) are important
+        if content.startswith("diff --git") or "@@ -" in content:
+            score += 0.2
+
+        # Heuristic: Very long content without errors is often less important
+        if len(content) > 10000 and score <= 0.5:
+            score -= 0.2
+
+        return max(0.0, min(1.0, score))
 
 
 # Global ephemeral cache instance

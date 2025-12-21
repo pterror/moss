@@ -460,17 +460,28 @@ Do NOT repeat the same command. Never output prose."""
         """Create preview of result, cache full if large.
 
         Uses EphemeralCache for TTL-based storage and proper preview generation.
+        Implements adaptive pruning based on content importance.
 
         Returns:
             (preview_text, result_id or None)
         """
-        limit = self._get_adaptive_preview_limit()
-        if len(result) <= limit:
+        base_limit = self._get_adaptive_preview_limit()
+
+        # Adaptive adjustment based on importance
+        importance = self._ephemeral_cache.score_content(
+            result, task_context=self._task_tree.root.goal if self._task_tree else ""
+        )
+
+        # High importance content gets more context (up to 2x)
+        # Low importance gets less (down to 0.5x)
+        adjusted_limit = int(base_limit * (0.5 + importance))
+
+        if len(result) <= adjusted_limit:
             return result, None
 
         # Store in ephemeral cache, get preview
         result_id = self._ephemeral_cache.store(result)
-        preview = self._ephemeral_cache.generate_preview(result, limit)
+        preview = self._ephemeral_cache.generate_preview(result, adjusted_limit)
         # Add result ID reference
         preview = preview.replace(
             "available via resource link",
