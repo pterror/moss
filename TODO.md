@@ -4,7 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] Comprehensive Telemetry & Analysis (see Active Backlog)
+- [ ] Add `moss telemetry` CLI command with aggregate analysis across sessions
+- [ ] Integrate SessionAnalyzer with TelemetryAPI for unified interface
+- [ ] HTML dashboard output for `moss telemetry --html`
 
 ## Active Backlog
 
