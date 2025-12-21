@@ -443,8 +443,13 @@ class CommandValidator(Validator):
 class ValidatorChain:
     """Run multiple validators in sequence."""
 
-    def __init__(self, validators: list[Validator] | None = None):
+    def __init__(
+        self,
+        validators: list[Validator] | None = None,
+        include_heuristics: bool = True,
+    ):
         self.validators = validators or []
+        self.include_heuristics = include_heuristics
 
     def add(self, validator: Validator) -> None:
         self.validators.append(validator)
@@ -462,6 +467,17 @@ class ValidatorChain:
         all_issues: list[ValidationIssue] = []
         all_success = True
         metadata: dict[str, Any] = {"validators": {}}
+
+        # Run heuristics first (fast guardrails)
+        if self.include_heuristics:
+            from moss.heuristics import HeuristicEngine
+
+            engine = HeuristicEngine()
+            h_result = engine.check(path)
+            all_issues.extend(h_result.issues)
+            metadata["heuristics"] = {
+                "issue_count": len(h_result.issues),
+            }
 
         for validator in self.validators:
             result = await validator.validate(path)

@@ -4,16 +4,17 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Verification Loops & Heuristics**: Formalize heuristic guardrails before validation (LLM unreliability mitigation)
 - [ ] **Symbol Hover Info**: Show signatures/docstrings on hover in TUI
 - [ ] **Context Elision Heuristics**: Prune large files while preserving semantic anchors
+- [ ] **Shadow Git Branching**: Support for multiple concurrent experiment branches
 
 ## Recently Completed
 
-- **Agentic Memory Analysis** (Dec 2025):
-  - Implemented `memory_analysis_loop` to extract preferences from session logs
-  - Added `extract_long_term_preferences` LLM operation for rule distillation
-  - Integrated with `telemetry.analyze_all_sessions` for data-driven insights
+- **Verification Loops & Heuristics** (Dec 2025):
+  - Implemented `HeuristicEngine` for fast, structural mistake detection
+  - Added built-in heuristics for unused imports and large functions
+  - Integrated heuristics into `ValidatorChain` as pre-validation guardrails
+  - Addresses LLM unreliability by catching obvious errors before full verification
 
 - **Cross-file Symbol Navigation** (Dec 2025):
   - Implemented clickable `ProjectTree` in TUI with task and file modes
