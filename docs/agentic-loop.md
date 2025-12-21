@@ -7,7 +7,7 @@ Design for an indefinite agent loop where the LLM outputs terse intents and DWIM
 - **LLM makes decisions**, not tool selections
 - **DWIM interprets intent** and routes to appropriate tools
 - **No tool schemas in prompts** - saves tokens, reduces coupling
-- **Terse agent output** - "skeleton foo.py" not "please show me the structure"
+- **Terse agent output** - "view foo.py" not "please show me the structure"
 - **Natural language for humans** - same DWIM handles both
 
 ## Architecture
@@ -20,17 +20,17 @@ Design for an indefinite agent loop where the LLM outputs terse intents and DWIM
 │  USER/LLM                                             │
 │     │                                                 │
 │     ▼                                                 │
-│  "skeleton foo.py"  ─or─  "show me the structure"    │
+│  "view foo.py"  ─or─  "show me the structure"        │
 │     │                                                 │
 │     ▼                                                 │
 │  DWIM PARSER                                          │
-│     ├─ Extract verb: skeleton, expand, fix, validate │
+│     ├─ Extract verb: view, edit, analyze             │
 │     ├─ Extract target: file path, symbol, error desc │
 │     └─ Route to tool with confidence score           │
 │     │                                                 │
 │     ▼                                                 │
 │  TOOL EXECUTOR                                        │
-│     ├─ MossAPI (skeleton, patch, validate, etc.)     │
+│     ├─ Core Primitives (view, edit, analyze)         │
 │     ├─ MCP servers (external capabilities)           │
 │     └─ LLM (when tool needs generated content)       │
 │     │                                                 │
@@ -48,11 +48,10 @@ Design for an indefinite agent loop where the LLM outputs terse intents and DWIM
 Terse, token-efficient. Verb + target(s):
 
 ```
-skeleton src/moss/agent_loop.py
-expand Patch
-validate
-fix: Patch.anchor should accept str | Anchor
-grep "def analyze" src/moss/
+view src/moss/agent_loop.py
+view src/moss/agent_loop.py/Patch
+analyze --complexity
+edit -f patches.py "add type check for anchor"
 done
 ```
 
@@ -60,9 +59,9 @@ No prose, no "I will now...", just action.
 
 ## DWIM Responsibilities
 
-1. **Verb extraction** - identify action: read, skeleton, expand, fix, validate, grep, done
-2. **Target extraction** - parse file paths, symbol names, search patterns
-3. **Tool routing** - map intent to best MossAPI/MCP tool
+1. **Verb extraction** - identify action: view, edit, analyze, done
+2. **Target extraction** - parse file paths, symbol names, options
+3. **Tool routing** - map intent to one of 3 core primitives
 4. **Confidence scoring** - know when to ask for clarification
 5. **Parameter construction** - build tool call from extracted parts
 
@@ -70,7 +69,7 @@ No prose, no "I will now...", just action.
 
 ### Existing Infrastructure
 
-- `moss.dwim` - already has `analyze_intent()`, `ToolRouter`, TF-IDF matching
+- `moss.dwim` - has `resolve_core_primitive()`, simple alias matching
 - `moss.session` - tracks tool calls, file changes, LLM usage
 - `moss.agent_loop` - has `AgentLoopRunner`, executors, metrics
 - `litellm` - unified LLM access
@@ -87,22 +86,21 @@ No prose, no "I will now...", just action.
 User: "Fix the type error in Patch.apply"
 
 ```
-LLM: skeleton src/moss/patches.py
-     → DWIM routes to skeleton_format
-     → Returns: class Patch, def apply(...)
+LLM: view src/moss/patches.py
+     → Routes to view command (Rust CLI)
+     → Returns: class Patch, def apply(...) skeleton
 
-LLM: expand Patch.apply
-     → DWIM routes to skeleton_expand
-     → Returns: full function body
+LLM: view src/moss/patches.py/Patch/apply
+     → Routes to view with symbol path
+     → Returns: full function source
 
-LLM: fix: add type check for anchor parameter
-     → DWIM detects "fix" verb, asks LLM for patch content
-     → LLM generates: if isinstance(anchor, str): anchor = Anchor(anchor)
-     → DWIM routes to patch_apply
+LLM: edit -f patches.py "add type check for anchor parameter"
+     → Routes to edit command
+     → Applies fix via structural editing
 
-LLM: validate
-     → DWIM routes to validation_validate
-     → Returns: no errors
+LLM: analyze --security
+     → Routes to analyze command
+     → Returns: no issues found
 
 LLM: done
      → Loop terminates
@@ -116,7 +114,7 @@ Compared to tool-schema approach:
 |----------|-------------|-------|
 | OpenAI function calling | ~500-2000 | Full schemas every request |
 | Claude Code XML | ~200-500 | Tool blocks + formatting |
-| DWIM terse | ~10-50 | Just "skeleton foo.py" |
+| DWIM terse | ~10-50 | Just "view foo.py" |
 
 90%+ token reduction for tool selection.
 
