@@ -44,8 +44,9 @@ Scaffold MCP Tool:
 
 Context Reset (before `/exit`):
 1. Commit current work
-2. Update TODO.md "Next Up" section
-3. Note any open questions
+2. Move completed tasks to CHANGELOG.md
+3. Update TODO.md "Next Up" section
+4. Note any open questions
 
 ## Dogfooding
 

@@ -4,25 +4,27 @@
 
 ### Features
 
-**Session Dec 21 2025 (latest)**
-- `Rust Delegation`: expand/callers/callees commands now delegate to Rust CLI with Python fallback
+**Rust Delegation & CLI Cleanup** (Dec 21 2025)
+- Removed ~900 lines of dead Python code from cli.py and rust_shim.py
+- Added `passthrough()` to bypass Python argparse for Rust-delegated commands
+- Passthrough commands: tree, view, search-tree, expand, callers, callees, anchors, skeleton, path
+- No more double-parsing: CLI args go directly to Rust CLI
+- Moved heuristic-based symbol args to Rust (normalize_symbol_args)
+- Supports flexible formats: `symbol`, `file:symbol`, `file::symbol`, `file#symbol`, `file symbol`, `symbol file`
+- Phase 1 Rust delegation complete (all commands delegate to Rust)
 
-**Session Dec 21 2025 (later)**
-- `Rust Delegation`: skeleton/summarize/search-tree/view delegate to Rust CLI (fail if unavailable)
-- `Rust search-tree fix`: Extension patterns (`.py`, `.rs`) now work correctly
-- `Conversational Loop Research`: Documented as future work for eval comparison
-
-**Session Dec 21 2025 (continued)**
-- `Claude vs Gemini CLI Analysis`: Documented edit paradigm differences (strict matching vs self-correction)
-- `Lazy Imports`: Converted moss.__init__.py to lazy imports for reduced baseline memory
-- `Extensible TUI Modes`: ModeRegistry with entry point + .moss/modes/ plugin discovery
-- `Brute Force Mode`: BruteForceConfig for n_samples + voting with small/local models
-
-**Session Dec 21 2025**
+**Session Dec 21 2025 (earlier)**
 - `Symbol Hover in TUI`: Tree view shows symbol children with hover displaying signatures/docstrings
 - `Context Elision Heuristics`: Anchor-preserving elision when token budget exceeded
 - `Experiment Branching`: Multiple concurrent shadow branches for parallel approach testing
 - `GBNF Grammar Support`: Constrained inference for llama.cpp with predefined and custom grammars
+- `Claude vs Gemini CLI Analysis`: Documented edit paradigm differences (strict matching vs self-correction)
+- `Lazy Imports`: Converted moss.__init__.py to lazy imports for reduced baseline memory
+- `Extensible TUI Modes`: ModeRegistry with entry point + .moss/modes/ plugin discovery
+- `Brute Force Mode`: BruteForceConfig for n_samples + voting with small/local models
+- `Runtime Memory Bounds`: streaming LLM responses, context eviction (max_context_steps)
+- `Brute Force Voting`: wired to LLMGenerator with majority/consensus/first_valid strategies
+- `Session Log Comparison Tool`: compare_sessions() for Claude vs Gemini CLI edit analysis
 
 **CLI & Workflow Improvements** (Dec 2025)
 - `Workflow Arguments`: `--arg KEY=VALUE` option for passing parameters to workflows
