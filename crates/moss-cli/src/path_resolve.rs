@@ -54,24 +54,38 @@ fn normalize_separators(query: &str) -> String {
 /// 3. If exact path doesn't exist, try fuzzy matching for the file portion
 pub fn resolve_unified(query: &str, root: &Path) -> Option<UnifiedPath> {
     let normalized = normalize_separators(query);
-    let segments: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+
+    // Handle absolute paths (start with /) - use filesystem root instead of project root
+    let (segments, base_path): (Vec<&str>, std::path::PathBuf) = if normalized.starts_with('/') {
+        let segs: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+        (segs, std::path::PathBuf::from("/"))
+    } else {
+        let segs: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+        (segs, root.to_path_buf())
+    };
+    let is_absolute = normalized.starts_with('/');
 
     if segments.is_empty() {
         return None;
     }
 
     // Strategy 1: Walk exact path segments
-    let mut current_path = root.to_path_buf();
+    let mut current_path = base_path.clone();
     for (idx, segment) in segments.iter().enumerate() {
         let test_path = current_path.join(segment);
 
         if test_path.is_file() {
             // Found a file - this is the boundary
-            let file_path = test_path
-                .strip_prefix(root)
-                .unwrap_or(&test_path)
-                .to_string_lossy()
-                .to_string();
+            // For absolute paths, keep full path; for relative, strip root prefix
+            let file_path = if is_absolute {
+                test_path.to_string_lossy().to_string()
+            } else {
+                test_path
+                    .strip_prefix(root)
+                    .unwrap_or(&test_path)
+                    .to_string_lossy()
+                    .to_string()
+            };
             return Some(UnifiedPath {
                 file_path,
                 symbol_path: segments[idx + 1..].iter().map(|s| s.to_string()).collect(),
@@ -80,18 +94,22 @@ pub fn resolve_unified(query: &str, root: &Path) -> Option<UnifiedPath> {
         } else if test_path.is_dir() {
             current_path = test_path;
         } else {
-            // Path doesn't exist - try fuzzy resolution
+            // Path doesn't exist - try fuzzy resolution (only for relative paths)
             break;
         }
     }
 
     // Check if we ended at a directory
-    if current_path != root.to_path_buf() && current_path.is_dir() {
-        let dir_path = current_path
-            .strip_prefix(root)
-            .unwrap_or(&current_path)
-            .to_string_lossy()
-            .to_string();
+    if current_path != base_path && current_path.is_dir() {
+        let dir_path = if is_absolute {
+            current_path.to_string_lossy().to_string()
+        } else {
+            current_path
+                .strip_prefix(root)
+                .unwrap_or(&current_path)
+                .to_string_lossy()
+                .to_string()
+        };
         let matched_segments = dir_path.matches('/').count() + 1;
         if matched_segments >= segments.len() {
             return Some(UnifiedPath {
@@ -102,25 +120,27 @@ pub fn resolve_unified(query: &str, root: &Path) -> Option<UnifiedPath> {
         }
     }
 
-    // Strategy 2: Try fuzzy matching progressively shorter prefixes as file paths
-    for split_point in (1..=segments.len()).rev() {
-        let file_query = segments[..split_point].join("/");
-        let matches = resolve(&file_query, root);
+    // Strategy 2: Try fuzzy matching (only for relative paths within project)
+    if !is_absolute {
+        for split_point in (1..=segments.len()).rev() {
+            let file_query = segments[..split_point].join("/");
+            let matches = resolve(&file_query, root);
 
-        if let Some(m) = matches.first() {
-            if m.kind == "file" {
-                return Some(UnifiedPath {
-                    file_path: m.path.clone(),
-                    symbol_path: segments[split_point..].iter().map(|s| s.to_string()).collect(),
-                    is_directory: false,
-                });
-            } else if m.kind == "directory" && split_point == segments.len() {
-                // Only return directory if it's the full query
-                return Some(UnifiedPath {
-                    file_path: m.path.clone(),
-                    symbol_path: vec![],
-                    is_directory: true,
-                });
+            if let Some(m) = matches.first() {
+                if m.kind == "file" {
+                    return Some(UnifiedPath {
+                        file_path: m.path.clone(),
+                        symbol_path: segments[split_point..].iter().map(|s| s.to_string()).collect(),
+                        is_directory: false,
+                    });
+                } else if m.kind == "directory" && split_point == segments.len() {
+                    // Only return directory if it's the full query
+                    return Some(UnifiedPath {
+                        file_path: m.path.clone(),
+                        symbol_path: vec![],
+                        is_directory: true,
+                    });
+                }
             }
         }
     }
@@ -143,11 +163,32 @@ pub fn all_files(root: &Path) -> Vec<PathMatch> {
 /// Resolve a fuzzy query to matching paths.
 ///
 /// Handles:
+/// - Absolute paths: /tmp/foo.py (if file exists)
 /// - Extension patterns: .rs, .py (returns all matching files)
 /// - Exact paths: src/moss/dwim.py
 /// - Partial filenames: dwim.py, dwim
 /// - Directory names: moss, src
 pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
+    // Handle absolute paths first - check if file exists directly
+    if query.starts_with('/') {
+        let abs_path = std::path::Path::new(query);
+        if abs_path.is_file() {
+            return vec![PathMatch {
+                path: query.to_string(),
+                kind: "file".to_string(),
+                score: u32::MAX,
+            }];
+        } else if abs_path.is_dir() {
+            return vec![PathMatch {
+                path: query.to_string(),
+                kind: "directory".to_string(),
+                score: u32::MAX,
+            }];
+        }
+        // Absolute path doesn't exist - return empty
+        return vec![];
+    }
+
     // Handle file:symbol syntax (defer symbol resolution to Python for now)
     if query.contains(':') {
         let file_part = query.split(':').next().unwrap();
@@ -479,5 +520,53 @@ mod tests {
         let u = result.unwrap();
         assert_eq!(u.file_path, "src/moss/cli.py");
         assert_eq!(u.symbol_path, vec!["Foo"]);
+    }
+
+    #[test]
+    fn test_unified_path_absolute() {
+        let dir = tempdir().unwrap();
+        let abs_path = dir.path().join("test.py");
+        fs::write(&abs_path, "def foo(): pass").unwrap();
+
+        // Absolute path should resolve directly
+        let abs_str = abs_path.to_string_lossy().to_string();
+        let result = resolve_unified(&abs_str, Path::new("/some/other/root"));
+        assert!(result.is_some());
+        let u = result.unwrap();
+        assert_eq!(u.file_path, abs_str);
+        assert!(u.symbol_path.is_empty());
+        assert!(!u.is_directory);
+    }
+
+    #[test]
+    fn test_unified_path_absolute_with_symbol() {
+        let dir = tempdir().unwrap();
+        let abs_path = dir.path().join("test.py");
+        fs::write(&abs_path, "def foo(): pass").unwrap();
+
+        // Absolute path with symbol
+        let query = format!("{}/foo", abs_path.to_string_lossy());
+        let result = resolve_unified(&query, Path::new("/some/other/root"));
+        assert!(result.is_some());
+        let u = result.unwrap();
+        assert_eq!(u.file_path, abs_path.to_string_lossy().to_string());
+        assert_eq!(u.symbol_path, vec!["foo"]);
+    }
+
+    #[test]
+    fn test_unified_path_unicode() {
+        let dir = tempdir().unwrap();
+        let unicode_dir = dir.path().join("日本語");
+        fs::create_dir_all(&unicode_dir).unwrap();
+        let unicode_file = unicode_dir.join("テスト.py");
+        fs::write(&unicode_file, "def hello(): pass").unwrap();
+
+        // Absolute unicode path
+        let abs_str = unicode_file.to_string_lossy().to_string();
+        let result = resolve_unified(&abs_str, Path::new("/some/other/root"));
+        assert!(result.is_some());
+        let u = result.unwrap();
+        assert_eq!(u.file_path, abs_str);
+        assert!(!u.is_directory);
     }
 }

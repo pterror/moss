@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from moss.dwim import TFIDFIndex
+from moss.semantic_search import TFIDFIndex
 
 from .learning import StrategyLearner, get_learner
 
@@ -55,22 +55,19 @@ class StrategyRouter:
         self.memory = memory
         self.learner = learner or get_learner()
         self._index = TFIDFIndex()
-        self._strategy_indices: dict[str, int] = {}
         self._build_index()
 
     def _build_index(self) -> None:
         """Build TF-IDF index over strategy descriptions."""
         for strategy in self.strategies:
             doc = strategy.document()
-            idx = self._index.add_document(doc)
-            self._strategy_indices[strategy.name] = idx
+            self._index.add(strategy.name, doc)
 
     def add_strategy(self, strategy: DecompositionStrategy) -> None:
         """Add a new strategy to the router."""
         self.strategies.append(strategy)
         doc = strategy.document()
-        idx = self._index.add_document(doc)
-        self._strategy_indices[strategy.name] = idx
+        self._index.add(strategy.name, doc)
 
     async def select_strategy(
         self,
@@ -114,9 +111,9 @@ class StrategyRouter:
         query_parts.extend(spec.constraints)
         query = " ".join(query_parts)
 
-        # Get TF-IDF scores
-        tfidf_results = self._index.query(query, top_k=len(self.strategies))
-        tfidf_scores: dict[int, float] = {idx: score for idx, score in tfidf_results}
+        # Get TF-IDF scores (strategy_name -> score)
+        tfidf_results = self._index.search(query, limit=len(self.strategies))
+        tfidf_scores: dict[str, float] = {name: score for name, score in tfidf_results}
 
         matches: list[StrategyMatch] = []
 
@@ -128,8 +125,7 @@ class StrategyRouter:
                 continue
 
             # Signal 2: TF-IDF similarity (35%)
-            strategy_idx = self._strategy_indices.get(strategy.name, -1)
-            tfidf_score = tfidf_scores.get(strategy_idx, 0.0)
+            tfidf_score = tfidf_scores.get(strategy.name, 0.0)
             signals["tfidf"] = tfidf_score
 
             # Signal 3: Strategy's self-assessment (30%)
