@@ -1005,6 +1005,29 @@ def telemetry_optimizer_loop(name: str = "telemetry_optimizer") -> AgentLoop:
     )
 
 
+def policy_optimizer_loop(name: str = "policy_optimizer") -> AgentLoop:
+    """Meta-loop that refines safety policies based on past rejections."""
+    return AgentLoop(
+        name=name,
+        steps=[
+            LoopStep("fetch_data", "telemetry.analyze_all_sessions", step_type=StepType.TOOL),
+            LoopStep(
+                "analyze",
+                "llm.analyze_policy_violations",
+                input_from="fetch_data",
+                step_type=StepType.LLM,
+            ),
+            LoopStep(
+                "propose",
+                "llm.propose_policy_updates",
+                input_from="analyze",
+                step_type=StepType.LLM,
+            ),
+        ],
+        exit_conditions=["propose.success"],
+    )
+
+
 def workflow_synthesis_loop(name: str = "workflow_synthesis") -> AgentLoop:
     """Meta-loop that creates new workflows based on telemetry patterns."""
     return AgentLoop(
@@ -2639,6 +2662,27 @@ class LLMToolExecutor:
                 f"1 = Trivial, 10 = extremely complex.\n\n"
                 f"Context: {structured_context}\n\n"
                 f"Output ONLY the integer score."
+            ),
+            "analyze_policy_violations": (
+                f"{structured_context}\n\n"
+                f"Analyze the following policy rejections from agent sessions.\n"
+                f"Determine:\n"
+                f"- If the rejections were correct (caught actual risks)\n"
+                f"- If they were false positives (blocked valid progress)\n"
+                f"- Root causes for frequent rejections\n\n"
+                f"Violation Data:\n{focus_str}\n\n"
+                f"Output a summary of policy effectiveness."
+            ),
+            "propose_policy_updates": (
+                f"{structured_context}\n\n"
+                f"Based on the analysis of policy violations, propose specific refinements "
+                f"to the safety rules.\n"
+                f"Consider:\n"
+                f"- Relaxing rules that cause false positives\n"
+                f"- Strengthening rules where risks were nearly missed\n"
+                f"- Adding new exceptions for common safe patterns\n\n"
+                f"Analysis:\n{focus_str}\n\n"
+                f"Output a prioritized list of rule updates."
             ),
             "predict_workspace_scope": (
                 f"Predict the minimal directory subset required to perform the following task.\n"

@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Agentic Policy Optimization**: Automatically refine safety rules based on rejected actions
 - [ ] **Adaptive Workspace Expansion**: Proactively grow sandbox when cross-file dependencies detected
 - [ ] **Heuristic Error Localization**: Automatically find buggy code from failing test output
+- [ ] **TUI Session Resume**: Ability to select and resume past sessions from TUI
 
 ## Recently Completed
+
+- **Agentic Policy Optimization** (Dec 2025):
+  - Implemented `policy_optimizer_loop` to refine safety rules based on rejections
+  - Added `analyze_policy_violations` and `propose_policy_updates` LLM operations
+  - Supports automated guardrail tuning to minimize false positives
 
 - **Cross-file Symbol Jump** (Dec 2025):
   - Implemented `navigate` method in TUI for quick file/symbol jumping
