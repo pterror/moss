@@ -51,13 +51,17 @@ Context Reset (before `/exit`):
 
 ## Dogfooding
 
-**Use moss CLI for code intelligence** via `uv run moss`. Returns structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens. MCP has historically been non-viable.
+**Use moss CLI for code intelligence** via `uv run moss`. Returns structure (symbols, skeletons) instead of raw text, saving ~90% tokens.
+
+Three primitives:
+- `uv run moss view <path>` - show tree, file skeleton, or symbol source
+- `uv run moss edit <path> "task"` - structural editing
+- `uv run moss analyze [path]` - health, complexity, security
 
 Quick reference:
-- `uv run moss skeleton <file>` - understand file structure before reading
-- `uv run moss search <query>` - find function/class definitions
-- `uv run moss complexity` - identify problem areas
-- `uv run moss explain <symbol>` - show callers/callees
+- `view dwim.py` - fuzzy path resolution works
+- `view dwim.py/resolve_core_primitive` - view specific symbol
+- `analyze --complexity` - identify problem areas
 
 Fall back to generic tools (Read/Grep) only for:
 - Exact line content needed for editing
