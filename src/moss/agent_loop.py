@@ -1057,6 +1057,29 @@ def policy_optimizer_loop(name: str = "policy_optimizer") -> AgentLoop:
     )
 
 
+def policy_learning_loop(name: str = "policy_learning") -> AgentLoop:
+    """Meta-loop that learns new safety rules from successful session histories."""
+    return AgentLoop(
+        name=name,
+        steps=[
+            LoopStep("fetch_data", "telemetry.analyze_all_sessions", step_type=StepType.TOOL),
+            LoopStep(
+                "extract",
+                "llm.extract_policy_rules",
+                input_from="fetch_data",
+                step_type=StepType.LLM,
+            ),
+            LoopStep(
+                "refine",
+                "llm.refine_policy_registry",
+                input_from="extract",
+                step_type=StepType.LLM,
+            ),
+        ],
+        exit_conditions=["refine.success"],
+    )
+
+
 def heuristic_optimizer_loop(name: str = "heuristic_optimizer") -> AgentLoop:
     """Meta-loop that refines structural heuristics based on session performance."""
     return AgentLoop(
@@ -2776,6 +2799,27 @@ class LLMToolExecutor:
                 f"- Adding new exceptions for common safe patterns\n\n"
                 f"Analysis:\n{focus_str}\n\n"
                 f"Output a prioritized list of rule updates."
+            ),
+            "extract_policy_rules": (
+                f"{structured_context}\n\n"
+                f"Analyze the following successful session histories to extract implicit "
+                f"safety rules and best practices.\n"
+                f"Identify:\n"
+                f"- Sequence of actions that consistently lead to success\n"
+                f"- Patterns of tool usage that minimize errors\n"
+                f"- Contextual constraints observed by successful agents\n\n"
+                f"Session Data:\n{focus_str}\n\n"
+                f"Output a set of recommended safety policies."
+            ),
+            "refine_policy_registry": (
+                f"{structured_context}\n\n"
+                f"Based on the extracted policy rules, refine the global policy registry.\n"
+                f"Propose:\n"
+                f"- New automated policies to codify observed best practices\n"
+                f"- Updates to existing policies to better align with successful patterns\n"
+                f"- Heuristics for detecting risky deviations from learned rules\n\n"
+                f"Rules:\n{focus_str}\n\n"
+                f"Output a structured proposal for policy registry updates."
             ),
             "analyze_heuristics": (
                 f"{structured_context}\n\n"

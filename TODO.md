@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Recursive Policy Learning**: Extract safety rules from successful session histories
 - [ ] **Adaptive Model Selection**: Automatically switch models based on step task type
 - [ ] **Heuristic Error Localization**: Automatically find buggy code from failing test output
+- [ ] **TUI Multi-Agent View**: Visualize swarm activity and worker status in TUI
 
 ## Recently Completed
+
+- **Recursive Policy Learning** (Dec 2025):
+  - Implemented `policy_learning_loop` to distill rules from successful sessions
+  - Added `extract_policy_rules` and `refine_policy_registry` LLM operations
+  - Supports automated best-practice codification based on historical success
 
 - **TUI Git Dashboard** (Dec 2025):
   - Added `BRANCH` mode to TUI for managing multiple experiments
