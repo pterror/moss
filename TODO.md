@@ -63,7 +63,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Remove TF-IDF matching, intent analysis, tool registry (119 tools)
   - Remove weighted example phrases
 - [ ] Simple tool resolution: exact match + basic typo correction for 4 names
-- [ ] Keep path fuzzy resolution (already in Rust, still useful)
+- [ ] Keep path fuzzy resolution (already in Rust): `view dwim` → `src/moss/dwim.py`
 - [ ] Consolidate MossAPI: 30 sub-APIs → 4 primitive APIs matching CLI/MCP
 
 ### Distribution & Installation
