@@ -9,11 +9,10 @@ project/
   src/
     moss/
       dwim.py
-        WORD_FORMS (dict)
-        TFIDFIndex (class)
-          add_document (method)
-          query (method)
-        resolve_tool (function)
+        CORE_PRIMITIVES (set)
+        CORE_ALIASES (dict)
+        resolve_core_primitive (function)
+        ToolInfo (class)
         ToolRouter (class)
           analyze_intent (method)
       cli.py

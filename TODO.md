@@ -20,7 +20,9 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 **Docs Alignment:**
 - [x] `docs/dwim-architecture.md` - rewritten for 3 primitives
 - [x] `docs/primitives-spec.md` - added `analyze` section
-- [ ] Check all docs align with `docs/philosophy.md` tenets
+- [x] `docs/agentic-loop.md` - updated examples for view/edit/analyze
+- [x] `docs/codebase-tree.md` - updated example to show current dwim.py structure
+- [ ] Check remaining docs for outdated references
 
 **CLI Cleanup:**
 - [ ] `dwim` - may no longer be necessary with 3 primitives
