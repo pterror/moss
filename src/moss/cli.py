@@ -3643,6 +3643,7 @@ def cmd_workflow(args: Namespace) -> int:
         name = getattr(args, "workflow_name", None)
         file_path_arg = getattr(args, "file", None)
         mock = getattr(args, "mock", False)
+        verbose = getattr(args, "verbose", False)
         workflow_args = getattr(args, "workflow_args", None) or []
 
         if not name:
@@ -3724,6 +3725,20 @@ def cmd_workflow(args: Namespace) -> int:
             output.print(f"  Time: {result.metrics.wall_time_seconds:.2f}s")
             if result.error:
                 output.error(f"  Error: {result.error}")
+
+            if verbose and result.step_results:
+                output.print("")
+                output.header("Step Details")
+                for i, step in enumerate(result.step_results, 1):
+                    output.print(f"--- Step {i}: {step.step_name} ---")
+                    if step.error:
+                        output.warning(f"Error: {step.error}")
+                    if step.output:
+                        out_str = str(step.output)
+                        if len(out_str) > 500:
+                            out_str = out_str[:500] + "..."
+                        output.print(f"Output: {out_str}")
+                    output.print("")
 
         return 0 if result.success else 1
 
@@ -6059,6 +6074,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--mock",
         action="store_true",
         help="Use mock LLM responses (for testing)",
+    )
+    workflow_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show LLM outputs and step details",
     )
     workflow_parser.add_argument(
         "--force",
