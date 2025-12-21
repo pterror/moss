@@ -4,10 +4,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] `anchors` command → delegate to Rust `search` with type filter
-- [ ] `query` command → delegate to Rust `search`
-- [ ] `tree` command → delegate to Rust `view` (directory-level)
-- [ ] Clean up Phase 1 checklist (skeleton/summarize already done)
+- [ ] `anchors` command → delegate to Rust `anchors` (direct match)
+- [ ] `tree` command → delegate to Rust `tree` (direct match)
+- [ ] Clean up Phase 1 checklist (outdated - Rust has direct commands now)
 
 ## Recently Completed
 
@@ -70,12 +69,15 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ### Codebase Tree Consolidation (see `docs/codebase-tree.md`)
 
-**Phase 1: Python CLI delegates to Rust (remove Python implementations)**
-- [ ] `skeleton` → delegate to Rust `view`
-- [ ] `summarize` → delegate to Rust `view`
-- [ ] `anchors` → delegate to Rust `search` with type filter
-- [ ] `query` → delegate to Rust `search`
-- [ ] `tree` → delegate to Rust `view` (directory-level)
+**Phase 1: Python CLI delegates to Rust** (mostly done)
+- [x] `skeleton` → Rust `skeleton`
+- [x] `summarize` → Rust `summarize`
+- [x] `expand` → Rust `expand`
+- [x] `callers` → Rust `callers`
+- [x] `callees` → Rust `callees`
+- [ ] `anchors` → Rust `anchors`
+- [ ] `tree` → Rust `tree`
+- [ ] `query` - Python-only (rich filtering Rust lacks)
 
 **Phase 2: Unified tree model**
 - [ ] Merge filesystem + AST into single tree data structure
