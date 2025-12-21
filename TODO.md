@@ -5,17 +5,25 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 - [ ] Tokens per symbol path in telemetry (leverage codebase tree)
-- [ ] Log format plugins (SessionAnalyzer becomes one of many)
 - [ ] Real-time telemetry mode (`moss telemetry --watch`)
+- [ ] Add Gemini CLI log parser to plugin system
 
 ## Active Backlog
+
+**When done or stuck, do this:**
+- [ ] **Dogfooding & Agentic Loop Iteration**:
+  1. Run a moss agentic loop on part of the codebase (`moss loop` or `moss agent`)
+  2. Evaluate results, log to `logs/dogfood-YYYY-MM-DD.md` (rotate when too long)
+  3. Plan improvements to test (loop behavior, infra, prompts)
+  4. Repeat
+  - Keys available in `.env` (see `.env.example`): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 
 **Large:**
 - [ ] **Comprehensive Telemetry & Analysis**: (In Progress - see `docs/telemetry.md`)
   - [x] `moss telemetry` CLI with aggregate analysis
   - [x] HTML dashboard output
+  - [x] Plugin architecture for log formats (LogParser protocol)
   - [ ] Tokens per function/file/module
-  - [ ] Plugin architecture for log formats
 - [ ] Memory system - layered memory for cross-session learning (see `docs/memory-system.md`)
 
 ## Future Work

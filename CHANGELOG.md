@@ -10,6 +10,12 @@
   - `--session ID`: specific moss session stats
   - `--logs *.jsonl`: analyze Claude Code session logs (supports multiple)
   - `--html`: HTML dashboard output
+- Log format plugin system:
+  - `LogParser` protocol for pluggable parsers
+  - `detect_log_format()` auto-detects format from file content
+  - `analyze_log()` unified entry point with auto-detection
+  - `ClaudeCodeAnalyzer` for Claude Code JSONL
+  - `MossSessionAnalyzer` for internal moss sessions
 - New design tenet: "Generalize, Don't Multiply"
   - Prefer one flexible solution over N specialized ones
   - Composability reduces cognitive load, maintenance burden, token cost
