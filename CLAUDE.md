@@ -50,17 +50,16 @@ Context Reset (before `/exit`):
 
 ## Dogfooding
 
-**Use moss MCP tools for code intelligence.** They return structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens.
+**Use moss CLI for code intelligence** via `uv run moss`. Returns structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens. MCP has historically been non-viable.
 
 Quick reference:
-- `skeleton_format` - understand file structure before reading
-- `search_find_symbols` - find function/class definitions
-- `complexity_get_high_risk` - identify problem areas
-- `explain_symbol` - show callers/callees
+- `uv run moss skeleton <file>` - understand file structure before reading
+- `uv run moss search <query>` - find function/class definitions
+- `uv run moss complexity` - identify problem areas
+- `uv run moss explain <symbol>` - show callers/callees
 
 Fall back to generic tools (Read/Grep) only for:
 - Exact line content needed for editing
-- Debugging moss itself (use CLI, MCP caches at startup)
 
 ## Conventions
 
