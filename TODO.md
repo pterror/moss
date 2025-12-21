@@ -9,56 +9,65 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] **Local Model Constrained Inference**: Implement GBNF (GGML BNF) for structured output
 - [ ] **TUI Syntax Highlighting**: High-quality code highlighting in file previews
 - [ ] **Adaptive Model Rotation**: Dynamically switch LLM providers based on task latency
+- [ ] **Agentic Prompt Versioning**: Implement loop that manages and compares prompt evolutions
 
-## Recently Completed
+## Recently Completed (Dec 2025)
 
-- **Adaptive model and context control** (Dec 2025)
-- **Recursive self-improvement** (Dec 2025)
-- **Shadow Git enhancements** (Dec 2025)
-- **Advanced TUI capabilities** (Dec 2025)
-- **Core architecture & UX** (Dec 2025)
+### Agent & Core Infrastructure
+- **Sandbox Scoping**: Task-level workspace restriction with parent inheritance and automatic enforcement.
+- **Workflow Loader Abstraction**: Extracted `WorkflowLoader` protocol and `TOMLWorkflowLoader` with registry.
+- **Vanilla Workflow**: Minimal baseline agent loop refactored into a data-driven workflow.
+- **TelemetryAPI**: Unified analysis of multi-session token usage, tool patterns, and hotspots.
+- **Adaptive Workspace Scoping**: Dynamic sandbox control with `shrink_to_fit` and `expand_to_include`.
+- **RefCheck**: Cross-language reference tracking for Rust/Cargo with deduplication.
+
+### Adaptive Loop Capabilities
+- **Adaptive Context Control**: Dynamic result preview limits based on task type (Read vs Write).
+- **Adaptive Context Pruning**: Heuristic and LLM-driven importance scoring for intelligent elision.
+- **Adaptive Loop Depth**: Dynamic `max_steps` adjustment in `AgentLoopRunner` based on progress.
+- **Dynamic Turn Budgeting**: Per-turn token scaling based on estimated task complexity.
+- **Adaptive Model Selection**: Task-specific model routing (e.g., using different models for analysis vs generation).
+- **LLM Benchmarking Harness**: Automated cross-model evaluation with markdown report generation.
+
+### Recursive Improvement Loops
+- **Recursive Policy Learning**: Automated distillation of safety rules from successful histories.
+- **Agentic Prompt Evolution**: Automated system prompt refinement based on session feedback.
+- **Adaptive Loop Strategy Refinement**: History-based switching between DWIM and Structured loops.
+- **Agentic Tool Discovery**: Automated search and configuration of new MCP tools.
+- **Agentic Workflow Synthesis**: Automatic creation of new workflows from telemetry patterns.
+- **Recursive Self-Optimization**: Tuning of structural heuristics based on session outcomes.
+
+### TUI & User Experience
+- **Extensible Agent Modes**: Plugin-based TUI mode system (PLAN, READ, WRITE, DIFF, SESSION, BRANCH, SWARM, COMMIT).
+- **TUI Git Dashboard**: Integrated view for branches, commits, hunks, and diffs with surgical rollback.
+- **TUI Session Resume**: Visual session history with one-click resumption and state recovery.
+- **Cross-file Symbol Jump**: Clickable references in TUI for quick navigation between files.
+- **Symbol Hover Info**: Metadata tooltips (skeletons, summaries) in the ProjectTree.
+- **TUI Exit Refinement**: Double `Ctrl+C` exit to avoid clipboard conflicts.
+- **Docs Styling**: Modern glassmorphism and rounded borders at `docs/stylesheets/custom.css`.
+
+### Safety & Verification
+- **LLM Reliability Guardrails**: 'Critic-first' execution for high-risk operations.
+- **Heuristic Error Localization**: Trace-based bug identification from test failures.
+- **Mistake Detection**: Dedicated critic steps for turn-level logic analysis.
+- **Verification Loops & Heuristics**: Formalized structural guardrails before full validation.
+- **Shadow Git Access**: First-class LLM access to diffs, hunks, multi-commits, and smart merging.
+- **User Feedback Story**: Agent inbox for mid-task corrections.
+- **Editing Tools**: `EditAPI` for direct file manipulation (write, replace, insert).
 
 ## Active Backlog
 
 - Workflow argument passing improvement
-- **Mistake Detection**: Detect when an LLM *maybe* made a mistake (Critic loop enhancement)
-- **Shadow Git Access**: Give LLM first-class access to 'Shadow Git' (diffs, rollback, "what did I break?")
-- **User Feedback Story**: Improve interruptibility and feedback loops (client-side interrupts, agent "check mail" steps) to handle mid-task corrections.
+- [ ] **Symbol Hover Info**: (TUI) Show signatures/docstrings on hover (Expanded)
+- [ ] **Context Elision Heuristics**: (Core) Prune large files while preserving anchors (Expanded)
+- [ ] **Shadow Git Branching**: (Git) Support for multiple concurrent experiment branches (Expanded)
 
 **Large:**
-- [ ] **Comprehensive Telemetry & Analysis**:
+- [ ] **Comprehensive Telemetry & Analysis**: (Partially Complete - see TelemetryAPI)
   - Track all token usage, patterns, and codebase access patterns by default
   - Store maximal metadata for every session
   - Built-in high-quality analysis tools (CLI & visual)
-  - Easy interface for complex custom analysis (e.g. "what files do I edit most with `fix`?")
 - [ ] Memory system - layered memory for cross-session learning (see `docs/memory-system.md`)
-- [ ] Workflow loader plugin abstraction - extract protocol when Python workflows need it
-  - Current: TOML loader is direct implementation
-  - Future: `WorkflowLoader` protocol, entry point registration, multiple loader types
-
-### Strict Harness (guardrails for all agents)
-
-**Signal-Only Diagnostics:** (done - see `src/moss/diagnostics.py`, `src/moss/validators.py`)
-- [x] Parse `cargo check --message-format=json` instead of raw stderr
-- [x] Extract: error code, message, file/line, suggestion - discard ASCII art
-- [x] Integrate with validation loop via `DiagnosticValidator`
-- [x] "Syntax Repair Engine" system prompt when errors present (see `REPAIR_ENGINE_PROMPT` in `agent_loop.py`)
-
-**Degraded Mode (AST fallback):** (done - see `src/moss/tree_sitter.py`)
-- [x] Wrap tree-sitter parse in Result (`ParseResult`)
-- [x] On parse failure, fallback to "Text Window" mode (`text_window()`)
-- [x] Never block read access due to parse failures
-
-**Peek-First Policy:** (done - see `LoopContext.expanded_symbols` in `agent_loop.py`)
-- [x] Constraint: agent cannot edit symbol only seen as skeleton
-- [x] Must `expand` before `edit` - enforced in agent loop (`MossToolExecutor.enforce_peek_first`)
-- [x] Prevents hallucination of function bodies
-
-**Hunk-Level Rollback:** (done - see `src/moss/shadow_git.py`)
-- [x] `DiffHunk` dataclass and `parse_diff()` for diff parsing
-- [x] `get_hunks()` - parse branch diff into hunks
-- [x] `map_hunks_to_symbols()` - map hunks to AST nodes via tree-sitter
-- [x] `rollback_hunks()` - selectively revert specific hunks
 
 ## Future Work
 
@@ -69,9 +78,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Evaluate if specialized prompting or different edit formats (e.g. diffs) help
 - [ ] **YOLO Mode Evaluation**: Evaluate if a "YOLO mode" aligns with Moss architectural principles
 - [ ] **Memory Usage Optimization**: Ensure Moss keeps RAM usage extremely low, even for large codebases
-- [ ] **Extensible Agent Modes**:
-  - Refactor TUI modes (PLAN, READ, WRITE, DIFF, SESSION, BRANCH, SWARM, COMMIT) into a plugin-based system
-  - Allow user-defined modes via `.moss/modes/`
 - [ ] **'Diffusion-like' methods for large-scale refactors**:
   - Generate contracts/signatures at high levels first
   - Parallelize implementation of components
@@ -81,9 +87,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Explore extreme optimization with models like 100M RWKV
   - Benchmark model size vs. reliability
   - High-frontier LLM generated tests for tiny model validation
-- [ ] **Pattern detection** - heuristic (frequency, similarity, rapid re-runs) + LLM for judgment
-- [ ] **Workflow self-creation** - agent creates workflows from detected patterns autonomously
-- [ ] **Workflow discovery** - surface candidates from Makefile/package.json/CI, agent or user picks
 
 ### Codebase Tree Consolidation (see `docs/codebase-tree.md`)
 
@@ -93,7 +96,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] `anchors` → delegate to Rust `search` with type filter
 - [ ] `query` → delegate to Rust `search`
 - [ ] `tree` → delegate to Rust `view` (directory-level)
-- [x] `context` → delegate to Rust `context` (done)
 
 **Phase 2: Unified tree model**
 - [ ] Merge filesystem + AST into single tree data structure
@@ -123,3 +125,4 @@ See `docs/philosophy.md` for full tenets. Key goals:
 - Minimize LLM usage (structural tools first)
 - Maximize useful work per token
 - Low barrier to entry, works on messy codebases
+- **Heuristic Guardrails**: Mitigate LLM unreliability with verification loops and deterministic rules
