@@ -621,7 +621,7 @@ Do NOT repeat the same command. Never output prose."""
                         f"(resolved: {abs_path})"
                     )
 
-            except Exception as e:
+            except OSError as e:
                 return f"Path validation failed for '{p_str}': {e}"
 
         return None
@@ -755,7 +755,7 @@ Do NOT repeat the same command. Never output prose."""
                 content = self.api.skeleton.expand(match.file_path, symbol_name)
                 if content:
                     results.append(f"# {match.file_path}\n{content}")
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 results.append(f"# {match.file_path}\nError: {e}")
 
         if not results:
@@ -784,7 +784,7 @@ Do NOT repeat the same command. Never output prose."""
                     results.append(f"# {file_path}\n{content}")
                 else:
                     results.append(f"# {file_path}\nNot found: {symbol_name}")
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 results.append(f"# {file_path}\nError: {e}")
 
         if not results:
