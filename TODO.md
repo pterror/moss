@@ -4,7 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Exception Handler Cleanup**: Fix remaining ~130 generic `except Exception` in tui.py, heuristics.py, metrics.py, etc.
 - [ ] **Incremental Test Runner**: Run tests only for changed files (pytest --co + git diff filtering)
 - [ ] **GEMINI.md Prompt Engineering**: Add constraints to prevent stub code and require test verification
 - [ ] **TUI Syntax Highlighting**: High-quality code highlighting in file previews
@@ -12,6 +11,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Recently Completed
 
+- **Exception Handler Cleanup** (Dec 2025): Fixed 150+ generic `except Exception` across 40+ files (batches 1-13), remaining 123 are legitimate catch-alls (CLI, servers, dynamic execution)
 - **Gemini Cleanup** (Dec 2025): Removed 6 stub loops, fixed 10 exception handlers, documented LLM differences
 - **Memory & Resource Metrics** (Dec 2025): Show context and RAM usage (with breakdown) for every command
 - **Adaptive and TUI enhancements** (Dec 2025):
