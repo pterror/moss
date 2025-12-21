@@ -21,6 +21,9 @@ Do not:
 - Use `os.path` - use `pathlib`
 - Catch generic `Exception` - catch specific errors
 - Leave work uncommitted
+- Write stub code with `pass` or `...` or "TODO: implement" - always provide full implementation
+- Skip running tests after code changes
+- Assume code works without verification
 
 Our system prompt for sub-agents (`src/moss/agent_loop.py:LLMConfig.system_prompt`):
 "Be terse. No preamble, no summary, no markdown formatting. Plain text only. For analysis: short bullet points, max 5 items, no code."
@@ -50,17 +53,16 @@ Context Reset (before `/exit`):
 
 ## Dogfooding
 
-**Use moss MCP tools for code intelligence.** They return structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens.
+**Use moss CLI for code intelligence** via `uv run moss`. Returns structure (symbols, skeletons, anchors) instead of raw text, saving ~90% tokens. MCP has historically been non-viable.
 
 Quick reference:
-- `skeleton_format` - understand file structure before reading
-- `search_find_symbols` - find function/class definitions
-- `complexity_get_high_risk` - identify problem areas
-- `explain_symbol` - show callers/callees
+- `uv run moss skeleton <file>` - understand file structure before reading
+- `uv run moss search <query>` - find function/class definitions
+- `uv run moss complexity` - identify problem areas
+- `uv run moss explain <symbol>` - show callers/callees
 
 Fall back to generic tools (Read/Grep) only for:
 - Exact line content needed for editing
-- Debugging moss itself (use CLI, MCP caches at startup)
 
 ## Conventions
 
@@ -110,3 +112,13 @@ Avoid using backticks inside double-quoted strings in commit messages to prevent
 
 Linting: `ruff check` and `ruff format`
 Tests: Run before committing. Add tests with new functionality.
+
+### Verification Workflow
+
+After writing any code:
+1. Run `ruff check` and fix issues
+2. Run relevant tests with `uv run pytest <test_file>`
+3. If tests fail, fix immediately - do not proceed with broken code
+4. Only commit after tests pass
+
+Never claim code is complete without running it or its tests.
