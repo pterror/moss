@@ -51,6 +51,7 @@ class WatchTestConfig:
     clear_screen: bool = True  # Clear screen before each run
     run_on_start: bool = True  # Run tests immediately on start
     stop_on_fail: bool = False  # Stop watching on first failure
+    incremental: bool = False  # Only run tests related to changed files
 
     # Output settings
     show_summary: bool = True
@@ -181,13 +182,28 @@ class WatchRunner:
         else:
             self.output.info("  Initial run")
 
+        # Build test command
+        test_command = list(self.config.test_command)
+
+        # Incremental mode: find and run only related tests
+        if self.config.incremental and changed_files:
+            related_tests = find_related_tests(changed_files, self.path)
+            if related_tests:
+                self.output.info(f"  Running {len(related_tests)} related test file(s)")
+                # Append test files to command
+                test_command.extend(str(t) for t in related_tests)
+            else:
+                self.output.warning("  No related tests found, running all tests")
+        elif self.config.incremental:
+            self.output.info("  Incremental mode (initial run = all tests)")
+
         self.output.blank()
 
         # Run tests
         start = time.perf_counter()
         try:
             result = subprocess.run(
-                self.config.test_command,
+                test_command,
                 capture_output=True,
                 text=True,
                 cwd=self.path,
@@ -286,3 +302,89 @@ def _parse_test_command(cmd_str: str | None) -> list[str] | None:
     import shlex
 
     return shlex.split(cmd_str)
+
+
+def find_related_tests(changed_files: list[Path], project_root: Path) -> list[Path]:
+    """Find test files related to changed source files.
+
+    Maps source files to test files using common conventions:
+    - src/module.py -> tests/test_module.py
+    - src/pkg/module.py -> tests/pkg/test_module.py, tests/test_pkg_module.py
+    - test_*.py files are returned as-is
+    """
+    test_files: set[Path] = set()
+    tests_dir = project_root / "tests"
+
+    for changed in changed_files:
+        try:
+            rel = changed.relative_to(project_root)
+        except ValueError:
+            continue
+
+        # If it's already a test file, include it directly
+        if rel.name.startswith("test_") or rel.name.endswith("_test.py"):
+            if changed.exists():
+                test_files.add(changed)
+            continue
+
+        # Skip non-Python files
+        if rel.suffix != ".py":
+            continue
+
+        # Try to find matching test file
+        stem = rel.stem
+        parts = list(rel.parts)
+
+        # Remove common source prefixes
+        if parts and parts[0] in ("src", "lib"):
+            parts = parts[1:]
+
+        if not parts:
+            continue
+
+        # Generate candidate test file paths
+        candidates = []
+
+        # Direct mapping: src/pkg/module.py -> tests/pkg/test_module.py
+        test_name = f"test_{parts[-1]}"
+        if len(parts) > 1:
+            candidates.append(tests_dir / Path(*parts[:-1]) / test_name)
+        candidates.append(tests_dir / test_name)
+
+        # Flat mapping: src/pkg/module.py -> tests/test_pkg_module.py
+        if len(parts) > 1:
+            flat_name = f"test_{'_'.join(parts[:-1])}_{stem}.py"
+            candidates.append(tests_dir / flat_name)
+
+        # Also check same directory for test file
+        if changed.parent != project_root:
+            candidates.append(changed.parent / f"test_{stem}.py")
+
+        for candidate in candidates:
+            if candidate.exists():
+                test_files.add(candidate)
+
+    return sorted(test_files)
+
+
+def get_git_changed_files(project_root: Path, base: str = "HEAD") -> list[Path]:
+    """Get list of files changed since base commit."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base],
+            capture_output=True,
+            text=True,
+            cwd=project_root,
+        )
+        if result.returncode != 0:
+            return []
+
+        files = []
+        for line in result.stdout.strip().split("\n"):
+            if line:
+                path = project_root / line
+                if path.exists():
+                    files.append(path)
+        return files
+    except FileNotFoundError:
+        return []

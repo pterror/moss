@@ -1693,6 +1693,7 @@ def cmd_watch(args: Namespace) -> int:
         debounce_ms=getattr(args, "debounce", 500),
         clear_screen=not getattr(args, "no_clear", False),
         run_on_start=not getattr(args, "no_initial", False),
+        incremental=getattr(args, "incremental", False),
     )
     if test_command:
         config.test_command = test_command
@@ -5417,6 +5418,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--no-initial",
         action="store_true",
         help="Don't run tests on start",
+    )
+    watch_parser.add_argument(
+        "--incremental",
+        "-i",
+        action="store_true",
+        help="Only run tests related to changed files",
     )
     watch_parser.set_defaults(func=cmd_watch)
 
