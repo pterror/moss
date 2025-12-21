@@ -37,12 +37,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Core Primitives - Simple Resolution for 4 Primary Tools
+# Core Primitives - Simple Resolution for 3 Primary Tools
 # =============================================================================
-# The 4 core primitives are the primary CLI/MCP interface. They subsume the
+# The 3 core primitives are the primary CLI/MCP interface. They subsume the
 # older tool set (skeleton, anchors, deps, etc.) into a unified tree model.
+# See: docs/philosophy.md for design rationale.
 
-CORE_PRIMITIVES = {"view", "edit", "analyze", "search"}
+CORE_PRIMITIVES = {"view", "edit", "analyze"}
 
 # Aliases for core primitives - maps common terms to canonical names
 CORE_ALIASES: dict[str, str] = {
@@ -72,17 +73,18 @@ CORE_ALIASES: dict[str, str] = {
     "security": "analyze",
     "lint": "analyze",
     "audit": "analyze",
-    # search aliases
-    "find": "search",
-    "grep": "search",
-    "query": "search",
-    "locate": "search",
-    "lookup": "search",
+    # search aliases (folded into view via filters)
+    "search": "view",
+    "find": "view",
+    "grep": "view",
+    "query": "view",
+    "locate": "view",
+    "lookup": "view",
 }
 
 
 def resolve_core_primitive(name: str) -> tuple[str | None, float]:
-    """Resolve a name to one of the 4 core primitives.
+    """Resolve a name to one of the 3 core primitives.
 
     Uses exact match + basic typo correction (Levenshtein).
 

@@ -6343,18 +6343,29 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
 
     # Commands that delegate entirely to Rust CLI (no Python parsing needed)
+    # Core primitives: view, edit (structural), analyze
     # Note: summarize kept in Python for directory mode and --docs flag
+    # Note: Python edit kept for LLM-based intelligent editing
     RUST_PASSTHROUGH = {
+        # Core primitives
+        "view",
         "analyze",
+        # Legacy commands (deprecated, use view/analyze instead)
         "anchors",
         "callers",
         "callees",
+        "cfg",
+        "complexity",
+        "context",
+        "deps",
         "expand",
+        "grep",
+        "health",
+        "overview",
         "path",
         "search-tree",
         "skeleton",
         "tree",
-        "view",
     }
 
     # Check for passthrough before argparse to avoid double-parsing

@@ -13,16 +13,25 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 **When done or stuck, do this:**
 - [ ] **Dogfooding & Agentic Loop Iteration**:
   1. Run a moss agentic loop on part of the codebase:
-     - `moss workflow run vanilla --file <file> --arg "task=..."` - minimal loop
+     - `moss agent "task description"` - **Primary**: DWIM-driven agent with parse→execute loop
+     - `moss workflow run vanilla --file <file> --arg "task=..."` - Single-shot prompt test
      - `moss workflow run validate-fix --file <file>` - validate and fix errors
-     - `moss agent "task description"` - DWIM-driven agent
      - `moss loop run simple --file <file>` - simple loop
   2. Evaluate results, log to `logs/dogfood-YYYY-MM-DD.md` (rotate when too long)
   3. Plan improvements to test (loop behavior, infra, prompts)
   4. Repeat
-  - Keys available in `.env` (see `.env.example`): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+  - Keys: see `.env.example` for ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 
 **Large:**
+- [ ] **CLI Cleanup & Consolidation**:
+  - Many commands need reconsidering: generalize, redesign, merge, or remove
+  - `dwim` - may no longer be necessary with 3 primitives
+  - `workflow` vs `loop` - redundant? consolidate?
+  - `patterns` - slow, consider Rust port
+  - `git-hotspots` - slow (may be unavoidable)
+  - `roadmap` - missing --compact mode
+  - Missing --compact on various commands
+  - See also: Phase 3 in "Codebase Tree Consolidation" below
 - [ ] **Comprehensive Telemetry & Analysis**: (In Progress - see `docs/telemetry.md`)
   - [x] `moss telemetry` CLI with aggregate analysis
   - [x] HTML dashboard output
@@ -87,10 +96,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 *From dogfooding session 2025-12-22 (see `logs/dogfood-2025-12-22.md`):*
 - [ ] Agent path resolution fails without full paths (`session_analysis.py` → should find `src/moss/session_analysis.py`)
 - [ ] Agent stuck in retry loop (3x same intent) - needs fallback strategy
-- [ ] Workflow verbose mode - show LLM outputs
-- [ ] Real editing tools in vanilla workflow (not just `patch.apply <description>`)
-- [ ] Connect terse command format to actual tools
-- [ ] Update default model in dwim_loop.py (done: now uses gemini-2.5-flash)
+- [x] Workflow verbose mode - show LLM outputs (--verbose flag added)
+- [x] Update vanilla prompt to use 3 primitives (view, edit, analyze)
+- [x] Update default model in dwim_loop.py (now uses gemini-2.5-flash)
+- [x] Update CORE_PRIMITIVES from 4 to 3 (search folded into view)
+- [x] More CLI commands delegate to Rust (cfg, complexity, context, deps, grep, health, overview)
 
 ## Notes
 
