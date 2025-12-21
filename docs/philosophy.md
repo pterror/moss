@@ -66,6 +66,34 @@ Hierarchy implies trees. Code (AST), files (directories), tasks (subtasks), agen
 
 Few orthogonal primitives beat many overlapping features. Lua got this right with tables. Find the smallest set of operations that compose well, not the largest set of features that cover cases.
 
+### Unified Codebase Tree
+
+The codebase is one tree. Filesystem and AST are not separate—they're levels of the same hierarchy:
+
+```
+project/                    # root
+├── src/                    # directory node
+│   ├── main.py             # file node
+│   │   ├── class Foo       # class node
+│   │   │   └── bar()       # method node
+│   │   └── def helper()    # function node
+```
+
+Uniform addressing: `src/main.py::Foo.bar` addresses a method the same way `src/main.py` addresses a file. Same primitives work at every level.
+
+**Four primitives, not 100 tools:**
+
+| Primitive | Purpose | Composable options |
+|-----------|---------|-------------------|
+| `view` | See a node | `--depth`, `--deps`, `--summary` |
+| `find` | Search nodes | `--type`, `--in`, `--calls`, `--called-by`, `--size` |
+| `edit` | Modify a node | `--insert`, `--replace`, `--delete` |
+| `analyze` | Compute properties | `--health`, `--complexity`, `--security` |
+
+Depth controls expansion: `view src/ --depth 2` shows files and their top-level symbols. Filters compose: `find --type function --calls "db.*"` finds functions that call database code.
+
+Discoverability through simplicity. With 100+ tools, users can't find what they need. With 4 primitives and composable filters, the entire interface fits in working memory.
+
 Nothing good appears from scratch. Iterate. CLAUDE.md grew through 20+ commits, not upfront investment. Features emerge from use, not design documents. Start minimal, capture what you learn, repeat.
 
 Put smarts in the tool, not the schema. Tool definitions cost context. One DWIM tool with runtime intent parsing beats N specialized tools with N schema definitions. The grammar lives in moss, not the protocol layer.

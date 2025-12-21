@@ -44,28 +44,24 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [x] `tree` → Rust `tree`
 - `query` - Python-only (rich filtering Rust lacks, no delegation needed)
 
-**Phase 2: Unified tree model**
+**Phase 2: Unified tree model** (see `docs/philosophy.md` - Unified Codebase Tree)
 - [ ] Merge filesystem + AST into single tree data structure
-- [ ] Consistent "context + node + children" view format
+- [ ] Uniform node addressing: `src/main.py::Foo.bar`
+- [ ] Depth-based expansion: `--depth 1` (default), `--depth 2`, `--all`
+- [ ] Four primitives replacing 100+ tools:
+  - `view [path]` - see node (skeleton, source, tree) with `--deps`, `--summary`
+  - `find [query]` - search with composable filters `--type`, `--calls`, `--called-by`
+  - `edit <path>` - modify node with `--insert`, `--replace`, `--delete`
+  - `analyze [path]` - compute properties with `--health`, `--complexity`, `--security`
 
 **Phase 3: DWIM integration**
 - [x] Replace TF-IDF with embedding-based matching (fastembed/bge-small-en)
 - [x] Simplify matching logic (tool-like vs NL detection)
 - [x] Add `moss dwim --analyze` for embedding similarity debugging
 - [x] Weighted example phrases per tool (ToolInfo.examples field)
-- [x] Fix all DWIM tests (23/23 = 100% passing)
-  - Skip first-word alias/tool matching for NL markers
-  - Skip first-word-base typo matching for NL markers
-- [ ] Natural language → tree operation mapping
-- [ ] **Tool unification** (reduce fragmentation from MossAPI auto-registration)
-  - Currently: 119 tools registered (only 8 match CLI commands)
-  - Problem: MossAPI sub-tools (skeleton_extract, health_check_docs, etc.) compete with unified tools
-  - Goal: Route to unified tools (skeleton, health, deps) not internal variants
-  - High-similarity pairs to consider unifying:
-    - `dependencies_analyze` ↔ `external_deps_analyze` (0.855)
-    - `skeleton` ↔ `skeleton_extract/format/expand` (consolidate)
-    - `health` ↔ `health_check/analyze_*` (consolidate)
-  - Options: Tier system (cli vs mcp), filter MossAPI internals, or consolidate at API level
+- [x] Fix all DWIM tests
+- [ ] Natural language → tree primitive mapping (view/find/edit/analyze)
+- [ ] Consolidate MossAPI: 30 sub-APIs → 4 primitive APIs matching CLI/MCP
 
 ### Distribution & Installation
 - [ ] Auto-updates: check for new versions, prompt user
