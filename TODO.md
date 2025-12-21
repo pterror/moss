@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Adaptive Loop Strategy**: Automatically switch between DWIM and Structured loops
 - [ ] **Self-Correcting Edit Harness**: Implement loop that auto-fixes its own syntax errors
-- [ ] **Extensible Agent Modes**: Refactor TUI modes (PLAN, READ, WRITE, DIFF) into a plugin-based system
+- [ ] **Agentic Memory Search**: Semantic search over past session episodes
+- [ ] **Parallel Multi-Agent Refactor**: Implement 'diffusion-like' parallel implementation
 
 ## Recently Completed
+
+- **Adaptive Loop Strategy** (Dec 2025):
+  - Implemented `HybridLoopRunner` to switch between DWIM and Structured loops
+  - Added `classify_loop_strategy` LLM operation for task classification
+  - Optimizes resource usage by selecting the most efficient loop per task
 
 - **Shadow Git Visualization** (Dec 2025):
   - Added `DIFF` mode to TUI for reviewing changes

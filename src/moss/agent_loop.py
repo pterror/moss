@@ -529,7 +529,7 @@ class AgentLoopRunner:
                 output, tokens_in, tokens_out = await self.executor.execute(
                     step.tool, context, step
                 )
-                duration = time.time() - start
+                duration = time.perf_counter() - start
 
                 metrics.record_step(step.name, step.step_type, duration, tokens_in, tokens_out)
 
@@ -547,7 +547,7 @@ class AgentLoopRunner:
                     step_name=step.name,
                     status=StepStatus.TIMEOUT,
                     error="Step timed out",
-                    duration_seconds=time.time() - start,
+                    duration_seconds=time.perf_counter() - start,
                 )
 
             except Exception as e:
@@ -563,6 +563,38 @@ class AgentLoopRunner:
             status=StepStatus.FAILED,
             error=last_error,
         )
+
+
+class HybridLoopRunner:
+    """Intelligently switches between DWIM and Structured loops.
+
+    Uses an initial LLM call to classify the task and select the most
+    efficient loop strategy.
+    """
+
+    def __init__(self, executor: LLMToolExecutor):
+        self.executor = executor
+
+    async def run(self, task: str, structured_loop: AgentLoop) -> Any:
+        """Classify task and run appropriate loop."""
+        # 1. Classify task
+        context = LoopContext(input=task)
+        step = LoopStep("classify", "llm.classify_loop_strategy", step_type=StepType.LLM)
+
+        output, _, _ = await self.executor.execute("llm.classify_loop_strategy", context, step)
+
+        strategy = str(output).strip().upper()
+
+        if "DWIM" in strategy:
+            # Use DWIM loop for simple tasks
+            from moss.dwim_loop import DWIMLoop
+
+            loop = DWIMLoop(self.executor.moss_executor.api)
+            return await loop.run(task)
+        else:
+            # Use provided structured loop for complex tasks
+            runner = AgentLoopRunner(self.executor)
+            return await runner.run(structured_loop, initial_input={"task": task})
 
 
 # ============================================================================
@@ -2345,6 +2377,15 @@ class LLMToolExecutor:
                 f"- Adding new heuristics or validators to catch early mistakes\n\n"
                 f"Analysis:\n{focus_str}\n\n"
                 f"Output a prioritized list of actionable optimizations."
+            ),
+            "classify_loop_strategy": (
+                f"Given the following task, determine if it should use a DWIM (terse) "
+                f"loop or a STRUCTURED (multi-step) loop.\n\n"
+                f"Task: {focus_str}\n\n"
+                f"Rules:\n"
+                f"- Use DWIM for simple exploration, search, and answer-based questions.\n"
+                f"- Use STRUCTURED for multi-file changes, refactoring, or new features.\n\n"
+                f"Output: DWIM or STRUCTURED"
             ),
         }
 
