@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from moss.events import EventBus
+
 if TYPE_CHECKING:
     from moss.anchors import AnchorMatch
     from moss.cfg import ControlFlowGraph
@@ -225,6 +227,10 @@ class TelemetryAPI:
         if not session:
             return {"error": f"Session {session_id} not found"}
 
+        # Resource metrics
+        max_memory = max([tc.memory_bytes for tc in session.tool_calls] or [0])
+        max_context = max([tc.context_tokens for tc in session.tool_calls] or [0])
+
         return {
             "id": session.id,
             "task": session.task,
@@ -233,6 +239,8 @@ class TelemetryAPI:
             "tool_calls": len(session.tool_calls),
             "file_changes": len(session.file_changes),
             "duration": session.duration_seconds,
+            "max_memory_bytes": max_memory,
+            "max_context_tokens": max_context,
             "access_patterns": dict(session.access_patterns),
         }
 
@@ -246,6 +254,14 @@ class TelemetryAPI:
         total_tokens = sum(s.total_tokens for s in sessions)
         total_calls = sum(s.llm_calls for s in sessions)
 
+        # Aggregate resource metrics
+        max_mem = 0
+        max_ctx = 0
+        for s in sessions:
+            for tc in s.tool_calls:
+                max_mem = max(max_mem, tc.memory_bytes)
+                max_ctx = max(max_ctx, tc.context_tokens)
+
         # Aggregate access patterns
         all_patterns = defaultdict(int)
         for s in sessions:
@@ -256,6 +272,8 @@ class TelemetryAPI:
             "session_count": len(sessions),
             "total_tokens": total_tokens,
             "total_llm_calls": total_calls,
+            "max_memory_bytes": max_mem,
+            "max_context_tokens": max_ctx,
             "hotspots": sorted(all_patterns.items(), key=lambda x: x[1], reverse=True)[:10],
         }
 
@@ -3759,28 +3777,11 @@ class DWIMAPI:
 
 @dataclass
 class MossAPI:
-    """Unified API for Moss functionality.
-
-    Provides organized access to all Moss capabilities through
-    domain-specific sub-APIs.
-
-    Example:
-        api = MossAPI.for_project("/path/to/project")
-
-        # Extract code structure
-        skeleton = api.skeleton.extract("src/main.py")
-
-        # Analyze dependencies
-        deps = api.dependencies.analyze()
-
-        # Check project health
-        health = api.health.check()
-        print(f"Health grade: {health.health_grade}")
-    """
+    """Consolidated API for all Moss functionality."""
 
     root: Path
+    event_bus: EventBus = field(default_factory=EventBus)
 
-    # Sub-APIs (initialized lazily)
     _skeleton: SkeletonAPI | None = None
     _tree: TreeAPI | None = None
     _anchor: AnchorAPI | None = None

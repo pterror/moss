@@ -4,6 +4,13 @@
 
 ### Features
 
+**Resource Monitoring** (Dec 2025)
+- `Memory & Resource Metrics`: Real-time tracking of RAM usage and context token pressure for every command
+- `Memory Breakdown`: Detailed RSS/VMS/USS breakdown showing exactly where memory is allocated during execution
+- `TUI Resource Display`: Integrated resource metrics in the agent log with cyan/yellow indicators
+- `CLI Resource telemetry`: Command-line output of tool execution costs including RAM and context
+- `Telemetry Integration`: Aggregated resource high-water marks across sessions via TelemetryAPI
+
 **Adaptive loop capabilities** (Dec 2025)
 - `Adaptive Context Control`: Dynamic result preview limits based on task type (Read vs Write)
 - `Adaptive Context Pruning`: Heuristic and LLM-driven importance scoring for intelligent elision

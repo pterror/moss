@@ -436,6 +436,37 @@ class MossTUI(App):
         # Initialize first mode
         self.current_mode_name = "PLAN"
 
+        # Subscribe to tool calls to show resources
+        from moss.events import Event, EventType
+
+        async def on_tool_call(event: Event) -> None:
+            tool = event.payload.get("tool_name", "unknown")
+            duration = event.payload.get("duration_ms", 0)
+            mem = event.payload.get("memory_bytes", 0) / 1024 / 1024
+            ctx = event.payload.get("context_tokens", 0)
+            breakdown = event.payload.get("memory_breakdown", {})
+
+            # Format breakdown for display
+            bd_str = ""
+            if breakdown:
+                # Show top 3 components
+                sorted_bd = sorted(breakdown.items(), key=lambda x: x[1], reverse=True)
+                bd_parts = []
+                for k, v in sorted_bd[:3]:
+                    bd_parts.append(f"{k}: {v / 1024 / 1024:.1f}MB")
+                bd_str = f" [[dim]{', '.join(bd_parts)}[/]]"
+
+            msg = (
+                f"Tool: [b]{tool}[/] ({duration}ms) | "
+                f"RAM: [cyan]{mem:.1f} MB[/]{bd_str} | "
+                f"Context: [yellow]{ctx}[/] tokens"
+            )
+            self.call_from_thread(self._log, msg)
+
+        # In a real app, MossAPI would have an event_bus
+        if hasattr(self.api, "event_bus") and self.api.event_bus:
+            self.api.event_bus.subscribe(EventType.TOOL_CALL, on_tool_call)
+
     async def watch_current_mode_name(self, name: str) -> None:
         """React to mode changes."""
         mode = self._registry.get_mode(name)

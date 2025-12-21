@@ -79,6 +79,9 @@ class ToolCall:
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     duration_ms: int = 0
+    memory_bytes: int = 0
+    context_tokens: int = 0
+    memory_breakdown: dict[str, int] = field(default_factory=dict)
 
     def complete(self, result: Any = None, error: str | None = None) -> None:
         """Mark the tool call as complete."""
@@ -96,6 +99,9 @@ class ToolCall:
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "duration_ms": self.duration_ms,
+            "memory_bytes": self.memory_bytes,
+            "context_tokens": self.context_tokens,
+            "memory_breakdown": self.memory_breakdown,
         }
 
     @classmethod
@@ -107,6 +113,9 @@ class ToolCall:
             error=data.get("error"),
             started_at=datetime.fromisoformat(data["started_at"]),
             duration_ms=data.get("duration_ms", 0),
+            memory_bytes=data.get("memory_bytes", 0),
+            context_tokens=data.get("context_tokens", 0),
+            memory_breakdown=data.get("memory_breakdown", {}),
         )
         if data.get("completed_at"):
             call.completed_at = datetime.fromisoformat(data["completed_at"])
@@ -327,9 +336,18 @@ class Session:
         parameters: dict[str, Any],
         result: Any = None,
         error: str | None = None,
+        memory_bytes: int = 0,
+        context_tokens: int = 0,
+        memory_breakdown: dict[str, int] | None = None,
     ) -> ToolCall:
         """Record a tool call."""
-        call = ToolCall(tool_name=tool_name, parameters=parameters)
+        call = ToolCall(
+            tool_name=tool_name,
+            parameters=parameters,
+            memory_bytes=memory_bytes,
+            context_tokens=context_tokens,
+            memory_breakdown=memory_breakdown or {},
+        )
         call.complete(result=result, error=error)
         self.tool_calls.append(call)
 
@@ -340,6 +358,9 @@ class Session:
                 "tool_name": tool_name,
                 "success": error is None,
                 "duration_ms": call.duration_ms,
+                "memory_bytes": memory_bytes,
+                "context_tokens": context_tokens,
+                "memory_breakdown": memory_breakdown or {},
             },
         )
         self._notify_update()

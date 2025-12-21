@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Tooling orchestration with structural awareness"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "psutil>=6.0.0",
+]
 
 [project.scripts]
 moss = "moss.cli:main"

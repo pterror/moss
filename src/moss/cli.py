@@ -269,7 +269,7 @@ def cmd_run(args: Namespace) -> int:
     """Run a task through moss."""
     from moss.agents import create_manager
     from moss.api import TaskRequest, create_api_handler
-    from moss.config import MossConfig, load_config_file
+    from moss.config import load_config_file
     from moss.events import EventBus
     from moss.shadow_git import ShadowGit
 
@@ -280,23 +280,39 @@ def cmd_run(args: Namespace) -> int:
     # Load config
     if config_file.exists():
         try:
-            config = load_config_file(config_file)
+            load_config_file(config_file)
         except Exception as e:
             output.error(f"Error loading config: {e}")
             return 1
-    else:
-        config = MossConfig().with_project(project_dir, project_dir.name)
-
-    # Validate config
-    errors = config.validate()
-    if errors:
-        output.error("Configuration errors:")
-        for error in errors:
-            output.error(f"  - {error}")
-        return 1
 
     # Set up components
     event_bus = EventBus()
+
+    # Listen for tool calls to show metrics
+    def on_tool_call(event: Any) -> None:
+        tool = event.payload.get("tool_name", "unknown")
+        success = event.payload.get("success", True)
+        duration = event.payload.get("duration_ms", 0)
+        mem = event.payload.get("memory_bytes", 0) / 1024 / 1024
+        ctx = event.payload.get("context_tokens", 0)
+        breakdown = event.payload.get("memory_breakdown", {})
+
+        # Format breakdown
+        bd_str = ""
+        if breakdown:
+            sorted_bd = sorted(breakdown.items(), key=lambda x: x[1], reverse=True)
+            bd_parts = [f"{k}={v / 1024 / 1024:.1f}MB" for k, v in sorted_bd[:2]]
+            bd_str = f" [{', '.join(bd_parts)}]"
+
+        status = "✓" if success else "✗"
+        output.info(
+            f"  {status} {tool} ({duration}ms) | RAM: {mem:.1f} MB{bd_str} | Context: {ctx} tokens"
+        )
+
+    from moss.events import EventType
+
+    event_bus.subscribe(EventType.TOOL_CALL, on_tool_call)
+
     shadow_git = ShadowGit(project_dir)
     manager = create_manager(shadow_git, event_bus)
     handler = create_api_handler(manager, event_bus)

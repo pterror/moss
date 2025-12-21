@@ -21,12 +21,61 @@ Usage:
 from __future__ import annotations
 
 import html
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import psutil
+
 from moss.skeleton import extract_python_skeleton
+
+
+@dataclass
+class ResourceMetrics:
+    """RAM and CPU usage metrics."""
+
+    memory_bytes: int = 0
+    cpu_percent: float = 0.0
+    thread_count: int = 0
+    open_files: int = 0
+    memory_breakdown: dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "memory_bytes": self.memory_bytes,
+            "cpu_percent": self.cpu_percent,
+            "thread_count": self.thread_count,
+            "open_files": self.open_files,
+            "memory_breakdown": self.memory_breakdown,
+        }
+
+
+def get_resource_usage() -> ResourceMetrics:
+    """Get current process resource usage."""
+    try:
+        process = psutil.Process(os.getpid())
+        with process.oneshot():
+            mem_info = process.memory_full_info()
+            breakdown = {
+                "rss": mem_info.rss,
+                "vms": mem_info.vms,
+            }
+            # Some fields might not be available on all platforms
+            for attr in ["shared", "text", "lib", "data", "dirty", "uss"]:
+                if hasattr(mem_info, attr):
+                    breakdown[attr] = getattr(mem_info, attr)
+
+            return ResourceMetrics(
+                memory_bytes=mem_info.rss,
+                cpu_percent=process.cpu_percent(),
+                thread_count=process.num_threads(),
+                open_files=len(process.open_files()),
+                memory_breakdown=breakdown,
+            )
+    except Exception:
+        return ResourceMetrics()
 
 
 @dataclass

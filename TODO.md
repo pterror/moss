@@ -5,7 +5,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 - [ ] **Recursive Workflow Learning**: Propose new workflows based on recurrent session patterns
-- [ ] **Memory & Resource Metrics**: Show context and RAM usage (with breakdown) for every command
 - [ ] **Local Model Constrained Inference**: Implement GBNF (GGML BNF) for structured output
 - [ ] **TUI Syntax Highlighting**: High-quality code highlighting in file previews
 - [ ] **Adaptive Model Rotation**: Dynamically switch LLM providers based on task latency
@@ -13,6 +12,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Recently Completed
 
+- **Memory & Resource Metrics** (Dec 2025): Show context and RAM usage (with breakdown) for every command
 - **Adaptive, Recursive, and TUI enhancements** (Dec 2025):
   - Refactored core infrastructure (Sandbox, Workflows, RefCheck, Telemetry)
   - Implemented dynamic loop controls (Context, Budget, Depth, Models)

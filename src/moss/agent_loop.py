@@ -6,6 +6,7 @@ Track them separately and optimize for fewer LLM calls.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -202,6 +203,10 @@ class LoopMetrics:
     wall_time_seconds: float = 0.0
     step_times: dict[str, float] = field(default_factory=dict)
 
+    # Resource tracking
+    max_memory_bytes: int = 0
+    max_context_tokens: int = 0
+
     # Iteration tracking
     iterations: int = 0
     retries: int = 0
@@ -213,6 +218,8 @@ class LoopMetrics:
         duration: float,
         tokens_in: int = 0,
         tokens_out: int = 0,
+        memory_bytes: int = 0,
+        context_tokens: int = 0,
     ) -> None:
         """Record a step execution."""
         if step_type == StepType.LLM:
@@ -229,12 +236,15 @@ class LoopMetrics:
                 self.llm_tokens_out += tokens_out
 
         self.step_times[step_name] = self.step_times.get(step_name, 0) + duration
+        self.max_memory_bytes = max(self.max_memory_bytes, memory_bytes)
+        self.max_context_tokens = max(self.max_context_tokens, context_tokens)
 
     def to_compact(self) -> str:
         """Format as compact summary."""
         lines = [
             f"LLM: {self.llm_calls} calls, {self.llm_tokens_in + self.llm_tokens_out} tokens",
             f"Tools: {self.tool_calls} calls",
+            f"RAM: {self.max_memory_bytes / 1024 / 1024:.1f} MB",
             f"Time: {self.wall_time_seconds:.2f}s",
             f"Iterations: {self.iterations}, Retries: {self.retries}",
         ]
@@ -261,6 +271,9 @@ class StepResult:
     duration_seconds: float = 0.0
     tokens_in: int = 0
     tokens_out: int = 0
+    memory_bytes: int = 0
+    context_tokens: int = 0
+    memory_breakdown: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -384,6 +397,7 @@ class AgentLoopRunner:
 
     def __init__(self, executor: ToolExecutor):
         self.executor = executor
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def run(self, loop: AgentLoop, initial_input: Any = None) -> LoopResult:
         """Execute a loop with metrics tracking.
@@ -456,6 +470,37 @@ class AgentLoopRunner:
             # Execute step with the full context
             step_result = await self._execute_step(step, context, metrics)
             step_results.append(step_result)
+
+            # Emit tool call event via API event bus if available
+            try:
+                # Try to find api and event_bus
+                api = None
+                if hasattr(self.executor, "moss_executor"):
+                    api = getattr(self.executor.moss_executor, "api", None)
+                elif hasattr(self.executor, "api"):
+                    api = getattr(self.executor, "api", None)
+
+                if api and hasattr(api, "event_bus") and api.event_bus:
+                    from moss.events import EventType
+
+                    # Emit event asynchronously
+                    task = asyncio.create_task(
+                        api.event_bus.emit(
+                            EventType.TOOL_CALL,
+                            {
+                                "tool_name": step.tool,
+                                "success": step_result.status == StepStatus.SUCCESS,
+                                "duration_ms": int(step_result.duration_seconds * 1000),
+                                "memory_bytes": step_result.memory_bytes,
+                                "context_tokens": step_result.context_tokens,
+                                "memory_breakdown": step_result.memory_breakdown,
+                            },
+                        )
+                    )
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
+            except Exception:
+                pass
 
             if step_result.status == StepStatus.SUCCESS:
                 context = context.with_step(step.name, step_result.output)
@@ -556,12 +601,23 @@ class AgentLoopRunner:
         while retries <= step.max_retries:
             start = time.time()
             try:
+                from moss.metrics import get_resource_usage
+
                 output, tokens_in, tokens_out = await self.executor.execute(
                     step.tool, context, step
                 )
                 duration = time.perf_counter() - start
+                resources = get_resource_usage()
 
-                metrics.record_step(step.name, step.step_type, duration, tokens_in, tokens_out)
+                metrics.record_step(
+                    step.name,
+                    step.step_type,
+                    duration,
+                    tokens_in,
+                    tokens_out,
+                    memory_bytes=resources.memory_bytes,
+                    context_tokens=tokens_in,  # Using tokens_in as a proxy for context pressure
+                )
 
                 return StepResult(
                     step_name=step.name,
@@ -570,6 +626,9 @@ class AgentLoopRunner:
                     duration_seconds=duration,
                     tokens_in=tokens_in,
                     tokens_out=tokens_out,
+                    memory_bytes=resources.memory_bytes,
+                    context_tokens=tokens_in,
+                    memory_breakdown=resources.memory_breakdown,
                 )
 
             except TimeoutError:
@@ -1427,12 +1486,17 @@ class MossToolExecutor:
         hallucination of function bodies.
     """
 
-    def __init__(self, root: Any = None, enforce_peek_first: bool = False):
+    def __init__(
+        self,
+        root: Any = None,
+        enforce_peek_first: bool = False,
+        api: Any | None = None,  # MossAPI
+    ):
         from pathlib import Path
 
         from moss.moss_api import MossAPI
 
-        self.api = MossAPI(root or Path.cwd())
+        self.api = api or MossAPI(root or Path.cwd())
         self.enforce_peek_first = enforce_peek_first
 
     def _get_input(self, context: LoopContext, step: LoopStep) -> Any:
@@ -2155,6 +2219,7 @@ class LLMToolExecutor:
         memory: Any = None,  # MemoryManager, typed as Any to avoid circular import
         cache_large_outputs: bool = True,
         large_output_threshold: int = 4000,
+        api: Any | None = None,  # MossAPI
     ):
         """Initialize the executor.
 
@@ -2166,13 +2231,14 @@ class LLMToolExecutor:
             memory: Optional MemoryManager for cross-session learning
             cache_large_outputs: Whether to cache large outputs (default: True)
             large_output_threshold: Character threshold for caching (default: 4000)
+            api: Optional MossAPI instance
         """
         # Load .env once per process
         if load_env and not LLMToolExecutor._dotenv_loaded:
             LLMToolExecutor._dotenv_loaded = _load_dotenv()
 
         self.config = config or LLMConfig()
-        self.moss_executor = moss_executor or MossToolExecutor(root)
+        self.moss_executor = moss_executor or MossToolExecutor(root, api=api)
         self.memory = memory
         self._call_count = 0  # For round-robin rotation
 
