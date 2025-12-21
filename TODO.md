@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Heuristic Error Localization**: Automatically find buggy code from failing test output
 - [ ] **TUI Multi-Agent View**: Visualize swarm activity and worker status in TUI
 - [ ] **Shadow Git Multi-Commit**: Support for multi-commit shadow experiments
+- [ ] **Agentic Tool Discovery**: Loop that searches for and registers new MCP tools
 
 ## Recently Completed
+
+- **Heuristic Error Localization** (Dec 2025):
+  - Implemented `analyze_test_failure` in `DiagnosticSet` to extract bug locations from traces
+  - Added `localize_bug_from_test` LLM operation for structural root-cause analysis
+  - Prioritizes implementation files over test files in stack trace parsing
 
 - **Adaptive Model Selection** (Dec 2025):
   - Added `task_models` mapping to `LLMConfig` for specialized model routing

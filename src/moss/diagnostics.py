@@ -193,6 +193,33 @@ class DiagnosticSet:
         # Deduplicate and return
         return sorted(list(set(locations)))
 
+    def analyze_test_failure(self) -> list[tuple[Path, int]]:
+        """Extract suspected bug locations (file, line) from test failures.
+
+        Prioritizes implementation files over test files in stack traces.
+        """
+        locations = []
+        for diag in self.diagnostics:
+            text = f"{diag.message} {diag.raw or ''}"
+            # Match file:line patterns common in pytest/unittest output
+            # e.g. "src/moss/api.py:123: in function_name"
+            pattern = r"([^:\s\"']+)\:(\d+)"
+            matches = re.findall(pattern, text)
+            for file_str, line_str in matches:
+                try:
+                    path = Path(file_str)
+                    if path.exists() and path.suffix in (".py", ".rs", ".ts", ".js"):
+                        # Heuristic: implementation files are better than test files
+                        is_test_file = "test" in path.name.lower() or "/tests/" in str(path)
+                        score = 1 if is_test_file else 10
+                        locations.append((path, int(line_str), score))
+                except Exception:
+                    pass
+
+        # Sort by score descending then line (to group files)
+        locations.sort(key=lambda x: (-x[2], x[0], x[1]))
+        return [(p, line) for p, line, s in locations]
+
 
 # ============================================================================
 # ANSI/Noise Stripping

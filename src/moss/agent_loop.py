@@ -2789,92 +2789,16 @@ class LLMToolExecutor:
                 f"Test Output:\n{focus_str}\n\n"
                 f"Output the file path and line number of the likely bug, with brief justification."
             ),
-            "analyze_policy_violations": (
+            "localize_bug_from_test": (
                 f"{structured_context}\n\n"
-                f"Analyze the following policy rejections from agent sessions.\n"
-                f"Determine:\n"
-                f"- If the rejections were correct (caught actual risks)\n"
-                f"- If they were false positives (blocked valid progress)\n"
-                f"- Root causes for frequent rejections\n\n"
-                f"Violation Data:\n{focus_str}\n\n"
-                f"Output a summary of policy effectiveness."
-            ),
-            "propose_policy_updates": (
-                f"{structured_context}\n\n"
-                f"Based on the analysis of policy violations, propose specific refinements "
-                f"to the safety rules.\n"
-                f"Consider:\n"
-                f"- Relaxing rules that cause false positives\n"
-                f"- Strengthening rules where risks were nearly missed\n"
-                f"- Adding new exceptions for common safe patterns\n\n"
-                f"Analysis:\n{focus_str}\n\n"
-                f"Output a prioritized list of rule updates."
-            ),
-            "extract_policy_rules": (
-                f"{structured_context}\n\n"
-                f"Analyze the following successful session histories to extract implicit "
-                f"safety rules and best practices.\n"
-                f"Identify:\n"
-                f"- Sequence of actions that consistently lead to success\n"
-                f"- Patterns of tool usage that minimize errors\n"
-                f"- Contextual constraints observed by successful agents\n\n"
-                f"Session Data:\n{focus_str}\n\n"
-                f"Output a set of recommended safety policies."
-            ),
-            "refine_policy_registry": (
-                f"{structured_context}\n\n"
-                f"Based on the extracted policy rules, refine the global policy registry.\n"
-                f"Propose:\n"
-                f"- New automated policies to codify observed best practices\n"
-                f"- Updates to existing policies to better align with successful patterns\n"
-                f"- Heuristics for detecting risky deviations from learned rules\n\n"
-                f"Rules:\n{focus_str}\n\n"
-                f"Output a structured proposal for policy registry updates."
-            ),
-            "analyze_heuristics": (
-                f"{structured_context}\n\n"
-                f"Analyze the following session telemetry to evaluate the effectiveness "
-                f"of current heuristic guardrails.\n"
-                f"Identify:\n"
-                f"- Frequent 'false alarms' (heuristics that triggered but were ignored)\n"
-                f"- Missed mistakes (errors that reached full validation but could have "
-                f"been caught earlier)\n"
-                f"- Recurrent anti-patterns not currently covered by heuristics\n\n"
-                f"Telemetry Data:\n{focus_str}\n\n"
-                f"Output a summary of heuristic performance."
-            ),
-            "propose_heuristic_updates": (
-                f"{structured_context}\n\n"
-                f"Based on the heuristic analysis, propose specific refinements to the "
-                f"HeuristicEngine.\n"
-                f"Consider:\n"
-                f"- Adjusting thresholds for existing rules (e.g. max function size)\n"
-                f"- Removing rules with high false-positive rates\n"
-                f"- Implementing new structural rules for frequently missed mistakes\n\n"
-                f"Analysis:\n{focus_str}\n\n"
-                f"Output a prioritized list of engine updates."
-            ),
-            "analyze_prompt_effectiveness": (
-                f"{structured_context}\n\n"
-                f"Analyze the following session telemetry to evaluate the effectiveness "
-                f"of the current system prompt.\n"
-                f"Identify:\n"
-                f"- Recurrent misunderstandings of instructions\n"
-                f"- Steps where the agent frequently ignores or violates constraints\n"
-                f"- Tone or style inconsistencies\n\n"
-                f"Telemetry Data:\n{focus_str}\n\n"
-                f"Output a summary of prompt strengths and weaknesses."
-            ),
-            "evolve_prompt": (
-                f"{structured_context}\n\n"
-                f"Based on the prompt effectiveness analysis, evolve the system prompt "
-                f"to resolve identified issues.\n"
-                f"Focus on:\n"
-                f"- Clarifying ambiguous instructions\n"
-                f"- Strengthening enforcement of key constraints\n"
-                f"- Minimizing token waste by removing redundant context\n\n"
-                f"Analysis:\n{focus_str}\n\n"
-                f"Output the complete evolved system prompt text."
+                f"Analyze the following implementation locations extracted from a "
+                f"failing test stack trace.\n"
+                f"Candidate locations (prioritized):\n{focus_str}\n\n"
+                f"Task:\n"
+                f"1. Explain why each location might be the root cause.\n"
+                f"2. Identify the single most likely line causing the failure.\n"
+                f"3. Propose a specific fix for that line.\n\n"
+                f"Output the localization analysis and proposed fix."
             ),
             "predict_workspace_scope": (
                 f"Predict the minimal directory subset required to perform the following task.\n"
