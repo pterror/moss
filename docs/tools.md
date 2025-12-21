@@ -4,30 +4,75 @@
 
 **MCP Server**: `moss mcp-server`
 
-## Introspection
+## Core Primitives
 
-- **skeleton** `<path>` — classes, functions, methods with signatures and docstrings; `--public-only`
-- **anchors** `<path>` — find code elements; `--type` (function/class/method), `--name` (regex)
-- **query** `<path>` — pattern search; `--name`, `--signature`, `--type`, `--inherits`, `--min-lines`, `--max-lines`, `--group-by=file`
-- **cfg** `<file> [function]` — control flow graph with cyclomatic complexity; `--dot`, `--summary`
-- **deps** `<path>` — imports and exports; `--reverse <module>`, `--dot` for graph visualization
-- **context** `<file>` — combined skeleton + deps + summary
+Three tools for all codebase operations:
 
-## Editing
+### view
 
-- **apply_patch** (MCP) — anchor-based code modification
+Show tree, file skeleton, or symbol source.
 
-## Discovery (MCP)
+```
+moss view [target] [options]
+```
 
-- **analyze_intent** `query` — natural language → tool recommendation
-- **resolve_tool** `name` — typo/alias → canonical tool
-- **list_capabilities** — all tools with metadata
+- `view` — project tree
+- `view src/` — directory contents
+- `view file.py` — file skeleton (fuzzy paths OK)
+- `view file.py/Class` — symbol source
+- `--depth N` — expansion depth
+- `--deps` — show dependencies
+- `--calls` — show callers
+- `--called-by` — show callees
 
-## Aliases
+### edit
 
-skeleton: structure, outline, symbols, tree, hierarchy
-anchors: functions, classes, methods, definitions, defs, locate
-query: search, find, grep, filter
-deps: imports, dependencies, exports, modules
-cfg: flow, graph, control-flow
-context: summary, overview, info
+Structural code modifications.
+
+```
+moss edit <target> [options]
+```
+
+- `--delete` — remove node
+- `--replace "code"` — swap content
+- `--before "code"` — insert before
+- `--after "code"` — insert after
+- `--prepend "code"` — add to start
+- `--append "code"` — add to end
+
+### analyze
+
+Health, complexity, and security analysis.
+
+```
+moss analyze [target] [options]
+```
+
+- `analyze` — full codebase analysis
+- `--health` — file counts, line counts, avg complexity
+- `--complexity` — cyclomatic complexity per function
+- `--security` — vulnerability scanning
+
+## Legacy Commands
+
+These commands still work but are deprecated in favor of the 3 primitives:
+
+- `skeleton` → use `view`
+- `anchors` → use `view --type`
+- `query` → use `view` with filters
+- `deps` → use `view --deps`
+- `cfg` → still available for control flow graphs
+- `context` → use `view --deps`
+- `health` → use `analyze --health`
+- `complexity` → use `analyze --complexity`
+- `security` → use `analyze --security`
+
+## DWIM Resolution
+
+Tool names are resolved with fuzzy matching:
+
+- `view`, `show`, `skeleton`, `tree` → view primitive
+- `edit`, `modify`, `change`, `patch` → edit primitive
+- `analyze`, `check`, `health`, `lint` → analyze primitive
+
+Fuzzy path resolution also works: `dwim.py` → `src/moss/dwim.py`
