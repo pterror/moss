@@ -49,10 +49,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [x] Replace TF-IDF with embedding-based matching (fastembed/bge-small-en)
 - [x] Simplify matching logic (tool-like vs NL detection)
 - [x] Add `moss dwim --analyze` for embedding similarity debugging
-- [ ] Weighted example phrases per tool (reduce 47 confusion pairs)
-  - Add distinguishing words (e.g., "begin" vs "finish") at low weight
-  - Use max-pooling or weighted avg for multi-phrase tools
-- [ ] Tune remaining 10 failing tests (mostly NL → tool confidence thresholds)
+- [x] Weighted example phrases per tool (ToolInfo.examples field)
+- [ ] Tune remaining 8 failing tests (44/52 = 85% passing)
+  - Most failures: "find" alias hijacks queries starting with "find"
+  - Consider: remove "find" alias or context-aware alias resolution
 - [ ] Natural language → tree operation mapping
 
 ### Distribution & Installation
