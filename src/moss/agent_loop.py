@@ -1789,6 +1789,27 @@ class MossToolExecutor:
             file_path = self._get_file_path(context, step)
             result = self.api.dependencies.format(file_path)
 
+        elif tool_name == "tree.format":
+            path = self._get_file_path(context, step)
+            result = self.api.tree.format(path)
+
+        elif tool_name == "search.grep":
+            if isinstance(input_data, dict):
+                pattern = input_data.get("pattern", "")
+                path = input_data.get("path", ".")
+            else:
+                pattern = str(input_data)
+                path = "."
+            result = self.api.search.grep(pattern, path)
+
+        elif tool_name == "shadow_git.get_diff":
+            branch = (
+                input_data.get("branch_name", "shadow/current")
+                if isinstance(input_data, dict)
+                else input_data
+            )
+            result = self.api.shadow_git.get_diff(branch)
+
         elif tool_name == "dwim.analyze_intent":
             if isinstance(input_data, str):
                 query = input_data
@@ -1801,6 +1822,9 @@ class MossToolExecutor:
 
         elif tool_name == "health.summarize":
             result = self.api.health.summarize()
+
+        elif tool_name == "patterns.analyze":
+            result = self.api.patterns.analyze()
 
         elif tool_name == "complexity.analyze":
             pattern = "**/*.py"
@@ -2690,10 +2714,13 @@ class LLMToolExecutor:
         if isinstance(context.input, dict):
             task = context.input.get("task", "")
             file_path = context.input.get("file_path", "")
+            directory = context.input.get("directory", "")
             if task:
                 sections.append(f"User Intent: {task}")
             if file_path:
                 sections.append(f"Target: {file_path}")
+            if directory:
+                sections.append(f"Working Directory: {directory}")
         elif isinstance(context.input, str) and context.input:
             sections.append(f"User Intent: {context.input}")
 

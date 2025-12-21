@@ -3925,20 +3925,11 @@ def cmd_workflow(args: Namespace) -> int:
 
     elif action == "run":
         name = getattr(args, "workflow_name", None)
-        file_path = getattr(args, "file", None)
+        file_path_arg = getattr(args, "file", None)
         mock = getattr(args, "mock", False)
 
         if not name:
             output.error("Workflow name required")
-            return 1
-
-        if not file_path:
-            output.error("File path required. Use --file <path>")
-            return 1
-
-        file_path = Path(file_path).resolve()
-        if not file_path.exists():
-            output.error(f"File not found: {file_path}")
             return 1
 
         try:
@@ -3947,7 +3938,22 @@ def cmd_workflow(args: Namespace) -> int:
             output.error(f"Workflow not found: {name}")
             return 1
 
-        output.info(f"Running workflow '{name}' on {file_path.name}...")
+        # Use file path if provided, otherwise default to project root
+        if file_path_arg:
+            target_path = Path(file_path_arg).resolve()
+            if not target_path.exists():
+                output.error(f"File not found: {target_path}")
+                return 1
+            output.info(f"Running workflow '{name}' on {target_path.name}...")
+            initial_input = {"file_path": str(target_path)}
+            # If it's a file, root should be its parent
+            # If it's a directory, root is itself
+            executor_root = target_path.parent if target_path.is_file() else target_path
+        else:
+            target_path = project_root
+            output.info(f"Running workflow '{name}' on codebase: {project_root.name}...")
+            initial_input = {"directory": str(project_root)}
+            executor_root = project_root
 
         # Convert and run
         from moss.agent_loop import AgentLoopRunner, LLMConfig, LLMToolExecutor
@@ -3959,11 +3965,11 @@ def cmd_workflow(args: Namespace) -> int:
             system_prompt=wf.llm.system_prompt,
             mock=mock,
         )
-        executor = LLMToolExecutor(config=config, root=file_path.parent)
+        executor = LLMToolExecutor(config=config, root=executor_root)
         runner = AgentLoopRunner(executor)
 
         async def do_run():
-            return await runner.run(loop, initial_input={"file_path": str(file_path)})
+            return await runner.run(loop, initial_input=initial_input)
 
         result = asyncio.run(do_run())
 
@@ -4255,6 +4261,7 @@ def cmd_agent(args: Namespace) -> int:
     verbose = getattr(args, "verbose", False)
     dry_run = getattr(args, "dry_run", False)
     use_vanilla = getattr(args, "vanilla", False)
+    mock = getattr(args, "mock", False)
 
     if not task:
         output.error("Usage: moss agent <task>")
@@ -4297,7 +4304,9 @@ def cmd_agent(args: Namespace) -> int:
 
         try:
             initial_input = {"task": task}
-            result = asyncio.run(run_workflow("vanilla", initial_input, project_root=api.root))
+            result = asyncio.run(
+                run_workflow("vanilla", initial_input, project_root=api.root, mock=mock)
+            )
         except ImportError as e:
             output.error(f"Missing dependency: {e}")
             output.info("Install with: pip install 'moss[llm]'")
@@ -4327,7 +4336,7 @@ def cmd_agent(args: Namespace) -> int:
             output.error(f"\nFailed: {result.error}")
             return 1
 
-    config = LoopConfig(max_turns=max_turns)
+    config = LoopConfig(max_turns=max_turns, mock=mock)
     if model:
         config.model = model
 
@@ -6330,7 +6339,7 @@ def create_parser() -> argparse.ArgumentParser:
     workflow_parser.add_argument(
         "--file",
         "-f",
-        help="File to process (required for run)",
+        help="File to process (optional, defaults to codebase root)",
     )
     workflow_parser.add_argument(
         "--directory",
@@ -6559,6 +6568,11 @@ def create_parser() -> argparse.ArgumentParser:
         "--vanilla",
         action="store_true",
         help="Run minimal vanilla agent loop instead of DWIM loop",
+    )
+    agent_parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Use mock LLM responses (for testing)",
     )
     agent_parser.set_defaults(func=cmd_agent)
 

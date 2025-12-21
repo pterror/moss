@@ -79,6 +79,7 @@ class LoopConfig:
     model: str = "gemini/gemini-2.0-flash"
     temperature: float = 0.0
     system_prompt: str = ""
+    mock: bool = False
 
 
 @dataclass
@@ -300,6 +301,7 @@ def build_tool_call(intent: ParsedIntent, api: MossAPI) -> tuple[str, dict[str, 
         "checkpoint": "shadow_git.begin_multi_commit",
         "commit": "shadow_git.finish_multi_commit",
         "analyze": "telemetry.analyze_all_sessions",
+        "patterns": "patterns.analyze",
     }
 
     tool_name = verb_to_tool.get(verb, verb)
@@ -548,6 +550,9 @@ Do NOT repeat the same command. Never output prose."""
             {"role": "system", "content": self._build_system_prompt()},
             {"role": "user", "content": context},
         ]
+
+        if self.config.mock:
+            return "done [MOCK RESPONSE]"
 
         response = await litellm.acompletion(
             model=self.config.model,

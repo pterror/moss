@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from moss.external_deps import DependencyAnalysisResult
     from moss.git_hotspots import GitHotspotAnalysis
     from moss.patches import Patch, PatchResult
+    from moss.patterns import PatternAnalysis
     from moss.rag import IndexStats, RAGIndex, SearchResult
     from moss.shadow_git import CommitHandle, ShadowBranch, ShadowGit
     from moss.skeleton import Symbol
@@ -49,6 +50,25 @@ if TYPE_CHECKING:
     from moss.weaknesses import WeaknessAnalysis
 
 
+@dataclass
+class PatternsAPI:
+    """API for architectural pattern detection."""
+
+    root: Path
+
+    def analyze(self, directory: str | Path | None = None) -> PatternAnalysis:
+        """Detect architectural patterns in the codebase."""
+        from moss.patterns import PatternAnalyzer
+
+        target = Path(directory) if directory else self.root
+        if not target.is_absolute():
+            target = self.root / target
+
+        analyzer = PatternAnalyzer(target)
+        return analyzer.analyze()
+
+
+@dataclass
 class PathResolvingMixin:
     """Mixin providing path resolution relative to project root."""
 
@@ -3813,6 +3833,7 @@ class MossAPI:
     _lessons: LessonsAPI | None = None
     _memory_layer: Any | None = None  # MemoryLayer
     _toml: TomlAPI | None = None
+    _patterns: PatternsAPI | None = None
 
     @classmethod
     def for_project(cls, path: str | Path) -> MossAPI:
@@ -4044,6 +4065,13 @@ class MossAPI:
         if self._toml is None:
             self._toml = TomlAPI(root=self.root)
         return self._toml
+
+    @property
+    def patterns(self) -> PatternsAPI:
+        """Access architectural pattern detection."""
+        if self._patterns is None:
+            self._patterns = PatternsAPI(root=self.root)
+        return self._patterns
 
 
 # Convenience alias

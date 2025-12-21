@@ -656,6 +656,7 @@ async def run_workflow(
     name: str | Path,
     initial_input: Any = None,
     project_root: Path | None = None,
+    mock: bool = False,
 ) -> LoopResult:
     """Load and run a workflow by name.
 
@@ -686,6 +687,8 @@ async def run_workflow(
     # Convert to executable loop (uses build_steps for dynamic workflows)
     loop = workflow_to_agent_loop(workflow, context)
     llm_config = workflow_to_llm_config(workflow)
+    if mock:
+        llm_config.mock = True
 
     # Create executor and run
     executor = LLMToolExecutor(config=llm_config)

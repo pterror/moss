@@ -932,6 +932,18 @@
     "name": "patch_create"
   },
   {
+    "description": "Detect architectural patterns in the codebase.",
+    "inputSchema": {
+      "properties": {
+        "directory": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "patterns_analyze"
+  },
+  {
     "description": "Clear the index. Dict with 'success' boolean",
     "inputSchema": {
       "properties": {},

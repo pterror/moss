@@ -1669,6 +1669,37 @@
         ]
       }
     },
+    "/patterns/analyze": {
+      "get": {
+        "description": "Detect architectural patterns in the codebase.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "directory": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Detect architectural patterns in the codebase",
+        "tags": [
+          "patterns"
+        ]
+      }
+    },
     "/rag/clear": {
       "post": {
         "description": "Clear the index. Dict with 'success' boolean",
@@ -3352,6 +3383,10 @@
     {
       "description": "API for applying code patches. Supports AST-aware patching with automatic fallback to text-based patching when AST parsing fails.",
       "name": "patch"
+    },
+    {
+      "description": "API for architectural pattern detection.",
+      "name": "patterns"
     },
     {
       "description": "API for RAG (Retrieval-Augmented Generation) semantic search. Provides semantic code search capabilities using vector embeddings. Index your codebase once, then search with natural language queries.",
