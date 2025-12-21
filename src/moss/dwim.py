@@ -413,9 +413,9 @@ def _discover_entry_points() -> None:
                     if isinstance(info, ToolInfo) and info.name not in _TOOLS:
                         register_tool(info)
                         logger.debug("Discovered tool: %s", info.name)
-            except Exception as e:
+            except (ImportError, AttributeError, TypeError) as e:
                 logger.warning("Failed to load tool '%s': %s", ep.name, e)
-    except Exception:
+    except (TypeError, StopIteration):
         pass
 
 

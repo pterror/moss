@@ -114,7 +114,7 @@ class ContextHost:
             try:
                 registry.register(wrapper)
                 logger.debug("Registered plugin %s for %s", meta.name, view_type.name)
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 logger.warning("Failed to register plugin %s: %s", meta.name, e)
 
         return registry

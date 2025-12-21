@@ -132,7 +132,7 @@ def load_dwim_config(path: Path) -> DWIMConfig:
 
     try:
         data = tomllib.loads(path.read_text())
-    except Exception as e:
+    except (OSError, tomllib.TOMLDecodeError) as e:
         logger.warning("Failed to load DWIM config from %s: %s", path, e)
         return DWIMConfig()
 

@@ -253,7 +253,7 @@ def run_pre_commit_checks(project_dir: Path) -> tuple[bool, list[str]]:
             view = await plugin.render(target)
             if "error" in view.metadata:
                 return f"{file_path}: {view.metadata['error']}"
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             return f"{file_path}: {e}"
 
         return None

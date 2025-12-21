@@ -84,7 +84,7 @@ class SecurityConfig:
                 if "security" in data:
                     config = cls._from_dict(data["security"])
                     return config
-            except Exception as e:
+            except (OSError, tomllib.TOMLDecodeError) as e:
                 logger.warning("Failed to load security config from moss.toml: %s", e)
 
         # Try pyproject.toml
@@ -96,7 +96,7 @@ class SecurityConfig:
                 if security_data:
                     config = cls._from_dict(security_data)
                     return config
-            except Exception as e:
+            except (OSError, tomllib.TOMLDecodeError) as e:
                 logger.warning("Failed to load security config from pyproject.toml: %s", e)
 
         return config
@@ -368,7 +368,7 @@ class BanditTool(SecurityTool):
             logger.warning("Bandit timed out")
         except json.JSONDecodeError as e:
             logger.warning("Failed to parse bandit output: %s", e)
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             logger.warning("Bandit failed: %s", e)
 
         return findings
@@ -500,7 +500,7 @@ class SemgrepTool(SecurityTool):
             logger.warning("Semgrep timed out")
         except json.JSONDecodeError as e:
             logger.warning("Failed to parse semgrep output: %s", e)
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             logger.warning("Semgrep failed: %s", e)
 
         return findings
@@ -582,7 +582,7 @@ class SecurityAnalyzer:
                 result.findings.extend(findings)
                 result.tools_run.append(tool.name)
                 logger.info("%s found %d issues", tool.name, len(findings))
-            except Exception as e:
+            except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as e:
                 result.errors.append(f"{tool.name}: {e}")
                 logger.error("%s failed: %s", tool.name, e)
 

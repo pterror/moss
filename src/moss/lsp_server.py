@@ -145,7 +145,7 @@ class MossLanguageServer(LanguageServer if HAS_LSP else object):
             source = doc.source
             if source:
                 analysis = self._analyze_python(doc.uri, doc.version, source)
-        except Exception as e:
+        except (OSError, SyntaxError, ValueError) as e:
             logger.warning(f"Analysis failed for {doc.uri}: {e}")
 
         self.cache.set(analysis)
@@ -184,14 +184,14 @@ class MossLanguageServer(LanguageServer if HAS_LSP else object):
                         "end_line": end_line or start_line or 1,
                     }
                 )
-        except Exception as e:
+        except (SyntaxError, ValueError) as e:
             logger.debug(f"CFG extraction failed: {e}")
 
         # Extract skeleton
         try:
             symbols = extract_python_skeleton(source)
             analysis.symbols = self._extract_symbols(symbols)
-        except Exception as e:
+        except (SyntaxError, ValueError) as e:
             logger.debug(f"Skeleton extraction failed: {e}")
 
         # Generate diagnostics
@@ -428,8 +428,8 @@ def create_server() -> MossLanguageServer:
                         end=lsp.Position(line=match.span.end_line - 1, character=1000),
                     ),
                 )
-        except Exception:
-            pass
+        except (ValueError, KeyError) as e:
+            logger.debug(f"Anchor resolution failed: {e}")
 
         return None
 

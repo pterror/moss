@@ -375,7 +375,7 @@ class TrustManager:
                 custom_levels, default_level = cls._parse_config(data)
             except ImportError:
                 logger.warning("PyYAML not installed, cannot load trust.yaml")
-            except Exception as e:
+            except (OSError, yaml.YAMLError) as e:
                 logger.warning("Failed to load trust.yaml: %s", e)
 
         # Try .moss/trust.toml
@@ -386,7 +386,7 @@ class TrustManager:
 
                 data = tomllib.loads(trust_toml.read_text())
                 custom_levels, default_level = cls._parse_config(data)
-            except Exception as e:
+            except (OSError, tomllib.TOMLDecodeError) as e:
                 logger.warning("Failed to load trust.toml: %s", e)
 
         # Try moss.toml [trust] section
@@ -398,7 +398,7 @@ class TrustManager:
                 data = tomllib.loads(moss_toml.read_text())
                 if "trust" in data:
                     custom_levels, default_level = cls._parse_config(data["trust"])
-            except Exception as e:
+            except (OSError, tomllib.TOMLDecodeError) as e:
                 logger.warning("Failed to load trust from moss.toml: %s", e)
 
         return cls(levels=custom_levels, default_level=default_level)

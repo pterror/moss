@@ -440,5 +440,5 @@ class IncrementalIndexer:
                 else:
                     await self.indexer.index_file(event.path)
                     logger.debug("Indexed: %s", event.path)
-            except Exception as e:
+            except (OSError, ValueError, SyntaxError) as e:
                 logger.warning("Failed to process %s: %s", event.path, e)

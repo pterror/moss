@@ -579,7 +579,7 @@ class MossShell:
 
         try:
             report = analyze_complexity(path)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             self.output.error(f"Complexity analysis failed: {e}")
             return
 
@@ -615,7 +615,7 @@ class MossShell:
 
         try:
             status = check_project_status(self.workspace)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             self.output.error(f"Health check failed: {e}")
             return
 
@@ -645,7 +645,7 @@ class MossShell:
             result = generate_tree(path, tracked_only=tracked_only)
             self.output.print(result.tree)
             self.output.info(f"({result.file_count} files, {result.dir_count} directories)")
-        except Exception as e:
+        except OSError as e:
             self.output.error(f"Tree generation failed: {e}")
 
     def _resolve_path(self, path_str: str) -> Path:

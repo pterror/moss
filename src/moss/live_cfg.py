@@ -88,7 +88,7 @@ class CFGState:
             self.error = None
             self.last_updated = time.time()
 
-        except Exception as e:
+        except (OSError, SyntaxError, ValueError) as e:
             self.error = str(e)
             logger.error(f"CFG update failed: {e}")
 
@@ -452,7 +452,7 @@ class LiveCFGServer:
                     if mtime > last_mtime:
                         last_mtime = mtime
                         self._debounced_update()
-            except Exception as e:
+            except OSError as e:
                 logger.debug(f"Watch error: {e}")
 
             time.sleep(0.5)
