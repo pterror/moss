@@ -46,6 +46,8 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - [ ] Consistent "context + node + children" view format
 
 **Phase 3: DWIM integration**
+- [x] Replace TF-IDF with embedding-based matching (fastembed/bge-small-en)
+- [ ] Tune embedding confidence thresholds (18 matching tests still failing)
 - [ ] Natural language → tree operation mapping
 
 ### Distribution & Installation
