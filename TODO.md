@@ -4,27 +4,30 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Extensible Agent Modes**: Refactor TUI modes (PLAN, READ, WRITE, DIFF) into a plugin-based system
 - [ ] **Dynamic Token Budgeting**: Adjust per-turn budget based on remaining task complexity
 - [ ] **Cross-file Symbol Navigation**: Clickable references in TUI to jump between files
+- [ ] **Agentic Memory Analysis**: Loop that extracts long-term preferences from session logs
+- [ ] **Verification Loops & Heuristics**: Formalize heuristic guardrails before validation (LLM unreliability mitigation)
 
 ## Recently Completed
+
+- **Extensible Agent Modes** (Dec 2025):
+  - Refactored TUI modes into a plugin-based system using `TUIMode` protocol
+  - Implemented `ModeRegistry` for dynamic mode loading and cycling
+  - Simplified `MossTUI` logic by delegating mode behavior to plugin classes
+
+- **Shadow Git Visualization** (Dec 2025):
+  - Added `DIFF` mode to TUI for reviewing changes
+  - Implemented `DiffView` and `HistoryView` (hunks) in TUI
+  - Integrated git data fetching via `ShadowGitAPI`
 
 - **Agentic Workflow Synthesis** (Dec 2025):
   - Implemented `workflow_synthesis_loop` to auto-create workflows from telemetry
   - Added `synthesize_workflow` LLM operation for TOML workflow generation
   - Automated sub-API discovery in `introspect_api` for better metadata coverage
 
-- **Adaptive Context Pruning** (Dec 2025):
-  - Implemented heuristic importance scoring in `EphemeralCache`
-  - Added dynamic result preview limits in `DWIMLoop` based on content relevance
-  - Added `score_importance` LLM operation for high-quality context management
-  - Prioritizes error signals, task-relevant keywords, and structural changes
-
 - **LLM Benchmarking Harness** (Dec 2025):
-  - Implemented `AutomatedBenchmark` for cross-model evaluation
-  - Added `MultiModelBenchmarkResult` with markdown report generation
-  - Integrated `benchmark_models` into `AgentAPI`
+
 
 - **Cross-Language Reference Tracking** (Dec 2025):
   - Extended `RefChecker` to support Rust files (`.rs`) and `crates/` directory

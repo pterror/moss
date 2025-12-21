@@ -5,8 +5,7 @@ Uses Textual for a modern, reactive terminal experience.
 
 from __future__ import annotations
 
-from enum import Enum, auto
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 try:
     from textual.app import App, ComposeResult
@@ -28,29 +27,109 @@ if TYPE_CHECKING:
     from moss.task_tree import TaskNode, TaskTree
 
 
-class AgentMode(Enum):
-    """Current operating mode of the agent UI."""
+@runtime_checkable
+class TUIMode(Protocol):
+    """Protocol for TUI operating modes."""
 
-    PLAN = auto()  # Planning next steps
-    READ = auto()  # Code exploration and search
-    WRITE = auto()  # Applying changes and refactoring
-    DIFF = auto()  # Reviewing shadow git changes
+    @property
+    def name(self) -> str:
+        """Mode name."""
+        ...
+
+    @property
+    def color(self) -> str:
+        """Mode color for indicator."""
+        ...
+
+    @property
+    def placeholder(self) -> str:
+        """Command input placeholder."""
+        ...
+
+    async def on_enter(self, app: MossTUI) -> None:
+        """Called when entering this mode."""
+        ...
+
+
+class PlanMode:
+    name = "PLAN"
+    color = "blue"
+    placeholder = "What is the plan? (e.g. breakdown...)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = True
+        app.query_one("#git-view").display = False
+        app.query_one("#content-header").update("Agent Log")
+
+
+class ReadMode:
+    name = "READ"
+    color = "green"
+    placeholder = "Explore codebase... (e.g. skeleton, grep, expand)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = True
+        app.query_one("#git-view").display = False
+        app.query_one("#content-header").update("Agent Log")
+
+
+class WriteMode:
+    name = "WRITE"
+    color = "red"
+    placeholder = "Modify code... (e.g. write, replace, insert)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = True
+        app.query_one("#git-view").display = False
+        app.query_one("#content-header").update("Agent Log")
+
+
+class DiffMode:
+    name = "DIFF"
+    color = "magenta"
+    placeholder = "Review changes... (revert <file> <line> to undo)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = False
+        app.query_one("#git-view").display = True
+        app.query_one("#content-header").update("Shadow Git")
+        await app._update_git_view()
+
+
+class ModeRegistry:
+    """Registry for extensible TUI modes."""
+
+    def __init__(self):
+        self._modes: dict[str, TUIMode] = {
+            "PLAN": PlanMode(),
+            "READ": ReadMode(),
+            "WRITE": WriteMode(),
+            "DIFF": DiffMode(),
+        }
+        self._order: list[str] = ["PLAN", "READ", "WRITE", "DIFF"]
+
+    def get_mode(self, name: str) -> TUIMode | None:
+        return self._modes.get(name)
+
+    def next_mode(self, current_name: str) -> TUIMode:
+        idx = self._order.index(current_name)
+        next_idx = (idx + 1) % len(self._order)
+        return self._modes[self._order[next_idx]]
+
+    def register_mode(self, mode: TUIMode) -> None:
+        self._modes[mode.name] = mode
+        if mode.name not in self._order:
+            self._order.append(mode.name)
 
 
 class ModeIndicator(Static):
     """Widget to display the current agent mode."""
 
-    mode = reactive(AgentMode.PLAN)
+    mode_name = reactive("PLAN")
+    mode_color = reactive("blue")
 
     def render(self) -> str:
-        colors = {
-            AgentMode.PLAN: "blue",
-            AgentMode.READ: "green",
-            AgentMode.WRITE: "red",
-            AgentMode.DIFF: "magenta",
-        }
-        color = colors.get(self.mode, "white")
-        return f"Mode: [{color} b]{self.mode.name}[/]"
+        return f"Mode: [{self.mode_color} b]{self.mode_name}[/]"
 
 
 class TaskTreeWidget(Tree[str]):
@@ -141,12 +220,13 @@ class MossTUI(App):
         ("shift+tab", "next_mode", "Next Mode"),
     ]
 
-    mode = reactive(AgentMode.PLAN)
+    current_mode_name = reactive("PLAN")
 
     def __init__(self, api: MossAPI):
         super().__init__()
         self.api = api
         self._task_tree: TaskTree | None = None
+        self._registry = ModeRegistry()
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -184,33 +264,28 @@ class MossTUI(App):
         self.title = "Moss TUI"
         self.sub_title = f"Project: {self.api.root.name}"
         self.query_one("#command-input").focus()
+        # Initialize first mode
+        self.current_mode_name = "PLAN"
 
-    def watch_mode(self, mode: AgentMode) -> None:
+    async def watch_current_mode_name(self, name: str) -> None:
         """React to mode changes."""
-        self.query_one("#mode-indicator").mode = mode
-        # Update input placeholder based on mode
-        placeholders = {
-            AgentMode.PLAN: "What is the plan? (e.g. breakdown...)",
-            AgentMode.READ: "Explore codebase... (e.g. skeleton, grep, expand)",
-            AgentMode.WRITE: "Modify code... (e.g. write, replace, insert)",
-            AgentMode.DIFF: "Review changes... (revert <file> <line> to undo)",
-        }
-        self.query_one("#command-input").placeholder = placeholders.get(mode, "Enter command...")
+        mode = self._registry.get_mode(name)
+        if not mode:
+            return
 
-        # Toggle views
-        log_view = self.query_one("#log-view")
-        git_view = self.query_one("#git-view")
-        header = self.query_one("#content-header")
+        indicator = self.query_one("#mode-indicator")
+        indicator.mode_name = mode.name
+        indicator.mode_color = mode.color
 
-        if mode == AgentMode.DIFF:
-            log_view.display = False
-            git_view.display = True
-            header.update("Shadow Git")
-            self._update_git_view()
-        else:
-            log_view.display = True
-            git_view.display = False
-            header.update("Agent Log")
+        self.query_one("#command-input").placeholder = mode.placeholder
+
+        await mode.on_enter(self)
+
+    def action_next_mode(self) -> None:
+        """Switch to the next mode."""
+        next_mode = self._registry.next_mode(self.current_mode_name)
+        self.current_mode_name = next_mode.name
+        self._log(f"Switched to {self.current_mode_name} mode")
 
     async def _update_git_view(self) -> None:
         """Fetch and display shadow git data."""
@@ -235,14 +310,6 @@ class MossTUI(App):
         except Exception as e:
             self._log(f"Failed to fetch git data: {e}")
 
-    def action_next_mode(self) -> None:
-        """Switch to the next mode."""
-        modes = list(AgentMode)
-        current_idx = modes.index(self.mode)
-        next_idx = (current_idx + 1) % len(modes)
-        self.mode = modes[next_idx]
-        self._log(f"Switched to {self.mode.name} mode")
-
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle command input."""
         command = event.value.strip()
@@ -250,7 +317,7 @@ class MossTUI(App):
             return
 
         self.query_one("#command-input").value = ""
-        self._log(f"[{self.mode.name}] {command}")
+        self._log(f"[{self.current_mode_name}] {command}")
 
         # TODO: Integrate with AgentLoop or DWIM
         if command == "exit":
