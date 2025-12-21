@@ -5,7 +5,8 @@
 ### Features
 
 **Session Dec 21 2025 (later)**
-- `Rust Delegation`: skeleton/summarize commands delegate to Rust CLI when available
+- `Rust Delegation`: skeleton/summarize/search-tree/view delegate to Rust CLI (fail if unavailable)
+- `Rust search-tree fix`: Extension patterns (`.py`, `.rs`) now work correctly
 - `Conversational Loop Research`: Documented as future work for eval comparison
 
 **Session Dec 21 2025 (continued)**

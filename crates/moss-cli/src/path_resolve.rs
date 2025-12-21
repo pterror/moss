@@ -27,6 +27,7 @@ pub fn all_files(root: &Path) -> Vec<PathMatch> {
 /// Resolve a fuzzy query to matching paths.
 ///
 /// Handles:
+/// - Extension patterns: .rs, .py (returns all matching files)
 /// - Exact paths: src/moss/dwim.py
 /// - Partial filenames: dwim.py, dwim
 /// - Directory names: moss, src
@@ -35,6 +36,25 @@ pub fn resolve(query: &str, root: &Path) -> Vec<PathMatch> {
     if query.contains(':') {
         let file_part = query.split(':').next().unwrap();
         return resolve(file_part, root);
+    }
+
+    // Handle extension patterns (e.g., ".rs", ".py") - return all matches directly
+    if query.starts_with('.') && !query.contains('/') {
+        if let Ok(mut index) = FileIndex::open(root) {
+            if index.needs_refresh() {
+                let _ = index.refresh();
+            }
+            if let Ok(files) = index.find_like(query) {
+                return files
+                    .into_iter()
+                    .map(|f| PathMatch {
+                        path: f.path,
+                        kind: if f.is_dir { "directory" } else { "file" }.to_string(),
+                        score: u32::MAX,
+                    })
+                    .collect();
+            }
+        }
     }
 
     // Get candidate paths (uses LIKE for fast filtering when possible)

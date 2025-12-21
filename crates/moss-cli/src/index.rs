@@ -1019,10 +1019,29 @@ impl FileIndex {
 
     /// Find files matching a query using LIKE (fast pre-filter)
     /// Splits query by whitespace/separators and requires all parts to match
+    /// Special case: queries starting with '.' are treated as extension patterns
     pub fn find_like(&self, query: &str) -> rusqlite::Result<Vec<IndexedFile>> {
-        // Normalize query: split on whitespace and common separators
+        // Handle extension patterns (e.g., ".rs", ".py")
+        if query.starts_with('.') && !query.contains('/') {
+            let sql = "SELECT path, is_dir, mtime FROM files WHERE LOWER(path) LIKE ?1 LIMIT 1000";
+            let pattern = format!("%{}", query.to_lowercase());
+            let mut stmt = self.conn.prepare(sql)?;
+            let files = stmt
+                .query_map([pattern], |row| {
+                    Ok(IndexedFile {
+                        path: row.get(0)?,
+                        is_dir: row.get::<_, i64>(1)? != 0,
+                        mtime: row.get(2)?,
+                    })
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+            return Ok(files);
+        }
+
+        // Normalize query: split on whitespace and common separators (but not '.')
         let parts: Vec<&str> = query
-            .split(|c: char| c.is_whitespace() || c == '_' || c == '-' || c == '.')
+            .split(|c: char| c.is_whitespace() || c == '_' || c == '-')
             .filter(|s| !s.is_empty())
             .collect();
 

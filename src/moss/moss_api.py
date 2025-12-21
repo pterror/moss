@@ -331,61 +331,32 @@ class SkeletonAPI(PathResolvingMixin):
     def format(self, file_path: str | Path, include_docstrings: bool = True) -> str:
         """Extract and format skeleton as readable text.
 
-        Uses Rust CLI when available (faster), falls back to Python plugin system.
+        Delegates to Rust CLI. Fails if Rust not available.
 
         Args:
             file_path: Path to the file
-            include_docstrings: Whether to include docstrings in output (Python only)
+            include_docstrings: Whether to include docstrings (ignored, Rust controls)
 
         Returns:
             Formatted string representation of the skeleton
+
+        Raises:
+            RuntimeError: If Rust CLI is not available
         """
         path = self._resolve_path(file_path)
         if not path.exists():
             return f"File not found: {path}"
 
-        # Try Rust delegation first (faster)
-        from moss.rust_shim import rust_skeleton
+        from moss.rust_shim import rust_available, rust_skeleton
+
+        if not rust_available():
+            raise RuntimeError("Rust CLI required for skeleton. Build with: cargo build --release")
 
         result = rust_skeleton(str(path), root=str(self.root))
-        if result is not None:
-            return result
+        if result is None:
+            return f"Error: Rust CLI failed for {path}"
 
-        # Fall back to Python plugin system
-        import asyncio
-        import concurrent.futures
-
-        from moss.plugins import get_registry
-        from moss.views import ViewOptions, ViewTarget
-
-        target = ViewTarget(path=path)
-        registry = get_registry()
-        plugin = registry.find_plugin(target, "skeleton")
-
-        if plugin is None:
-            return f"No skeleton plugin found for: {path.suffix}"
-
-        options = ViewOptions(include_private=True)
-
-        async def render() -> str:
-            view = await plugin.render(target, options)
-            if "error" in view.metadata:
-                return f"Error: {view.metadata['error']}"
-            return view.content
-
-        def run_in_new_loop() -> str:
-            return asyncio.run(render())
-
-        # Check if we're already in an async context
-        try:
-            asyncio.get_running_loop()
-            # Already in async context - run in a thread with its own loop
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_new_loop)
-                return future.result()
-        except RuntimeError:
-            # No running loop - just use asyncio.run
-            return asyncio.run(render())
+        return result
 
     def expand(self, file_path: str | Path, symbol_name: str) -> str | None:
         """Get the full source code of a named symbol.

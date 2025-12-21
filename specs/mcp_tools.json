@@ -1493,7 +1493,7 @@
         },
         "include_docstrings": {
           "default": true,
-          "description": "Whether to include docstrings in output (Python only)",
+          "description": "Whether to include docstrings (ignored, Rust controls)",
           "type": "boolean"
         }
       },

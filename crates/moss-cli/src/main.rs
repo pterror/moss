@@ -661,7 +661,16 @@ fn cmd_search_tree(query: &str, root: Option<&Path>, limit: usize, json: bool) -
 
     // Use fuzzy matching to find all matches
     let matches = path_resolve::resolve(query, &root);
-    let limited: Vec<_> = matches.into_iter().take(limit).collect();
+    let total = matches.len();
+
+    // For extension patterns, use higher limit unless explicitly set
+    let effective_limit = if query.starts_with('.') && limit == 20 {
+        500 // Default higher limit for extension searches
+    } else {
+        limit
+    };
+
+    let limited: Vec<_> = matches.into_iter().take(effective_limit).collect();
 
     if json {
         let output: Vec<_> = limited
@@ -672,6 +681,9 @@ fn cmd_search_tree(query: &str, root: Option<&Path>, limit: usize, json: bool) -
     } else {
         for m in &limited {
             println!("{} ({})", m.path, m.kind);
+        }
+        if total > effective_limit {
+            println!("... +{} more (use -l to show more)", total - effective_limit);
         }
     }
 

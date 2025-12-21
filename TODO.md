@@ -4,12 +4,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **search-tree respects gitignore**: Currently searches through `target/` etc.
+- [ ] **Python CLI → Rust CLI delegation**: More commands to delegate (expand, callees, callers)
 
 ## Recently Completed
 
 - **Session Dec 21 2025 (later)**:
-  - Rust delegation for skeleton/summarize (SkeletonAPI.format → rust_skeleton)
+  - Rust delegation for skeleton/summarize/search-tree/view
+  - Fixed Rust search-tree extension patterns (`.py`, `.rs`)
   - Documented conversational loop pattern as future research
   - Verified hierarchical (not conversational) agent architecture
 

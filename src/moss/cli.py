@@ -607,6 +607,39 @@ def cmd_path(args: Namespace) -> int:
 
 def cmd_view(args: Namespace) -> int:
     """View a node in the codebase tree."""
+    from moss.rust_shim import call_rust, rust_available
+
+    output = setup_output(args)
+    query = args.target
+
+    if not rust_available():
+        output.error("Rust CLI required for view. Build with: cargo build --release")
+        return 1
+
+    rust_args = ["view", query]
+    if getattr(args, "line_numbers", False):
+        rust_args.append("-n")
+    if wants_json(args):
+        rust_args.append("--json")
+
+    code, result = call_rust(rust_args, json_output=wants_json(args))
+
+    if code != 0:
+        output.error(f"No matches for: {query}")
+        return 1
+
+    if wants_json(args):
+        import json
+
+        output.data(json.loads(result))
+    else:
+        output.print(result)
+
+    return 0
+
+
+def _cmd_view_legacy(args: Namespace) -> int:
+    """Legacy view implementation (kept for reference)."""
     from moss.codebase import build_tree
 
     output = setup_output(args)
@@ -667,28 +700,34 @@ def cmd_view(args: Namespace) -> int:
 
 def cmd_search_tree(args: Namespace) -> int:
     """Search for nodes in the codebase tree."""
-    from moss.codebase import build_tree
+    from moss.rust_shim import call_rust, rust_available
 
     output = setup_output(args)
     query = args.query
-    scope = getattr(args, "scope", None)
-    root = Path.cwd()
 
-    tree = build_tree(root)
-    matches = tree.search(query, scope=scope)
+    if not rust_available():
+        output.error("Rust CLI required for search-tree. Build with: cargo build --release")
+        return 1
 
-    if not matches:
+    rust_args = ["search-tree", query]
+    # Only pass limit if explicitly set (let Rust use smart defaults for extensions)
+    if hasattr(args, "limit") and args.limit != 50:
+        rust_args.extend(["-l", str(args.limit)])
+    if wants_json(args):
+        rust_args.append("--json")
+
+    code, result = call_rust(rust_args, json_output=wants_json(args))
+
+    if code != 0 or not result.strip():
         output.error(f"No matches for: {query}")
         return 1
 
     if wants_json(args):
-        output.data([{"path": m.full_path, "kind": m.kind.value} for m in matches])
+        import json
+
+        output.data(json.loads(result))
     else:
-        for m in matches[:50]:  # Limit output
-            desc = f" - {m.description}" if m.description else ""
-            output.print(f"{m.full_path} ({m.kind.value}){desc}")
-        if len(matches) > 50:
-            output.print(f"... +{len(matches) - 50} more")
+        output.print(result.rstrip())
 
     return 0
 

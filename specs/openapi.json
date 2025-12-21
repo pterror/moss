@@ -2649,7 +2649,7 @@
     },
     "/skeleton/format": {
       "post": {
-        "description": "Extract and format skeleton as readable text. Uses Rust CLI when available (faster), falls back to Python plugin system. Formatted string representation of the skeleton",
+        "description": "Extract and format skeleton as readable text. Delegates to Rust CLI. Fails if Rust not available. Formatted string representation of the skeleton RuntimeError: If Rust CLI is not available",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2661,7 +2661,7 @@
                   },
                   "include_docstrings": {
                     "default": true,
-                    "description": "Whether to include docstrings in output (Python only)",
+                    "description": "Whether to include docstrings (ignored, Rust controls)",
                     "type": "boolean"
                   }
                 },
