@@ -48,6 +48,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 **Phase 3: DWIM integration**
 - [ ] Natural language → tree operation mapping
 
+### Distribution & Installation
+- [ ] Auto-updates: check for new versions, prompt user
+- [ ] Portable installation: single binary or minimal deps
+- [ ] Pre-built binaries for common platforms (GitHub Actions)
+
 ### Reference Resolution (GitHub-level)
 - [ ] Full import graph with alias tracking
 - [ ] Variable scoping analysis

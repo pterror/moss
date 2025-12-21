@@ -25,13 +25,11 @@ Example plugin registration in pyproject.toml:
 from __future__ import annotations
 
 import logging
-import math
 import re
-from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 from importlib.metadata import entry_points
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -94,103 +92,135 @@ def expand_keywords(keywords: list[str]) -> list[str]:
 
 
 # =============================================================================
-# TF-IDF Cosine Similarity (pure Python implementation)
+# Embedding-based Semantic Matching
 # =============================================================================
 
 
-def tokenize(text: str) -> list[str]:
-    """Tokenize text into lowercase words."""
-    return re.findall(r"\b\w+\b", text.lower())
+class EmbeddingMatcher:
+    """Semantic matcher using sentence embeddings.
 
+    Lazy-loads the embedding model on first use to avoid startup cost.
+    Pre-computes tool embeddings for fast query matching.
+    """
 
-def compute_tf(tokens: list[str]) -> dict[str, float]:
-    """Compute term frequency for tokens."""
-    counts = Counter(tokens)
-    total = len(tokens)
-    return {word: count / total for word, count in counts.items()} if total > 0 else {}
+    _instance: EmbeddingMatcher | None = None
+    _model: Any | None = None
+    _tool_embeddings: dict[str, Any]
+    _tool_texts: dict[str, str]
 
+    def __new__(cls) -> EmbeddingMatcher:
+        """Create new instance with fresh dictionaries."""
+        instance = super().__new__(cls)
+        instance._tool_embeddings = {}
+        instance._tool_texts = {}
+        return instance
 
-def compute_idf(documents: list[list[str]]) -> dict[str, float]:
-    """Compute inverse document frequency across documents."""
-    n_docs = len(documents)
-    if n_docs == 0:
-        return {}
+    def __init__(self) -> None:
+        """Initialize matcher (model loaded lazily)."""
+        pass
 
-    # Count how many documents contain each word
-    doc_freq: Counter[str] = Counter()
-    for doc in documents:
-        doc_freq.update(set(doc))
+    @classmethod
+    def get(cls) -> EmbeddingMatcher:
+        """Get singleton instance."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
-    # IDF = log(N / df) with smoothing
-    return {word: math.log((n_docs + 1) / (df + 1)) + 1 for word, df in doc_freq.items()}
+    def _ensure_model(self) -> bool:
+        """Lazy-load the embedding model. Returns True if available."""
+        if self._model is not None:
+            return True
 
+        try:
+            from fastembed import TextEmbedding
 
-def compute_tfidf(tokens: list[str], idf: dict[str, float]) -> dict[str, float]:
-    """Compute TF-IDF vector for tokens."""
-    tf = compute_tf(tokens)
-    return {word: tf_val * idf.get(word, 1.0) for word, tf_val in tf.items()}
+            self._model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            logger.debug("Loaded embedding model: BAAI/bge-small-en-v1.5")
+            return True
+        except ImportError:
+            logger.debug("fastembed not available, embeddings disabled")
+            return False
+        except Exception as e:
+            logger.warning("Failed to load embedding model: %s", e)
+            return False
 
+    def _ensure_tool_embeddings(self) -> bool:
+        """Compute embeddings for all registered tools."""
+        if not self._ensure_model():
+            return False
 
-def cosine_similarity(vec1: dict[str, float], vec2: dict[str, float]) -> float:
-    """Compute cosine similarity between two sparse vectors."""
-    # Find common keys
-    common_keys = set(vec1.keys()) & set(vec2.keys())
+        # Check if we need to rebuild
+        current_tools = set(TOOL_REGISTRY.keys())
+        cached_tools = set(self._tool_embeddings.keys())
 
-    if not common_keys:
-        return 0.0
+        if current_tools == cached_tools:
+            return True
 
-    # Dot product
-    dot_product = sum(vec1[k] * vec2[k] for k in common_keys)
+        # Build text for each tool
+        self._tool_texts = {}
+        for name, info in TOOL_REGISTRY.items():
+            # Combine name, description, and keywords for richer matching
+            text = f"{info.name} {info.description} {' '.join(info.keywords)}"
+            self._tool_texts[name] = text
 
-    # Magnitudes
-    mag1 = math.sqrt(sum(v * v for v in vec1.values()))
-    mag2 = math.sqrt(sum(v * v for v in vec2.values()))
+        # Batch embed all tools
+        tool_names = list(self._tool_texts.keys())
+        texts = [self._tool_texts[name] for name in tool_names]
 
-    if mag1 == 0 or mag2 == 0:
-        return 0.0
+        embeddings = list(self._model.embed(texts))
+        self._tool_embeddings = dict(zip(tool_names, embeddings, strict=True))
 
-    return dot_product / (mag1 * mag2)
+        logger.debug("Computed embeddings for %d tools", len(tool_names))
+        return True
 
+    def match(
+        self, query: str, available_tools: set[str] | None = None, top_k: int = 10
+    ) -> list[tuple[str, float]]:
+        """Match query against tools using embedding similarity.
 
-@dataclass
-class TFIDFIndex:
-    """TF-IDF index for semantic similarity."""
+        Args:
+            query: Natural language query
+            available_tools: Limit to these tools (default: all)
+            top_k: Maximum results to return
 
-    documents: list[str] = field(default_factory=list)
-    doc_tokens: list[list[str]] = field(default_factory=list)
-    idf: dict[str, float] = field(default_factory=dict)
-    doc_vectors: list[dict[str, float]] = field(default_factory=list)
-
-    def add_document(self, text: str) -> int:
-        """Add a document and return its index."""
-        self.documents.append(text)
-        tokens = tokenize(text)
-        self.doc_tokens.append(tokens)
-        # Recompute IDF with new document
-        self.idf = compute_idf(self.doc_tokens)
-        # Recompute all vectors with new IDF
-        self.doc_vectors = [compute_tfidf(t, self.idf) for t in self.doc_tokens]
-        return len(self.documents) - 1
-
-    def query(self, text: str, top_k: int = 5) -> list[tuple[int, float]]:
-        """Query for most similar documents.
-
-        Returns list of (doc_index, similarity) tuples.
+        Returns:
+            List of (tool_name, similarity) tuples, sorted by similarity descending.
+            Empty list if embeddings unavailable.
         """
-        if not self.documents:
+        if not self._ensure_tool_embeddings():
             return []
 
-        query_tokens = tokenize(text)
-        query_vec = compute_tfidf(query_tokens, self.idf)
+        import numpy as np
+
+        # Embed query
+        query_emb = next(iter(self._model.embed([query])))
 
         # Compute similarities
-        similarities = [
-            (i, cosine_similarity(query_vec, doc_vec)) for i, doc_vec in enumerate(self.doc_vectors)
-        ]
+        results = []
+        tools = available_tools or set(self._tool_embeddings.keys())
+
+        for tool_name in tools:
+            if tool_name not in self._tool_embeddings:
+                continue
+            tool_emb = self._tool_embeddings[tool_name]
+            # Cosine similarity
+            sim = float(
+                np.dot(query_emb, tool_emb) / (np.linalg.norm(query_emb) * np.linalg.norm(tool_emb))
+            )
+            results.append((tool_name, sim))
 
         # Sort by similarity descending
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        return similarities[:top_k]
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:top_k]
+
+    def is_available(self) -> bool:
+        """Check if embedding model is available."""
+        return self._ensure_model()
+
+
+def get_embedding_matcher() -> EmbeddingMatcher:
+    """Get the global embedding matcher instance."""
+    return EmbeddingMatcher.get()
 
 
 # =============================================================================
@@ -822,56 +852,6 @@ def string_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def normalize_word(word: str) -> str:
-    """Normalize a word to its canonical form using word form mappings."""
-    return _CANONICAL_FORMS.get(word.lower(), word.lower())
-
-
-def keyword_match_score(query: str, keywords: list[str]) -> float:
-    """Score how well a query matches a list of keywords.
-
-    Uses word form normalization so "summarize" matches "summary".
-    Optimized to reward matched keywords rather than penalize tools with many keywords.
-    """
-    if not keywords:
-        return 0.0
-
-    query_lower = query.lower()
-    query_words = query_lower.split()
-    query_words_set = set(query_words)
-
-    # Normalize query words to canonical forms
-    query_canonical = {normalize_word(w) for w in query_words_set}
-
-    # Normalize keywords to canonical forms
-    keyword_canonical = {normalize_word(kw) for kw in keywords}
-
-    # Overlap score: proportion of query words matched
-    overlap = len(query_canonical & keyword_canonical)
-    overlap_score = overlap / len(query_words_set) if query_words_set else 0.0
-
-    # First word (action) bonus: if first word matches, it's very likely the right tool
-    first_word = normalize_word(query_words[0]) if query_words else ""
-    first_word_match = 0.3 if first_word in keyword_canonical else 0.0
-
-    # Best partial match score (for typo tolerance)
-    best_partial = 0.0
-    if keywords:
-        for qw in query_words_set:
-            for kw in keywords:
-                sim = string_similarity(qw, kw)
-                if sim > best_partial:
-                    best_partial = sim
-
-    # Combine scores
-    # - Overlap: 50% weight (how many query words match keywords)
-    # - First word: 30% bonus if action word matches
-    # - Best partial: 20% for typo tolerance
-    score = overlap_score * 0.5 + first_word_match + best_partial * 0.2
-
-    return min(score, 1.0)
-
-
 # =============================================================================
 # Tool Resolution
 # =============================================================================
@@ -965,39 +945,27 @@ def normalize_parameters(params: dict, tool: str | None = None) -> dict:
 
 
 # =============================================================================
-# Semantic Routing with TF-IDF
+# Semantic Routing with Embeddings
 # =============================================================================
 
 
 class ToolRouter:
-    """Smart tool router using TF-IDF cosine similarity.
+    """Smart tool router using sentence embeddings.
 
-    Combines multiple signals for robust matching:
-    - TF-IDF cosine similarity on tool descriptions
-    - Keyword matching
-    - Fuzzy string matching for typos
-    - Alias resolution
+    Combines:
+    - Fast path: exact name/alias matching
+    - Embedding similarity: semantic matching for natural language
+    - Fuzzy matching: typo tolerance
     """
 
     def __init__(self) -> None:
-        """Initialize the router with tool descriptions."""
-        self._index = TFIDFIndex()
-        self._tool_names: list[str] = []
-
-        # Build index from tool descriptions and keywords
-        for tool_name, info in TOOL_REGISTRY.items():
-            # Combine description and keywords for richer matching
-            full_text = f"{info.name} {info.description} {' '.join(info.keywords)}"
-            self._index.add_document(full_text)
-            self._tool_names.append(tool_name)
+        """Initialize the router."""
+        self._matcher = get_embedding_matcher()
 
     def analyze_intent(
         self, query: str, available_tools: Sequence[str] | None = None
     ) -> list[ToolMatch]:
         """Analyze a natural language query to find the best matching tools.
-
-        Uses TF-IDF cosine similarity combined with keyword matching
-        and fuzzy string matching for comprehensive coverage.
 
         Args:
             query: Natural language description of what the user wants
@@ -1024,149 +992,89 @@ class ToolRouter:
                         )
                     ]
         except ImportError:
-            config = None
+            pass
 
         # Normalize hyphens to underscores for tool name matching
-        # e.g., "todo-list" -> "todo_list"
         normalized_query = query.replace("-", "_")
-
-        # Fast path: if first word is a recognized tool name or alias, use it directly
-        # This prevents "expand Patch" from matching patch tools due to the second word
-        # But skip this for natural language queries (detected by common words)
         query_words = normalized_query.lower().split()
-        natural_lang_words = {
-            "and",
-            "or",
-            "but",
-            "the",
-            "a",
-            "an",
-            "for",
-            "to",
-            "in",
-            "of",
-            "with",
-            "what",
-            "how",
-            "where",
-            "why",
-            "which",
-            "that",
-            "this",
-            "is",
-            "are",
-        }
-        is_natural_language = any(w in natural_lang_words for w in query_words[1:])
 
-        if query_words and not is_natural_language:
+        if query_words:
             first_word = query_words[0]
-            # Join query words with underscore for exact tool name matching
-            # e.g., "todo list" -> "todo_list"
             joined_query = "_".join(query_words)
 
-            # Check for exact tool name match (entire query)
+            # Fast path 1: Exact tool name match (always wins)
             if joined_query in tools:
                 return [ToolMatch(tool=joined_query, confidence=1.0)]
 
-            # Check for alias match
-            if first_word in TOOL_ALIASES:
-                tool = TOOL_ALIASES[first_word]
-                if tool in tools:
-                    return [ToolMatch(tool=tool, confidence=1.0)]
+            # Detect natural language queries
+            # Only skip fast path if query contains connectors/articles
+            natural_lang_connectors = {
+                "and",
+                "or",
+                "but",
+                "the",
+                "a",
+                "an",
+                "for",
+                "to",
+                "in",
+                "of",
+                "with",
+                "what",
+                "how",
+                "where",
+                "why",
+                "which",
+                "that",
+                "this",
+                "is",
+                "are",
+                "my",
+                "all",
+            }
+            is_natural_language = len(query_words) > 1 and any(
+                w in natural_lang_connectors for w in query_words[1:]
+            )
 
-            # Check for direct tool name match (first word matches tool base name)
-            # Only use this if there's a single matching tool
-            matching_tools = []
-            for tool_name in tools:
-                if tool_name not in TOOL_REGISTRY:
-                    continue
-                tool_base = tool_name.split("_")[0]
-                if first_word == tool_base or first_word == tool_name:
-                    matching_tools.append(tool_name)
-            if len(matching_tools) == 1:
-                return [ToolMatch(tool=matching_tools[0], confidence=1.0)]
+            # Fast path 2: Alias or base name match (skip for natural language)
+            if not is_natural_language:
+                # Alias match
+                if first_word in TOOL_ALIASES:
+                    tool = TOOL_ALIASES[first_word]
+                    if tool in tools:
+                        return [ToolMatch(tool=tool, confidence=1.0)]
 
-        # Expand query with word form variants for better TF-IDF matching
-        # e.g., "summarize" -> "summarize summary summarization summarizing"
-        expanded_words = set(query_words)
-        for word in query_words:
-            if word in WORD_FORMS:
-                expanded_words.update(WORD_FORMS[word])
-            if word in _CANONICAL_FORMS:
-                canonical = _CANONICAL_FORMS[word]
-                expanded_words.add(canonical)
-                if canonical in WORD_FORMS:
-                    expanded_words.update(WORD_FORMS[canonical])
-        expanded_query = " ".join(expanded_words)
+                # Single matching tool by base name
+                matching_tools = [
+                    t
+                    for t in tools
+                    if t in TOOL_REGISTRY and (first_word == t.split("_")[0] or first_word == t)
+                ]
+                if len(matching_tools) == 1:
+                    return [ToolMatch(tool=matching_tools[0], confidence=1.0)]
 
-        # Get TF-IDF similarities using expanded query
-        tfidf_results = self._index.query(expanded_query, top_k=len(self._tool_names))
-        tfidf_scores = {
-            self._tool_names[idx]: score
-            for idx, score in tfidf_results
-            if self._tool_names[idx] in tools
-        }
+        # Semantic matching via embeddings
+        embedding_results = self._matcher.match(query, tools)
 
-        # Extract first word (usually the action) for special handling
-        norm_words = normalized_query.lower().split()
-        first_word = normalize_word(norm_words[0]) if norm_words else ""
+        if embedding_results:
+            # Convert to ToolMatch with scaled confidence
+            # Embedding similarity is typically 0.5-0.9, scale to 0.3-0.95
+            matches = []
+            for tool_name, sim in embedding_results:
+                # Scale: 0.5 sim -> 0.3 conf, 0.9 sim -> 0.95 conf
+                confidence = max(0.1, min(0.95, (sim - 0.5) * 1.625 + 0.3))
+                matches.append(ToolMatch(tool=tool_name, confidence=confidence))
+            return matches
 
+        # Fallback: fuzzy string matching (for typos, no embeddings available)
         matches = []
         for tool_name in tools:
             if tool_name not in TOOL_REGISTRY:
                 continue
-
-            tool_info = TOOL_REGISTRY[tool_name]
-
-            # TF-IDF cosine similarity
-            tfidf_score = tfidf_scores.get(tool_name, 0.0)
-
-            # Keyword matching (includes first-word bonus)
-            keyword_score = keyword_match_score(normalized_query, tool_info.keywords)
-
-            # Apply custom keyword boosts if configured
-            custom_boost = 0.0
-            if config is not None and tool_name in config.keyword_boosts:
-                boost_config = config.keyword_boosts[tool_name]
-                # Check if any custom keywords match
-                query_words_set = set(normalized_query.lower().split())
-                extra_keywords_set = set(kw.lower() for kw in boost_config.keywords)
-                if query_words_set & extra_keywords_set:
-                    custom_boost = boost_config.boost
-                    # Also boost keyword score with extra keywords
-                    combined_keywords = tool_info.keywords + boost_config.keywords
-                    keyword_score = keyword_match_score(normalized_query, combined_keywords)
-
-            # Fuzzy string matching (for typos)
             name_score = string_similarity(normalized_query, tool_name)
-            desc_score = string_similarity(query, tool_info.description)
+            if name_score > 0.5:
+                matches.append(ToolMatch(tool=tool_name, confidence=name_score * 0.8))
 
-            # Exact name match boost: if first word IS the tool name, strong signal
-            # e.g., "skeleton foo.py" -> skeleton tool gets boost
-            # Common verbs like "search", "find" don't give boost because they're generic
-            common_verbs = {"search", "find", "show", "get", "list", "check", "run", "what"}
-            tool_base = tool_name.split("_")[0]  # "skeleton_format" -> "skeleton"
-            exact_name_boost = 0.0
-            if first_word == tool_base or first_word == tool_name:
-                if first_word not in common_verbs:
-                    exact_name_boost = 0.4  # Full boost for specific tool names
-            elif tool_base in normalized_query.lower() and tool_base not in common_verbs:
-                exact_name_boost = 0.2
-
-            # Combined score (weighted)
-            confidence = (
-                tfidf_score * 0.20
-                + keyword_score * 0.40
-                + desc_score * 0.10
-                + name_score * 0.10
-                + exact_name_boost
-                + custom_boost
-            )
-
-            if confidence > 0.1:  # Minimum threshold
-                matches.append(ToolMatch(tool=tool_name, confidence=confidence))
-
-        # Sort by confidence
         matches.sort(key=lambda m: m.confidence, reverse=True)
         return matches
 
