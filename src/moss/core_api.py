@@ -145,20 +145,6 @@ class ViewAPI:
             raw=result,
         )
 
-    def skeleton(self, file_path: str) -> str | None:
-        """Get code skeleton for a file.
-
-        Convenience wrapper around view for common use case.
-        """
-        return rust_shim.rust_skeleton(file_path, root=str(self.root))
-
-    def tree(self, path: str | None = None, depth: int = 2) -> ViewResult:
-        """View directory tree.
-
-        Convenience wrapper for viewing directories.
-        """
-        return self.view(target=path, depth=depth)
-
 
 class EditAPI:
     """API for structural code modifications.

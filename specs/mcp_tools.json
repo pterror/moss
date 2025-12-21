@@ -1957,37 +1957,6 @@
     "name": "validation_validate"
   },
   {
-    "description": "Get code skeleton for a file. Convenience wrapper around view for common use case.",
-    "inputSchema": {
-      "properties": {
-        "file_path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "file_path"
-      ],
-      "type": "object"
-    },
-    "name": "view_skeleton"
-  },
-  {
-    "description": "View directory tree. Convenience wrapper for viewing directories.",
-    "inputSchema": {
-      "properties": {
-        "depth": {
-          "default": 2,
-          "type": "integer"
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "name": "view_tree"
-  },
-  {
     "description": "View a node in the codebase tree. ViewResult with node content",
     "inputSchema": {
       "properties": {

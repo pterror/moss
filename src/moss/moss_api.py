@@ -4078,9 +4078,9 @@ class MossAPI:
         Primary API for viewing code structure. Wraps Rust CLI.
 
         Example:
-            result = api.view.view("src/main.py")
-            result = api.view.view("src/main.py/Foo", depth=2)
-            result = api.view.skeleton("src/main.py")
+            result = api.view.view("src/main.py")  # file structure
+            result = api.view.view("src/main.py/Foo", depth=2)  # symbol + children
+            result = api.view.view("src/", depth=2)  # directory tree
         """
         if self._core_view is None:
             self._core_view = CoreViewAPI(root=self.root)
