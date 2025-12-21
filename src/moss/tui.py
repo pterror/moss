@@ -122,7 +122,7 @@ class MossTUI(App):
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("q", "quit", "Quit"),
         ("d", "toggle_dark", "Toggle Dark Mode"),
-        ("tab", "next_mode", "Next Mode"),
+        ("shift+tab", "next_mode", "Next Mode"),
     ]
 
     mode = reactive(AgentMode.PLAN)

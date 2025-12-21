@@ -272,6 +272,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Future Work
 
 ### Agent Research & Optimization
+- [ ] **LLM Editing Performance Comparison**:
+  - Investigate Gemini 3 Flash's significant issues with code editing
+  - Compare with Claude Code and Opus to identify architectural differences
+  - Evaluate if specialized prompting or different edit formats (e.g. diffs) help
+- [ ] **Extensible Agent Modes**:
+  - Refactor TUI modes (PLAN, READ, WRITE) into a plugin-based system
+  - Allow user-defined modes via `.moss/modes/`
 - [ ] **'Diffusion-like' methods for large-scale refactors**:
   - Generate contracts/signatures at high levels first
   - Parallelize implementation of components
