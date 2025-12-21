@@ -1854,6 +1854,7 @@ class LLMConfig:
     rotation: str | None = None  # "round_robin", "random", or None
     temperature: float = 0.0
     max_tokens: int | None = None  # Let the model determine output length
+    max_tokens_per_turn: int | None = None  # Dynamic turn limit
     system_prompt: str | None = None  # None = load from prompts/terse.txt
     mock: bool = False  # Set True for testing without API calls
 
@@ -2166,10 +2167,7 @@ class LLMToolExecutor:
     async def _execute_llm(
         self, tool_name: str, context: LoopContext, step: LoopStep
     ) -> tuple[Any, int, int]:
-        """Execute an LLM-based tool via litellm.
-
-        litellm provides unified access to all providers (Gemini, OpenAI, Anthropic, etc.)
-        """
+        """Execute an LLM-based tool via litellm."""
         # Extract the specific LLM operation
         operation = tool_name.split(".", 1)[1] if "." in tool_name else tool_name
 
@@ -2179,6 +2177,11 @@ class LLMToolExecutor:
         # Extract repair context if validation errors are present
         repair_context = self._extract_repair_context(context)
 
+        # Dynamic Turn Budgeting
+        max_tokens = self.config.max_tokens
+        if self.config.max_tokens_per_turn:
+            max_tokens = self.config.max_tokens_per_turn
+
         # Mock mode - return placeholder
         if self.config.mock:
             mock_response = f"[MOCK {operation}]: {str(context.last)[:100]}"
@@ -2186,7 +2189,7 @@ class LLMToolExecutor:
             tokens_out = len(mock_response) // 4
             return mock_response, tokens_in, tokens_out
 
-        return await self._call_litellm(prompt, repair_context)
+        return await self._call_litellm(prompt, repair_context, max_tokens=max_tokens)
 
     async def _execute_memory(
         self, tool_name: str, context: LoopContext, step: LoopStep
@@ -2330,7 +2333,9 @@ class LLMToolExecutor:
 
         return f"Errors to fix:\n{error_list}"
 
-    async def _call_litellm(self, prompt: str, repair_context: str = "") -> tuple[str, int, int]:
+    async def _call_litellm(
+        self, prompt: str, repair_context: str = "", max_tokens: int | None = None
+    ) -> tuple[str, int, int]:
         """Call LLM via litellm (unified interface for all providers)."""
         import asyncio
 
@@ -2368,8 +2373,11 @@ class LLMToolExecutor:
                 "messages": messages,
                 "temperature": self.config.temperature,
             }
-            if self.config.max_tokens is not None:
-                kwargs["max_tokens"] = self.config.max_tokens
+
+            # Use override if provided, otherwise config default
+            effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
+            if effective_max_tokens is not None:
+                kwargs["max_tokens"] = effective_max_tokens
 
             response = completion(**kwargs)
 

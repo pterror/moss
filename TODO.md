@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Dynamic Turn Budgeting**: Adjust per-turn budget based on remaining task complexity
 - [ ] **Cross-file Symbol Jump**: Command-click support in TUI for quick navigation
 - [ ] **Agentic Policy Optimization**: Automatically refine safety rules based on rejected actions
+- [ ] **Adaptive Workspace Expansion**: Proactively grow sandbox when cross-file dependencies detected
 
 ## Recently Completed
+
+- **Dynamic Turn Budgeting** (Dec 2025):
+  - Added `max_tokens_per_turn` to `LLMConfig` for per-response resource control
+  - Implemented dynamic budget scaling in `LLMToolExecutor` based on task complexity
+  - Ensures deep reasoning for complex tasks while preserving tokens for trivial ones
 
 - **LLM Reliability Guardrails** (Dec 2025):
   - Implemented 'critic-first' execution for high-risk loop steps
