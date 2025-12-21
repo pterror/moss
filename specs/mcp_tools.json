@@ -1376,6 +1376,24 @@
     "name": "shadow_git_rollback_hunk"
   },
   {
+    "description": "Merge a shadow branch with automated conflict resolution.",
+    "inputSchema": {
+      "properties": {
+        "branch_name": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch_name"
+      ],
+      "type": "object"
+    },
+    "name": "shadow_git_smart_merge"
+  },
+  {
     "description": "Switch to a different shadow branch.",
     "inputSchema": {
       "properties": {

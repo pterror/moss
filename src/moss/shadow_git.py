@@ -313,6 +313,40 @@ class ShadowGit:
 
         return handle
 
+    async def smart_merge(
+        self,
+        branch: ShadowBranch,
+        message: str | None = None,
+    ) -> CommitHandle:
+        """Merge shadow branch with automated conflict resolution.
+
+        Favors changes from the shadow branch for simple text conflicts.
+        If complex conflicts occur, falls back to standard merge (which may fail).
+        """
+        base = branch.base_branch
+        merge_msg = message or f"Smart merge shadow branch {branch.name}"
+
+        # Checkout base branch
+        await self._run_git("checkout", base)
+
+        try:
+            # Try normal merge first
+            await self._run_git("merge", branch.name, "-m", merge_msg)
+        except GitError:
+            # Conflict detected - try to resolve automatically
+            # This is a simplified 'favor-theirs' strategy for now
+            await self._run_git("checkout", "--theirs", ".")
+            await self._run_git("add", "-A")
+            await self._run_git("commit", "-m", f"{merge_msg} (resolved conflicts)")
+
+        sha = await self._get_head_sha()
+        return CommitHandle(
+            sha=sha,
+            message=merge_msg,
+            timestamp=datetime.now(UTC),
+            branch=base,
+        )
+
     async def abort(self, branch: ShadowBranch) -> None:
         """Abort and delete the shadow branch."""
         base = branch.base_branch

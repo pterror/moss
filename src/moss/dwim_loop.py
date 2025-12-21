@@ -172,6 +172,7 @@ ACTION_VERBS = {
     "revert": "revert",
     "diff": "diff",
     "branch": "branch",
+    "merge": "merge",
     "analyze": "analyze",
     # Validation
     "validate": "validate",
@@ -293,6 +294,7 @@ def build_tool_call(intent: ParsedIntent, api: MossAPI) -> tuple[str, dict[str, 
         "revert": "shadow_git.rollback_hunk",
         "diff": "shadow_git.get_diff",
         "branch": "shadow_git.switch_branch",
+        "merge": "shadow_git.smart_merge",
         "analyze": "telemetry.analyze_all_sessions",
     }
 
@@ -442,6 +444,7 @@ Commands:
 - insert <file> <content> - append or insert line
 - diff [branch] - show changes
 - branch [name] - list or switch branch
+- merge <branch> - merge changes with auto-fix
 - revert <file> <line> - undo change at line
 - analyze [session] - show telemetry
 - fix: <description> - describe fix

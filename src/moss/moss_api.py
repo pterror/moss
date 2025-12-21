@@ -180,6 +180,15 @@ class ShadowGitAPI:
         except Exception:
             return False
 
+    async def smart_merge(self, branch_name: str, message: str | None = None) -> dict[str, str]:
+        """Merge a shadow branch with automated conflict resolution."""
+        git = self._get_git()
+        from moss.shadow_git import ShadowBranch
+
+        branch = ShadowBranch(branch_name, "main", self.root)
+        handle = await git.smart_merge(branch, message)
+        return {"commit": handle.sha, "branch": handle.branch}
+
 
 @dataclass
 class TelemetryAPI:

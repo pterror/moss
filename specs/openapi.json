@@ -2424,6 +2424,43 @@
         ]
       }
     },
+    "/shadow_git/smart-merge": {
+      "post": {
+        "description": "Merge a shadow branch with automated conflict resolution.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "branch_name": {
+                    "description": "",
+                    "type": "string"
+                  },
+                  "message": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "branch_name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Merge a shadow branch with automated conflict resolution",
+        "tags": [
+          "shadow_git"
+        ]
+      }
+    },
     "/shadow_git/switch-branch": {
       "post": {
         "description": "Switch to a different shadow branch.",

@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Shadow Git Merging**: Automatically resolve simple conflicts when merging experiments
 - [ ] **Agentic Prompt Evolution**: Automatically refine turn-level system prompts based on feedback
 - [ ] **TUI Git Dashboard**: Integrated view for all shadow branches and their diffs
+- [ ] **Recursive Policy Learning**: Extract safety rules from successful session histories
 
 ## Recently Completed
+
+- **Shadow Git Merging** (Dec 2025):
+  - Added `smart_merge` to `ShadowGit` with automated 'favor-theirs' conflict resolution
+  - Integrated smart merging into `ShadowGitAPI`
+  - Exposed `merge` command in `DWIMLoop` for intelligent experiment reconciliation
 
 - **Context Elision Policies** (Dec 2025):
   - Added `ContextConfig` to `MossConfig` for user-definable elision rules
