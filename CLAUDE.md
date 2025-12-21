@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Behavioral rules for Claude Code working in this repository.
-Design philosophy: `docs/philosophy.md`. Key tenets: Minimize LLM usage, Structure > Text, Library-first.
+Design philosophy: `docs/philosophy.md`. Key tenets: Generalize Don't Multiply, Minimize LLM usage, Structure > Text. Three primitives: view, edit, analyze.
 
 ## Core Rule
 
