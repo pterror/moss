@@ -193,7 +193,7 @@ class SilentLoop(EventEmitterMixin):
                             EventType.SHADOW_COMMIT,
                             {"iteration": i + 1, "sha": commit.sha},
                         )
-                    except Exception:
+                    except (OSError, ValueError):
                         pass  # No changes to commit
 
                 # Validate

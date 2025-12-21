@@ -187,7 +187,7 @@ class DiagnosticSet:
                     path = Path(m)
                     if path.exists():
                         locations.append(path)
-                except Exception:
+                except (OSError, ValueError):
                     pass
 
         # Deduplicate and return
@@ -213,7 +213,7 @@ class DiagnosticSet:
                         is_test_file = "test" in path.name.lower() or "/tests/" in str(path)
                         score = 1 if is_test_file else 10
                         locations.append((path, int(line_str), score))
-                except Exception:
+                except (OSError, ValueError):
                     pass
 
         # Sort by score descending then line (to group files)

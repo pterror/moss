@@ -88,7 +88,7 @@ def _has_moss_section(pyproject_path: Path) -> bool:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
         return "tool" in data and "moss" in data["tool"]
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return False
 
 

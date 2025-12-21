@@ -370,7 +370,7 @@ def hash_ast(node: ast.AST) -> str:
     # Use ast.dump for a canonical string representation
     try:
         dumped = ast.dump(node, annotate_fields=False)
-    except Exception:
+    except (ValueError, AttributeError):
         # Fallback for malformed nodes
         dumped = str(node)
 
@@ -451,7 +451,7 @@ class CloneDetector:
         try:
             source = path.read_text()
             tree = ast.parse(source)
-        except Exception:
+        except (OSError, UnicodeDecodeError, SyntaxError):
             return clones
 
         for node in ast.walk(tree):
@@ -476,7 +476,7 @@ class CloneDetector:
                         hash=hash_val,
                     )
                     clones.append(clone)
-                except Exception:
+                except (ValueError, AttributeError, TypeError):
                     # Skip functions that fail to normalize
                     continue
 

@@ -200,7 +200,7 @@ class TodoChecker:
 
         try:
             content = path.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return items
 
         for i, line in enumerate(content.splitlines(), 1):
@@ -244,7 +244,7 @@ class TodoChecker:
 
             try:
                 content = py_file.read_text()
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
 
             for i, line in enumerate(content.splitlines(), 1):

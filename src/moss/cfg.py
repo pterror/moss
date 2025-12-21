@@ -607,7 +607,7 @@ class CFGBuilder:
         node_id = self._new_node_id()
         try:
             stmt_text = ast.unparse(stmt)
-        except Exception:
+        except ValueError:
             stmt_text = f"<{stmt.__class__.__name__}>"
 
         node = CFGNode(

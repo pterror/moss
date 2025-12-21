@@ -313,7 +313,7 @@ class Summarizer:
             source = init_file.read_text()
             tree = ast.parse(source)
             docstring = ast.get_docstring(tree)
-        except Exception:
+        except (OSError, UnicodeDecodeError, SyntaxError):
             pass
 
         files: list[FileSummary] = []
@@ -345,7 +345,7 @@ class Summarizer:
 
         try:
             source = path.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return None
 
         # Parse AST for docstring and imports
@@ -663,7 +663,7 @@ class DocSummarizer:
         """Summarize a single documentation file."""
         try:
             content = path.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return None
 
         # Use the proper markdown parser that handles code blocks correctly

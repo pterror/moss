@@ -193,7 +193,7 @@ class GuessabilityAnalyzer:
             try:
                 source = py_file.read_text()
                 symbols = extract_python_skeleton(source)
-            except Exception:
+            except (OSError, UnicodeDecodeError, SyntaxError):
                 continue
 
             if not symbols:
@@ -304,7 +304,7 @@ class GuessabilityAnalyzer:
                 content = f.read_text()
                 if "def test_" in content or "@pytest" in content:
                     actual_test_files.append(f)
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
         test_files = actual_test_files
 

@@ -536,7 +536,7 @@ class EditAPI:
                 original_size=original_size,
                 new_size=new_size,
             )
-        except Exception as e:
+        except OSError as e:
             return SimpleEditResult(
                 success=False,
                 file_path=str(file_path),

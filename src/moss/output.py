@@ -374,7 +374,7 @@ class Output:
         except subprocess.TimeoutExpired:
             self.error("jq timed out")
             return None
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             self.error(f"jq failed: {e}")
             return None
 

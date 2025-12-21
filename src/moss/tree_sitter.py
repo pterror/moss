@@ -365,7 +365,7 @@ class TreeSitterParser:
                 error=ParseError(message=str(e), source=source_str),
                 source=source_str,
             )
-        except Exception as e:
+        except (RuntimeError, OSError, MemoryError) as e:
             return ParseResult(
                 tree=None,
                 error=ParseError(message=str(e), source=source_str),
@@ -889,7 +889,7 @@ def get_symbols_at_line(file_path: Path | str, line: int) -> list[str]:
         source = file_path.read_text()
         skeleton = TreeSitterSkeletonProvider()
         symbols = skeleton.extract_skeleton(source)
-    except Exception:
+    except (OSError, UnicodeDecodeError, RuntimeError):
         return []
 
     def find_containing(syms: list[TSSymbol], target_line: int) -> list[str]:

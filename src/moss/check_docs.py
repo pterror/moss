@@ -270,7 +270,7 @@ class DocChecker:
         refs = []
         try:
             content = doc_file.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return refs
 
         lines = content.splitlines()
@@ -379,7 +379,7 @@ class DocChecker:
 
         try:
             content = readme.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return issues
 
         # Check for project structure section
@@ -423,7 +423,7 @@ class DocChecker:
 
         try:
             content = doc_file.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return issues
 
         lines = content.splitlines()

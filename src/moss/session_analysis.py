@@ -261,7 +261,7 @@ class SessionAnalyzer:
                             entries.append(json.loads(line))
                         except json.JSONDecodeError:
                             continue
-        except Exception:
+        except OSError:
             pass
         return entries
 

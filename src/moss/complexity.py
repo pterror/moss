@@ -248,7 +248,7 @@ class ComplexityAnalyzer:
                 report.avg_complexity = total / len(report.functions)
                 report.max_complexity = max(f.complexity for f in report.functions)
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             report.error = str(e)
 
         return report
@@ -258,7 +258,7 @@ class ComplexityAnalyzer:
         try:
             source = path.read_text()
             tree = ast.parse(source)
-        except Exception:
+        except (OSError, UnicodeDecodeError, SyntaxError):
             return
 
         # Make path relative

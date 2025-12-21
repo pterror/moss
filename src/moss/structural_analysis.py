@@ -285,7 +285,7 @@ class StructuralAnalyzer:
             source = path.read_text()
             lines = source.splitlines()
             line_count = len(lines)
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return
 
         result.files_analyzed += 1

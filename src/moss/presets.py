@@ -114,7 +114,7 @@ def load_presets(root: Path) -> dict[str, Preset]:
             if "presets" in data:
                 for name, preset_data in data["presets"].items():
                     presets[name] = Preset.from_dict(name, preset_data)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError):
             pass  # Ignore config errors, use defaults
 
     # Try to load from pyproject.toml
@@ -128,7 +128,7 @@ def load_presets(root: Path) -> dict[str, Preset]:
                 if "presets" in moss_config:
                     for name, preset_data in moss_config["presets"].items():
                         presets[name] = Preset.from_dict(name, preset_data)
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError):
             pass  # Ignore config errors, use defaults
 
     return presets

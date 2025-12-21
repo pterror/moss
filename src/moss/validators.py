@@ -629,9 +629,9 @@ def _discover_entry_points() -> None:
                 if ep.name not in _VALIDATORS:
                     register_validator(ep.name, validator_class)
                     logger.debug("Discovered validator: %s", ep.name)
-            except Exception as e:
+            except (ImportError, AttributeError, TypeError) as e:
                 logger.warning("Failed to load validator '%s': %s", ep.name, e)
-    except Exception:
+    except (TypeError, StopIteration):
         pass
 
 

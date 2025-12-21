@@ -152,7 +152,7 @@ class RuleEngine:
 
         try:
             content = file_path.read_text()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return violations
 
         lines = content.splitlines()
@@ -348,7 +348,7 @@ def load_rules_from_config(directory: Path) -> list[Rule]:
             data = tomllib.loads(moss_toml.read_text())
             for rule_data in data.get("rules", []):
                 rules.append(_rule_from_dict(rule_data))
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError):
             pass
 
     # Check .moss/rules.toml
@@ -356,7 +356,7 @@ def load_rules_from_config(directory: Path) -> list[Rule]:
     if rules_toml.exists():
         try:
             rules.extend(load_rules_from_toml(rules_toml))
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError):
             pass
 
     # Check pyproject.toml
@@ -367,7 +367,7 @@ def load_rules_from_config(directory: Path) -> list[Rule]:
             tool_moss = data.get("tool", {}).get("moss", {})
             for rule_data in tool_moss.get("rules", []):
                 rules.append(_rule_from_dict(rule_data))
-        except Exception:
+        except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError):
             pass
 
     return rules

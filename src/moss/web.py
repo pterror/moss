@@ -434,7 +434,7 @@ class WebSearcher:
         """
         try:
             return await self._search_duckduckgo(query)
-        except Exception:
+        except (OSError, TimeoutError, ConnectionError, ValueError):
             # Return empty results on error
             return SearchResults(query=query, results=[], total=0)
 

@@ -348,7 +348,7 @@ def elide_literals(
 
     try:
         elided_source = ast.unparse(elided_tree)
-    except Exception:
+    except ValueError:
         return source, elider.stats
 
     return elided_source, elider.stats

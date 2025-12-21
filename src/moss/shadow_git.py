@@ -431,7 +431,7 @@ class ShadowGit:
             try:
                 symbols = get_symbols_at_line(file_path, hunk.new_start)
                 symbol_name = symbols[0] if symbols else None
-            except Exception:
+            except (OSError, ValueError, IndexError):
                 symbol_name = None
 
             result.append(replace(hunk, symbol=symbol_name))

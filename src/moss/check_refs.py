@@ -360,7 +360,7 @@ class RefChecker:
                                     raw_text=match.group(0),
                                 )
                             )
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
         return refs
 
@@ -387,7 +387,7 @@ class RefChecker:
                             if key not in seen:
                                 refs.append(ref)
                                 seen.add(key)
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
         return refs
 
@@ -451,7 +451,7 @@ class RefChecker:
                 )
                 if stale.staleness_days >= self.staleness_days:
                     return stale
-        except Exception:
+        except (OSError, ValueError):
             pass
         return None
 

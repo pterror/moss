@@ -158,7 +158,7 @@ class RAGIndex:
                 )
                 self._backend = "sqlite"
                 logger.debug("Using SQLite backend for RAG index (persistent)")
-            except Exception as e:
+            except (ImportError, OSError, ValueError) as e:
                 logger.warning("SQLite backend failed: %s", e)
 
         # Last resort: in-memory (non-persistent)
@@ -185,7 +185,7 @@ class RAGIndex:
             try:
                 data = json.loads(self.metadata_path.read_text())
                 self._files_indexed = data.get("files_indexed", 0)
-            except Exception:
+            except (OSError, json.JSONDecodeError):
                 pass
 
     def _save_metadata(self) -> None:
@@ -200,7 +200,7 @@ class RAGIndex:
                     indent=2,
                 )
             )
-        except Exception as e:
+        except OSError as e:
             logger.warning("Failed to save RAG metadata: %s", e)
 
     async def index(
@@ -246,7 +246,7 @@ class RAGIndex:
             try:
                 chunks = await self._indexer.index_file(file, force=force)
                 total_chunks += chunks
-            except Exception as e:
+            except (OSError, UnicodeDecodeError, ValueError) as e:
                 logger.warning("Failed to index %s: %s", file, e)
 
         self._files_indexed = len(files)

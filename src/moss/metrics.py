@@ -74,7 +74,7 @@ def get_resource_usage() -> ResourceMetrics:
                 open_files=len(process.open_files()),
                 memory_breakdown=breakdown,
             )
-    except Exception:
+    except (OSError, AttributeError):
         return ResourceMetrics()
 
 
@@ -191,7 +191,7 @@ def analyze_file(path: Path) -> FileMetrics:
     """
     try:
         content = path.read_text()
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return FileMetrics(path=path)
 
     lines = content.splitlines()

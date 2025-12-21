@@ -140,7 +140,7 @@ class MossShell:
         try:
             if self.history_file.exists():
                 readline.read_history_file(str(self.history_file))
-        except Exception:
+        except OSError:
             pass
 
     def _save_history(self) -> None:
@@ -148,7 +148,7 @@ class MossShell:
         try:
             readline.set_history_length(1000)
             readline.write_history_file(str(self.history_file))
-        except Exception:
+        except OSError:
             pass
 
     def _get_prompt(self) -> str:

@@ -79,7 +79,7 @@ class UnusedImportHeuristic(HeuristicRule):
                             source="heuristic:unused_import",
                         )
                     )
-        except Exception:
+        except (SyntaxError, re.error):
             pass
 
         return HeuristicResult(success=len(issues) == 0, issues=issues)
@@ -115,7 +115,7 @@ class LargeFunctionHeuristic(HeuristicRule):
                                 source="heuristic:large_function",
                             )
                         )
-        except Exception:
+        except SyntaxError:
             pass
 
         return HeuristicResult(success=len(issues) == 0, issues=issues)
@@ -135,7 +135,7 @@ class HeuristicEngine:
             for rule in self.rules:
                 result = rule.check(path, source)
                 all_issues.extend(result.issues)
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             all_issues.append(
                 ValidationIssue(
                     message=f"Heuristic engine failed: {e}",
