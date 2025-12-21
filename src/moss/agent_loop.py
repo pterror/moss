@@ -956,6 +956,36 @@ def telemetry_optimizer_loop(name: str = "telemetry_optimizer") -> AgentLoop:
     )
 
 
+def autofix_loop(name: str = "autofix") -> AgentLoop:
+    """Loop that automatically fixes syntax errors in a file."""
+    return AgentLoop(
+        name=name,
+        steps=[
+            LoopStep("validate", "validation.validate", step_type=StepType.TOOL),
+            LoopStep(
+                "repair",
+                "llm.repair_syntax",
+                input_from="validate",
+                step_type=StepType.LLM,
+                on_error="abort",
+            ),
+            LoopStep(
+                "apply",
+                "patch.apply",
+                input_from="repair",
+                step_type=StepType.TOOL,
+            ),
+            LoopStep(
+                "re-validate",
+                "validation.validate",
+                input_from="apply",
+                step_type=StepType.TOOL,
+            ),
+        ],
+        exit_conditions=["re-validate.success"],
+    )
+
+
 def self_improving_docstring_loop(name: str = "self_improve_docstring") -> AgentLoop:
     """Docstring loop that learns from its own performance.
 
@@ -2386,6 +2416,13 @@ class LLMToolExecutor:
                 f"- Use DWIM for simple exploration, search, and answer-based questions.\n"
                 f"- Use STRUCTURED for multi-file changes, refactoring, or new features.\n\n"
                 f"Output: DWIM or STRUCTURED"
+            ),
+            "repair_syntax": (
+                f"{structured_context}\n\n"
+                f"The following code has syntax errors. Generate a fix to make it valid.\n"
+                f"Focus ONLY on fixing the syntax errors while preserving logic.\n\n"
+                f"Errors:\n{focus_str}\n\n"
+                f"Output the repaired code block."
             ),
         }
 
