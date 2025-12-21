@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Features
+
+**Analyze Command & Core API Consolidation** (Dec 21 2025)
+- New `moss analyze [path]` command in Rust CLI:
+  - `--health`: Codebase health metrics (files, lines, complexity scores)
+  - `--complexity`: Cyclomatic complexity analysis per function
+  - `--security`: Security vulnerability scanning (shells out to bandit)
+  - Runs all analyses by default if no flags specified
+  - JSON output with `--json`
+- Consolidated MossAPI from 30 sub-APIs to 4 core primitives:
+  - `api.view` - ViewAPI wrapping Rust `view` command
+  - `api.structural_edit` - EditAPI wrapping Rust `edit` command
+  - `api.analyze` - AnalyzeAPI wrapping Rust `analyze` command
+  - `api.search` - SearchAPI (existing, already consolidated)
+- New `rust_shim` functions: `rust_view()`, `rust_edit()`, `rust_analyze()`
+- New `core_api.py` module with ViewResult, EditResult, AnalyzeResult dataclasses
+
 ### Fixes
 
 **Path Resolution & Test Fixes** (Dec 21 2025)

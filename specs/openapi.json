@@ -92,6 +92,153 @@
         ]
       }
     },
+    "/analyze/analyze": {
+      "get": {
+        "description": "Analyze codebase health, complexity, and security. AnalyzeResult with analysis data",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "complexity": {
+                    "default": false,
+                    "description": "Run complexity analysis",
+                    "type": "boolean"
+                  },
+                  "health": {
+                    "default": false,
+                    "description": "Run health analysis",
+                    "type": "boolean"
+                  },
+                  "security": {
+                    "default": false,
+                    "description": "Run security analysis",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "Path to analyze (defaults to cwd)",
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "description": "Complexity threshold filter If no flags specified, runs all analyses.",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Analyze codebase health, complexity, and security",
+        "tags": [
+          "analyze"
+        ]
+      }
+    },
+    "/analyze/complexity": {
+      "post": {
+        "description": "Run complexity analysis only. Convenience wrapper for complexity-only analysis.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Run complexity analysis only",
+        "tags": [
+          "analyze"
+        ]
+      }
+    },
+    "/analyze/health": {
+      "post": {
+        "description": "Run health analysis only. Convenience wrapper for health-only analysis.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Run health analysis only",
+        "tags": [
+          "analyze"
+        ]
+      }
+    },
+    "/analyze/security": {
+      "post": {
+        "description": "Run security analysis only. Convenience wrapper for security-only analysis.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Run security analysis only",
+        "tags": [
+          "analyze"
+        ]
+      }
+    },
     "/anchor/find": {
       "get": {
         "description": "Find anchors matching a name in a file. List of AnchorMatch objects with locations and confidence scores",
@@ -2723,6 +2870,248 @@
         ]
       }
     },
+    "/structural_edit/delete": {
+      "post": {
+        "description": "Delete a symbol or file. Convenience wrapper for delete operation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "dry_run": {
+                    "default": false,
+                    "description": "",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Delete a symbol or file",
+        "tags": [
+          "structural_edit"
+        ]
+      }
+    },
+    "/structural_edit/edit": {
+      "post": {
+        "description": "Edit a node in the codebase tree. EditResult with operation status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "after": {
+                    "description": "Insert content after target",
+                    "type": "string"
+                  },
+                  "append": {
+                    "description": "Insert at end of target container",
+                    "type": "string"
+                  },
+                  "before": {
+                    "description": "Insert content before target",
+                    "type": "string"
+                  },
+                  "delete": {
+                    "default": false,
+                    "description": "Delete the target node",
+                    "type": "boolean"
+                  },
+                  "dry_run": {
+                    "default": false,
+                    "description": "Show what would change without applying",
+                    "type": "boolean"
+                  },
+                  "move_after": {
+                    "description": "Move target after another node",
+                    "type": "string"
+                  },
+                  "move_before": {
+                    "description": "Move target before another node",
+                    "type": "string"
+                  },
+                  "prepend": {
+                    "description": "Insert at beginning of target container",
+                    "type": "string"
+                  },
+                  "replace": {
+                    "description": "Replace target with new content",
+                    "type": "string"
+                  },
+                  "swap": {
+                    "description": "Swap target with another node",
+                    "type": "string"
+                  },
+                  "target": {
+                    "description": "Path to edit (like src/foo.py/Bar/method)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Edit a node in the codebase tree",
+        "tags": [
+          "structural_edit"
+        ]
+      }
+    },
+    "/structural_edit/insert-after": {
+      "post": {
+        "description": "Insert content after a symbol. Convenience wrapper for after operation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "content": {
+                    "description": "",
+                    "type": "string"
+                  },
+                  "dry_run": {
+                    "default": false,
+                    "description": "",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "content"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Insert content after a symbol",
+        "tags": [
+          "structural_edit"
+        ]
+      }
+    },
+    "/structural_edit/insert-before": {
+      "post": {
+        "description": "Insert content before a symbol. Convenience wrapper for before operation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "content": {
+                    "description": "",
+                    "type": "string"
+                  },
+                  "dry_run": {
+                    "default": false,
+                    "description": "",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "content"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Insert content before a symbol",
+        "tags": [
+          "structural_edit"
+        ]
+      }
+    },
+    "/structural_edit/replace": {
+      "post": {
+        "description": "Replace a symbol with new content. Convenience wrapper for replace operation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "content": {
+                    "description": "",
+                    "type": "string"
+                  },
+                  "dry_run": {
+                    "default": false,
+                    "description": "",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "content"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Replace a symbol with new content",
+        "tags": [
+          "structural_edit"
+        ]
+      }
+    },
     "/telemetry/analyze-all-sessions": {
       "get": {
         "description": "Analyze patterns across all recorded sessions.",
@@ -3121,6 +3510,135 @@
         ]
       }
     },
+    "/view/skeleton": {
+      "post": {
+        "description": "Get code skeleton for a file. Convenience wrapper around view for common use case.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "file_path": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_path"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get code skeleton for a file",
+        "tags": [
+          "view"
+        ]
+      }
+    },
+    "/view/tree": {
+      "post": {
+        "description": "View directory tree. Convenience wrapper for viewing directories.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "depth": {
+                    "default": 2,
+                    "description": "",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "View directory tree",
+        "tags": [
+          "view"
+        ]
+      }
+    },
+    "/view/view": {
+      "post": {
+        "description": "View a node in the codebase tree. ViewResult with node content",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "called_by": {
+                    "default": false,
+                    "description": "Show symbols the target calls",
+                    "type": "boolean"
+                  },
+                  "calls": {
+                    "default": false,
+                    "description": "Show symbols that call the target",
+                    "type": "boolean"
+                  },
+                  "deps": {
+                    "default": false,
+                    "description": "Show dependencies (imports/exports)",
+                    "type": "boolean"
+                  },
+                  "depth": {
+                    "default": 1,
+                    "description": "Expansion depth (0=names, 1=signatures, 2=children, -1=all)",
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "description": "Filter by symbol type (class, function, method)",
+                    "type": "string"
+                  },
+                  "line_numbers": {
+                    "default": false,
+                    "description": "Include line numbers",
+                    "type": "boolean"
+                  },
+                  "target": {
+                    "description": "Path to view (file, directory, or symbol like src/foo.py/Bar)",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          }
+        },
+        "summary": "View a node in the codebase tree",
+        "tags": [
+          "view"
+        ]
+      }
+    },
     "/weaknesses/analyze": {
       "get": {
         "description": "Analyze codebase for architectural weaknesses. WeaknessAnalysis with detected weaknesses",
@@ -3325,6 +3843,10 @@
       "name": "agent"
     },
     {
+      "description": "API for codebase analysis (health, complexity, security). Wraps the Rust `moss analyze` command for comprehensive analysis.",
+      "name": "analyze"
+    },
+    {
       "description": "API for finding code locations using fuzzy anchors. Anchors identify code elements (functions, classes, variables) by name and type, with fuzzy matching support.",
       "name": "anchor"
     },
@@ -3413,6 +3935,10 @@
       "name": "skeleton"
     },
     {
+      "description": "API for structural code modifications. Wraps the Rust `moss edit` command for precise, AST-aware edits.",
+      "name": "structural_edit"
+    },
+    {
       "description": "API for session telemetry and analysis. Provides tools for analyzing token usage, tool patterns, and codebase access patterns across sessions.",
       "name": "telemetry"
     },
@@ -3431,6 +3957,10 @@
     {
       "description": "API for code validation. Runs validators (syntax, linting, tests) and reports issues.",
       "name": "validation"
+    },
+    {
+      "description": "API for viewing codebase nodes (directories, files, symbols). Wraps the Rust `moss view` command for fast, consistent results.",
+      "name": "view"
     },
     {
       "description": "API for architectural weakness analysis. Identifies potential issues in codebase architecture: - Tight coupling between components - Missing abstractions - Inconsistent patterns - Technical debt indicators",

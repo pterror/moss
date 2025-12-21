@@ -216,3 +216,131 @@ def rust_summarize(file_path: str, root: str | None = None) -> str | None:
         return None
 
     return output
+
+
+def rust_view(
+    target: str | None = None,
+    depth: int = 1,
+    line_numbers: bool = False,
+    deps: bool = False,
+    kind: str | None = None,
+    calls: bool = False,
+    called_by: bool = False,
+    root: str | None = None,
+) -> dict | None:
+    """View a node in the codebase tree using Rust CLI.
+
+    Returns view result as dict or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["view", "-d", str(depth)]
+    if line_numbers:
+        args.append("-n")
+    if deps:
+        args.append("--deps")
+    if kind:
+        args.extend(["-t", kind])
+    if calls:
+        args.append("--calls")
+    if called_by:
+        args.append("--called-by")
+    if root:
+        args.extend(["-r", root])
+    if target:
+        args.append(target)
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)
+
+
+def rust_edit(
+    target: str,
+    delete: bool = False,
+    replace: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    prepend: str | None = None,
+    append: str | None = None,
+    move_before: str | None = None,
+    move_after: str | None = None,
+    swap: str | None = None,
+    dry_run: bool = False,
+    root: str | None = None,
+) -> dict | None:
+    """Edit a node in the codebase tree using Rust CLI.
+
+    Returns edit result as dict or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["edit", target]
+    if delete:
+        args.append("--delete")
+    if replace:
+        args.extend(["--replace", replace])
+    if before:
+        args.extend(["--before", before])
+    if after:
+        args.extend(["--after", after])
+    if prepend:
+        args.extend(["--prepend", prepend])
+    if append:
+        args.extend(["--append", append])
+    if move_before:
+        args.extend(["--move-before", move_before])
+    if move_after:
+        args.extend(["--move-after", move_after])
+    if swap:
+        args.extend(["--swap", swap])
+    if dry_run:
+        args.append("--dry-run")
+    if root:
+        args.extend(["-r", root])
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)
+
+
+def rust_analyze(
+    target: str | None = None,
+    health: bool = False,
+    complexity: bool = False,
+    security: bool = False,
+    threshold: int | None = None,
+    root: str | None = None,
+) -> dict | None:
+    """Analyze codebase health, complexity, and security using Rust CLI.
+
+    Returns analysis result as dict or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["analyze"]
+    if health:
+        args.append("--health")
+    if complexity:
+        args.append("--complexity")
+    if security:
+        args.append("--security")
+    if threshold:
+        args.extend(["-t", str(threshold)])
+    if root:
+        args.extend(["-r", root])
+    if target:
+        args.append(target)
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)

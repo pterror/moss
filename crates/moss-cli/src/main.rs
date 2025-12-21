@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+mod analyze;
 mod anchors;
 mod cfg;
 mod complexity;
@@ -471,6 +472,32 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
+    /// Analyze codebase (unified health, complexity, security)
+    Analyze {
+        /// Target to analyze (path, file, or directory). Defaults to current directory.
+        target: Option<String>,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Run health analysis (codebase metrics)
+        #[arg(long)]
+        health: bool,
+
+        /// Run complexity analysis (cyclomatic complexity)
+        #[arg(long)]
+        complexity: bool,
+
+        /// Run security analysis (vulnerability scanning)
+        #[arg(long)]
+        security: bool,
+
+        /// Complexity threshold - only show functions above this
+        #[arg(short, long)]
+        threshold: Option<usize>,
+    },
+
     /// Show comprehensive codebase overview
     Overview {
         /// Root directory (defaults to current directory)
@@ -677,6 +704,22 @@ fn main() {
         } => cmd_cfg(&file, root.as_deref(), function.as_deref(), cli.json),
         Commands::Daemon { action, root } => cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Health { root } => cmd_health(root.as_deref(), cli.json, &mut profiler),
+        Commands::Analyze {
+            target,
+            root,
+            health,
+            complexity,
+            security,
+            threshold,
+        } => cmd_analyze(
+            target.as_deref(),
+            root.as_deref(),
+            health,
+            complexity,
+            security,
+            threshold,
+            cli.json,
+        ),
         Commands::Overview { root, compact } => {
             cmd_overview(root.as_deref(), compact, cli.json, &mut profiler)
         }
@@ -3158,6 +3201,44 @@ fn cmd_health(root: Option<&Path>, json: bool, profiler: &mut Profiler) -> i32 {
                 "high_risk_functions": report.high_risk_functions,
             })
         );
+    } else {
+        println!("{}", report.format());
+    }
+
+    0
+}
+
+fn cmd_analyze(
+    target: Option<&str>,
+    root: Option<&Path>,
+    health: bool,
+    complexity: bool,
+    security: bool,
+    threshold: Option<usize>,
+    json: bool,
+) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    // If no specific flags, run all analyses
+    let (run_health, run_complexity, run_security) = if !health && !complexity && !security {
+        (true, true, true)
+    } else {
+        (health, complexity, security)
+    };
+
+    let report = analyze::analyze(
+        target,
+        &root,
+        run_health,
+        run_complexity,
+        run_security,
+        threshold,
+    );
+
+    if json {
+        println!("{}", report.to_json());
     } else {
         println!("{}", report.format());
     }

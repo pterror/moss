@@ -58,6 +58,77 @@
     "name": "agent_run_vanilla"
   },
   {
+    "description": "Analyze codebase health, complexity, and security. AnalyzeResult with analysis data",
+    "inputSchema": {
+      "properties": {
+        "complexity": {
+          "default": false,
+          "description": "Run complexity analysis",
+          "type": "boolean"
+        },
+        "health": {
+          "default": false,
+          "description": "Run health analysis",
+          "type": "boolean"
+        },
+        "security": {
+          "default": false,
+          "description": "Run security analysis",
+          "type": "boolean"
+        },
+        "target": {
+          "description": "Path to analyze (defaults to cwd)",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Complexity threshold filter If no flags specified, runs all analyses.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "analyze_analyze"
+  },
+  {
+    "description": "Run complexity analysis only. Convenience wrapper for complexity-only analysis.",
+    "inputSchema": {
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "analyze_complexity"
+  },
+  {
+    "description": "Run health analysis only. Convenience wrapper for health-only analysis.",
+    "inputSchema": {
+      "properties": {
+        "target": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "analyze_health"
+  },
+  {
+    "description": "Run security analysis only. Convenience wrapper for security-only analysis.",
+    "inputSchema": {
+      "properties": {
+        "target": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "analyze_security"
+  },
+  {
     "description": "Find anchors (functions, classes, methods) in code. Example: moss anchors src/api.py",
     "inputSchema": {
       "properties": {
@@ -1526,6 +1597,152 @@
     "name": "skeleton_get_enum_values"
   },
   {
+    "description": "Delete a symbol or file. Convenience wrapper for delete operation.",
+    "inputSchema": {
+      "properties": {
+        "dry_run": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    },
+    "name": "structural_edit_delete"
+  },
+  {
+    "description": "Edit a node in the codebase tree. EditResult with operation status",
+    "inputSchema": {
+      "properties": {
+        "after": {
+          "description": "Insert content after target",
+          "type": "string"
+        },
+        "append": {
+          "description": "Insert at end of target container",
+          "type": "string"
+        },
+        "before": {
+          "description": "Insert content before target",
+          "type": "string"
+        },
+        "delete": {
+          "default": false,
+          "description": "Delete the target node",
+          "type": "boolean"
+        },
+        "dry_run": {
+          "default": false,
+          "description": "Show what would change without applying",
+          "type": "boolean"
+        },
+        "move_after": {
+          "description": "Move target after another node",
+          "type": "string"
+        },
+        "move_before": {
+          "description": "Move target before another node",
+          "type": "string"
+        },
+        "prepend": {
+          "description": "Insert at beginning of target container",
+          "type": "string"
+        },
+        "replace": {
+          "description": "Replace target with new content",
+          "type": "string"
+        },
+        "swap": {
+          "description": "Swap target with another node",
+          "type": "string"
+        },
+        "target": {
+          "description": "Path to edit (like src/foo.py/Bar/method)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    },
+    "name": "structural_edit_edit"
+  },
+  {
+    "description": "Insert content after a symbol. Convenience wrapper for after operation.",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "dry_run": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "content"
+      ],
+      "type": "object"
+    },
+    "name": "structural_edit_insert_after"
+  },
+  {
+    "description": "Insert content before a symbol. Convenience wrapper for before operation.",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "dry_run": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "content"
+      ],
+      "type": "object"
+    },
+    "name": "structural_edit_insert_before"
+  },
+  {
+    "description": "Replace a symbol with new content. Convenience wrapper for replace operation.",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "dry_run": {
+          "default": false,
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "content"
+      ],
+      "type": "object"
+    },
+    "name": "structural_edit_replace"
+  },
+  {
     "description": "Analyze patterns across all recorded sessions.",
     "inputSchema": {
       "properties": {},
@@ -1738,6 +1955,79 @@
       "type": "object"
     },
     "name": "validation_validate"
+  },
+  {
+    "description": "Get code skeleton for a file. Convenience wrapper around view for common use case.",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "name": "view_skeleton"
+  },
+  {
+    "description": "View directory tree. Convenience wrapper for viewing directories.",
+    "inputSchema": {
+      "properties": {
+        "depth": {
+          "default": 2,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "view_tree"
+  },
+  {
+    "description": "View a node in the codebase tree. ViewResult with node content",
+    "inputSchema": {
+      "properties": {
+        "called_by": {
+          "default": false,
+          "description": "Show symbols the target calls",
+          "type": "boolean"
+        },
+        "calls": {
+          "default": false,
+          "description": "Show symbols that call the target",
+          "type": "boolean"
+        },
+        "deps": {
+          "default": false,
+          "description": "Show dependencies (imports/exports)",
+          "type": "boolean"
+        },
+        "depth": {
+          "default": 1,
+          "description": "Expansion depth (0=names, 1=signatures, 2=children, -1=all)",
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Filter by symbol type (class, function, method)",
+          "type": "string"
+        },
+        "line_numbers": {
+          "default": false,
+          "description": "Include line numbers",
+          "type": "boolean"
+        },
+        "target": {
+          "description": "Path to view (file, directory, or symbol like src/foo.py/Bar)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "view_view"
   },
   {
     "description": "Analyze codebase for architectural weaknesses. WeaknessAnalysis with detected weaknesses",

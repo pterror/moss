@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from moss.core_api import AnalyzeAPI as CoreAnalyzeAPI
+from moss.core_api import EditAPI as CoreEditAPI
+from moss.core_api import ViewAPI as CoreViewAPI
 from moss.events import EventBus
 
 if TYPE_CHECKING:
@@ -3823,6 +3826,10 @@ class MossAPI:
     _memory_layer: Any | None = None  # MemoryLayer
     _toml: TomlAPI | None = None
     _patterns: PatternsAPI | None = None
+    # Core APIs (consolidated, wrap Rust CLI)
+    _core_view: CoreViewAPI | None = None
+    _core_edit: CoreEditAPI | None = None
+    _core_analyze: CoreAnalyzeAPI | None = None
 
     @classmethod
     def for_project(cls, path: str | Path) -> MossAPI:
@@ -4061,6 +4068,53 @@ class MossAPI:
         if self._patterns is None:
             self._patterns = PatternsAPI(root=self.root)
         return self._patterns
+
+    # Core APIs - consolidated interface matching CLI/MCP
+
+    @property
+    def view(self) -> CoreViewAPI:
+        """View codebase nodes (directories, files, symbols).
+
+        Primary API for viewing code structure. Wraps Rust CLI.
+
+        Example:
+            result = api.view.view("src/main.py")
+            result = api.view.view("src/main.py/Foo", depth=2)
+            result = api.view.skeleton("src/main.py")
+        """
+        if self._core_view is None:
+            self._core_view = CoreViewAPI(root=self.root)
+        return self._core_view
+
+    @property
+    def structural_edit(self) -> CoreEditAPI:
+        """Structural code modifications via Rust CLI.
+
+        AST-aware edits for precise modifications.
+
+        Example:
+            result = api.structural_edit.delete("src/main.py/Foo/old_method")
+            result = api.structural_edit.replace("src/main.py/Foo", new_content)
+        """
+        if self._core_edit is None:
+            self._core_edit = CoreEditAPI(root=self.root)
+        return self._core_edit
+
+    @property
+    def analyze(self) -> CoreAnalyzeAPI:
+        """Analyze codebase health, complexity, and security.
+
+        Unified analysis API wrapping Rust CLI.
+
+        Example:
+            result = api.analyze.analyze()  # All analyses
+            result = api.analyze.health()
+            result = api.analyze.complexity("src/main.py", threshold=10)
+            result = api.analyze.security()
+        """
+        if self._core_analyze is None:
+            self._core_analyze = CoreAnalyzeAPI(root=self.root)
+        return self._core_analyze
 
 
 # Convenience alias
