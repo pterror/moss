@@ -102,16 +102,6 @@ class DiffMode:
         app._update_tree("task")
 
 
-class AgentMode(Enum):
-    """Current operating mode of the agent UI."""
-
-    PLAN = auto()  # Planning next steps
-    READ = auto()  # Code exploration and search
-    WRITE = auto()  # Applying changes and refactoring
-    DIFF = auto()  # Reviewing shadow git changes
-    SESSION = auto()  # Managing and resuming sessions
-
-
 class SessionMode:
     name = "SESSION"
     color = "yellow"
@@ -125,6 +115,30 @@ class SessionMode:
         await app._update_session_view()
 
 
+class AgentMode(Enum):
+    """Current operating mode of the agent UI."""
+
+    PLAN = auto()  # Planning next steps
+    READ = auto()  # Code exploration and search
+    WRITE = auto()  # Applying changes and refactoring
+    DIFF = auto()  # Reviewing shadow git changes
+    SESSION = auto()  # Managing and resuming sessions
+    BRANCH = auto()  # Managing multiple experiment branches
+
+
+class BranchMode:
+    name = "BRANCH"
+    color = "cyan"
+    placeholder = "Manage branches... (branch <name> to switch)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = False
+        app.query_one("#git-view").display = True
+        app.query_one("#session-view").display = False
+        app.query_one("#content-header").update("Git Dashboard")
+        await app._update_branch_view()
+
+
 class ModeRegistry:
     """Registry for extensible TUI modes."""
 
@@ -135,8 +149,9 @@ class ModeRegistry:
             "WRITE": WriteMode(),
             "DIFF": DiffMode(),
             "SESSION": SessionMode(),
+            "BRANCH": BranchMode(),
         }
-        self._order: list[str] = ["PLAN", "READ", "WRITE", "DIFF", "SESSION"]
+        self._order: list[str] = ["PLAN", "READ", "WRITE", "DIFF", "SESSION", "BRANCH"]
 
     def get_mode(self, name: str) -> TUIMode | None:
         return self._modes.get(name)
@@ -377,6 +392,33 @@ class MossTUI(App):
         self.query_one("#session-view").display = False
 
         await mode.on_enter(self)
+
+    async def _update_branch_view(self) -> None:
+        """Fetch and display all shadow branches."""
+        try:
+            branches = await self.api.shadow_git.list_branches()
+            tree = self.query_one("#history-tree")
+            tree.clear()
+            root = tree.root
+            root.label = f"Shadow Branches ({len(branches)})"
+
+            for b in branches:
+                label = f"[@click=app.navigate_branch('{b}')]{b}[/]"
+                root.add_leaf(label)
+            root.expand()
+
+            # Show current diff in diff-view
+            diff = await self.api.shadow_git.get_diff("shadow/current")
+            self.query_one("#diff-view").clear()
+            self.query_one("#diff-view").write(diff)
+        except Exception as e:
+            self._log(f"Failed to fetch branch data: {e}")
+
+    def navigate_branch(self, branch_name: str) -> None:
+        """Switch to a specific branch and update view."""
+        self._log(f"Switching to branch: {branch_name}")
+        self.query_one("#command-input").value = f"branch {branch_name}"
+        self.query_one("#command-input").focus()
 
     def _update_tree(self, tree_type: str = "task") -> None:
         """Update the sidebar tree."""

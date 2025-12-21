@@ -4,21 +4,21 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **TUI Git Dashboard**: Integrated view for all shadow branches and their diffs
 - [ ] **Recursive Policy Learning**: Extract safety rules from successful session histories
 - [ ] **Adaptive Model Selection**: Automatically switch models based on step task type
+- [ ] **Heuristic Error Localization**: Automatically find buggy code from failing test output
 
 ## Recently Completed
 
-- **Agentic Prompt Evolution** (Dec 2025):
-  - Implemented `prompt_optimizer_loop` to refine system prompts from session data
-  - Added `analyze_prompt_effectiveness` and `evolve_prompt` LLM operations
-  - Supports automated prompt clarification and constraint enforcement
+- **TUI Git Dashboard** (Dec 2025):
+  - Added `BRANCH` mode to TUI for managing multiple experiments
+  - Implemented `branch-view` with integrated diff and history
+  - Support for clickable branch switching and proactive diff fetching
+  - Integrated with `ShadowGitAPI` for real-time repo state
 
 - **Shadow Git Merging** (Dec 2025):
-  - Added `smart_merge` to `ShadowGit` with automated 'favor-theirs' conflict resolution
-  - Integrated smart merging into `ShadowGitAPI`
-  - Exposed `merge` command in `DWIMLoop` for intelligent experiment reconciliation
+
+
 
 - **Context Elision Policies** (Dec 2025):
   - Added `ContextConfig` to `MossConfig` for user-definable elision rules
