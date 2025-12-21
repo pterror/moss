@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from moss.shadow_git import CommitHandle, DiffHunk, GitError, ShadowGit, parse_diff
+from moss.shadow_git import (
+    CommitHandle,
+    DiffHunk,
+    GitError,
+    ShadowGit,
+    parse_diff,
+)
 
 
 @pytest.fixture
@@ -491,3 +497,105 @@ class TestHunkLevelRollback:
         # Should have symbol info if tree-sitter is available
         if mapped and mapped[0].symbol:
             assert "my_func" in mapped[0].symbol
+
+
+class TestExperimentAPI:
+    """Tests for experiment branching API."""
+
+    async def test_create_experiment(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test creating an experiment."""
+        experiment = await shadow_git.create_experiment(
+            "perf-optimization", description="Test different optimizations"
+        )
+
+        assert experiment.id == "perf-optimization"
+        assert experiment.description == "Test different optimizations"
+        assert experiment.branch_count == 0
+
+    async def test_create_experiment_branch(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test creating branches within an experiment."""
+        experiment = await shadow_git.create_experiment("test-exp")
+
+        branch1 = await shadow_git.create_experiment_branch(
+            experiment, "approach-a", metadata={"strategy": "vectorize"}
+        )
+        await shadow_git.create_experiment_branch(experiment, "approach-b")
+
+        assert experiment.branch_count == 2
+        assert "approach-a" in experiment.branches
+        assert "approach-b" in experiment.branches
+        assert branch1.experiment_id == "test-exp"
+        assert branch1.metadata["strategy"] == "vectorize"
+
+    async def test_record_metrics(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test recording metrics on branches."""
+        experiment = await shadow_git.create_experiment("metrics-test")
+        branch = await shadow_git.create_experiment_branch(experiment, "approach-a")
+
+        await shadow_git.record_metrics(branch, {"execution_time": 100, "memory_mb": 50})
+        await shadow_git.record_metrics(branch, {"test_passed": True})
+
+        assert branch.metadata["metrics"]["execution_time"] == 100
+        assert branch.metadata["metrics"]["test_passed"] is True
+
+    async def test_compare_experiment_branches(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test comparing branches in an experiment."""
+        experiment = await shadow_git.create_experiment("compare-test")
+
+        # Create two branches with different changes
+        branch1 = await shadow_git.create_experiment_branch(experiment, "approach-a")
+        (git_repo / "file_a.py").write_text("# approach a")
+        (git_repo / "common.py").write_text("# modified by a")
+        await shadow_git.commit(branch1, "Changes for approach A")
+        await shadow_git.record_metrics(branch1, {"score": 80})
+
+        branch2 = await shadow_git.create_experiment_branch(experiment, "approach-b")
+        (git_repo / "file_b.py").write_text("# approach b")
+        (git_repo / "common.py").write_text("# modified by b")
+        await shadow_git.commit(branch2, "Changes for approach B")
+        await shadow_git.record_metrics(branch2, {"score": 90})
+
+        comparison = await shadow_git.compare_experiment_branches(experiment)
+
+        assert comparison.experiment_id == "compare-test"
+        assert len(comparison.branches) == 2
+        assert "common.py" in comparison.common_files
+        assert comparison.metrics["approach-a"]["score"] == 80
+        assert comparison.metrics["approach-b"]["score"] == 90
+
+    async def test_select_winner(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test selecting a winning approach."""
+        experiment = await shadow_git.create_experiment("winner-test")
+
+        branch = await shadow_git.create_experiment_branch(experiment, "winner")
+        (git_repo / "winner.py").write_text("# winning code")
+        await shadow_git.commit(branch, "Winning implementation")
+
+        commit = await shadow_git.select_winner(experiment, "winner")
+
+        assert commit.sha
+        assert "winner" in commit.message
+
+    async def test_abort_experiment(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test aborting an experiment deletes all branches."""
+        experiment = await shadow_git.create_experiment("abort-test")
+
+        await shadow_git.create_experiment_branch(experiment, "branch-1")
+        await shadow_git.create_experiment_branch(experiment, "branch-2")
+
+        assert len(shadow_git.active_branches) >= 2
+
+        await shadow_git.abort_experiment(experiment)
+
+        assert shadow_git.get_experiment("abort-test") is None
+
+    async def test_active_experiments(self, shadow_git: ShadowGit, git_repo: Path):
+        """Test listing active experiments."""
+        await shadow_git.create_experiment("exp-1")
+        await shadow_git.create_experiment("exp-2")
+
+        experiments = shadow_git.active_experiments
+
+        assert len(experiments) == 2
+        assert any(e.id == "exp-1" for e in experiments)
+        assert any(e.id == "exp-2" for e in experiments)

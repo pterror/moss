@@ -152,10 +152,44 @@ class ShadowBranch:
     repo_path: Path
     commits: list[CommitHandle] = field(default_factory=list)
     _id: UUID = field(default_factory=uuid4)
+    experiment_id: str | None = None  # Link to parent experiment
+    metadata: dict = field(default_factory=dict)  # Approach, params, metrics
 
     @property
     def id(self) -> UUID:
         return self._id
+
+
+@dataclass
+class ExperimentComparison:
+    """Result of comparing branches in an experiment."""
+
+    experiment_id: str
+    branches: list[str]
+    common_files: list[str]  # Files modified in all branches
+    unique_files: dict[str, list[str]]  # Branch -> files only modified there
+    metrics: dict[str, dict]  # Branch -> metrics
+
+
+@dataclass
+class Experiment:
+    """Groups multiple concurrent branches testing the same problem."""
+
+    id: str
+    description: str
+    base_branch: str
+    branches: dict[str, ShadowBranch] = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    _uuid: UUID = field(default_factory=uuid4)
+
+    @property
+    def branch_count(self) -> int:
+        return len(self.branches)
+
+    @property
+    def total_commits(self) -> int:
+        return sum(len(b.commits) for b in self.branches.values())
 
 
 class ShadowGit:
@@ -164,6 +198,7 @@ class ShadowGit:
     def __init__(self, repo_path: Path | str):
         self.repo_path = Path(repo_path).resolve()
         self._branches: dict[str, ShadowBranch] = {}
+        self._experiments: dict[str, Experiment] = {}
         self._multi_commit_mode: bool = False
         self._staged_messages: list[str] = []
 
@@ -507,3 +542,185 @@ class ShadowGit:
     def active_branches(self) -> list[ShadowBranch]:
         """List all active shadow branches."""
         return list(self._branches.values())
+
+    # =========================================================================
+    # Experiment API: Multiple concurrent branches for parallel exploration
+    # =========================================================================
+
+    async def create_experiment(
+        self,
+        name: str,
+        description: str = "",
+        metadata: dict | None = None,
+    ) -> Experiment:
+        """Create a new experiment to group multiple parallel branches.
+
+        An experiment represents a problem to solve with multiple approaches.
+        Each approach gets its own branch that can be compared and merged.
+
+        Args:
+            name: Unique experiment identifier (e.g., "optimize-search")
+            description: What the experiment is testing
+            metadata: Optional approach parameters, config
+
+        Returns:
+            Experiment object for tracking branches
+        """
+        base_branch = await self._get_current_branch()
+
+        experiment = Experiment(
+            id=name,
+            description=description,
+            base_branch=base_branch,
+            metadata=metadata or {},
+        )
+        self._experiments[name] = experiment
+        return experiment
+
+    def get_experiment(self, name: str) -> Experiment | None:
+        """Get an experiment by name."""
+        return self._experiments.get(name)
+
+    @property
+    def active_experiments(self) -> list[Experiment]:
+        """List all active experiments."""
+        return list(self._experiments.values())
+
+    async def create_experiment_branch(
+        self,
+        experiment: Experiment,
+        approach_name: str,
+        metadata: dict | None = None,
+    ) -> ShadowBranch:
+        """Create a new branch within an experiment.
+
+        Args:
+            experiment: Parent experiment
+            approach_name: Name for this approach (e.g., "vectorize", "cache")
+            metadata: Optional approach-specific parameters
+
+        Returns:
+            ShadowBranch linked to the experiment
+        """
+        branch_name = f"experiment/{experiment.id}/{approach_name}"
+
+        # Ensure we're on base branch before creating
+        await self._run_git("checkout", experiment.base_branch)
+        await self._run_git("checkout", "-b", branch_name)
+
+        branch = ShadowBranch(
+            name=branch_name,
+            base_branch=experiment.base_branch,
+            repo_path=self.repo_path,
+            experiment_id=experiment.id,
+            metadata=metadata or {},
+        )
+
+        experiment.branches[approach_name] = branch
+        self._branches[branch_name] = branch
+        return branch
+
+    async def record_metrics(
+        self,
+        branch: ShadowBranch,
+        metrics: dict,
+    ) -> None:
+        """Record metrics for a branch (e.g., test results, performance).
+
+        Args:
+            branch: The branch to record metrics for
+            metrics: Key-value pairs of metrics
+        """
+        branch.metadata.setdefault("metrics", {}).update(metrics)
+
+    async def compare_experiment_branches(
+        self,
+        experiment: Experiment,
+    ) -> ExperimentComparison:
+        """Compare all branches in an experiment.
+
+        Analyzes which files each branch modified and collects metrics
+        for comparison.
+
+        Args:
+            experiment: Experiment to compare
+
+        Returns:
+            ExperimentComparison with file overlap and metrics
+        """
+        files_by_branch: dict[str, set[str]] = {}
+
+        for name, branch in experiment.branches.items():
+            # Get files changed in this branch
+            result = await self._run_git(
+                "diff",
+                "--name-only",
+                f"{experiment.base_branch}...{branch.name}",
+                check=False,
+            )
+            files = set(result.stdout.split("\n")) if result.stdout else set()
+            files.discard("")
+            files_by_branch[name] = files
+
+        # Find common files (modified in all branches)
+        if files_by_branch:
+            common = set.intersection(*files_by_branch.values())
+        else:
+            common = set()
+
+        # Find unique files per branch
+        unique: dict[str, list[str]] = {}
+        for name, files in files_by_branch.items():
+            other_files = set()
+            for other_name, other in files_by_branch.items():
+                if other_name != name:
+                    other_files |= other
+            unique[name] = sorted(files - other_files)
+
+        # Collect metrics
+        metrics = {
+            name: branch.metadata.get("metrics", {}) for name, branch in experiment.branches.items()
+        }
+
+        return ExperimentComparison(
+            experiment_id=experiment.id,
+            branches=list(experiment.branches.keys()),
+            common_files=sorted(common),
+            unique_files=unique,
+            metrics=metrics,
+        )
+
+    async def select_winner(
+        self,
+        experiment: Experiment,
+        winner_name: str,
+        merge_message: str | None = None,
+    ) -> CommitHandle:
+        """Select winning approach and merge to base branch.
+
+        Args:
+            experiment: The experiment
+            winner_name: Name of the winning approach
+            merge_message: Optional merge commit message
+
+        Returns:
+            CommitHandle for the merge commit
+        """
+        if winner_name not in experiment.branches:
+            raise ValueError(f"No branch named '{winner_name}' in experiment")
+
+        winner = experiment.branches[winner_name]
+        message = merge_message or f"Experiment '{experiment.id}': selected {winner_name}"
+
+        return await self.squash_merge(winner, message)
+
+    async def abort_experiment(self, experiment: Experiment) -> None:
+        """Abort experiment and delete all branches.
+
+        Args:
+            experiment: Experiment to abort
+        """
+        for branch in list(experiment.branches.values()):
+            await self.abort(branch)
+
+        self._experiments.pop(experiment.id, None)
