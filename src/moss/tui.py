@@ -125,6 +125,7 @@ class AgentMode(Enum):
     SESSION = auto()  # Managing and resuming sessions
     BRANCH = auto()  # Managing multiple experiment branches
     SWARM = auto()  # Visualizing multi-agent swarm activity
+    COMMIT = auto()  # Viewing grouped actions in a shadow commit
 
 
 class BranchMode:
@@ -154,6 +155,20 @@ class SwarmMode:
         await app._update_swarm_view()
 
 
+class CommitMode:
+    name = "COMMIT"
+    color = "green"
+    placeholder = "Review commit actions... (select a hunk to view)"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = False
+        app.query_one("#git-view").display = True
+        app.query_one("#session-view").display = False
+        app.query_one("#swarm-view").display = False
+        app.query_one("#content-header").update("Commit Dashboard")
+        await app._update_git_view()
+
+
 class ModeRegistry:
     """Registry for extensible TUI modes."""
 
@@ -166,8 +181,18 @@ class ModeRegistry:
             "SESSION": SessionMode(),
             "BRANCH": BranchMode(),
             "SWARM": SwarmMode(),
+            "COMMIT": CommitMode(),
         }
-        self._order: list[str] = ["PLAN", "READ", "WRITE", "DIFF", "SESSION", "BRANCH", "SWARM"]
+        self._order: list[str] = [
+            "PLAN",
+            "READ",
+            "WRITE",
+            "DIFF",
+            "SESSION",
+            "BRANCH",
+            "SWARM",
+            "COMMIT",
+        ]
 
     def get_mode(self, name: str) -> TUIMode | None:
         return self._modes.get(name)

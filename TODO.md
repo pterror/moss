@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Shadow Git Multi-Commit Dashboard**: Visualize grouped actions in TUI
 - [ ] **Agentic Prompt Versioning**: Automatically track and compare system prompt evolutions
 - [ ] **Recursive Workflow Learning**: Propose new workflows based on recurrent session patterns
+- [ ] **Adaptive Model Rotation**: Dynamically switch LLM providers based on task latency
 
 ## Recently Completed
+
+- **Shadow Git Multi-Commit Dashboard** (Dec 2025):
+  - Added `COMMIT` mode to TUI for reviewing grouped experiment actions
+  - Integrated with `ShadowGit` multi-commit staging logic
+  - Provides integrated view of hunks and diffs for atomic work units
 
 - **Adaptive Loop Strategy Refinement** (Dec 2025):
   - Added history tracking to `HybridLoopRunner` to record loop outcomes
