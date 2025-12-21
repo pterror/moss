@@ -4,9 +4,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
+- [ ] Fix remaining 8 DWIM test failures (85% → 100%)
+  - Remove or context-aware "find" alias (hijacks "find all classes" etc.)
+  - Handle "search todo" → "todo_search" word order
 - [ ] Add failure mode tests: Rust binary missing, invalid paths, malformed files
 - [ ] Ensure all failure modes have informative error messages
-- [ ] Phase 2: Start unified tree model design (merge filesystem + AST)
 
 ## Active Backlog
 
