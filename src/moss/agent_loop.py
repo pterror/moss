@@ -1080,6 +1080,36 @@ def heuristic_optimizer_loop(name: str = "heuristic_optimizer") -> AgentLoop:
     )
 
 
+def prompt_optimizer_loop(name: str = "prompt_optimizer") -> AgentLoop:
+    """Meta-loop that evolves system prompts based on session feedback."""
+    return AgentLoop(
+        name=name,
+        steps=[
+            LoopStep("fetch_data", "telemetry.analyze_all_sessions", step_type=StepType.TOOL),
+            LoopStep(
+                "analyze",
+                "llm.analyze_prompt_effectiveness",
+                input_from="fetch_data",
+                step_type=StepType.LLM,
+            ),
+            LoopStep(
+                "evolve",
+                "llm.evolve_prompt",
+                input_from="analyze",
+                step_type=StepType.LLM,
+            ),
+            LoopStep(
+                "save",
+                "edit.write_file",
+                input_from="evolve",
+                step_type=StepType.TOOL,
+                parameters={"file_path": ".moss/prompts/evolved.txt"},
+            ),
+        ],
+        exit_conditions=["save.success"],
+    )
+
+
 def workflow_synthesis_loop(name: str = "workflow_synthesis") -> AgentLoop:
     """Meta-loop that creates new workflows based on telemetry patterns."""
     return AgentLoop(
@@ -2769,6 +2799,28 @@ class LLMToolExecutor:
                 f"- Implementing new structural rules for frequently missed mistakes\n\n"
                 f"Analysis:\n{focus_str}\n\n"
                 f"Output a prioritized list of engine updates."
+            ),
+            "analyze_prompt_effectiveness": (
+                f"{structured_context}\n\n"
+                f"Analyze the following session telemetry to evaluate the effectiveness "
+                f"of the current system prompt.\n"
+                f"Identify:\n"
+                f"- Recurrent misunderstandings of instructions\n"
+                f"- Steps where the agent frequently ignores or violates constraints\n"
+                f"- Tone or style inconsistencies\n\n"
+                f"Telemetry Data:\n{focus_str}\n\n"
+                f"Output a summary of prompt strengths and weaknesses."
+            ),
+            "evolve_prompt": (
+                f"{structured_context}\n\n"
+                f"Based on the prompt effectiveness analysis, evolve the system prompt "
+                f"to resolve identified issues.\n"
+                f"Focus on:\n"
+                f"- Clarifying ambiguous instructions\n"
+                f"- Strengthening enforcement of key constraints\n"
+                f"- Minimizing token waste by removing redundant context\n\n"
+                f"Analysis:\n{focus_str}\n\n"
+                f"Output the complete evolved system prompt text."
             ),
             "predict_workspace_scope": (
                 f"Predict the minimal directory subset required to perform the following task.\n"

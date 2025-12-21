@@ -4,11 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- [ ] **Agentic Prompt Evolution**: Automatically refine turn-level system prompts based on feedback
 - [ ] **TUI Git Dashboard**: Integrated view for all shadow branches and their diffs
 - [ ] **Recursive Policy Learning**: Extract safety rules from successful session histories
+- [ ] **Adaptive Model Selection**: Automatically switch models based on step task type
 
 ## Recently Completed
+
+- **Agentic Prompt Evolution** (Dec 2025):
+  - Implemented `prompt_optimizer_loop` to refine system prompts from session data
+  - Added `analyze_prompt_effectiveness` and `evolve_prompt` LLM operations
+  - Supports automated prompt clarification and constraint enforcement
 
 - **Shadow Git Merging** (Dec 2025):
   - Added `smart_merge` to `ShadowGit` with automated 'favor-theirs' conflict resolution
