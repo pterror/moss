@@ -1,5 +1,5 @@
 use std::path::Path;
-use tree_sitter::Parser;
+use moss_core::tree_sitter::Parser;
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
@@ -36,12 +36,12 @@ impl SymbolParser {
     pub fn new() -> Self {
         let mut python_parser = Parser::new();
         python_parser
-            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .set_language(&moss_core::tree_sitter_python::LANGUAGE.into())
             .expect("Failed to load Python grammar");
 
         let mut rust_parser = Parser::new();
         rust_parser
-            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .set_language(&moss_core::tree_sitter_rust::LANGUAGE.into())
             .expect("Failed to load Rust grammar");
 
         Self {
@@ -75,7 +75,7 @@ impl SymbolParser {
 
     fn collect_python_symbols(
         &self,
-        cursor: &mut tree_sitter::TreeCursor,
+        cursor: &mut moss_core::tree_sitter::TreeCursor,
         content: &str,
         symbols: &mut Vec<Symbol>,
         parent: Option<&str>,
@@ -152,7 +152,7 @@ impl SymbolParser {
 
     fn collect_rust_symbols(
         &self,
-        cursor: &mut tree_sitter::TreeCursor,
+        cursor: &mut moss_core::tree_sitter::TreeCursor,
         content: &str,
         symbols: &mut Vec<Symbol>,
         parent: Option<&str>,
@@ -258,7 +258,7 @@ impl SymbolParser {
 
     fn collect_python_calls_with_lines(
         &self,
-        cursor: &mut tree_sitter::TreeCursor,
+        cursor: &mut moss_core::tree_sitter::TreeCursor,
         content: &str,
         calls: &mut Vec<(String, u32)>,
     ) {
@@ -299,7 +299,7 @@ impl SymbolParser {
 
     fn collect_rust_calls_with_lines(
         &self,
-        cursor: &mut tree_sitter::TreeCursor,
+        cursor: &mut moss_core::tree_sitter::TreeCursor,
         content: &str,
         calls: &mut Vec<(String, u32)>,
     ) {

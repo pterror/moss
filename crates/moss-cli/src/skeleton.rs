@@ -2,8 +2,8 @@
 //!
 //! Extracts function/class signatures with optional docstrings.
 
+use moss_core::{Language, Parsers};
 use std::path::Path;
-use tree_sitter::Parser;
 
 /// A code symbol with its signature
 #[derive(Debug, Clone)]
@@ -64,41 +64,29 @@ fn format_symbols(
 }
 
 pub struct SkeletonExtractor {
-    python_parser: Parser,
-    rust_parser: Parser,
-    markdown_parser: Parser,
+    parsers: Parsers,
 }
 
 impl SkeletonExtractor {
     pub fn new() -> Self {
-        let mut python_parser = Parser::new();
-        python_parser
-            .set_language(&tree_sitter_python::LANGUAGE.into())
-            .expect("Failed to load Python grammar");
-
-        let mut rust_parser = Parser::new();
-        rust_parser
-            .set_language(&tree_sitter_rust::LANGUAGE.into())
-            .expect("Failed to load Rust grammar");
-
-        let mut markdown_parser = Parser::new();
-        markdown_parser
-            .set_language(&tree_sitter_md::LANGUAGE.into())
-            .expect("Failed to load Markdown grammar");
-
         Self {
-            python_parser,
-            rust_parser,
-            markdown_parser,
+            parsers: Parsers::new(),
         }
     }
 
     pub fn extract(&mut self, path: &Path, content: &str) -> SkeletonResult {
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let symbols = match ext {
-            "py" => self.extract_python(content),
-            "rs" => self.extract_rust(content),
-            "md" => self.extract_markdown(content),
+        let lang = Language::from_path(path);
+        let symbols = match lang {
+            Some(Language::Python) => self.extract_python(content),
+            Some(Language::Rust) => self.extract_rust(content),
+            Some(Language::Markdown) => self.extract_markdown(content),
+            Some(Language::JavaScript) | Some(Language::Tsx) => self.extract_javascript(content),
+            Some(Language::TypeScript) => self.extract_typescript(content),
+            Some(Language::Go) => self.extract_go(content),
+            Some(Language::Java) => self.extract_java(content),
+            Some(Language::C) => self.extract_c(content),
+            Some(Language::Cpp) => self.extract_cpp(content),
+            Some(Language::Ruby) => self.extract_ruby(content),
             _ => Vec::new(),
         };
 
@@ -109,7 +97,7 @@ impl SkeletonExtractor {
     }
 
     fn extract_python(&mut self, content: &str) -> Vec<SkeletonSymbol> {
-        let tree = match self.python_parser.parse(content, None) {
+        let tree = match self.parsers.get(Language::Python).parse(content, None) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -118,12 +106,11 @@ impl SkeletonExtractor {
         let root = tree.root_node();
         let mut cursor = root.walk();
 
-        self.collect_python_symbols(&mut cursor, content, &mut symbols, false);
+        Self::collect_python_symbols(&mut cursor, content, &mut symbols, false);
         symbols
     }
 
     fn collect_python_symbols(
-        &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
         symbols: &mut Vec<SkeletonSymbol>,
@@ -135,12 +122,12 @@ impl SkeletonExtractor {
 
             match kind {
                 "function_definition" | "async_function_definition" => {
-                    if let Some(sym) = self.extract_python_function(&node, content, in_class) {
+                    if let Some(sym) = Self::extract_python_function(&node, content, in_class) {
                         symbols.push(sym);
                     }
                 }
                 "class_definition" => {
-                    if let Some(sym) = self.extract_python_class(&node, content) {
+                    if let Some(sym) = Self::extract_python_class(&node, content) {
                         symbols.push(sym);
                     }
                     // Skip children - we handle them in extract_python_class
@@ -154,7 +141,7 @@ impl SkeletonExtractor {
 
             // Recurse into children (except for class definitions)
             if kind != "class_definition" && cursor.goto_first_child() {
-                self.collect_python_symbols(cursor, content, symbols, in_class);
+                Self::collect_python_symbols(cursor, content, symbols, in_class);
                 cursor.goto_parent();
             }
 
@@ -165,7 +152,6 @@ impl SkeletonExtractor {
     }
 
     fn extract_python_function(
-        &self,
         node: &tree_sitter::Node,
         content: &str,
         in_class: bool,
@@ -196,7 +182,7 @@ impl SkeletonExtractor {
         let signature = format!("{} {}{}{}", prefix, name, params_text, return_text);
 
         // Extract docstring
-        let docstring = self.extract_python_docstring(node, content);
+        let docstring = Self::extract_python_docstring(node, content);
 
         Some(SkeletonSymbol {
             name,
@@ -210,7 +196,6 @@ impl SkeletonExtractor {
     }
 
     fn extract_python_class(
-        &self,
         node: &tree_sitter::Node,
         content: &str,
     ) -> Option<SkeletonSymbol> {
@@ -240,14 +225,14 @@ impl SkeletonExtractor {
         };
 
         // Extract docstring
-        let docstring = self.extract_python_docstring(node, content);
+        let docstring = Self::extract_python_docstring(node, content);
 
         // Extract methods
         let mut children = Vec::new();
         if let Some(body) = node.child_by_field_name("body") {
             let mut cursor = body.walk();
             if cursor.goto_first_child() {
-                self.collect_python_symbols(&mut cursor, content, &mut children, true);
+                Self::collect_python_symbols(&mut cursor, content, &mut children, true);
             }
         }
 
@@ -262,7 +247,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_python_docstring(&self, node: &tree_sitter::Node, content: &str) -> Option<String> {
+    fn extract_python_docstring(node: &tree_sitter::Node, content: &str) -> Option<String> {
         // Look for docstring in body
         let body = node.child_by_field_name("body")?;
         let first_child = body.child(0)?;
@@ -291,7 +276,7 @@ impl SkeletonExtractor {
     }
 
     fn extract_rust(&mut self, content: &str) -> Vec<SkeletonSymbol> {
-        let tree = match self.rust_parser.parse(content, None) {
+        let tree = match self.parsers.get(Language::Rust).parse(content, None) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -300,12 +285,11 @@ impl SkeletonExtractor {
         let root = tree.root_node();
         let mut cursor = root.walk();
 
-        self.collect_rust_symbols(&mut cursor, content, &mut symbols, None);
+        Self::collect_rust_symbols(&mut cursor, content, &mut symbols, None);
         symbols
     }
 
     fn collect_rust_symbols(
-        &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
         symbols: &mut Vec<SkeletonSymbol>,
@@ -317,22 +301,22 @@ impl SkeletonExtractor {
 
             match kind {
                 "function_item" => {
-                    if let Some(sym) = self.extract_rust_function(&node, content, impl_name) {
+                    if let Some(sym) = Self::extract_rust_function(&node, content, impl_name) {
                         symbols.push(sym);
                     }
                 }
                 "struct_item" => {
-                    if let Some(sym) = self.extract_rust_struct(&node, content) {
+                    if let Some(sym) = Self::extract_rust_struct(&node, content) {
                         symbols.push(sym);
                     }
                 }
                 "enum_item" => {
-                    if let Some(sym) = self.extract_rust_enum(&node, content) {
+                    if let Some(sym) = Self::extract_rust_enum(&node, content) {
                         symbols.push(sym);
                     }
                 }
                 "trait_item" => {
-                    if let Some(sym) = self.extract_rust_trait(&node, content) {
+                    if let Some(sym) = Self::extract_rust_trait(&node, content) {
                         symbols.push(sym);
                     }
                 }
@@ -346,7 +330,7 @@ impl SkeletonExtractor {
                             let mut body_cursor = body.walk();
                             if body_cursor.goto_first_child() {
                                 let mut methods = Vec::new();
-                                self.collect_rust_symbols(
+                                Self::collect_rust_symbols(
                                     &mut body_cursor,
                                     content,
                                     &mut methods,
@@ -385,7 +369,7 @@ impl SkeletonExtractor {
 
             // Recurse into children (except for impl blocks)
             if kind != "impl_item" && cursor.goto_first_child() {
-                self.collect_rust_symbols(cursor, content, symbols, impl_name);
+                Self::collect_rust_symbols(cursor, content, symbols, impl_name);
                 cursor.goto_parent();
             }
 
@@ -396,7 +380,6 @@ impl SkeletonExtractor {
     }
 
     fn extract_rust_function(
-        &self,
         node: &tree_sitter::Node,
         content: &str,
         impl_name: Option<&str>,
@@ -430,7 +413,7 @@ impl SkeletonExtractor {
         let signature = format!("{}fn {}{}{}", vis, name, params_text, return_text);
 
         // Extract doc comment (look for preceding line_comment or block_comment)
-        let docstring = self.extract_rust_doc_comment(node, content);
+        let docstring = Self::extract_rust_doc_comment(node, content);
 
         Some(SkeletonSymbol {
             name,
@@ -447,11 +430,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_struct(
-        &self,
-        node: &tree_sitter::Node,
-        content: &str,
-    ) -> Option<SkeletonSymbol> {
+    fn extract_rust_struct(node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
         let name_node = node.child_by_field_name("name")?;
         let name = content[name_node.byte_range()].to_string();
 
@@ -467,7 +446,7 @@ impl SkeletonExtractor {
         }
 
         let signature = format!("{}struct {}", vis, name);
-        let docstring = self.extract_rust_doc_comment(node, content);
+        let docstring = Self::extract_rust_doc_comment(node, content);
 
         Some(SkeletonSymbol {
             name,
@@ -480,7 +459,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_enum(&self, node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
+    fn extract_rust_enum(node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
         let name_node = node.child_by_field_name("name")?;
         let name = content[name_node.byte_range()].to_string();
 
@@ -496,7 +475,7 @@ impl SkeletonExtractor {
         }
 
         let signature = format!("{}enum {}", vis, name);
-        let docstring = self.extract_rust_doc_comment(node, content);
+        let docstring = Self::extract_rust_doc_comment(node, content);
 
         Some(SkeletonSymbol {
             name,
@@ -509,11 +488,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_trait(
-        &self,
-        node: &tree_sitter::Node,
-        content: &str,
-    ) -> Option<SkeletonSymbol> {
+    fn extract_rust_trait(node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
         let name_node = node.child_by_field_name("name")?;
         let name = content[name_node.byte_range()].to_string();
 
@@ -529,14 +504,14 @@ impl SkeletonExtractor {
         }
 
         let signature = format!("{}trait {}", vis, name);
-        let docstring = self.extract_rust_doc_comment(node, content);
+        let docstring = Self::extract_rust_doc_comment(node, content);
 
         // Extract trait methods
         let mut children = Vec::new();
         if let Some(body) = node.child_by_field_name("body") {
             let mut cursor = body.walk();
             if cursor.goto_first_child() {
-                self.collect_rust_symbols(&mut cursor, content, &mut children, Some(&name));
+                Self::collect_rust_symbols(&mut cursor, content, &mut children, Some(&name));
             }
         }
 
@@ -551,7 +526,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn extract_rust_doc_comment(&self, node: &tree_sitter::Node, content: &str) -> Option<String> {
+    fn extract_rust_doc_comment(node: &tree_sitter::Node, content: &str) -> Option<String> {
         // Look for doc comments before the node
         let lines: Vec<&str> = content.lines().collect();
         let start_line = node.start_position().row;
@@ -588,14 +563,14 @@ impl SkeletonExtractor {
     }
 
     fn extract_markdown(&mut self, content: &str) -> Vec<SkeletonSymbol> {
-        let tree = match self.markdown_parser.parse(content, None) {
+        let tree = match self.parsers.get(Language::Markdown).parse(content, None) {
             Some(t) => t,
             None => return Vec::new(),
         };
 
         let mut headings = Vec::new();
         let root = tree.root_node();
-        self.collect_markdown_headings(&root, content, &mut headings);
+        Self::collect_markdown_headings(&root, content, &mut headings);
 
         // Compute end_line for each heading (line before next heading at same/higher level)
         let total_lines = content.lines().count();
@@ -616,11 +591,10 @@ impl SkeletonExtractor {
         }
 
         // Build nested tree from flat headings list
-        self.build_heading_tree(headings)
+        Self::build_heading_tree(headings)
     }
 
     fn collect_markdown_headings(
-        &self,
         node: &tree_sitter::Node,
         content: &str,
         headings: &mut Vec<(SkeletonSymbol, usize)>, // (symbol, level)
@@ -628,8 +602,8 @@ impl SkeletonExtractor {
         // ATX headings have type like "atx_h1_marker", "atx_h2_marker", etc.
         // The heading node contains the marker and heading_content
         if node.kind().starts_with("atx_heading") || node.kind() == "setext_heading" {
-            if let Some(sym) = self.extract_markdown_heading(node, content) {
-                let level = self.get_heading_level(node);
+            if let Some(sym) = Self::extract_markdown_heading(node, content) {
+                let level = Self::get_heading_level(node);
                 headings.push((sym, level));
             }
         }
@@ -638,7 +612,7 @@ impl SkeletonExtractor {
         let mut cursor = node.walk();
         if cursor.goto_first_child() {
             loop {
-                self.collect_markdown_headings(&cursor.node(), content, headings);
+                Self::collect_markdown_headings(&cursor.node(), content, headings);
                 if !cursor.goto_next_sibling() {
                     break;
                 }
@@ -646,7 +620,7 @@ impl SkeletonExtractor {
         }
     }
 
-    fn get_heading_level(&self, node: &tree_sitter::Node) -> usize {
+    fn get_heading_level(node: &tree_sitter::Node) -> usize {
         // atx_heading nodes have a marker child that indicates level
         let kind = node.kind();
         if kind.starts_with("atx_heading") {
@@ -668,11 +642,7 @@ impl SkeletonExtractor {
         1 // Default to level 1
     }
 
-    fn extract_markdown_heading(
-        &self,
-        node: &tree_sitter::Node,
-        content: &str,
-    ) -> Option<SkeletonSymbol> {
+    fn extract_markdown_heading(node: &tree_sitter::Node, content: &str) -> Option<SkeletonSymbol> {
         // Get the full heading text
         let text = &content[node.byte_range()];
         let line = text.lines().next().unwrap_or("").trim();
@@ -694,7 +664,7 @@ impl SkeletonExtractor {
         })
     }
 
-    fn build_heading_tree(&self, headings: Vec<(SkeletonSymbol, usize)>) -> Vec<SkeletonSymbol> {
+    fn build_heading_tree(headings: Vec<(SkeletonSymbol, usize)>) -> Vec<SkeletonSymbol> {
         if headings.is_empty() {
             return Vec::new();
         }
@@ -730,6 +700,550 @@ impl SkeletonExtractor {
         }
 
         result
+    }
+
+    // JavaScript/JSX extraction (also used for TSX)
+    fn extract_javascript(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::JavaScript).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+        Self::extract_js_like_symbols(&tree, content)
+    }
+
+    // TypeScript extraction
+    fn extract_typescript(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::TypeScript).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+        Self::extract_js_like_symbols(&tree, content)
+    }
+
+    // Shared JS/TS symbol extraction
+    fn extract_js_like_symbols(tree: &tree_sitter::Tree, content: &str) -> Vec<SkeletonSymbol> {
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_js_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_js_symbols(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "function_declaration" | "generator_function_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_else(|| "()".to_string());
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: if parent.is_some() { "method" } else { "function" },
+                            signature: format!("function {}{}", name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "class_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let mut children = Vec::new();
+                        if let Some(body) = node.child_by_field_name("body") {
+                            let mut body_cursor = body.walk();
+                            if body_cursor.goto_first_child() {
+                                Self::collect_js_symbols(
+                                    &mut body_cursor,
+                                    content,
+                                    &mut children,
+                                    Some(&name),
+                                );
+                            }
+                        }
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "class",
+                            signature: format!("class {}", name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children,
+                        });
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+                "method_definition" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_else(|| "()".to_string());
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "method",
+                            signature: format!("{}{}", name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "arrow_function" | "function_expression" => {
+                    // Skip anonymous functions
+                }
+                _ => {}
+            }
+
+            if kind != "class_declaration" && cursor.goto_first_child() {
+                Self::collect_js_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    // Go extraction
+    fn extract_go(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Go).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_go_symbols(&mut cursor, content, &mut symbols);
+        symbols
+    }
+
+    fn collect_go_symbols(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "function_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_else(|| "()".to_string());
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "function",
+                            signature: format!("func {}{}", name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "method_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let receiver = node
+                            .child_by_field_name("receiver")
+                            .map(|r| content[r.byte_range()].to_string())
+                            .unwrap_or_default();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_else(|| "()".to_string());
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "method",
+                            signature: format!("func {} {}{}", receiver, name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "type_declaration" => {
+                    // Handle struct and interface declarations
+                    for i in 0..node.child_count() {
+                        if let Some(spec) = node.child(i) {
+                            if spec.kind() == "type_spec" {
+                                if let Some(name_node) = spec.child_by_field_name("name") {
+                                    let name = content[name_node.byte_range()].to_string();
+                                    let type_node = spec.child_by_field_name("type");
+                                    let type_kind = type_node.map(|t| t.kind()).unwrap_or("");
+                                    let kind = if type_kind == "struct_type" {
+                                        "struct"
+                                    } else if type_kind == "interface_type" {
+                                        "interface"
+                                    } else {
+                                        "type"
+                                    };
+                                    symbols.push(SkeletonSymbol {
+                                        name: name.clone(),
+                                        kind,
+                                        signature: format!("type {}", name),
+                                        docstring: None,
+                                        start_line: spec.start_position().row + 1,
+                                        end_line: spec.end_position().row + 1,
+                                        children: Vec::new(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            if cursor.goto_first_child() {
+                Self::collect_go_symbols(cursor, content, symbols);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    // Java extraction
+    fn extract_java(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Java).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_java_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_java_symbols(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "method_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_else(|| "()".to_string());
+                        let return_type = node
+                            .child_by_field_name("type")
+                            .map(|t| content[t.byte_range()].to_string())
+                            .unwrap_or_else(|| "void".to_string());
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "method",
+                            signature: format!("{} {}{}", return_type, name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "class_declaration" | "interface_declaration" | "enum_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let sym_kind = if kind == "class_declaration" {
+                            "class"
+                        } else if kind == "interface_declaration" {
+                            "interface"
+                        } else {
+                            "enum"
+                        };
+                        let mut children = Vec::new();
+                        if let Some(body) = node.child_by_field_name("body") {
+                            let mut body_cursor = body.walk();
+                            if body_cursor.goto_first_child() {
+                                Self::collect_java_symbols(
+                                    &mut body_cursor,
+                                    content,
+                                    &mut children,
+                                    Some(&name),
+                                );
+                            }
+                        }
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: sym_kind,
+                            signature: format!("{} {}", sym_kind, name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children,
+                        });
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+                _ => {}
+            }
+
+            if !matches!(
+                kind,
+                "class_declaration" | "interface_declaration" | "enum_declaration"
+            ) && cursor.goto_first_child()
+            {
+                Self::collect_java_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    // C extraction
+    fn extract_c(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::C).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+        Self::extract_c_like_symbols(&tree, content)
+    }
+
+    // C++ extraction
+    fn extract_cpp(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Cpp).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+        Self::extract_c_like_symbols(&tree, content)
+    }
+
+    // Shared C/C++ symbol extraction
+    fn extract_c_like_symbols(tree: &tree_sitter::Tree, content: &str) -> Vec<SkeletonSymbol> {
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_c_symbols(&mut cursor, content, &mut symbols);
+        symbols
+    }
+
+    fn collect_c_symbols(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "function_definition" => {
+                    if let Some(declarator) = node.child_by_field_name("declarator") {
+                        // Get function name from declarator
+                        let name = Self::extract_c_function_name(&declarator, content);
+                        if let Some(name) = name {
+                            let sig_end = declarator.end_byte();
+                            let sig_start = node.start_byte();
+                            let signature = content[sig_start..sig_end].trim().to_string();
+                            symbols.push(SkeletonSymbol {
+                                name,
+                                kind: "function",
+                                signature,
+                                docstring: None,
+                                start_line: node.start_position().row + 1,
+                                end_line: node.end_position().row + 1,
+                                children: Vec::new(),
+                            });
+                        }
+                    }
+                }
+                "struct_specifier" | "class_specifier" | "enum_specifier" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let sym_kind = if kind == "struct_specifier" {
+                            "struct"
+                        } else if kind == "class_specifier" {
+                            "class"
+                        } else {
+                            "enum"
+                        };
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: sym_kind,
+                            signature: format!("{} {}", sym_kind, name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+
+            if cursor.goto_first_child() {
+                Self::collect_c_symbols(cursor, content, symbols);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn extract_c_function_name(declarator: &tree_sitter::Node, content: &str) -> Option<String> {
+        // Navigate through possible pointer declarators to find the identifier
+        let mut current = *declarator;
+        loop {
+            match current.kind() {
+                "function_declarator" => {
+                    if let Some(inner) = current.child_by_field_name("declarator") {
+                        current = inner;
+                    } else {
+                        break;
+                    }
+                }
+                "pointer_declarator" => {
+                    if let Some(inner) = current.child_by_field_name("declarator") {
+                        current = inner;
+                    } else {
+                        break;
+                    }
+                }
+                "identifier" => {
+                    return Some(content[current.byte_range()].to_string());
+                }
+                _ => break,
+            }
+        }
+        None
+    }
+
+    // Ruby extraction
+    fn extract_ruby(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Ruby).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_ruby_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_ruby_symbols(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "method" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let params = node
+                            .child_by_field_name("parameters")
+                            .map(|p| content[p.byte_range()].to_string())
+                            .unwrap_or_default();
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: if parent.is_some() { "method" } else { "function" },
+                            signature: format!("def {}{}", name, params),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "class" | "module" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        let sym_kind = if kind == "class" { "class" } else { "module" };
+                        let mut children = Vec::new();
+                        // Find body and collect methods
+                        for i in 0..node.child_count() {
+                            if let Some(child) = node.child(i) {
+                                if child.kind() == "body_statement" {
+                                    let mut body_cursor = child.walk();
+                                    if body_cursor.goto_first_child() {
+                                        Self::collect_ruby_symbols(
+                                            &mut body_cursor,
+                                            content,
+                                            &mut children,
+                                            Some(&name),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: sym_kind,
+                            signature: format!("{} {}", sym_kind, name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children,
+                        });
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+                _ => {}
+            }
+
+            if kind != "class" && kind != "module" && cursor.goto_first_child() {
+                Self::collect_ruby_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
 }
 

@@ -74,12 +74,12 @@ impl ComplexityAnalyzer {
     pub fn new() -> Self {
         let mut python_parser = Parser::new();
         python_parser
-            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .set_language(&moss_core::tree_sitter_python::LANGUAGE.into())
             .expect("Failed to load Python grammar");
 
         let mut rust_parser = Parser::new();
         rust_parser
-            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .set_language(&moss_core::tree_sitter_rust::LANGUAGE.into())
             .expect("Failed to load Rust grammar");
 
         Self {
