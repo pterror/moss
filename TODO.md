@@ -68,6 +68,10 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
         - retry: exponential | fixed | none
       - DWIM parsing is just ~50 lines, should be a simple function
     - Target: workflows compose strategies, DWIMLoop becomes library code
+    - Open design question: how do strategies compose/nest?
+      - Sub-steps may want different context than parent
+      - TOML awkward for expressing trees/scopes
+      - Maybe code > config for complex workflows?
   - Python edit → redundant with agent, remove
   - Rust edit vs Python edit → same name, different behavior
 - [ ] Define clear boundaries: what's Rust, what's Python, why
