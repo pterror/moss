@@ -46,16 +46,10 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
-- [ ] Explore TUI verification:
-  - Command palette input still too big (CSS selector may be wrong)
-  - Test command palette commands work (SystemCommand fix)
-  - Test syntax highlighting matches theme (transparent bg)
-- [ ] Explore TUI polish:
-  - Add autocomplete for paths in command input
-  - Error handling for Rust CLI failures in _execute_primitive
-- [ ] Analyze output improvements:
-  - Default `--limit 10` for check-docs/check-todos, `--all` to override
-  - `--changed` flag: only check git-modified files
+- [ ] Fix pre-existing test failures (not related to this session):
+  - test_complexity_analyze_returns_compact_string - glob pattern issue
+  - test_map_hunks_to_symbols - TreeSitterSkeletonProvider constructor
+- [ ] Explore TUI: modal keybinds, jump-to-node shortcut
 
 ## Backlog
 

@@ -4,6 +4,18 @@
 
 ### Features
 
+**TUI Improvements** (Dec 22 2025)
+- Fixed CommandPalette CSS selectors (uses CommandInput, not Input)
+- Added path autocomplete to command input (tab completion for file paths)
+- Fixed transparency toggle (now actually applies CSS class to Screen)
+- Better error handling for Rust CLI failures (shows helpful messages)
+
+**Analyze Output Improvements** (Dec 22 2025)
+- Added `--limit` (default 10) and `--all` flags for check-docs/check-todos
+- Added `--changed` flag to only check git-modified files
+- Simplified check-docs output: no boilerplate, grouped stale refs by file
+- Stale references now show `file: ref1 @L10, ref2 @L20` format
+
 **External Index Location** (Dec 22 2025)
 - New `MOSS_INDEX_DIR` environment variable for custom data/index location
 - Absolute path: uses directory directly (`MOSS_INDEX_DIR=/tmp/moss`)
