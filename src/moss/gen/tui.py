@@ -228,13 +228,9 @@ class TUIGenerator:
 
             #execute-btn {
                 dock: bottom;
-                height: 1;
-                min-height: 1;
-            }
-
-            Button {
-                height: 1;
-                min-height: 1;
+                height: 3;
+                margin: 0;
+                padding: 0;
             }
 
             Tree {
