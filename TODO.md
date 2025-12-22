@@ -60,12 +60,14 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
   - MossToolExecutor → call rust_shim directly
   - Two agent loops (DWIMLoop vs AgentLoop+workflows) - why both?
     - AgentLoop: generic step executor - rename to StepExecutor
-    - DWIMLoop (1151 lines): right goals, possibly overcomplicated implementation
-      - Core agent loop is ~10 lines
-      - Ephemeral cache, adaptive previews - correct (minimize LLM usage)
-      - But does it need 1151 lines to achieve this?
-      - DWIM parsing could be a simple function, not baked in
-    - Consider: minimal agent loop + composable pieces (cache, dwim parse)
+    - DWIMLoop (1151 lines): right goals, wrong structure
+      - Bakes in specific choices (EphemeralCache, TaskTree, etc.)
+      - These should be composable strategies, not hardcoded:
+        - context: task_tree | task_list | flat | none
+        - cache: ephemeral | persistent | none
+        - retry: exponential | fixed | none
+      - DWIM parsing is just ~50 lines, should be a simple function
+    - Target: workflows compose strategies, DWIMLoop becomes library code
   - Python edit → redundant with agent, remove
   - Rust edit vs Python edit → same name, different behavior
 - [ ] Define clear boundaries: what's Rust, what's Python, why
