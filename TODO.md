@@ -48,12 +48,14 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 - [ ] Design: Composable execution architecture
   - [x] Primitives defined: Scope, ContextStrategy, CacheStrategy (docs/design/execution-primitives.md)
-  - [x] Prototype working: src/moss/execution/__init__.py (~300 lines)
-  - [x] Wire up real execution: scope.run() → rust_shim.passthrough()
-  - [x] parse_intent() + execute_intent() (~40 lines total)
-  - [x] TaskTreeContext strategy (hierarchical context)
-  - [x] TOML analysis: can express state machines, not just linear; limit is computed values
-  - [ ] Test with real tasks end-to-end
+  - [x] Prototype: src/moss/execution/__init__.py (~450 lines)
+  - [x] Context strategies: FlatContext, TaskListContext, TaskTreeContext
+  - [x] Cache strategies: NoCache, InMemoryCache
+  - [x] Retry strategies: NoRetry, FixedRetry, ExponentialRetry
+  - [x] LLM strategies: NoLLM, SimpleLLM (uses moss.llm.complete)
+  - [x] parse_intent() + execute_intent() - DWIM verb parsing, real CLI execution
+  - [x] TOML analysis: can express state machines; limit is computed values; plugins could help
+  - [ ] Test with real LLM end-to-end
   - [ ] Replace DWIMLoop with new primitives
 - [ ] Explore TUI: modal keybinds, jump-to-node shortcut
 
