@@ -267,9 +267,9 @@ Phase 1 (current): Basic nested steps
 - [x] TOML parsing for nested steps
 
 Phase 2: Context modes
-- [ ] Add `context_mode` to WorkflowStep
-- [ ] Implement shared/inherited modes in Scope.child()
-- [ ] Document when to use each mode
+- [x] Add `context_mode` to WorkflowStep
+- [x] Implement shared/inherited modes in Scope.child()
+- [x] Document when to use each mode (see WorkflowStep docstring)
 
 Phase 3: Feedback
 - [ ] Add `summarize` option to compound steps

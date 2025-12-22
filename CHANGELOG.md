@@ -16,6 +16,8 @@
 - Compound steps execute in child Scope with inherited strategies
 - Recursive step parsing in load_workflow for nested TOML structures
 - Design doc for multi-agent communication: docs/nested-execution.md
+- Context modes for compound steps: `isolated` (default), `shared`, `inherited`
+- InheritedContext wrapper: child sees parent context (read), writes to own storage
 
 ### Documentation
 

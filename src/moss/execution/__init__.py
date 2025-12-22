@@ -154,6 +154,39 @@ class TaskTreeContext(ContextStrategy):
         return child_ctx
 
 
+class InheritedContext(ContextStrategy):
+    """Wrapper that provides read access to parent, writes to own storage.
+
+    Used for 'inherited' context mode:
+    - Child sees parent's context (read)
+    - Child writes to own storage (parent unchanged)
+    - One-way visibility: parent never sees child's additions
+    """
+
+    def __init__(self, parent: ContextStrategy):
+        self._parent = parent
+        self._own_items: list[tuple[str, Any]] = []
+
+    def add(self, key: str, value: Any) -> None:
+        """Write to own storage only."""
+        self._own_items.append((key, value))
+        # Keep last 10 items
+        if len(self._own_items) > 10:
+            self._own_items.pop(0)
+
+    def get_context(self) -> str:
+        """Return parent context + own additions."""
+        parent_ctx = self._parent.get_context()
+        own_ctx = "\n".join(f"{k}: {v}" for k, v in self._own_items)
+        if parent_ctx and own_ctx:
+            return f"{parent_ctx}\n---\n{own_ctx}"
+        return parent_ctx or own_ctx
+
+    def child(self) -> ContextStrategy:
+        """Create isolated child (inherited doesn't cascade)."""
+        return FlatContext()
+
+
 # =============================================================================
 # Cache Strategies
 # =============================================================================
@@ -313,10 +346,30 @@ class Scope:
         context: ContextStrategy | None = None,
         cache: CacheStrategy | None = None,
         retry: RetryStrategy | None = None,
+        mode: str = "isolated",
     ) -> Generator[Scope]:
-        """Create nested scope, optionally with different strategies."""
+        """Create nested scope, optionally with different strategies.
+
+        Args:
+            context: Override context strategy (ignores mode if set)
+            cache: Override cache strategy
+            retry: Override retry strategy
+            mode: Context mode if context not provided:
+                - "isolated": Child gets fresh context via context.child()
+                - "shared": Child uses same context object as parent
+                - "inherited": Child sees parent context (read), writes to own
+        """
+        if context is not None:
+            child_context = context
+        elif mode == "shared":
+            child_context = self.context  # Same object
+        elif mode == "inherited":
+            child_context = InheritedContext(self.context)
+        else:  # isolated (default)
+            child_context = self.context.child()
+
         child_scope = Scope(
-            context=context or self.context.child(),
+            context=child_context,
             cache=cache or self.cache,
             retry=retry or self.retry,
             parent=self,
@@ -761,6 +814,11 @@ class WorkflowStep:
 
     Simple step: has action (command string to execute).
     Compound step: has steps (sub-steps that execute in a child Scope).
+
+    Context modes for compound steps:
+    - isolated: Child gets fresh context via context.child() (default)
+    - shared: Child uses same context object as parent
+    - inherited: Child sees parent context (read), writes to own
     """
 
     name: str
@@ -768,6 +826,7 @@ class WorkflowStep:
     steps: list[WorkflowStep] | None = None  # Sub-steps for compound steps
     on_error: str = "fail"  # "fail", "skip", "retry"
     max_retries: int = 1
+    context_mode: str = "isolated"  # "isolated", "shared", "inherited"
 
 
 @dataclass
@@ -886,6 +945,7 @@ def load_workflow(path: str) -> WorkflowConfig:
                     steps=sub_steps,
                     on_error=step_cfg.get("on_error", "fail"),
                     max_retries=step_cfg.get("max_retries", 1),
+                    context_mode=step_cfg.get("context_mode", "isolated"),
                 )
             )
         return result
@@ -953,7 +1013,7 @@ def _run_steps(scope: Scope, steps: list[WorkflowStep]) -> bool:
         try:
             if step.steps:
                 # Compound step: create child scope and run sub-steps
-                with scope.child() as child_scope:
+                with scope.child(mode=step.context_mode) as child_scope:
                     if not _run_steps(child_scope, step.steps):
                         # Sub-step failed with on_error="fail"
                         if step.on_error == "skip":
