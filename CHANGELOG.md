@@ -74,6 +74,18 @@
 
 ### Bug Fixes
 
+**Workflow Path Resolution** (Dec 23 2025)
+- Fixed workflow discovery after cli/ package split (was looking in cli/workflows, now moss/workflows)
+- Affected: `workflow list`, `workflow run`, `agent`, `MossAPI.run_agent()`
+
+**UX Improvements** (Dec 23 2025)
+- `analyze --complexity` now shows helpful message when file target required
+- Added "Skipped" section to analyze report for better user feedback
+- Removed wasteful theme toggle keybind (T) from TUI
+
+**Test Coverage** (Dec 23 2025)
+- Added test for `filter_types()` method in skeleton.rs
+
 **Test Fixes** (Dec 22 2025)
 - Fixed `TreeSitterSkeletonProvider` call in `get_symbols_at_line` (uses `from_file`)
 - Fixed `ComplexityAnalyzer.analyze` to handle absolute paths (was glob-only)
