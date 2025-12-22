@@ -195,6 +195,16 @@ enum Commands {
         /// Show symbols that the target calls (callees)
         #[arg(long)]
         called_by: bool,
+
+        /// Show only type definitions (class, struct, enum, interface, type alias)
+        /// Filters out functions/methods for architectural overview
+        #[arg(long)]
+        types_only: bool,
+
+        /// Fisheye view: show target at high detail, imports at signature level
+        /// Resolves local imports and shows their skeletons inline
+        #[arg(long)]
+        fisheye: bool,
     },
 
     /// Edit a node in the codebase tree (structural code modification)
@@ -620,6 +630,8 @@ fn main() {
             kind,
             calls,
             called_by,
+            types_only,
+            fisheye,
         } => cmd_view(
             target.as_deref(),
             root.as_deref(),
@@ -629,6 +641,8 @@ fn main() {
             kind.as_deref(),
             calls,
             called_by,
+            types_only,
+            fisheye,
             cli.json,
         ),
         Commands::SearchTree { query, root, limit } => {
@@ -875,6 +889,8 @@ fn cmd_view(
     kind_filter: Option<&str>,
     show_calls: bool,
     show_called_by: bool,
+    types_only: bool,
+    fisheye: bool,
     json: bool,
 ) -> i32 {
     let root = root
@@ -920,7 +936,7 @@ fn cmd_view(
         cmd_view_directory(&root.join(&unified.file_path), &root, depth, json)
     } else if unified.symbol_path.is_empty() {
         // View file
-        cmd_view_file(&unified.file_path, &root, depth, line_numbers, show_deps, json)
+        cmd_view_file(&unified.file_path, &root, depth, line_numbers, show_deps, types_only, fisheye, json)
     } else {
         // View symbol within file
         cmd_view_symbol(
@@ -1568,12 +1584,76 @@ fn cmd_view_directory(dir: &Path, root: &Path, depth: i32, json: bool) -> i32 {
     0
 }
 
+/// Try to resolve a Python import module to a local file path
+fn resolve_python_import(module: &str, current_file: &Path, root: &Path) -> Option<PathBuf> {
+    // Handle relative imports (starting with .)
+    if module.starts_with('.') {
+        let current_dir = current_file.parent()?;
+        let dots = module.chars().take_while(|c| *c == '.').count();
+        let module_part = &module[dots..];
+
+        // Go up (dots-1) directories from current file's directory
+        let mut base = current_dir.to_path_buf();
+        for _ in 1..dots {
+            base = base.parent()?.to_path_buf();
+        }
+
+        // Convert module.path to module/path.py
+        let module_path = if module_part.is_empty() {
+            base.join("__init__.py")
+        } else {
+            let path_part = module_part.replace('.', "/");
+            // Try module/submodule.py first, then module/submodule/__init__.py
+            let direct = base.join(format!("{}.py", path_part));
+            if direct.exists() {
+                return Some(direct);
+            }
+            base.join(path_part).join("__init__.py")
+        };
+
+        if module_path.exists() {
+            return Some(module_path);
+        }
+    }
+
+    // Handle absolute imports - try to find in src/ or as top-level package
+    let module_path = module.replace('.', "/");
+
+    // Try src/<module>.py
+    let src_path = root.join("src").join(format!("{}.py", module_path));
+    if src_path.exists() {
+        return Some(src_path);
+    }
+
+    // Try src/<module>/__init__.py
+    let src_pkg_path = root.join("src").join(&module_path).join("__init__.py");
+    if src_pkg_path.exists() {
+        return Some(src_pkg_path);
+    }
+
+    // Try <module>.py directly
+    let direct_path = root.join(format!("{}.py", module_path));
+    if direct_path.exists() {
+        return Some(direct_path);
+    }
+
+    // Try <module>/__init__.py
+    let pkg_path = root.join(&module_path).join("__init__.py");
+    if pkg_path.exists() {
+        return Some(pkg_path);
+    }
+
+    None
+}
+
 fn cmd_view_file(
     file_path: &str,
     root: &Path,
     depth: i32,
     line_numbers: bool,
     show_deps: bool,
+    types_only: bool,
+    fisheye: bool,
     json: bool,
 ) -> i32 {
     let full_path = root.join(file_path);
@@ -1615,8 +1695,15 @@ fn cmd_view_file(
     let mut extractor = skeleton::SkeletonExtractor::new();
     let skeleton_result = extractor.extract(&full_path, &content);
 
-    // Optionally get deps
-    let deps_result = if show_deps {
+    // Filter to types only if requested
+    let skeleton_result = if types_only {
+        skeleton_result.filter_types()
+    } else {
+        skeleton_result
+    };
+
+    // Get deps if showing deps or using fisheye mode
+    let deps_result = if show_deps || fisheye {
         let mut deps_extractor = deps::DepsExtractor::new();
         Some(deps_extractor.extract(&full_path, &content))
     } else {
@@ -1673,8 +1760,8 @@ fn cmd_view_file(
         println!("# {}", file_path);
         println!("Lines: {}", content.lines().count());
 
-        if let Some(deps) = deps_result {
-            if !deps.imports.is_empty() {
+        if let Some(ref deps) = deps_result {
+            if show_deps && !deps.imports.is_empty() {
                 println!("\n## Imports");
                 for imp in &deps.imports {
                     if imp.names.is_empty() {
@@ -1691,6 +1778,45 @@ fn cmd_view_file(
             if !formatted.is_empty() {
                 println!("\n## Symbols");
                 println!("{}", formatted);
+            }
+        }
+
+        // Fisheye mode: show skeletons of imported local files
+        if fisheye {
+            // deps_result is guaranteed to be Some when fisheye is true
+            let deps = deps_result.as_ref().unwrap();
+
+            // Collect resolved imports
+            let mut resolved: Vec<(String, PathBuf)> = Vec::new();
+            for imp in &deps.imports {
+                if let Some(resolved_path) = resolve_python_import(&imp.module, &full_path, root) {
+                    // Make path relative to root
+                    if let Ok(rel_path) = resolved_path.strip_prefix(root) {
+                        resolved.push((imp.module.clone(), rel_path.to_path_buf()));
+                    }
+                }
+            }
+
+            if !resolved.is_empty() {
+                println!("\n## Imported Modules (Skeletons)");
+                for (module_name, rel_path) in resolved {
+                    let import_full_path = root.join(&rel_path);
+                    if let Ok(import_content) = std::fs::read_to_string(&import_full_path) {
+                        let mut import_extractor = skeleton::SkeletonExtractor::new();
+                        let import_skeleton = import_extractor.extract(&import_full_path, &import_content);
+                        let import_skeleton = if types_only {
+                            import_skeleton.filter_types()
+                        } else {
+                            import_skeleton
+                        };
+
+                        let formatted = import_skeleton.format(false); // depth 1 = signatures only
+                        if !formatted.is_empty() {
+                            println!("\n### {} ({})", module_name, rel_path.display());
+                            println!("{}", formatted);
+                        }
+                    }
+                }
             }
         }
     }

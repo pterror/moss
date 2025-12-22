@@ -30,6 +30,45 @@ impl SkeletonResult {
         format_symbols(&self.symbols, include_docstrings, 0, &mut lines);
         lines.join("\n")
     }
+
+    /// Filter to only type definitions (class, struct, enum, trait, interface)
+    /// Returns a new SkeletonResult with only type-like symbols, and strips methods from classes
+    pub fn filter_types(&self) -> SkeletonResult {
+        fn is_type_kind(kind: &str) -> bool {
+            matches!(kind, "class" | "struct" | "enum" | "trait" | "interface" | "type" | "impl")
+        }
+
+        fn filter_symbol(sym: &SkeletonSymbol) -> Option<SkeletonSymbol> {
+            if is_type_kind(sym.kind) {
+                // For types, keep only nested types (not methods)
+                let type_children: Vec<_> = sym.children
+                    .iter()
+                    .filter_map(|c| filter_symbol(c))
+                    .collect();
+                Some(SkeletonSymbol {
+                    name: sym.name.clone(),
+                    kind: sym.kind,
+                    signature: sym.signature.clone(),
+                    docstring: sym.docstring.clone(),
+                    start_line: sym.start_line,
+                    end_line: sym.end_line,
+                    children: type_children,
+                })
+            } else {
+                None
+            }
+        }
+
+        let filtered_symbols: Vec<_> = self.symbols
+            .iter()
+            .filter_map(|s| filter_symbol(s))
+            .collect();
+
+        SkeletonResult {
+            symbols: filtered_symbols,
+            file_path: self.file_path.clone(),
+        }
+    }
 }
 
 fn format_symbols(

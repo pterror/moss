@@ -4,6 +4,21 @@
 
 ### Features
 
+**View Primitive Enhancements** (Dec 23 2025)
+- `--types-only` flag: filters skeleton to show only type definitions (class, struct, enum, interface)
+  - Strips methods/functions for architectural overview
+  - Works with all skeleton output (Python, Rust, TypeScript, etc.)
+- `--fisheye` mode: shows target file at full detail, plus skeletons of imported modules
+  - Resolves Python imports (relative and absolute) to local files
+  - Shows imported module skeletons at signature level (depth 1)
+  - Combines with `--types-only` for types-only fisheye view
+- Both flags work together for maximum token efficiency
+
+**Package Restructuring** (Dec 23 2025)
+- cli.py (5687 lines) → cli/ package with _main.py (backwards compatible)
+- moss_api.py (4148 lines) → moss_api/ package with _main.py (backwards compatible)
+- Gradual extraction can now happen incrementally
+
 **State Machine Workflows** (Dec 23 2025)
 - New `state_machine_loop()` for graph-based execution with conditional transitions
 - States defined via `[[states]]` in TOML with `[[states.transitions]]`

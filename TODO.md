@@ -46,14 +46,27 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
+**View Primitive Enhancements (from architecture review):**
+- [x] `--types-only` flag: show only types/interfaces/signatures, no bodies (highest ROI)
+- [x] `--fisheye` mode: show target at full detail, imported modules at signature level
+- [ ] `--resolve-imports`: inline imported symbol signatures (lower priority, fisheye covers most cases)
+
+**Housekeeping:**
+- [x] Split cli.py into cli/ package (structure in place, gradual extraction)
+- [x] Split moss_api.py into moss_api/ package (structure in place)
+
+**Deferred:**
+- [ ] Python edit separate targeting (LLM-based, intentionally different)
 - [ ] Remaining docs: prior-art.md, hybrid-loops.md (lower priority)
-- [ ] Python edit uses separate file/symbol targeting (LLM-based, intentionally different)
-- [ ] Stop and plan before adding more features
 
 ## Backlog
 
-**Architecture Cleanup (High Priority):**
-- [ ] Stop and plan before adding more features
+**View Primitive Polish:**
+- [ ] `--visibility public|all` or `--exported` filter for semantic zoom
+- [ ] Barrel file hoisting: detect `export * from` and surface re-exported symbols
+- [ ] Useless docstring detection: skip "Sets the user id" on `setUserId()`
+
+**Architecture Cleanup:**
 - [x] Consolidate redundant layers discovered Dec 22:
   - [x] SkeletonAPI.expand → now uses rust_view() properly
   - [x] rust_shim: rust_skeleton (calls skeleton), rust_view (calls view) - both correct
