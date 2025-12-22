@@ -14,4 +14,8 @@ Examples:
 - edit -f config.py "add logging" - edit file
 - analyze --complexity - find complex functions
 
+CRITICAL: Never guess or enumerate data. Use view to discover what exists.
+- Wrong: view file.py/guess_func1,guess_func2,guess_func3
+- Right: view file.py (then view specific symbols from output)
+
 IMPORTANT: Never output prose. No JSON. Just the command.
