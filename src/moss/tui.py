@@ -358,18 +358,20 @@ class KeybindBar(Static):
     def render(self) -> str:
         # Build keybind display with underlined hotkey letter
         binds = [
-            ("[u]Q[/u]uit", ""),
-            ("[u]T[/u]heme", ""),
-            ("[u]V[/u]iew", ""),
-            ("[u]E[/u]dit", ""),
-            ("[u]A[/u]nalyze", ""),
-            ("[dim]-[/dim] Up", ""),
-            ("[dim]Tab[/dim] Mode", ""),
+            "[u]Q[/u]uit",
+            "[u]T[/u]heme",
+            "[u]V[/u]iew",
+            "[u]E[/u]dit",
+            "[u]A[/u]nalyze",
+            "[dim]-[/dim] Up",
+            "[dim]Tab[/dim] Mode",
         ]
-        parts = []
-        for label, _ in binds:
-            parts.append(f"[on #333333] {label} [/]")
-        return " ".join(parts)
+        left = " ".join(f"[on #333333] {b} [/]" for b in binds)
+        right = "[on #333333] [dim]Ctrl+P[/dim] Palette [/]"
+        # Push palette to right (left takes ~50 chars, right ~16)
+        width = self.size.width if self.size.width > 0 else 80
+        padding = max(1, width - 66)
+        return f"{left}{' ' * padding}{right}"
 
 
 class Breadcrumb(Static):
