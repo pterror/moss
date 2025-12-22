@@ -44,6 +44,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
+- [ ] Add `--kind` filter to `analyze` (filter by symbol type, avoid `-t` conflict with `--threshold`)
 - [ ] Tokens per symbol path in telemetry (leverage codebase tree)
 - [ ] Real-time telemetry mode (`moss telemetry --watch`)
 - [ ] Add Gemini CLI log parser to plugin system
