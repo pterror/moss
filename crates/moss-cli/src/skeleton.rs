@@ -1686,4 +1686,34 @@ class Greeter {
             greeter.children
         );
     }
+
+    #[test]
+    fn test_filter_types() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+def helper():
+    pass
+
+class MyClass:
+    def method(self):
+        pass
+
+def another_function():
+    pass
+
+class AnotherClass:
+    pass
+"#;
+        let result = extractor.extract(&PathBuf::from("test.py"), content);
+
+        // Original should have 4 top-level symbols (2 functions, 2 classes)
+        assert_eq!(result.symbols.len(), 4);
+
+        // Filtered should only have classes
+        let filtered = result.filter_types();
+        assert_eq!(filtered.symbols.len(), 2);
+        assert!(filtered.symbols.iter().all(|s| s.kind == "class"));
+        assert_eq!(filtered.symbols[0].name, "MyClass");
+        assert_eq!(filtered.symbols[1].name, "AnotherClass");
+    }
 }
