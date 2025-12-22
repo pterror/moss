@@ -1403,11 +1403,17 @@ class MossTUI(App):
             content = file_path.read_text()
             lines = content.splitlines()
             start = symbol.lineno - 1  # 0-indexed
-            # Find next heading at same or higher level
+            # Find next heading at same or higher level (skip fenced code blocks)
             level = len(symbol.signature) - len(symbol.signature.lstrip("#"))
             end = len(lines)
+            in_code_block = False
             for i in range(start + 1, len(lines)):
                 line = lines[i]
+                if line.startswith("```"):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    continue
                 if line.startswith("#"):
                     next_level = len(line) - len(line.lstrip("#"))
                     if next_level <= level:
@@ -1415,16 +1421,11 @@ class MossTUI(App):
                         break
             section = "\n".join(lines[start:end])
             explore_header.update(f"{symbol.signature} ({end - start} lines)")
-            # Syntax highlight markdown
-            from rich.syntax import Syntax
+            # Render markdown properly (handles code blocks, lists, etc.)
+            from rich.markdown import Markdown
 
-            syntax = Syntax(
-                section,
-                "markdown",
-                theme=self._get_syntax_theme(),
-                background_color=self._get_syntax_bg(),
-            )
-            explore_detail.write(syntax)
+            md = Markdown(section, code_theme=self._get_syntax_theme())
+            explore_detail.write(md)
         except OSError as e:
             explore_detail.write(f"[red]Error: {e}[/]")
 
