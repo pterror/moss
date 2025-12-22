@@ -381,10 +381,16 @@ class KeybindBar(Static):
                 parts.append(f"[@click=app.{action}]{text}[/]")
         left = " ".join(parts)
         # Palette uses Textual's built-in command_palette action
-        right = "[@click=app.command_palette]\\[^p] Palette[/]"
+        right = "\\[^p] Palette"
+        # Calculate padding to right-align palette
+        # Approximate visible length (markup tags don't count)
+        left_len = (
+            sum(len(b.description) + 3 for b in self.app.BINDINGS if b.show) if self.app else 0
+        )
+        right_len = len("[^p] Palette")
         width = self.size.width if self.size.width > 0 else 80
-        padding = max(1, width - 50)
-        return f"{left}{' ' * padding}{right}"
+        padding = max(1, width - left_len - right_len - 2)
+        return f"{left}{' ' * padding}[@click=app.command_palette]{right}[/]"
 
 
 class Breadcrumb(Static):
@@ -731,9 +737,9 @@ class MossTUI(App):
         padding-left: 0;
     }
 
-    CommandPalette > .command-palette--input {
-        height: 1;
-        padding: 0 1;
+    CommandPalette Input {
+        height: 3;
+        border: none;
     }
     """
 
@@ -818,10 +824,10 @@ class MossTUI(App):
         return "default"
 
     def _get_syntax_bg(self) -> str | None:
-        """Get syntax background color (None for transparent)."""
-        if getattr(self, "_transparent_bg", False):
-            return None
-        return "default"
+        """Get syntax background color (None for transparent/theme-matched)."""
+        # Always return None to let theme background show through
+        # Rich Syntax with background_color=None uses transparent bg
+        return None
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -1159,13 +1165,13 @@ class MossTUI(App):
 
     def get_system_commands(self, screen):
         """Add custom commands to the command palette."""
-        from textual.command import DiscoveryHit
+        from textual.app import SystemCommand
 
         yield from super().get_system_commands(screen)
-        yield DiscoveryHit(
+        yield SystemCommand(
             "Toggle Transparency",
-            self.action_toggle_transparency,
             "Enable/disable transparent background for terminal opacity",
+            self.action_toggle_transparency,
         )
 
     async def _update_git_view(self) -> None:

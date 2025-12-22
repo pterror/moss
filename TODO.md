@@ -51,6 +51,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
   - Error handling for Rust CLI failures in _execute_primitive
   - Fix duplicate keybind issue (h for toggle_tooltip conflicts with navigation)
 - [ ] ViewAPI markdown support: extract headings as symbols, handle path/heading_name targets
+- [ ] Unified codebase tree for markdown + python + directories (currently TUI has separate markdown handling)
 - [ ] Analyze output improvements:
   - Default `--limit 10` for check-docs/check-todos, `--all` to override
   - `--changed` flag: only check git-modified files
@@ -62,6 +63,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Modal keybinds like Blender (mode-specific keys that change based on context)
 - [ ] Live footer keybind updates when mode/context changes
 - [ ] Modifier key layers (Ctrl/Alt/Shift combos for power users)
+- [ ] Jump-to-node shortcut (fuzzy search to quickly navigate tree)
 
 **Telemetry** (see `docs/telemetry.md`):
 - [x] `moss telemetry` CLI with aggregate analysis
