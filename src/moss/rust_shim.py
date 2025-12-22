@@ -132,6 +132,31 @@ def rust_find_symbols(
     return json.loads(output)
 
 
+def rust_list_files(
+    prefix: str = "",
+    limit: int = 1000,
+    root: str | None = None,
+) -> list[str] | None:
+    """List indexed files with optional prefix filter.
+
+    Returns list of file paths or None if Rust not available.
+    """
+    if not rust_available():
+        return None
+
+    args = ["list-files", "-l", str(limit)]
+    if root:
+        args.extend(["-r", root])
+    if prefix:
+        args.append(prefix)
+
+    code, output = call_rust(args, json_output=True)
+    if code != 0:
+        return None
+
+    return json.loads(output)
+
+
 def rust_grep(
     pattern: str,
     glob_pattern: str | None = None,

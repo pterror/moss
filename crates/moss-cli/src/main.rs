@@ -574,6 +574,20 @@ enum Commands {
         #[arg(short, long)]
         root: Option<PathBuf>,
     },
+
+    /// List indexed files (with optional prefix filter)
+    ListFiles {
+        /// Path prefix to filter (e.g., "src/moss" for files in that dir)
+        prefix: Option<String>,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Limit results
+        #[arg(short, long, default_value = "1000")]
+        limit: usize,
+    },
 }
 
 #[derive(Subcommand)]
@@ -768,6 +782,9 @@ fn main() {
             &mut profiler,
         ),
         Commands::IndexStats { root } => cmd_index_stats(root.as_deref(), cli.json),
+        Commands::ListFiles { prefix, root, limit } => {
+            cmd_list_files(prefix.as_deref(), root.as_deref(), limit, cli.json)
+        }
     };
 
     profiler.mark("done");
@@ -3590,6 +3607,47 @@ fn cmd_index_stats(root: Option<&Path>, json: bool) -> i32 {
         println!("Top extensions:");
         for (ext, count) in ext_list.iter().take(15) {
             println!("  {:12} {:>6}", ext, count);
+        }
+    }
+
+    0
+}
+
+fn cmd_list_files(prefix: Option<&str>, root: Option<&Path>, limit: usize, json: bool) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    let idx = match index::FileIndex::open(&root) {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("Failed to open index: {}", e);
+            return 1;
+        }
+    };
+
+    let files = match idx.all_files() {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to read files: {}", e);
+            return 1;
+        }
+    };
+
+    // Filter by prefix and exclude directories
+    let prefix_str = prefix.unwrap_or("");
+    let filtered: Vec<&str> = files
+        .iter()
+        .filter(|f| !f.is_dir && f.path.starts_with(prefix_str))
+        .take(limit)
+        .map(|f| f.path.as_str())
+        .collect();
+
+    if json {
+        println!("{}", serde_json::to_string(&filtered).unwrap());
+    } else {
+        for path in &filtered {
+            println!("{}", path);
         }
     }
 

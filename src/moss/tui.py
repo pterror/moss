@@ -527,23 +527,16 @@ class ProjectTree(Tree[Any]):
         root.expand()
 
     def _get_indexed_files(self, root: Path) -> set[str]:
-        """Get all files from Rust index database.
+        """Get all files from Rust index via list-files command.
 
-        Uses .moss/index.db which is created by `moss reindex`.
-        Falls back to git ls-files if index not available.
+        Falls back to git ls-files if Rust not available.
         """
-        import sqlite3
+        from moss.rust_shim import rust_list_files
 
-        index_path = root / ".moss" / "index.db"
-        if index_path.exists():
-            try:
-                conn = sqlite3.connect(str(index_path))
-                cursor = conn.execute("SELECT path FROM files WHERE is_dir = 0")
-                files = {row[0] for row in cursor.fetchall()}
-                conn.close()
-                return files
-            except sqlite3.Error:
-                pass
+        # Try Rust index first
+        files = rust_list_files(prefix="", limit=10000, root=str(root))
+        if files is not None:
+            return set(files)
 
         # Fallback to git ls-files
         import subprocess
