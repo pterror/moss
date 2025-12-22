@@ -48,7 +48,9 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 - [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
 - [ ] Context modes for nested steps: implement shared/inherited (see docs/nested-execution.md)
-- [ ] State machine workflows (states + transitions) - design doc needed
+- [ ] State machine workflows: on_entry/on_exit hooks per state
+- [ ] State machine workflows: parallel state execution
+- [ ] State machine workflows: nested state machines
 - [ ] Define clear Rust/Python boundaries (what goes where, why)
 
 ## Backlog
@@ -63,7 +65,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
     - [x] `moss agent` is now alias for workflow run dwim
     - [x] Removed: AgentLoop, MossToolExecutor, old workflow loader (2742 lines)
     - [x] Nested steps (step type that runs sub-steps) - see docs/nested-execution.md
-    - [ ] State machine workflows (states + transitions) - see design doc
+    - [x] State machine workflows (states + transitions) - see design doc
   - [x] DWIMLoop removed - replaced by composable execution primitives (src/moss/execution/)
   - [x] Python edit assessment: keep EditAPI (file ops), complexity-routed edit() is stubs - agent handles it
   - Rust edit vs Python edit → same name, different behavior (Rust=structural, Python=LLM-routed)

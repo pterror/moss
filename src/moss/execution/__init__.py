@@ -686,6 +686,75 @@ LLM_STRATEGIES: dict[str, type[LLMStrategy]] = {
 }
 
 
+# =============================================================================
+# Condition Plugins (for state machine transitions)
+# =============================================================================
+
+
+class ConditionPlugin(ABC):
+    """Base class for transition condition plugins."""
+
+    @abstractmethod
+    def evaluate(self, context: str, result: str, param: str | None = None) -> bool:
+        """Return True if condition is met."""
+        ...
+
+
+class HasErrorsCondition(ConditionPlugin):
+    """True if result contains 'error' (case-insensitive)."""
+
+    def evaluate(self, context: str, result: str, param: str | None = None) -> bool:
+        return "error" in result.lower()
+
+
+class SuccessCondition(ConditionPlugin):
+    """True if result doesn't indicate an error."""
+
+    def evaluate(self, context: str, result: str, param: str | None = None) -> bool:
+        return not result.startswith("[Error")
+
+
+class EmptyCondition(ConditionPlugin):
+    """True if result is empty or whitespace."""
+
+    def evaluate(self, context: str, result: str, param: str | None = None) -> bool:
+        return not result.strip()
+
+
+class ContainsCondition(ConditionPlugin):
+    """True if result contains the parameter string."""
+
+    def evaluate(self, context: str, result: str, param: str | None = None) -> bool:
+        if param is None:
+            return False
+        return param in result
+
+
+CONDITION_PLUGINS: dict[str, ConditionPlugin] = {
+    "has_errors": HasErrorsCondition(),
+    "success": SuccessCondition(),
+    "empty": EmptyCondition(),
+    "contains": ContainsCondition(),
+}
+
+
+def evaluate_condition(condition: str, context: str, result: str) -> bool:
+    """Evaluate a condition string using plugins.
+
+    Supports parametric conditions: "contains:TypeError"
+    """
+    if ":" in condition:
+        name, param = condition.split(":", 1)
+    else:
+        name, param = condition, None
+
+    plugin = CONDITION_PLUGINS.get(name)
+    if plugin is None:
+        return False
+
+    return plugin.evaluate(context, result, param)
+
+
 @dataclass
 class WorkflowStep:
     """A predefined step in a workflow.
@@ -702,6 +771,24 @@ class WorkflowStep:
 
 
 @dataclass
+class Transition:
+    """A transition between states in a state machine workflow."""
+
+    next: str  # Target state name
+    condition: str | None = None  # Condition plugin name, None = always
+
+
+@dataclass
+class WorkflowState:
+    """A state in a state machine workflow."""
+
+    name: str
+    action: str | None = None  # Command to execute in this state
+    transitions: list[Transition] = field(default_factory=list)
+    terminal: bool = False  # End state?
+
+
+@dataclass
 class WorkflowConfig:
     """Parsed workflow configuration."""
 
@@ -713,6 +800,8 @@ class WorkflowConfig:
     retry: RetryStrategy | None = None
     llm: LLMStrategy | None = None
     steps: list[WorkflowStep] | None = None  # If set, run step-based instead of agentic
+    states: list[WorkflowState] | None = None  # If set, run state machine
+    initial_state: str | None = None  # Starting state for state machine
 
 
 def load_workflow(path: str) -> WorkflowConfig:
@@ -805,6 +894,35 @@ def load_workflow(path: str) -> WorkflowConfig:
     if steps_cfg := wf.get("steps"):
         steps = parse_steps(steps_cfg)
 
+    # Parse states (for state machine workflows)
+    def parse_states(states_cfg: list[dict[str, Any]]) -> list[WorkflowState]:
+        """Parse state configs with transitions."""
+        result = []
+        for state_cfg in states_cfg:
+            transitions = []
+            if trans_cfg := state_cfg.get("transitions"):
+                for t in trans_cfg:
+                    transitions.append(
+                        Transition(
+                            next=t.get("next", ""),
+                            condition=t.get("condition"),
+                        )
+                    )
+            result.append(
+                WorkflowState(
+                    name=state_cfg.get("name", "state"),
+                    action=state_cfg.get("action"),
+                    transitions=transitions,
+                    terminal=state_cfg.get("terminal", False),
+                )
+            )
+        return result
+
+    states = None
+    initial_state = wf.get("initial_state")
+    if states_cfg := data.get("states"):
+        states = parse_states(states_cfg)
+
     return WorkflowConfig(
         name=wf.get("name", "unnamed"),
         description=wf.get("description", ""),
@@ -814,6 +932,8 @@ def load_workflow(path: str) -> WorkflowConfig:
         retry=retry,
         llm=llm,
         steps=steps,
+        states=states,
+        initial_state=initial_state,
     )
 
 
@@ -914,22 +1034,114 @@ def step_loop(
     return scope.context.get_context()
 
 
+def state_machine_loop(
+    states: list[WorkflowState],
+    initial: str,
+    context: ContextStrategy | None = None,
+    cache: CacheStrategy | None = None,
+    retry: RetryStrategy | None = None,
+    max_transitions: int = 50,
+    initial_context: dict[str, str] | None = None,
+) -> str:
+    """Execute state machine until terminal state or limit.
+
+    Args:
+        states: List of workflow states
+        initial: Name of initial state
+        context: Context strategy (default: FlatContext)
+        cache: Cache strategy (default: InMemoryCache)
+        retry: Retry strategy (default: NoRetry)
+        max_transitions: Maximum state transitions before stopping
+        initial_context: Initial context values
+
+    Returns:
+        Final context string
+    """
+    scope = Scope(
+        context=context or FlatContext(),
+        cache=cache or InMemoryCache(),
+        retry=retry or NoRetry(),
+    )
+
+    # Add initial context
+    if initial_context:
+        for key, value in initial_context.items():
+            scope.context.add(key, value)
+
+    # Build state lookup
+    state_map = {s.name: s for s in states}
+
+    if initial not in state_map:
+        scope.context.add("error", f"Initial state '{initial}' not found")
+        return scope.context.get_context()
+
+    current = state_map[initial]
+
+    for _ in range(max_transitions):
+        scope.context.add("state", current.name)
+
+        if current.terminal:
+            scope.context.add("result", "Terminal state reached")
+            break
+
+        # Execute state action
+        result = ""
+        if current.action:
+            result = scope.run(current.action)
+
+        # Find matching transition
+        next_state_name = None
+        for t in current.transitions:
+            if t.condition is None:
+                # No condition = always take this transition
+                next_state_name = t.next
+                break
+            if evaluate_condition(t.condition, scope.context.get_context(), result):
+                next_state_name = t.next
+                break
+
+        if next_state_name is None:
+            scope.context.add("error", f"No valid transition from state '{current.name}'")
+            break
+
+        if next_state_name not in state_map:
+            scope.context.add("error", f"Target state '{next_state_name}' not found")
+            break
+
+        current = state_map[next_state_name]
+
+    return scope.context.get_context()
+
+
 def run_workflow(path: str, task: str = "", initial_context: dict[str, str] | None = None) -> str:
     """Load and run a workflow from TOML.
 
-    Automatically detects agentic vs step-based:
+    Automatically detects workflow type (priority: states > steps > llm):
+    - If workflow has states: runs state_machine_loop
     - If workflow has steps: runs step_loop
     - If workflow has llm: runs agent_loop
 
     Args:
         path: Path to workflow TOML file
         task: Task description (for agentic workflows)
-        initial_context: Initial context (for step-based workflows)
+        initial_context: Initial context (for step-based/state machine workflows)
 
     Returns:
         Final context string
     """
     config = load_workflow(path)
+
+    # State machine workflow
+    if config.states and config.initial_state:
+        return state_machine_loop(
+            states=config.states,
+            initial=config.initial_state,
+            context=config.context,
+            cache=config.cache,
+            retry=config.retry,
+            max_transitions=config.max_turns,
+            initial_context=initial_context,
+        )
 
     # Step-based workflow
     if config.steps:

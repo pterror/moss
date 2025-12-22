@@ -4,6 +4,13 @@
 
 ### Features
 
+**State Machine Workflows** (Dec 23 2025)
+- New `state_machine_loop()` for graph-based execution with conditional transitions
+- States defined via `[[states]]` in TOML with `[[states.transitions]]`
+- Condition plugin system: `has_errors`, `success`, `empty`, `contains:X`
+- Extensible via `CONDITION_PLUGINS` registry
+- Example workflow: `validate-fix.toml` (analyze → fix → verify loop)
+
 **Nested Steps** (Dec 23 2025)
 - WorkflowStep now supports compound steps (with sub-steps)
 - Compound steps execute in child Scope with inherited strategies
