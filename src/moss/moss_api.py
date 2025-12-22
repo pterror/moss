@@ -425,7 +425,7 @@ class SkeletonAPI(PathResolvingMixin):
             content = api.skeleton.expand("src/agent_loop.py", "StepType")
             # Returns complete enum with all values
         """
-        from moss.rust_shim import call_rust
+        from moss.rust_shim import rust_view
 
         path = self._resolve_path(file_path)
         try:
@@ -435,9 +435,9 @@ class SkeletonAPI(PathResolvingMixin):
 
         # Use Rust view with path/symbol syntax
         symbol_path = f"{rel_path}/{symbol_name}"
-        exit_code, output = call_rust(["view", symbol_path, "-r", str(self.root)])
-        if exit_code == 0 and output:
-            return output.strip()
+        result = rust_view(symbol_path, root=str(self.root), line_numbers=True)
+        if result and "content" in result:
+            return result["content"].strip()
         return None
 
     def get_enum_values(self, file_path: str | Path, enum_name: str) -> list[str] | None:

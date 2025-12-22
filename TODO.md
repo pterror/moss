@@ -46,27 +46,27 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
-- [ ] Nested steps: step type that runs sub-steps (for grouping in workflows)
-- [ ] rust_shim naming: rename `rust_skeleton` → `rust_view` (calls `view` not `skeleton`)
-- [ ] Explore TUI: modal keybinds, jump-to-node shortcut
-- [ ] Python edit cleanup: redundant with agent, consider removing
+- [x] Nested steps: step type that runs sub-steps (see docs/nested-execution.md)
+- [x] rust_shim cleanup: SkeletonAPI.expand now uses rust_view() instead of raw call_rust()
+- [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
+- [x] Python edit assessment: EditAPI (file ops) is used; complexity-routed edit() is 80% stubs - leave as-is, agent handles edits
 
 ## Backlog
 
 **Architecture Cleanup (High Priority):**
 - [ ] Stop and plan before adding more features
 - [x] Consolidate redundant layers discovered Dec 22:
-  - [x] SkeletonAPI.expand → now uses `view path/symbol` via rust_shim
-  - rust_shim naming: `rust_skeleton` → should be `rust_view` (calls `view` not `skeleton`)
+  - [x] SkeletonAPI.expand → now uses rust_view() properly
+  - [x] rust_shim: rust_skeleton (calls skeleton), rust_view (calls view) - both correct
   - [x] Unify under `moss workflow run`:
     - [x] `moss workflow run dwim --arg task="..."` - agentic
     - [x] `moss agent` is now alias for workflow run dwim
     - [x] Removed: AgentLoop, MossToolExecutor, old workflow loader (2742 lines)
-    - [ ] Nested steps (step type that runs sub-steps) - for grouping
+    - [x] Nested steps (step type that runs sub-steps) - see docs/nested-execution.md
     - [ ] State machine workflows (states + transitions) - see design doc
   - [x] DWIMLoop removed - replaced by composable execution primitives (src/moss/execution/)
-  - Python edit → redundant with agent, remove
-  - Rust edit vs Python edit → same name, different behavior
+  - [x] Python edit assessment: keep EditAPI (file ops), complexity-routed edit() is stubs - agent handles it
+  - Rust edit vs Python edit → same name, different behavior (Rust=structural, Python=LLM-routed)
 - [ ] Define clear boundaries: what's Rust, what's Python, why
 
 **Indexing Performance:**
@@ -105,11 +105,10 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Use detected corrections to identify friction points, improve prompts/tools
 
 **Explore TUI Keybinds:**
-- [ ] Modal keybinds like Blender (mode-specific keys that change based on context)
-- [ ] Live footer keybind updates when mode/context changes
-- [ ] Modifier key layers (Ctrl/Alt/Shift combos for power users)
+- [ ] Modal keybinds (NEEDS DESIGN - see docs/tui.md "Modal Keybinds" section)
 - [ ] Jump-to-node shortcut (fuzzy search to quickly navigate tree)
-- [ ] View/Edit/Analyze mode indicator (replace 3 visible bindings with single indicator + dropdown, cycle with ctrl+tab)
+- [ ] View/Edit/Analyze: mode indicator (bottom right, near palette) OR tabbed content view
+- [ ] Remove theme keybind (T) - wasteful, only toggles light/dark
 
 **Editor Integration:**
 - [ ] LSP refactor actions (rename symbol across files via language server)

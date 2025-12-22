@@ -688,10 +688,15 @@ LLM_STRATEGIES: dict[str, type[LLMStrategy]] = {
 
 @dataclass
 class WorkflowStep:
-    """A predefined step in a workflow."""
+    """A predefined step in a workflow.
+
+    Simple step: has action (command string to execute).
+    Compound step: has steps (sub-steps that execute in a child Scope).
+    """
 
     name: str
-    action: str  # Command to execute (e.g., "view main.py", "analyze --health")
+    action: str | None = None  # Command to execute, None for compound steps
+    steps: list[WorkflowStep] | None = None  # Sub-steps for compound steps
     on_error: str = "fail"  # "fail", "skip", "retry"
     max_retries: int = 1
 
@@ -778,18 +783,27 @@ def load_workflow(path: str) -> WorkflowConfig:
             llm = NoLLM(actions=actions)
 
     # Parse steps (for step-based workflows)
-    steps = None
-    if steps_cfg := wf.get("steps"):
-        steps = []
+    def parse_steps(steps_cfg: list[dict[str, Any]]) -> list[WorkflowStep]:
+        """Parse step configs recursively."""
+        result = []
         for step_cfg in steps_cfg:
-            steps.append(
+            sub_steps = None
+            if sub_cfg := step_cfg.get("steps"):
+                sub_steps = parse_steps(sub_cfg)
+            result.append(
                 WorkflowStep(
                     name=step_cfg.get("name", "step"),
-                    action=step_cfg.get("action", ""),
+                    action=step_cfg.get("action"),
+                    steps=sub_steps,
                     on_error=step_cfg.get("on_error", "fail"),
                     max_retries=step_cfg.get("max_retries", 1),
                 )
             )
+        return result
+
+    steps = None
+    if steps_cfg := wf.get("steps"):
+        steps = parse_steps(steps_cfg)
 
     return WorkflowConfig(
         name=wf.get("name", "unnamed"),
@@ -803,6 +817,67 @@ def load_workflow(path: str) -> WorkflowConfig:
     )
 
 
+def _run_steps(scope: Scope, steps: list[WorkflowStep]) -> bool:
+    """Run steps in a scope, handling both simple and compound steps.
+
+    Args:
+        scope: The scope to run steps in
+        steps: List of workflow steps to execute
+
+    Returns:
+        True if all steps succeeded, False if stopped on error
+    """
+    for step in steps:
+        scope.context.add("step", step.name)
+
+        try:
+            if step.steps:
+                # Compound step: create child scope and run sub-steps
+                with scope.child() as child_scope:
+                    if not _run_steps(child_scope, step.steps):
+                        # Sub-step failed with on_error="fail"
+                        if step.on_error == "skip":
+                            scope.context.add("skipped", f"{step.name}: sub-step failed")
+                            continue
+                        elif step.on_error != "fail":
+                            continue
+                        else:
+                            return False
+            elif step.action:
+                # Simple step: execute action
+                result = scope.run(step.action)
+                scope.context.add("result", result)
+            else:
+                # Neither action nor steps - skip
+                scope.context.add("skipped", f"{step.name}: no action or steps")
+                continue
+
+        except Exception as e:
+            if step.on_error == "skip":
+                scope.context.add("skipped", f"{step.name}: {e}")
+                continue
+            elif step.on_error == "retry" and step.max_retries > 1:
+                # Simple retry
+                success = False
+                for _attempt in range(step.max_retries - 1):
+                    try:
+                        if step.action:
+                            result = scope.run(step.action)
+                            scope.context.add("result", result)
+                            success = True
+                            break
+                    except Exception:
+                        continue
+                if not success:
+                    scope.context.add("error", f"{step.name}: {e}")
+                    return False
+            else:
+                scope.context.add("error", f"{step.name}: {e}")
+                return False
+
+    return True
+
+
 def step_loop(
     steps: list[WorkflowStep],
     context: ContextStrategy | None = None,
@@ -811,6 +886,8 @@ def step_loop(
     initial_context: dict[str, str] | None = None,
 ) -> str:
     """Run predefined steps in sequence.
+
+    Supports nested steps: compound steps (with sub-steps) create child scopes.
 
     Args:
         steps: List of workflow steps to execute
@@ -833,32 +910,7 @@ def step_loop(
         for key, value in initial_context.items():
             scope.context.add(key, value)
 
-    # Run each step
-    for step in steps:
-        scope.context.add("step", step.name)
-
-        try:
-            result = scope.run(step.action)
-            scope.context.add("result", result)
-        except Exception as e:
-            if step.on_error == "skip":
-                scope.context.add("skipped", f"{step.name}: {e}")
-                continue
-            elif step.on_error == "retry" and step.max_retries > 1:
-                # Simple retry
-                for _attempt in range(step.max_retries - 1):
-                    try:
-                        result = scope.run(step.action)
-                        scope.context.add("result", result)
-                        break
-                    except Exception:
-                        continue
-                else:
-                    scope.context.add("error", f"{step.name}: {e}")
-            else:
-                scope.context.add("error", f"{step.name}: {e}")
-                break
-
+    _run_steps(scope, steps)
     return scope.context.get_context()
 
 
