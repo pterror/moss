@@ -16,12 +16,16 @@
 - `ExploreMode` is now default TUI mode (replaces READ/WRITE)
 - Tree navigation with files + symbols (lazy-loaded)
 - Keyboard shortcuts: `v`, `e`, `a` to apply primitives to selected node
+- Left/right arrow keys expand/collapse tree nodes
 - Command input supports both explicit (`view foo.py`) and implicit (`foo.py`)
 - Detail panel shows view output, edit preview, or analyze reports
 - Mode set now: EXPLORE (default), PLAN, DIFF, SESSION, BRANCH, SWARM, COMMIT
 - Subdirectory navigation with breadcrumbs (`cd`, `-` to go up, Enter to navigate)
 - Syntax highlighting for code in detail panel
-- Leaf nodes no longer show expand arrows
+- Files without symbols hide expand arrow after expansion attempt
+- Data files (JSON, YAML, lockfiles) limited to 50 lines in preview
+- Preview updates throttled to 100ms when holding arrow keys
+- Markdown parent headings show tree structure of children
 - Mode indicator moved to subtitle (compact header)
 - Action bar shows clickable View/Edit/Analyze buttons
 
