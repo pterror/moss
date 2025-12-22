@@ -47,8 +47,6 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 ## Next Up
 
 - [ ] Explore TUI: modal keybinds, jump-to-node shortcut
-- [ ] Review hybrid-loops.md for accuracy (user questioned if tools still exist)
-- [ ] Consider generating file extension list from authoritative source (linguist)
 
 ## Backlog
 
