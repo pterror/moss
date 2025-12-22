@@ -64,6 +64,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Live footer keybind updates when mode/context changes
 - [ ] Modifier key layers (Ctrl/Alt/Shift combos for power users)
 - [ ] Jump-to-node shortcut (fuzzy search to quickly navigate tree)
+- [ ] View/Edit/Analyze as mode indicator with dropdown (right side of footer)
 
 **Telemetry** (see `docs/telemetry.md`):
 - [x] `moss telemetry` CLI with aggregate analysis
