@@ -50,6 +50,15 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Backlog
 
+**Architecture Cleanup (High Priority):**
+- [ ] Stop and plan before adding more features
+- [ ] Consolidate redundant layers discovered Dec 22:
+  - SkeletonAPI wrappers (just call Rust CLI)
+  - Two agent loops (DWIMLoop vs AgentLoop+workflows)
+  - Python edit (redundant with agent)
+  - Confusing CLI naming (edit means different things)
+- [ ] Define clear boundaries: what's Rust, what's Python, why
+
 **Indexing Performance:**
 - [x] Slow reindexing on large repos - FIXED (20s → 1s on ~/git/enso/)
   - Fixed redundant parsing (find_callees_for_symbol avoids re-parse)
@@ -64,21 +73,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 **Code Organization:**
 - [x] Synthesis plugins: aligned module paths with entry point names (Dec 22)
-- [ ] Simplify MossAPI/MossToolExecutor: Remove redundant Python wrappers
-  - `skeleton.format` → `rust_shim.passthrough("view", [path])`
-  - `skeleton.expand` → `rust_shim.passthrough("view", [path/symbol])`
-  - `skeleton.extract` → same with `--json`
-  - MossToolExecutor could use rust_shim directly
-- [ ] CLI simplification: Too many overlapping commands
-  - `view`, `edit`, `analyze` - Rust primitives (keep)
-  - Remove Python `edit` - redundant with agent
-  - Two parallel agent implementations (!):
-    - `DWIMLoop` class (default `moss agent`) - custom Python, DWIM routing
-    - `AgentLoop` + workflow system (`--vanilla`) - TOML-defined, executor-based
-  - Open questions:
-    - Why two agent loop implementations?
-    - Should DWIMLoop be a workflow, or should workflows use DWIMLoop?
-    - What about workflow {list,new,show}? Management commands need a home
+- See "Architecture Cleanup" above for major refactoring items
 
 **Call Graph Improvements:**
 - [x] Call extraction for Python, Rust, TypeScript, JavaScript, Java, Go
