@@ -361,32 +361,39 @@ with Scope(context=TaskTreeContext()) as outer:
 
 DWIMLoop should not be a special class. It should be a predefined workflow:
 
+```toml
+# What DWIMLoop becomes - just a TOML workflow:
+[workflow]
+name = "dwim"
+
+[workflow.context]
+strategy = "task_tree"
+
+[workflow.cache]
+strategy = "in_memory"
+preview_length = 500
+
+[workflow.retry]
+strategy = "exponential"
+max_attempts = 3
+
+[workflow.llm]
+strategy = "simple"
+provider = "anthropic"
+model = "claude-3-haiku"
+system_prompt = "..." # or reference a file
+```
+
+Python equivalent (for programmatic use):
+
 ```python
-# What DWIMLoop becomes:
 DWIM_WORKFLOW = {
     "context": TaskTreeContext,
-    "cache": InMemoryCache,  # with preview/truncation
+    "cache": InMemoryCache,
     "retry": ExponentialRetry(max_attempts=3),
     "llm": SimpleLLM(system_prompt=DWIM_SYSTEM_PROMPT),
 }
-
-# Usage:
 result = agent_loop("fix type errors", **DWIM_WORKFLOW)
-```
-
-Or in TOML for non-agentic variant:
-
-```toml
-[workflow]
-name = "dwim"
-context = "task_tree"
-cache = "in_memory"
-retry = { strategy = "exponential", max_attempts = 3 }
-
-# LLM config only if agentic
-[workflow.llm]
-provider = "anthropic"
-model = "claude-3-haiku"
 ```
 
 **Key insight**: The 1151 lines of DWIMLoop are mostly:
