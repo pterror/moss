@@ -63,6 +63,11 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Backlog
 
+**Rust Crate Consolidation:**
+- [ ] Extract shared code from moss-cli and moss-daemon into moss-core crate
+- [ ] Duplicate modules: index.rs (1213 vs 407 lines), symbols.rs (767 vs 334 lines)
+- [ ] Share: FileIndex, SymbolParser, tree-sitter parsers, path resolution
+
 **Skeleton Language Support:**
 - [ ] Add more tree-sitter grammars: YAML, JSON, TypeScript, JavaScript, HTML
 - [ ] Priority: languages used in this codebase first

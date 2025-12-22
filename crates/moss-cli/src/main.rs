@@ -2020,7 +2020,7 @@ fn cmd_callees(symbol: &str, file: Option<&str>, root: Option<&Path>, json: bool
 
     if let Ok(mut idx) = index::FileIndex::open(&root) {
         if idx.needs_refresh() {
-            if let Err(e) = idx.refresh() {
+            if let Err(e) = idx.incremental_refresh() {
                 eprintln!("Failed to refresh file index: {}", e);
                 return 1;
             }
@@ -2125,7 +2125,7 @@ fn cmd_callers(symbol: &str, root: Option<&Path>, json: bool, profiler: &mut Pro
     if let Ok(mut idx) = index::FileIndex::open(&root) {
         // Ensure file index is populated first
         if idx.needs_refresh() {
-            if let Err(e) = idx.refresh() {
+            if let Err(e) = idx.incremental_refresh() {
                 eprintln!("Failed to refresh file index: {}", e);
                 return 1;
             }
