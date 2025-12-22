@@ -39,6 +39,8 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [x] `patterns`, `git-hotspots` - NOT slow (6s, 2.5s), keeping both
 - [x] `--compact` mode on patterns (added)
 - [x] Large file detection in `analyze --health` (shows top 10 files >500 lines)
+- [x] Folded `health`, `summarize`, `check-docs`, `check-todos` into `analyze` flags
+- [x] PTY detection for auto-compact mode (non-TTY defaults to compact)
 
 **Keys:** see `.env.example` for ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 

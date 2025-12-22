@@ -24,11 +24,23 @@
 - Added `GeminiCliAnalyzer` for Gemini CLI session logs (JSON format)
 - Auto-detection now recognizes Gemini CLI sessions
 
+**CLI Consolidation & UX** (Dec 22 2025)
+- Folded standalone commands into `analyze` primitive:
+  - `--summary`: generate file/directory summary (was `moss summarize`)
+  - `--check-docs`: check documentation freshness (was `moss check-docs`)
+  - `--check-todos`: check TODO.md accuracy (was `moss check-todos`)
+  - `--health`: already available in Rust CLI
+- PTY auto-detection: non-TTY defaults to compact mode (machine-readable)
+- Added "Never Extract Data Manually" principle to `docs/philosophy.md`
+- Updated agent prompt to forbid guessing data (use `view` to discover)
+- Added Command Philosophy section to `docs/cli/commands.md`
+
 ### Removed
 
 **CLI Cleanup** (Dec 22 2025)
 - Removed `moss loop` CLI command and all predefined loops (simple, critic, incremental, etc.)
 - Removed `moss dwim` CLI command (module kept for alias resolution)
+- Removed `moss health`, `moss summarize`, `moss check-docs`, `moss check-todos` (use `analyze` flags)
 - Use DWIMLoop or TOML workflows instead
 
 ### Features
