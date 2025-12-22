@@ -358,23 +358,24 @@ class KeybindBar(Static):
 
     def render(self) -> str:
         parts = []
-        # Build from app's active bindings
         if self.app:
             for binding in self.app.BINDINGS:
                 if not binding.show:
                     continue
                 key = binding.key
-                # Normalize key display
                 if key == "minus":
                     key = "-"
                 elif key == "slash":
                     key = "/"
+                desc = binding.description
                 action = binding.action.replace("app.", "")
-                parts.append(f"[@click=app.{action}][b]{key}[/b] {binding.description}[/]")
+                # Style first letter bold, rest normal
+                styled = f"[b]{desc[0]}[/]{desc[1:]}" if desc else key
+                parts.append(f"[@click=app.{action}]{styled}[/]")
         left = " ".join(parts)
-        right = "[@click=app.action_command_palette][b]^p[/b] Palette[/]"
+        right = "[@click=app.action_command_palette][b]^p[/] Palette[/]"
         width = self.size.width if self.size.width > 0 else 80
-        padding = max(1, width - len(left) // 2 - 12)
+        padding = max(1, width - 45)
         return f"{left}{' ' * padding}{right}"
 
 
