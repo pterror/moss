@@ -14,6 +14,12 @@ ALWAYS NOTE THINGS DOWN. When you discover something important, write it immedia
 - Conventions → this file
 - **Areas for improvement** → TODO.md (self-evaluate constantly, note friction points)
 
+**Triggers to document immediately:**
+- User corrects you → write down what you learned before fixing
+- Trial-and-error (2+ failed attempts) → document what actually works
+- Framework/library quirk discovered → add to relevant docs/ file
+- "I'll remember this" thought → you won't, write it down now
+
 ## Negative Constraints
 
 Do not:
