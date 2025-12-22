@@ -127,6 +127,7 @@ Scope(context=TaskTree) {
    class Decision:
        thinking: str | None = None  # Reasoning/scratchpad
        actions: list[str] = field(default_factory=list)  # One or more
+       parallel: bool = False  # Run actions concurrently or sequentially
        done: bool = False
 
    def decide(task, context) -> Decision
@@ -135,7 +136,7 @@ Scope(context=TaskTree) {
    This enables:
    - **Thinking**: Visible reasoning before acting
    - **Planning**: Multiple steps at once
-   - **Parallel execution**: Independent actions run concurrently (fanout)
+   - **Execution mode**: LLM indicates if actions are independent (parallel) or ordered (sequential)
 
    TOML representation:
    ```toml
@@ -143,8 +144,11 @@ Scope(context=TaskTree) {
    strategy = "simple"
    thinking = true          # Enable chain-of-thought
    max_actions = 5          # Allow planning multiple steps
-   parallel = true          # Run independent actions concurrently
+   allow_parallel = true    # Let LLM indicate parallel execution
    ```
+
+   Note: `allow_parallel` is a capability flag. The LLM decides per-decision
+   whether actions are actually parallel or sequential.
 
 4. **DWIM** - Where does intent parsing fit?
    - Just a function: `parse_intent(text) → Step`
