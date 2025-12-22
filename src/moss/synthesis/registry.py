@@ -306,7 +306,7 @@ class SynthesisRegistry:
         """
         # Import built-in generators
         try:
-            from moss.synthesis.plugins.generators import PlaceholderGenerator
+            from moss.synthesis.generators import PlaceholderGenerator
 
             if "placeholder" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(PlaceholderGenerator())
@@ -314,7 +314,7 @@ class SynthesisRegistry:
             logger.debug("PlaceholderGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import TemplateGenerator
+            from moss.synthesis.generators import TemplateGenerator
 
             if "template" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(TemplateGenerator())
@@ -322,7 +322,7 @@ class SynthesisRegistry:
             logger.debug("TemplateGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import LLMGenerator, MockLLMProvider
+            from moss.synthesis.generators import LLMGenerator, MockLLMProvider
 
             if "llm" not in [g.metadata.name for g in self.generators.get_all()]:
                 # Register with mock provider by default (safe for testing)
@@ -331,7 +331,7 @@ class SynthesisRegistry:
             logger.debug("LLMGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import ComponentGenerator
+            from moss.synthesis.generators import ComponentGenerator
 
             if "component" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(ComponentGenerator())
@@ -339,7 +339,7 @@ class SynthesisRegistry:
             logger.debug("ComponentGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import SMTGenerator
+            from moss.synthesis.generators import SMTGenerator
 
             if "smt" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(SMTGenerator())
@@ -347,7 +347,7 @@ class SynthesisRegistry:
             logger.debug("SMTGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import PBEGenerator
+            from moss.synthesis.generators import PBEGenerator
 
             if "pbe" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(PBEGenerator())
@@ -355,7 +355,7 @@ class SynthesisRegistry:
             logger.debug("PBEGenerator not available")
 
         try:
-            from moss.synthesis.plugins.generators import SketchGenerator
+            from moss.synthesis.generators import SketchGenerator
 
             if "sketch" not in [g.metadata.name for g in self.generators.get_all()]:
                 self.generators.register(SketchGenerator())
@@ -364,7 +364,7 @@ class SynthesisRegistry:
 
         # Import built-in validators
         try:
-            from moss.synthesis.plugins.validators import PytestValidator
+            from moss.synthesis.validators import PytestValidator
 
             if "pytest" not in [v.metadata.name for v in self.validators.get_all()]:
                 self.validators.register(PytestValidator())
@@ -373,7 +373,7 @@ class SynthesisRegistry:
 
         # Import built-in libraries
         try:
-            from moss.synthesis.plugins.libraries import MemoryLibrary
+            from moss.synthesis.libraries import MemoryLibrary
 
             if "memory" not in [lib.metadata.name for lib in self.libraries.get_all()]:
                 self.libraries.register(MemoryLibrary())
@@ -381,7 +381,7 @@ class SynthesisRegistry:
             logger.debug("MemoryLibrary not available")
 
         try:
-            from moss.synthesis.plugins.libraries import LearnedLibrary
+            from moss.synthesis.libraries import LearnedLibrary
 
             if "learned" not in [lib.metadata.name for lib in self.libraries.get_all()]:
                 self.libraries.register(LearnedLibrary())

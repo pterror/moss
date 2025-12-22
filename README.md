@@ -381,7 +381,7 @@ Plugin-based code generation:
 
 ```python
 from moss.synthesis import SynthesisFramework, Specification
-from moss.synthesis.plugins import get_synthesis_registry
+from moss.synthesis import get_synthesis_registry
 
 # Get the global registry (discovers plugins automatically)
 registry = get_synthesis_registry()
@@ -414,13 +414,13 @@ if result.success:
 #### LLM Generator
 
 ```python
-from moss.synthesis.plugins.generators import create_llm_generator
+from moss.synthesis.generators import create_llm_generator
 
 # Create with real LLM provider (requires litellm)
 generator = create_llm_generator(model="claude-sonnet-4-20250514")
 
 # Or use mock for testing
-from moss.synthesis.plugins.generators import create_mock_generator
+from moss.synthesis.generators import create_mock_generator
 generator = create_mock_generator()
 ```
 

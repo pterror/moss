@@ -30,7 +30,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     CodeGenerator,
     GenerationCost,
     GenerationHints,

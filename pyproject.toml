@@ -27,17 +27,17 @@ toml-schema = "moss.plugins.data_files:TOMLSchemaPlugin"
 
 # Synthesis plugin entry points
 [project.entry-points."moss.synthesis.generators"]
-placeholder = "moss.synthesis.plugins.generators:PlaceholderGenerator"
-template = "moss.synthesis.plugins.generators:TemplateGenerator"
-llm = "moss.synthesis.plugins.generators.llm:LLMGenerator"
+placeholder = "moss.synthesis.generators:PlaceholderGenerator"
+template = "moss.synthesis.generators:TemplateGenerator"
+llm = "moss.synthesis.generators.llm:LLMGenerator"
 
 [project.entry-points."moss.synthesis.validators"]
-pytest = "moss.synthesis.plugins.validators:TestValidator"
-mypy = "moss.synthesis.plugins.validators:TypeValidator"
+pytest = "moss.synthesis.validators:TestValidator"
+mypy = "moss.synthesis.validators:TypeValidator"
 
 [project.entry-points."moss.synthesis.libraries"]
-memory = "moss.synthesis.plugins.libraries:MemoryLibrary"
-learned = "moss.synthesis.plugins.libraries:LearnedLibrary"
+memory = "moss.synthesis.libraries:MemoryLibrary"
+learned = "moss.synthesis.libraries:LearnedLibrary"
 
 [project.entry-points."moss.synthesis.strategies"]
 type_driven = "moss.synthesis.strategies:TypeDrivenDecomposition"

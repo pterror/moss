@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     SynthesisValidator,
     ValidationResult,
     ValidatorMetadata,

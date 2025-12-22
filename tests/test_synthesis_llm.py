@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from moss.synthesis.plugins.generators.llm import (
+from moss.synthesis.generators.llm import (
     LiteLLMProvider,
     LLMCostEstimate,
     LLMGenerator,
@@ -15,7 +15,7 @@ from moss.synthesis.plugins.generators.llm import (
     create_llm_generator,
     create_mock_generator,
 )
-from moss.synthesis.plugins.protocols import CodeGenerator, GenerationCost
+from moss.synthesis.protocols import CodeGenerator, GenerationCost
 from moss.synthesis.types import Context, Specification
 
 # =============================================================================
@@ -404,7 +404,7 @@ class TestLLMGenerator:
         simple_spec: Specification,
         context: Context,
     ) -> None:
-        from moss.synthesis.plugins.protocols import Abstraction, GenerationHints
+        from moss.synthesis.protocols import Abstraction, GenerationHints
 
         hints = GenerationHints(
             preferred_style="functional",

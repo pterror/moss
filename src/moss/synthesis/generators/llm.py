@@ -11,7 +11,7 @@ Features:
 - Configurable prompts and parameters
 
 Usage:
-    from moss.synthesis.plugins.generators.llm import (
+    from moss.synthesis.generators.llm import (
         LLMGenerator,
         MockLLMProvider,
         LiteLLMProvider,
@@ -32,7 +32,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     CodeGenerator,
     GenerationCost,
     GenerationHints,

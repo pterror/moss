@@ -19,7 +19,7 @@ import string
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     CodeGenerator,
     GenerationCost,
     GenerationHints,

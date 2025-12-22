@@ -11,15 +11,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from moss.synthesis.plugins.libraries.base import (
-    BaseLibrary,
-    extract_keywords,
-    types_compatible,
-)
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     Abstraction,
     LibraryMetadata,
     LibraryPlugin,
+)
+from .base import (
+    BaseLibrary,
+    extract_keywords,
+    types_compatible,
 )
 
 if TYPE_CHECKING:

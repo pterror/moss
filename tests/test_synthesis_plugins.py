@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from moss.synthesis.plugins import (
+from moss.synthesis import (
     Abstraction,
     CodeGenerator,
     GenerationHints,
@@ -16,12 +16,12 @@ from moss.synthesis.plugins import (
     get_synthesis_registry,
     reset_synthesis_registry,
 )
-from moss.synthesis.plugins.generators import PlaceholderGenerator, TemplateGenerator
-from moss.synthesis.plugins.libraries import MemoryLibrary
+from moss.synthesis.generators import PlaceholderGenerator, TemplateGenerator
+from moss.synthesis.libraries import MemoryLibrary
 from moss.synthesis.plugins.strategies import StrategyRegistry
-from moss.synthesis.plugins.validators import TestValidator, TypeValidator
 from moss.synthesis.strategies import TypeDrivenDecomposition
 from moss.synthesis.types import Context, Specification
+from moss.synthesis.validators import TestValidator, TypeValidator
 
 
 @pytest.fixture
@@ -532,7 +532,7 @@ class TestComponentGenerator:
     @pytest.fixture
     def component_gen(self):
         """Create ComponentGenerator instance."""
-        from moss.synthesis.plugins.generators import ComponentGenerator
+        from moss.synthesis.generators import ComponentGenerator
 
         return ComponentGenerator(max_depth=3, max_solutions=3)
 
@@ -633,7 +633,7 @@ class TestSMTGenerator:
     @pytest.fixture
     def smt_gen(self):
         """Create SMTGenerator instance."""
-        from moss.synthesis.plugins.generators import SMTGenerator
+        from moss.synthesis.generators import SMTGenerator
 
         return SMTGenerator(max_depth=3, timeout_ms=1000, max_solutions=3)
 
@@ -814,7 +814,7 @@ class TestPBEGenerator:
     @pytest.fixture
     def pbe_gen(self):
         """Create PBEGenerator instance."""
-        from moss.synthesis.plugins.generators import PBEGenerator
+        from moss.synthesis.generators import PBEGenerator
 
         return PBEGenerator(max_candidates=50, max_concat_parts=4)
 
@@ -905,7 +905,7 @@ class TestSketchGenerator:
     @pytest.fixture
     def sketch_gen(self):
         """Create SketchGenerator instance."""
-        from moss.synthesis.plugins.generators import SketchGenerator
+        from moss.synthesis.generators import SketchGenerator
 
         return SketchGenerator(max_candidates=500, max_holes=4)
 
@@ -1000,7 +1000,7 @@ class TestSketchParser:
     @pytest.fixture
     def parser(self):
         """Create parser instance."""
-        from moss.synthesis.plugins.generators.sketch import SketchParser
+        from moss.synthesis.generators.sketch import SketchParser
 
         return SketchParser()
 
@@ -1051,7 +1051,7 @@ class TestPBESynthesizer:
     @pytest.fixture
     def synthesizer(self):
         """Create synthesizer instance."""
-        from moss.synthesis.plugins.generators.pbe import PBESynthesizer
+        from moss.synthesis.generators.pbe import PBESynthesizer
 
         return PBESynthesizer(max_candidates=50)
 

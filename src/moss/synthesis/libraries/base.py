@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from moss.synthesis.plugins.protocols import Abstraction, LibraryMetadata
+from ..protocols import Abstraction, LibraryMetadata
 
 if TYPE_CHECKING:
     pass

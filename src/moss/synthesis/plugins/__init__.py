@@ -1,45 +1,40 @@
-"""Synthesis Plugin Architecture.
+"""Backward compatibility shim.
 
-This module provides the plugin infrastructure for moss synthesis,
-enabling pluggable code generators, validators, and library learning.
+All synthesis plugin exports have moved to moss.synthesis.
+Import from there instead:
 
-Inspired by prior art:
-- Synquid: Type-driven synthesis (SMTGenerator)
-- miniKanren: Relational programming (RelationalStrategy)
-- DreamCoder: Library learning (LibraryPlugin)
-- lambda^2: Bidirectional type-example synthesis
-
-Key components:
-- CodeGenerator: Protocol for code generation plugins
-- SynthesisValidator: Protocol for validation plugins
-- LibraryPlugin: Protocol for abstraction libraries
-- SynthesisRegistry: Unified registry for all synthesis plugins
+    from moss.synthesis import (
+        CodeGenerator,
+        GeneratorMetadata,
+        get_synthesis_registry,
+        ...
+    )
 """
 
-from .protocols import (
+from moss.synthesis import (
     Abstraction,
     CodeGenerator,
     GenerationCost,
     GenerationHints,
     GenerationResult,
     GeneratorMetadata,
+    GeneratorRegistry,
     GeneratorType,
     LibraryMetadata,
     LibraryPlugin,
+    LibraryRegistry,
+    SynthesisRegistry,
     SynthesisValidator,
     ValidationResult,
     ValidatorMetadata,
-    ValidatorType,
-)
-from .registry import (
-    GeneratorRegistry,
-    LibraryRegistry,
-    SynthesisRegistry,
     ValidatorRegistry,
+    ValidatorType,
     get_synthesis_registry,
     reset_synthesis_registry,
 )
-from .strategies import (
+
+# Re-export strategy items from strategy_registry module
+from moss.synthesis.strategy_registry import (
     StrategyPlugin,
     StrategyRegistry,
     get_strategy_registry,

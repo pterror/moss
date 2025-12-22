@@ -36,7 +36,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     GenerationCost,
     GenerationHints,
     GenerationResult,

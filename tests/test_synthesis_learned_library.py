@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from moss.synthesis.plugins.libraries.learned import (
+from moss.synthesis.libraries.learned import (
     CodePattern,
     LearnedLibrary,
     PatternExtractor,
 )
-from moss.synthesis.plugins.protocols import Abstraction, LibraryPlugin
+from moss.synthesis.protocols import Abstraction, LibraryPlugin
 from moss.synthesis.types import Context, Specification
 
 # =============================================================================

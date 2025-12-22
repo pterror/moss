@@ -1529,13 +1529,13 @@ def cmd_synthesize(args: Namespace) -> int:
         strategies = [PatternBasedDecomposition()]
 
     # Set up generator
-    from moss.synthesis.plugins import CodeGenerator
+    from moss.synthesis import CodeGenerator
 
     generator: CodeGenerator | None = None
     generator_name = getattr(args, "generator", "auto")
 
     if generator_name != "auto":
-        from moss.synthesis.plugins.generators import (
+        from moss.synthesis.generators import (
             LLMGenerator,
             MockLLMProvider,
             PlaceholderGenerator,

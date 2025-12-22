@@ -89,7 +89,7 @@ export OPENAI_API_KEY="sk-..."
 **Mock provider for testing:**
 
 ```python
-from moss.synthesis.plugins.generators.llm import LLMGenerator, MockLLMProvider
+from moss.synthesis.generators.llm import LLMGenerator, MockLLMProvider
 
 generator = LLMGenerator(provider=MockLLMProvider())
 ```
@@ -115,7 +115,7 @@ return placeholder_generator.generate(spec, context)
 Hints guide generation:
 
 ```python
-from moss.synthesis.plugins import GenerationHints
+from moss.synthesis import GenerationHints
 
 hints = GenerationHints(
     preferred_style="crud/create",      # Template preference
@@ -130,7 +130,7 @@ result = await generator.generate(spec, context, hints)
 ## Creating Custom Generators
 
 ```python
-from moss.synthesis.plugins import (
+from moss.synthesis import (
     CodeGenerator,
     GeneratorMetadata,
     GeneratorType,

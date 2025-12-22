@@ -18,7 +18,7 @@ Moss uses Python entry points for plugin discovery and registration.
 
 ```python
 # my_plugin/generator.py
-from moss.synthesis.plugins import CodeGenerator, GeneratorMetadata, GeneratorType
+from moss.synthesis import CodeGenerator, GeneratorMetadata, GeneratorType
 
 class MyGenerator(CodeGenerator):
     @property
@@ -117,7 +117,7 @@ class MyStrategy(DecompositionStrategy):
 Plugins are discovered at runtime:
 
 ```python
-from moss.synthesis.plugins import get_synthesis_registry
+from moss.synthesis import get_synthesis_registry
 
 registry = get_synthesis_registry()
 

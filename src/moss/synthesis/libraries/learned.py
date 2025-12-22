@@ -9,7 +9,7 @@ Inspired by DreamCoder's library learning, but uses frequency-based
 detection rather than compression-based optimization.
 
 Usage:
-    from moss.synthesis.plugins.libraries.learned import LearnedLibrary
+    from .learned import LearnedLibrary
 
     library = LearnedLibrary()
 
@@ -34,15 +34,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from moss.synthesis.plugins.libraries.base import (
-    BaseLibrary,
-    extract_keywords,
-    types_compatible,
-)
-from moss.synthesis.plugins.protocols import (
+from ..protocols import (
     Abstraction,
     LibraryMetadata,
     LibraryPlugin,
+)
+from .base import (
+    BaseLibrary,
+    extract_keywords,
+    types_compatible,
 )
 
 if TYPE_CHECKING:
