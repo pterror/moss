@@ -87,6 +87,9 @@ impl SkeletonExtractor {
             Some(Language::C) => self.extract_c(content),
             Some(Language::Cpp) => self.extract_cpp(content),
             Some(Language::Ruby) => self.extract_ruby(content),
+            Some(Language::Json) => self.extract_json(content),
+            Some(Language::Yaml) => self.extract_yaml(content),
+            Some(Language::Toml) => self.extract_toml(content),
             _ => Vec::new(),
         };
 
@@ -1237,6 +1240,247 @@ impl SkeletonExtractor {
 
             if kind != "class" && kind != "module" && cursor.goto_first_child() {
                 Self::collect_ruby_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn extract_json(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Json).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_json_keys(&mut cursor, content, &mut symbols);
+        symbols
+    }
+
+    fn collect_json_keys(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            if kind == "pair" {
+                if let Some(key_node) = node.child_by_field_name("key") {
+                    let key_text = &content[key_node.byte_range()];
+                    let key_name = key_text.trim_matches('"');
+
+                    let value_node = node.child_by_field_name("value");
+                    let is_object = value_node.map(|v| v.kind() == "object").unwrap_or(false);
+                    let is_array = value_node.map(|v| v.kind() == "array").unwrap_or(false);
+
+                    let (sym_kind, type_hint) = if is_object {
+                        ("class", "object")
+                    } else if is_array {
+                        ("variable", "array")
+                    } else {
+                        ("variable", value_node.map(|v| v.kind()).unwrap_or("value"))
+                    };
+
+                    let mut children = Vec::new();
+                    if is_object {
+                        if cursor.goto_first_child() {
+                            Self::collect_json_keys(cursor, content, &mut children);
+                            cursor.goto_parent();
+                        }
+                    }
+
+                    symbols.push(SkeletonSymbol {
+                        name: key_name.to_string(),
+                        kind: sym_kind,
+                        signature: format!("{}: {}", key_name, type_hint),
+                        docstring: None,
+                        start_line: node.start_position().row + 1,
+                        end_line: node.end_position().row + 1,
+                        children,
+                    });
+
+                    if is_object {
+                        if cursor.goto_next_sibling() {
+                            continue;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if kind != "pair" && cursor.goto_first_child() {
+                Self::collect_json_keys(cursor, content, symbols);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn extract_yaml(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Yaml).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_yaml_keys(&mut cursor, content, &mut symbols);
+        symbols
+    }
+
+    fn collect_yaml_keys(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            if kind == "block_mapping_pair" || kind == "flow_pair" {
+                if let Some(key_node) = node.child_by_field_name("key") {
+                    let key_text = &content[key_node.byte_range()];
+                    let key_name = key_text.trim_matches(|c| c == '"' || c == '\'').trim();
+
+                    if !key_name.is_empty() {
+                        let value_node = node.child_by_field_name("value");
+                        let is_object = value_node.map(|v| {
+                            v.kind() == "block_node" || v.kind() == "flow_node" ||
+                            v.kind() == "block_mapping" || v.kind() == "flow_mapping"
+                        }).unwrap_or(false);
+
+                        let sym_kind = if is_object { "class" } else { "variable" };
+
+                        let mut children = Vec::new();
+                        if is_object {
+                            if cursor.goto_first_child() {
+                                Self::collect_yaml_keys(cursor, content, &mut children);
+                                cursor.goto_parent();
+                            }
+                        }
+
+                        symbols.push(SkeletonSymbol {
+                            name: key_name.to_string(),
+                            kind: sym_kind,
+                            signature: format!("{}:", key_name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children,
+                        });
+
+                        if is_object {
+                            if cursor.goto_next_sibling() {
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let dominated = kind == "block_mapping_pair" || kind == "flow_pair";
+            if !dominated && cursor.goto_first_child() {
+                Self::collect_yaml_keys(cursor, content, symbols);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn extract_toml(&mut self, content: &str) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.get(Language::Toml).parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        Self::collect_toml_keys(&mut cursor, content, &mut symbols);
+        symbols
+    }
+
+    fn collect_toml_keys(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<SkeletonSymbol>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "table" | "table_array_element" => {
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            if child.kind() == "dotted_key" || child.kind() == "key" {
+                                let key_text = &content[child.byte_range()];
+
+                                let mut children = Vec::new();
+                                if cursor.goto_first_child() {
+                                    Self::collect_toml_keys(cursor, content, &mut children);
+                                    cursor.goto_parent();
+                                }
+
+                                symbols.push(SkeletonSymbol {
+                                    name: key_text.to_string(),
+                                    kind: "class",
+                                    signature: format!("[{}]", key_text),
+                                    docstring: None,
+                                    start_line: node.start_position().row + 1,
+                                    end_line: node.end_position().row + 1,
+                                    children,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+                "pair" => {
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            if child.kind() == "dotted_key" || child.kind() == "bare_key" || child.kind() == "quoted_key" {
+                                let key_text = &content[child.byte_range()];
+                                let key_name = key_text.trim_matches(|c| c == '"' || c == '\'');
+                                symbols.push(SkeletonSymbol {
+                                    name: key_name.to_string(),
+                                    kind: "variable",
+                                    signature: format!("{} =", key_name),
+                                    docstring: None,
+                                    start_line: node.start_position().row + 1,
+                                    end_line: node.end_position().row + 1,
+                                    children: Vec::new(),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            let dominated = matches!(kind, "table" | "table_array_element");
+            if !dominated && cursor.goto_first_child() {
+                Self::collect_toml_keys(cursor, content, symbols);
                 cursor.goto_parent();
             }
 

@@ -47,6 +47,14 @@ impl SymbolKind {
 pub struct SymbolParser {
     python_parser: Parser,
     rust_parser: Parser,
+    java_parser: Parser,
+    typescript_parser: Parser,
+    tsx_parser: Parser,
+    javascript_parser: Parser,
+    go_parser: Parser,
+    json_parser: Parser,
+    yaml_parser: Parser,
+    toml_parser: Parser,
 }
 
 impl SymbolParser {
@@ -61,9 +69,57 @@ impl SymbolParser {
             .set_language(&moss_core::tree_sitter_rust::LANGUAGE.into())
             .expect("Failed to load Rust grammar");
 
+        let mut java_parser = Parser::new();
+        java_parser
+            .set_language(&moss_core::tree_sitter_java::LANGUAGE.into())
+            .expect("Failed to load Java grammar");
+
+        let mut typescript_parser = Parser::new();
+        typescript_parser
+            .set_language(&moss_core::tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .expect("Failed to load TypeScript grammar");
+
+        let mut tsx_parser = Parser::new();
+        tsx_parser
+            .set_language(&moss_core::tree_sitter_typescript::LANGUAGE_TSX.into())
+            .expect("Failed to load TSX grammar");
+
+        let mut javascript_parser = Parser::new();
+        javascript_parser
+            .set_language(&moss_core::tree_sitter_javascript::LANGUAGE.into())
+            .expect("Failed to load JavaScript grammar");
+
+        let mut go_parser = Parser::new();
+        go_parser
+            .set_language(&moss_core::tree_sitter_go::LANGUAGE.into())
+            .expect("Failed to load Go grammar");
+
+        let mut json_parser = Parser::new();
+        json_parser
+            .set_language(&moss_core::tree_sitter_json::LANGUAGE.into())
+            .expect("Failed to load JSON grammar");
+
+        let mut yaml_parser = Parser::new();
+        yaml_parser
+            .set_language(&moss_core::tree_sitter_yaml::LANGUAGE.into())
+            .expect("Failed to load YAML grammar");
+
+        let mut toml_parser = Parser::new();
+        toml_parser
+            .set_language(&moss_core::tree_sitter_toml::language())
+            .expect("Failed to load TOML grammar");
+
         Self {
             python_parser,
             rust_parser,
+            java_parser,
+            typescript_parser,
+            tsx_parser,
+            javascript_parser,
+            go_parser,
+            json_parser,
+            yaml_parser,
+            toml_parser,
         }
     }
 
@@ -73,6 +129,14 @@ impl SymbolParser {
         match ext {
             "py" => self.parse_python(content),
             "rs" => self.parse_rust(content),
+            "java" => self.parse_java(content),
+            "ts" => self.parse_typescript(content),
+            "tsx" => self.parse_tsx(content),
+            "js" | "mjs" | "cjs" => self.parse_javascript(content),
+            "go" => self.parse_go(content),
+            "json" => self.parse_json(content),
+            "yaml" | "yml" => self.parse_yaml(content),
+            "toml" => self.parse_toml(content),
             _ => Vec::new(),
         }
     }
@@ -375,6 +439,559 @@ impl SymbolParser {
             // Recurse into children (but not for impl blocks, handled above)
             if kind != "impl_item" && cursor.goto_first_child() {
                 self.collect_rust_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_java(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.java_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_java_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_java_symbols(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "class_declaration" | "interface_declaration" | "enum_declaration" | "record_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: SymbolKind::Class,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+
+                        // Recurse into class body to find methods
+                        if cursor.goto_first_child() {
+                            self.collect_java_symbols(cursor, content, symbols, Some(name));
+                            cursor.goto_parent();
+                        }
+                        if cursor.goto_next_sibling() {
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                "method_declaration" | "constructor_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        let symbol_kind = if parent.is_some() {
+                            SymbolKind::Method
+                        } else {
+                            SymbolKind::Function
+                        };
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: symbol_kind,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+                    }
+                }
+                _ => {}
+            }
+
+            // Recurse into children (skip class bodies handled above)
+            let dominated = matches!(kind, "class_declaration" | "interface_declaration" | "enum_declaration" | "record_declaration");
+            if !dominated && cursor.goto_first_child() {
+                self.collect_java_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_typescript(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.typescript_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_ts_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn parse_tsx(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.tsx_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_ts_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn parse_javascript(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.javascript_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_ts_symbols(&mut cursor, content, &mut symbols, None); // Same AST structure
+        symbols
+    }
+
+    fn collect_ts_symbols(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "class_declaration" | "abstract_class_declaration" | "interface_declaration" | "enum_declaration" | "type_alias_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: SymbolKind::Class,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+
+                        // Recurse into class body
+                        if cursor.goto_first_child() {
+                            self.collect_ts_symbols(cursor, content, symbols, Some(name));
+                            cursor.goto_parent();
+                        }
+                        if cursor.goto_next_sibling() {
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                "function_declaration" | "generator_function_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: SymbolKind::Function,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+                    }
+                }
+                "method_definition" | "public_field_definition" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        // Skip computed property names like [Symbol.iterator]
+                        if !name.starts_with('[') {
+                            symbols.push(Symbol {
+                                name: name.to_string(),
+                                kind: SymbolKind::Method,
+                                start_line: node.start_position().row + 1,
+                                end_line: node.end_position().row + 1,
+                                parent: parent.map(String::from),
+                            });
+                        }
+                    }
+                }
+                // Arrow functions and function expressions assigned to variables
+                "lexical_declaration" | "variable_declaration" => {
+                    // Look for const foo = () => {} or const foo = function() {}
+                    for i in 0..node.child_count() {
+                        if let Some(decl) = node.child(i) {
+                            if decl.kind() == "variable_declarator" {
+                                if let (Some(name_node), Some(value_node)) = (
+                                    decl.child_by_field_name("name"),
+                                    decl.child_by_field_name("value"),
+                                ) {
+                                    let value_kind = value_node.kind();
+                                    if matches!(value_kind, "arrow_function" | "function_expression" | "function") {
+                                        let name = &content[name_node.byte_range()];
+                                        symbols.push(Symbol {
+                                            name: name.to_string(),
+                                            kind: SymbolKind::Function,
+                                            start_line: node.start_position().row + 1,
+                                            end_line: node.end_position().row + 1,
+                                            parent: parent.map(String::from),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            let dominated = matches!(kind, "class_declaration" | "abstract_class_declaration" | "interface_declaration" | "enum_declaration");
+            if !dominated && cursor.goto_first_child() {
+                self.collect_ts_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_go(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.go_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_go_symbols(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_go_symbols(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                "function_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: SymbolKind::Function,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+                    }
+                }
+                "method_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = &content[name_node.byte_range()];
+                        // Try to get receiver type as parent
+                        let receiver_type = node
+                            .child_by_field_name("receiver")
+                            .and_then(|r| {
+                                // Receiver is (name Type) or (name *Type)
+                                for i in 0..r.child_count() {
+                                    if let Some(c) = r.child(i) {
+                                        let ck = c.kind();
+                                        if ck == "type_identifier" || ck == "pointer_type" {
+                                            return Some(content[c.byte_range()].trim_start_matches('*').to_string());
+                                        }
+                                    }
+                                }
+                                None
+                            });
+                        symbols.push(Symbol {
+                            name: name.to_string(),
+                            kind: SymbolKind::Method,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: receiver_type.or_else(|| parent.map(String::from)),
+                        });
+                    }
+                }
+                "type_declaration" => {
+                    // type Foo struct { ... } or type Foo interface { ... }
+                    for i in 0..node.child_count() {
+                        if let Some(spec) = node.child(i) {
+                            if spec.kind() == "type_spec" {
+                                if let Some(name_node) = spec.child_by_field_name("name") {
+                                    let name = &content[name_node.byte_range()];
+                                    symbols.push(Symbol {
+                                        name: name.to_string(),
+                                        kind: SymbolKind::Class, // struct/interface as Class
+                                        start_line: node.start_position().row + 1,
+                                        end_line: node.end_position().row + 1,
+                                        parent: parent.map(String::from),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            if cursor.goto_first_child() {
+                self.collect_go_symbols(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_json(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.json_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_json_keys(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_json_keys(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            if kind == "pair" {
+                if let Some(key_node) = node.child_by_field_name("key") {
+                    // Key is a "string" node, get the content without quotes
+                    let key_text = &content[key_node.byte_range()];
+                    let key_name = key_text.trim_matches('"');
+
+                    // Check if value is an object (has nested keys)
+                    let is_object = node
+                        .child_by_field_name("value")
+                        .map(|v| v.kind() == "object")
+                        .unwrap_or(false);
+
+                    symbols.push(Symbol {
+                        name: key_name.to_string(),
+                        kind: if is_object { SymbolKind::Class } else { SymbolKind::Variable },
+                        start_line: node.start_position().row + 1,
+                        end_line: node.end_position().row + 1,
+                        parent: parent.map(String::from),
+                    });
+
+                    // Recurse into object values
+                    if is_object {
+                        if cursor.goto_first_child() {
+                            self.collect_json_keys(cursor, content, symbols, Some(key_name));
+                            cursor.goto_parent();
+                        }
+                        if cursor.goto_next_sibling() {
+                            continue;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Recurse into children
+            if kind != "pair" && cursor.goto_first_child() {
+                self.collect_json_keys(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_yaml(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.yaml_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_yaml_keys(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_yaml_keys(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            // YAML uses "block_mapping_pair" for key-value pairs
+            if kind == "block_mapping_pair" || kind == "flow_pair" {
+                if let Some(key_node) = node.child_by_field_name("key") {
+                    let key_text = &content[key_node.byte_range()];
+                    // Remove quotes if present
+                    let key_name = key_text.trim_matches(|c| c == '"' || c == '\'').trim();
+
+                    if !key_name.is_empty() {
+                        // Check if value is a block_node with block_mapping (nested object)
+                        let is_object = node
+                            .child_by_field_name("value")
+                            .map(|v| {
+                                v.kind() == "block_node" || v.kind() == "flow_node" ||
+                                v.kind() == "block_mapping" || v.kind() == "flow_mapping"
+                            })
+                            .unwrap_or(false);
+
+                        symbols.push(Symbol {
+                            name: key_name.to_string(),
+                            kind: if is_object { SymbolKind::Class } else { SymbolKind::Variable },
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            parent: parent.map(String::from),
+                        });
+
+                        // Recurse into nested mappings
+                        if is_object {
+                            if cursor.goto_first_child() {
+                                self.collect_yaml_keys(cursor, content, symbols, Some(key_name));
+                                cursor.goto_parent();
+                            }
+                            if cursor.goto_next_sibling() {
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Recurse
+            let dominated = kind == "block_mapping_pair" || kind == "flow_pair";
+            if !dominated && cursor.goto_first_child() {
+                self.collect_yaml_keys(cursor, content, symbols, parent);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    fn parse_toml(&mut self, content: &str) -> Vec<Symbol> {
+        let tree = match self.toml_parser.parse(content, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        self.collect_toml_keys(&mut cursor, content, &mut symbols, None);
+        symbols
+    }
+
+    fn collect_toml_keys(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        symbols: &mut Vec<Symbol>,
+        parent: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            match kind {
+                // [section] or [[array_of_tables]]
+                "table" | "table_array_element" => {
+                    // Get the section name from child nodes
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            if child.kind() == "dotted_key" || child.kind() == "key" {
+                                let key_text = &content[child.byte_range()];
+                                symbols.push(Symbol {
+                                    name: key_text.to_string(),
+                                    kind: SymbolKind::Class,
+                                    start_line: node.start_position().row + 1,
+                                    end_line: node.end_position().row + 1,
+                                    parent: parent.map(String::from),
+                                });
+                                // Recurse with this section as parent
+                                if cursor.goto_first_child() {
+                                    self.collect_toml_keys(cursor, content, symbols, Some(key_text));
+                                    cursor.goto_parent();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+                // key = value pairs
+                "pair" => {
+                    for i in 0..node.child_count() {
+                        if let Some(child) = node.child(i) {
+                            if child.kind() == "dotted_key" || child.kind() == "bare_key" || child.kind() == "quoted_key" {
+                                let key_text = &content[child.byte_range()];
+                                let key_name = key_text.trim_matches(|c| c == '"' || c == '\'');
+                                symbols.push(Symbol {
+                                    name: key_name.to_string(),
+                                    kind: SymbolKind::Variable,
+                                    start_line: node.start_position().row + 1,
+                                    end_line: node.end_position().row + 1,
+                                    parent: parent.map(String::from),
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            // Recurse into children
+            let dominated = matches!(kind, "table" | "table_array_element");
+            if !dominated && cursor.goto_first_child() {
+                self.collect_toml_keys(cursor, content, symbols, parent);
                 cursor.goto_parent();
             }
 

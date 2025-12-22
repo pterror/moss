@@ -854,13 +854,20 @@ impl FileIndex {
         Ok(importers)
     }
 
-    /// Refresh the call graph by parsing all Python/Rust files
+    /// Refresh the call graph by parsing all supported source files
     /// This is more expensive than file refresh since it parses every file
     pub fn refresh_call_graph(&mut self) -> rusqlite::Result<(usize, usize, usize)> {
-        // Get all indexed Python/Rust files BEFORE starting transaction
+        // Get all indexed source files BEFORE starting transaction
         let files: Vec<String> = {
             let mut stmt = self.conn.prepare(
-                "SELECT path FROM files WHERE is_dir = 0 AND (path LIKE '%.py' OR path LIKE '%.rs')"
+                "SELECT path FROM files WHERE is_dir = 0 AND (
+                    path LIKE '%.py' OR path LIKE '%.rs' OR
+                    path LIKE '%.java' OR path LIKE '%.ts' OR path LIKE '%.tsx' OR
+                    path LIKE '%.js' OR path LIKE '%.mjs' OR path LIKE '%.cjs' OR
+                    path LIKE '%.go' OR
+                    path LIKE '%.json' OR path LIKE '%.yaml' OR path LIKE '%.yml' OR
+                    path LIKE '%.toml'
+                )"
             )?;
             let mut files = Vec::new();
             let mut rows = stmt.query([])?;
@@ -935,16 +942,25 @@ impl FileIndex {
     pub fn incremental_call_graph_refresh(&mut self) -> rusqlite::Result<(usize, usize, usize)> {
         let (new_files, modified_files, deleted_files) = self.get_changed_files()?;
 
-        // Only process Python/Rust files
+        // Only process supported source and data files
+        let is_source_file = |f: &String| {
+            f.ends_with(".py") || f.ends_with(".rs") ||
+            f.ends_with(".java") || f.ends_with(".ts") || f.ends_with(".tsx") ||
+            f.ends_with(".js") || f.ends_with(".mjs") || f.ends_with(".cjs") ||
+            f.ends_with(".go") ||
+            f.ends_with(".json") || f.ends_with(".yaml") || f.ends_with(".yml") ||
+            f.ends_with(".toml")
+        };
+
         let changed_files: Vec<String> = new_files
             .into_iter()
             .chain(modified_files.into_iter())
-            .filter(|f| f.ends_with(".py") || f.ends_with(".rs"))
+            .filter(is_source_file)
             .collect();
 
         let deleted_source_files: Vec<String> = deleted_files
             .into_iter()
-            .filter(|f| f.ends_with(".py") || f.ends_with(".rs"))
+            .filter(is_source_file)
             .collect();
 
         if changed_files.is_empty() && deleted_source_files.is_empty() {
