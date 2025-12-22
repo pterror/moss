@@ -10,6 +10,7 @@
 - Condition plugin system: `has_errors`, `success`, `empty`, `contains:X`
 - Extensible via `CONDITION_PLUGINS` registry
 - Example workflow: `validate-fix.toml` (analyze → fix → verify loop)
+- State lifecycle hooks: `on_entry` (when entering state), `on_exit` (before leaving)
 
 **Nested Steps** (Dec 23 2025)
 - WorkflowStep now supports compound steps (with sub-steps)

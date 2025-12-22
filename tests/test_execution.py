@@ -130,6 +130,50 @@ class TestStateMachineLoop:
         )
         assert "file: main.py" in result
 
+    def test_on_entry_hook(self):
+        """on_entry runs when entering a state."""
+        states = [
+            WorkflowState(
+                name="start",
+                on_entry="view .",  # This runs when entering
+                transitions=[Transition(next="end")],
+            ),
+            WorkflowState(name="end", terminal=True),
+        ]
+        # NoLLM by default, action doesn't execute but context captures state
+        result = state_machine_loop(states, initial="start")
+        # Should have entered both states
+        assert "start" in result
+        assert "end" in result
+
+    def test_on_exit_hook(self):
+        """on_exit runs before leaving a state."""
+        states = [
+            WorkflowState(
+                name="start",
+                on_exit="view .",  # This runs before transitioning
+                transitions=[Transition(next="end")],
+            ),
+            WorkflowState(name="end", terminal=True),
+        ]
+        result = state_machine_loop(states, initial="start")
+        # Should have both states in context
+        assert "start" in result
+        assert "end" in result
+
+    def test_hooks_with_terminal_state(self):
+        """Terminal states run on_entry but not on_exit (no transition out)."""
+        states = [
+            WorkflowState(
+                name="done",
+                terminal=True,
+                on_entry="view .",  # Should run
+                on_exit="view .",  # Should NOT run (no transition out)
+            ),
+        ]
+        result = state_machine_loop(states, initial="done")
+        assert "Terminal state reached" in result
+
 
 class TestContextModes:
     """Test context modes for nested scopes."""

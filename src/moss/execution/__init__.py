@@ -839,12 +839,20 @@ class Transition:
 
 @dataclass
 class WorkflowState:
-    """A state in a state machine workflow."""
+    """A state in a state machine workflow.
+
+    Lifecycle hooks run in this order:
+    1. on_entry (when entering state)
+    2. action (main state logic)
+    3. on_exit (before transitioning out)
+    """
 
     name: str
     action: str | None = None  # Command to execute in this state
     transitions: list[Transition] = field(default_factory=list)
     terminal: bool = False  # End state?
+    on_entry: str | None = None  # Run when entering state
+    on_exit: str | None = None  # Run before leaving state
 
 
 @dataclass
@@ -974,6 +982,8 @@ def load_workflow(path: str) -> WorkflowConfig:
                     action=state_cfg.get("action"),
                     transitions=transitions,
                     terminal=state_cfg.get("terminal", False),
+                    on_entry=state_cfg.get("on_entry"),
+                    on_exit=state_cfg.get("on_exit"),
                 )
             )
         return result
@@ -1137,8 +1147,14 @@ def state_machine_loop(
 
     current = state_map[initial]
 
+    prev_state: WorkflowState | None = None
+
     for _ in range(max_transitions):
         scope.context.add("state", current.name)
+
+        # Run on_entry hook (if entering new state)
+        if current.on_entry and current != prev_state:
+            scope.run(current.on_entry)
 
         if current.terminal:
             scope.context.add("result", "Terminal state reached")
@@ -1168,6 +1184,11 @@ def state_machine_loop(
             scope.context.add("error", f"Target state '{next_state_name}' not found")
             break
 
+        # Run on_exit hook before transitioning
+        if current.on_exit:
+            scope.run(current.on_exit)
+
+        prev_state = current
         current = state_map[next_state_name]
 
     return scope.context.get_context()

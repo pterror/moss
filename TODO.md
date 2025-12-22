@@ -47,7 +47,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 ## Next Up
 
 - [x] Context modes for nested steps: implement shared/inherited (see docs/nested-execution.md)
-- [ ] State machine: on_entry/on_exit hooks per state
+- [x] State machine: on_entry/on_exit hooks per state
 - [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
 - [x] Define clear Rust/Python boundaries (what goes where, why) → docs/rust-python-boundary.md
 
