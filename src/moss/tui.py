@@ -706,7 +706,7 @@ class MossTUI(App):
                 bd_parts = []
                 for k, v in sorted_bd[:3]:
                     bd_parts.append(f"{k}: {v / 1024 / 1024:.1f}MB")
-                bd_str = f" [[dim]{', '.join(bd_parts)}[/]]"
+                bd_str = f" [dim][[{', '.join(bd_parts)}]][/]"
 
             msg = (
                 f"Tool: [b]{tool}[/] ({duration}ms) | "
