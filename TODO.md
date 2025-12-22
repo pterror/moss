@@ -28,17 +28,17 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Remaining: prior-art.md, hybrid-loops.md, etc. (lower priority)
 
 **Unified Plumbing for 3 Primitives:**
-- [ ] view/edit/analyze should share: path resolution, node targeting, filtering, output formatting
-- [ ] Same filters work everywhere: `--type`, `--calls`, `--called-by`, `--deps`
-- [ ] Deduplicate any redundant implementations (Python vs Rust, per-command logic)
-- [ ] Interface stays separate (clear intent), plumbing unifies (DRY)
+- [x] Path resolution unified: `path_resolve::resolve_unified` used by view, edit (Rust), analyze
+- [ ] Add filters to analyze: `--type`, `--calls`, `--called-by` (currently view-only)
+- [ ] Note: `-t` conflict - view uses `--type`, analyze uses `--threshold`
+- [ ] Python edit uses separate file/symbol targeting (LLM-based, intentionally different)
 
 **CLI Cleanup:**
 - [x] `dwim` CLI - REMOVED (module kept for alias resolution)
 - [x] `loop` CLI - REMOVED along with predefined loops (simple, critic, etc.)
-- [ ] `patterns`, `git-hotspots` - slow, consider removal or Rust port
-- [ ] Missing `--compact` mode on `roadmap` and other commands
-- [ ] Large file detection in `analyze --health`
+- [x] `patterns`, `git-hotspots` - NOT slow (6s, 2.5s), keeping both
+- [x] `--compact` mode on patterns (added)
+- [x] Large file detection in `analyze --health` (shows top 10 files >500 lines)
 
 **Keys:** see `.env.example` for ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 

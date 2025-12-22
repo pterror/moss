@@ -11,6 +11,13 @@ use rayon::prelude::*;
 use crate::complexity::ComplexityAnalyzer;
 use crate::path_resolve;
 
+/// Large file info for reporting
+#[derive(Debug, Clone)]
+pub struct LargeFile {
+    pub path: String,
+    pub lines: usize,
+}
+
 /// Health metrics for a codebase
 #[derive(Debug)]
 pub struct HealthReport {
@@ -23,6 +30,7 @@ pub struct HealthReport {
     pub max_complexity: usize,
     pub high_risk_functions: usize,
     pub total_functions: usize,
+    pub large_files: Vec<LargeFile>,
 }
 
 impl HealthReport {
@@ -45,6 +53,17 @@ impl HealthReport {
         lines.push(format!("  Average: {:.1}", self.avg_complexity));
         lines.push(format!("  Maximum: {}", self.max_complexity));
         lines.push(format!("  High risk (>10): {}", self.high_risk_functions));
+
+        if !self.large_files.is_empty() {
+            lines.push(String::new());
+            lines.push("## Large Files (>500 lines)".to_string());
+            for lf in self.large_files.iter().take(10) {
+                lines.push(format!("  {} ({} lines)", lf.path, lf.lines));
+            }
+            if self.large_files.len() > 10 {
+                lines.push(format!("  ... and {} more", self.large_files.len() - 10));
+            }
+        }
 
         let health_score = self.calculate_health_score();
         let grade = self.grade();
@@ -116,8 +135,12 @@ impl HealthReport {
     }
 }
 
+/// Threshold for "large" files
+const LARGE_FILE_THRESHOLD: usize = 500;
+
 /// Per-file analysis result for parallel aggregation
 struct FileStats {
+    path: String,
     lines: usize,
     functions: usize,
     complexity_sum: usize,
@@ -154,6 +177,7 @@ pub fn analyze_health(root: &Path) -> HealthReport {
             // Skip complexity analysis for non-code files
             if ext != "py" && ext != "rs" {
                 return Some(FileStats {
+                    path: file.path.clone(),
                     lines,
                     functions: 0,
                     complexity_sum: 0,
@@ -183,6 +207,7 @@ pub fn analyze_health(root: &Path) -> HealthReport {
             }
 
             Some(FileStats {
+                path: file.path.clone(),
                 lines,
                 functions,
                 complexity_sum,
@@ -198,6 +223,7 @@ pub fn analyze_health(root: &Path) -> HealthReport {
     let mut total_complexity = 0;
     let mut max_complexity = 0;
     let mut high_risk_functions = 0;
+    let mut large_files = Vec::new();
 
     for stat in stats {
         total_lines += stat.lines;
@@ -207,7 +233,16 @@ pub fn analyze_health(root: &Path) -> HealthReport {
             max_complexity = stat.max_complexity;
         }
         high_risk_functions += stat.high_risk;
+        if stat.lines >= LARGE_FILE_THRESHOLD {
+            large_files.push(LargeFile {
+                path: stat.path,
+                lines: stat.lines,
+            });
+        }
     }
+
+    // Sort large files by line count descending
+    large_files.sort_by(|a, b| b.lines.cmp(&a.lines));
 
     let avg_complexity = if total_functions > 0 {
         total_complexity as f64 / total_functions as f64
@@ -227,5 +262,6 @@ pub fn analyze_health(root: &Path) -> HealthReport {
         max_complexity,
         high_risk_functions,
         total_functions,
+        large_files,
     }
 }

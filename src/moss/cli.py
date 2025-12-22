@@ -3099,7 +3099,10 @@ def cmd_patterns(args: Namespace) -> int:
         output.error(f"Pattern analysis failed: {e}")
         return 1
 
-    if wants_json(args):
+    compact = getattr(args, "compact", False)
+    if compact and not wants_json(args):
+        output.print(analysis.to_compact())
+    elif wants_json(args):
         output.data(analysis.to_dict())
     else:
         output.print(format_pattern_analysis(analysis))

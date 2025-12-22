@@ -11,6 +11,12 @@
 
 ### Features
 
+**CLI Improvements & Unified Plumbing** (Dec 22 2025)
+- Added `--compact` mode to `moss patterns` command for token-efficient output
+- Added large file detection to `analyze --health` (shows top 10 files >500 lines)
+- Audited unified plumbing: path resolution already shared via `path_resolve::resolve_unified`
+- Evaluated `patterns` and `git-hotspots` commands: NOT slow (6s, 2.5s), keeping both
+
 **CLI Consolidation & Model Update** (Dec 22 2025)
 - Updated default model to `gemini-3-flash-preview` across all components
 - Expanded Rust CLI passthrough: cfg, complexity, context, deps, grep, health, overview

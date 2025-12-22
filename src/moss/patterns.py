@@ -97,6 +97,28 @@ class PatternAnalysis:
     def strategies(self) -> list[PatternInstance]:
         return [p for p in self.patterns if p.pattern_type == "strategy"]
 
+    def to_compact(self) -> str:
+        """Token-efficient compact format for AI agents."""
+        summary = (
+            f"patterns: {len(self.patterns)} "
+            f"(plugins={len(self.plugin_systems)}, "
+            f"factories={len(self.factories)}, "
+            f"strategies={len(self.strategies)})"
+        )
+        lines = [summary]
+        if self.plugin_systems:
+            names = [p.name for p in self.plugin_systems[:10]]
+            lines.append(f"plugins: {', '.join(names)}")
+        if self.factories:
+            names = [p.name for p in self.factories[:10]]
+            lines.append(f"factories: {', '.join(names)}")
+        if self.strategies:
+            names = [p.name for p in self.strategies[:10]]
+            lines.append(f"strategies: {', '.join(names)}")
+        if self.suggestions:
+            lines.append(f"suggestions: {len(self.suggestions)}")
+        return "\n".join(lines)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {

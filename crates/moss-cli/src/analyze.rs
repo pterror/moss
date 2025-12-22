@@ -189,6 +189,16 @@ impl AnalyzeReport {
         );
 
         if let Some(ref health) = self.health {
+            let large_files: Vec<_> = health
+                .large_files
+                .iter()
+                .map(|lf| {
+                    serde_json::json!({
+                        "path": lf.path,
+                        "lines": lf.lines,
+                    })
+                })
+                .collect();
             obj.insert(
                 "health".to_string(),
                 serde_json::json!({
@@ -201,6 +211,7 @@ impl AnalyzeReport {
                     "max_complexity": health.max_complexity,
                     "high_risk_functions": health.high_risk_functions,
                     "total_functions": health.total_functions,
+                    "large_files": large_files,
                 }),
             );
         }
