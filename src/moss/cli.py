@@ -5689,7 +5689,7 @@ def _cmd_analyze_python(argv: list[str]) -> int:
         if root.is_file():
             result = summarizer.summarize_file(root)
         else:
-            result = summarizer.summarize_directory(root)
+            result = summarizer.summarize_project(root)
 
         if result is None:
             print(f"Error: Failed to summarize {root}", file=sys.stderr)

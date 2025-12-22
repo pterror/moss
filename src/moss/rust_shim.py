@@ -5,11 +5,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Max command line length to prevent "Argument list too long" errors.
-# Linux typically allows ~128KB, but we use a conservative limit.
-MAX_CMD_LENGTH = 100_000  # 100KB
-MAX_SYMBOLS_PER_REQUEST = 20  # Limit multi-symbol views
-
 
 def find_rust_binary() -> Path | None:
     """Find the Rust moss binary if available."""
@@ -64,11 +59,6 @@ def call_rust(args: list[str], json_output: bool = False) -> tuple[int, str]:
     if json_output:
         cmd.append("--json")
     cmd.extend(args)
-
-    # Validate command length to prevent "Argument list too long" errors
-    cmd_length = sum(len(arg) for arg in cmd) + len(cmd)  # args + spaces
-    if cmd_length > MAX_CMD_LENGTH:
-        return 1, f"Command too long ({cmd_length} bytes). Limit: {MAX_CMD_LENGTH}"
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     output = result.stdout if result.returncode == 0 else result.stderr
@@ -244,16 +234,6 @@ def rust_view(
     """
     if not rust_available():
         return None
-
-    # Validate multi-symbol requests (comma-separated symbols after /)
-    if target and "/" in target:
-        parts = target.split("/", 1)
-        if len(parts) == 2 and "," in parts[1]:
-            symbols = parts[1].split(",")
-            if len(symbols) > MAX_SYMBOLS_PER_REQUEST:
-                # Truncate to limit and warn
-                truncated = ",".join(symbols[:MAX_SYMBOLS_PER_REQUEST])
-                target = f"{parts[0]}/{truncated}"
 
     args = ["view", "-d", str(depth)]
     if line_numbers:
