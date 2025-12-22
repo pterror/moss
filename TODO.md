@@ -46,11 +46,9 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
-- [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
 - [ ] Context modes for nested steps: implement shared/inherited (see docs/nested-execution.md)
-- [ ] State machine workflows: on_entry/on_exit hooks per state
-- [ ] State machine workflows: parallel state execution
-- [ ] State machine workflows: nested state machines
+- [ ] State machine: on_entry/on_exit hooks per state
+- [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
 - [ ] Define clear Rust/Python boundaries (what goes where, why)
 
 ## Backlog
@@ -70,6 +68,11 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
   - [x] Python edit assessment: keep EditAPI (file ops), complexity-routed edit() is stubs - agent handles it
   - Rust edit vs Python edit → same name, different behavior (Rust=structural, Python=LLM-routed)
 - [ ] Define clear boundaries: what's Rust, what's Python, why
+
+**Workflow Enhancements:**
+- [ ] State machine: parallel state execution
+- [ ] State machine: nested state machines
+- [ ] State machine: LLM-driven state selection (hybrid with agent_loop)
 
 **Indexing Performance:**
 - [x] Slow reindexing on large repos - FIXED (20s → 1s on ~/git/enso/)
