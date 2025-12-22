@@ -329,7 +329,7 @@ def parse_intent(text: str) -> Intent:
 def execute_intent(intent: Intent) -> str:
     """Execute an intent via Rust CLI.
 
-    Returns result string.
+    Returns result string (actual output, not just status).
     """
     if intent.verb == "done":
         return "done"
@@ -337,23 +337,22 @@ def execute_intent(intent: Intent) -> str:
     if intent.verb == "unknown":
         return f"Unknown command: {intent.raw}"
 
-    # Build CLI args
-    cmd = intent.verb
-    args = []
+    # Build CLI args: [subcommand, target, ...args]
+    cli_args = [intent.verb]
     if intent.target:
-        args.append(intent.target)
+        cli_args.append(intent.target)
     if intent.args:
-        args.extend(intent.args.split())
+        cli_args.extend(intent.args.split())
 
-    # Call Rust CLI
+    # Call Rust CLI and capture output
     try:
-        from moss.rust_shim import passthrough
+        from moss.rust_shim import call_rust
 
-        exit_code = passthrough(cmd, args)
+        exit_code, output = call_rust(cli_args)
         if exit_code == 0:
-            return f"[{cmd} {' '.join(args)}] OK"
+            return output.strip() if output else "[OK]"
         else:
-            return f"[{cmd} {' '.join(args)}] Failed (exit {exit_code})"
+            return f"[Error] {output.strip()}" if output else f"[Error exit {exit_code}]"
     except Exception as e:
         return f"Error: {e}"
 

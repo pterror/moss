@@ -268,6 +268,38 @@ action = "fix {item}"
 This bridges the gap but adds complexity. Evaluate whether simpler
 "just use Python" is better than hybrid TOML+Python.
 
+### Alternative: TOML + Plugins
+
+Instead of inline Python, plugins could provide computed values:
+
+```toml
+[[states]]
+name = "deciding"
+plugin = "llm-decide"  # Plugin makes LLM call, returns next state
+prompt = "Given {context}, what should we do next?"
+
+[[states]]
+name = "fixing"
+plugin = "for-each"
+source = "find-issues"  # Plugin that returns list
+action = "edit {item}"
+```
+
+**Potentially useful plugins:**
+| Plugin | Purpose |
+|--------|---------|
+| `llm-decide` | LLM call → next state/action |
+| `for-each` | Iterate over plugin result |
+| `condition` | Predefined conditions (has_errors, file_exists) |
+| `capture` | Store result for later use |
+| `transform` | Extract JSON field, format string |
+
+**Trade-offs:**
+- Pro: Workflows shareable, constrained, versionable
+- Con: Plugin explosion, more indirection, harder to debug
+
+**Open question:** Is TOML + plugins better than "just use Python for complex cases"?
+
 ### Conclusion
 
 | Use Case | Representation |
@@ -275,11 +307,11 @@ This bridges the gap but adds complexity. Evaluate whether simpler
 | Linear recipe | TOML |
 | State machine | TOML |
 | Nested scopes | TOML (verbose) or Python |
-| Computed values/LLM | Python (or TOML+inline Python) |
+| Computed values/LLM | TOML + plugins or Python |
 
 **Key insight:** The dividing line is computed values, not control flow.
 TOML can express arbitrary static control flow (including state machines).
-Python is needed when values are computed at runtime.
+For computed values: plugins extend TOML, or use Python directly.
 
 ## Prototype Status
 
