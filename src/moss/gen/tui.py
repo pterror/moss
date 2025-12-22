@@ -207,7 +207,7 @@ class TUIGenerator:
 
             .param-row {
                 layout: horizontal;
-                height: 3;
+                height: 1;
             }
 
             .param-label {
@@ -216,10 +216,25 @@ class TUIGenerator:
 
             .param-input {
                 width: 1fr;
+                height: 1;
+                padding: 0;
+                border: none;
+            }
+
+            Input {
+                height: 1;
+                padding: 0;
             }
 
             #execute-btn {
-                width: 100%;
+                dock: bottom;
+                height: 1;
+                min-height: 1;
+            }
+
+            Button {
+                height: 1;
+                min-height: 1;
             }
 
             Tree {
@@ -233,10 +248,39 @@ class TUIGenerator:
                 Binding("ctrl+c", "clear", "Clear"),
             ]
 
+            SETTINGS_PATH = Path.home() / ".config" / "moss" / "tui_settings.json"
+
             def __init__(self):
                 super().__init__()
                 self.selected_method: TUIMethod | None = None
                 self.param_inputs: dict[str, Input] = {}
+                self._load_theme()
+
+            def _load_theme(self) -> None:
+                """Load saved theme."""
+                if self.SETTINGS_PATH.exists():
+                    try:
+                        data = json.loads(self.SETTINGS_PATH.read_text())
+                        if "theme" in data:
+                            self.theme = data["theme"]
+                    except Exception:
+                        pass
+
+            def _save_theme(self) -> None:
+                """Save current theme."""
+                self.SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+                data = {}
+                if self.SETTINGS_PATH.exists():
+                    try:
+                        data = json.loads(self.SETTINGS_PATH.read_text())
+                    except Exception:
+                        pass
+                data["theme"] = self.theme
+                self.SETTINGS_PATH.write_text(json.dumps(data))
+
+            def watch_theme(self, theme: str) -> None:
+                """Save theme when changed."""
+                self._save_theme()
 
             def compose(self) -> ComposeResult:
                 yield Header()
