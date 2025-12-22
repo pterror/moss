@@ -465,7 +465,8 @@ class ProjectTree(Tree[Any]):
                         if entry.endswith(".py") or entry.endswith(".md"):
                             tree_node.add(f"📄 {entry}", data=file_data)
                         else:
-                            tree_node.add_leaf(f"📄 {entry}", data=file_data)
+                            # Add padding to align with expandable items (▶ is 2 chars)
+                            tree_node.add_leaf(f"  📄 {entry}", data=file_data)
             except OSError:
                 pass
 
@@ -499,7 +500,8 @@ class ProjectTree(Tree[Any]):
                     sym_node = tree_node.add(label, data=sym_data)
                     add_symbols(sym_node, symbol.children, path)
                 else:
-                    tree_node.add_leaf(label, data=sym_data)
+                    # Add padding to align with expandable items
+                    tree_node.add_leaf(f"  {label}", data=sym_data)
 
         if self._api and str(path).endswith(".py"):
             try:
@@ -687,6 +689,7 @@ class MossTUI(App):
         self._mode_registry = ModeRegistry()
         self._last_ctrl_c: float = 0
         self._tree_root: Path = api.root  # Current root for file tree
+        self._transparent_bg: bool = False  # For terminal opacity support
 
     def action_handle_ctrl_c(self) -> None:
         """Handle Ctrl+C with double-tap to exit."""
@@ -701,8 +704,8 @@ class MossTUI(App):
 
     SETTINGS_PATH = Path.home() / ".config" / "moss" / "tui_settings.json"
 
-    def _load_theme(self) -> None:
-        """Load saved theme."""
+    def _load_settings(self) -> None:
+        """Load saved settings (theme, transparent_bg)."""
         import json
 
         if self.SETTINGS_PATH.exists():
@@ -710,11 +713,12 @@ class MossTUI(App):
                 data = json.loads(self.SETTINGS_PATH.read_text())
                 if "theme" in data:
                     self.theme = data["theme"]
+                self._transparent_bg = data.get("transparent_bg", False)
             except (json.JSONDecodeError, OSError):
                 pass
 
-    def _save_theme(self) -> None:
-        """Save current theme."""
+    def _save_settings(self) -> None:
+        """Save current settings."""
         import json
 
         self.SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -725,21 +729,27 @@ class MossTUI(App):
             except (json.JSONDecodeError, OSError):
                 pass
         data["theme"] = self.theme
+        data["transparent_bg"] = getattr(self, "_transparent_bg", False)
         try:
             self.SETTINGS_PATH.write_text(json.dumps(data))
         except OSError:
             pass
 
     def watch_theme(self, theme: str) -> None:
-        """Save theme when changed."""
-        self._save_theme()
+        """Save settings when theme changed."""
+        self._save_settings()
 
     def _get_syntax_theme(self) -> str:
         """Get syntax highlighting theme matching current UI theme."""
-        # Map Textual themes to Pygments themes
         dark_themes = {"textual-dark", "monokai", "dracula", "nord", "gruvbox"}
         if self.theme in dark_themes or "dark" in self.theme.lower():
             return "monokai"
+        return "default"
+
+    def _get_syntax_bg(self) -> str | None:
+        """Get syntax background color (None for transparent)."""
+        if getattr(self, "_transparent_bg", False):
+            return None
         return "default"
 
     def compose(self) -> ComposeResult:
@@ -799,7 +809,7 @@ class MossTUI(App):
         self._selected_path: str = ""
         self._selected_type: str = ""
         # Load theme preference
-        self._load_theme()
+        self._load_settings()
 
         # Subscribe to tool calls to show resources
         from moss.events import Event, EventType
@@ -1330,6 +1340,7 @@ class MossTUI(App):
                                 skeleton,
                                 lexer,
                                 theme=self._get_syntax_theme(),
+                                background_color=self._get_syntax_bg(),
                             )
                             explore_detail.write(syntax)
                         else:
@@ -1350,6 +1361,7 @@ class MossTUI(App):
                                 source,
                                 lexer,
                                 theme=self._get_syntax_theme(),
+                                background_color=self._get_syntax_bg(),
                             )
                             explore_detail.write(syntax)
                         else:
