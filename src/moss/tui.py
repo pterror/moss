@@ -17,7 +17,7 @@ try:
     from textual.binding import Binding
     from textual.containers import Container, Horizontal, Vertical
     from textual.reactive import reactive
-    from textual.widgets import Footer, Input, Static, Tree
+    from textual.widgets import Input, Static, Tree
     from textual.widgets.tree import TreeNode
 except ImportError:
     # TUI dependencies not installed
@@ -344,6 +344,34 @@ class ModeIndicator(Static):
         return f"Mode: [{self.mode_color} b]{self.mode_name}[/]"
 
 
+class KeybindBar(Static):
+    """Custom footer showing keybindings with integrated hotkey display."""
+
+    DEFAULT_CSS = """
+    KeybindBar {
+        dock: bottom;
+        height: 1;
+        background: $surface;
+    }
+    """
+
+    def render(self) -> str:
+        # Build keybind display with underlined hotkey letter
+        binds = [
+            ("[u]Q[/u]uit", ""),
+            ("[u]T[/u]heme", ""),
+            ("[u]V[/u]iew", ""),
+            ("[u]E[/u]dit", ""),
+            ("[u]A[/u]nalyze", ""),
+            ("[dim]-[/dim] Up", ""),
+            ("[dim]Tab[/dim] Mode", ""),
+        ]
+        parts = []
+        for label, _ in binds:
+            parts.append(f"[on #333333] {label} [/]")
+        return " ".join(parts)
+
+
 class Breadcrumb(Static):
     """Breadcrumb navigation showing path from project root."""
 
@@ -618,14 +646,14 @@ class MossTUI(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("q", "quit", "[u]Q[/u]uit", show=True, key_display=""),
+        Binding("q", "quit", "Quit", show=False),
         Binding("ctrl+c", "handle_ctrl_c", "Interrupt", show=False),
-        Binding("d", "toggle_dark", "[u]D[/u]ark", show=True, key_display=""),
-        Binding("tab", "next_mode", "Mode", show=True),
-        Binding("v", "primitive_view", "[u]V[/u]iew", show=True, key_display=""),
-        Binding("e", "primitive_edit", "[u]E[/u]dit", show=True, key_display=""),
-        Binding("a", "primitive_analyze", "[u]A[/u]nalyze", show=True, key_display=""),
-        Binding("minus", "cd_up", "Up", show=True, key_display="-"),
+        Binding("t", "app.toggle_dark", "Theme", show=False),
+        Binding("tab", "next_mode", "Mode", show=False),
+        Binding("v", "primitive_view", "View", show=False),
+        Binding("e", "primitive_edit", "Edit", show=False),
+        Binding("a", "primitive_analyze", "Analyze", show=False),
+        Binding("minus", "cd_up", "Up", show=False),
         Binding("enter", "enter_dir", "Enter", show=False),
     ]
 
@@ -650,49 +678,48 @@ class MossTUI(App):
             self._last_ctrl_c = now
             self._log("Press Ctrl+C again to exit")
 
-    def _get_prefs_path(self) -> Path:
-        """Get path to TUI preferences file."""
-        return self.api.root / ".moss" / "tui_prefs.json"
+    SETTINGS_PATH = Path.home() / ".config" / "moss" / "tui_settings.json"
 
     def _load_theme(self) -> None:
-        """Load theme preference from disk."""
+        """Load saved theme."""
         import json
 
-        prefs_path = self._get_prefs_path()
-        if prefs_path.exists():
+        if self.SETTINGS_PATH.exists():
             try:
-                prefs = json.loads(prefs_path.read_text())
-                if prefs.get("dark_mode", True) != self.dark:
-                    self.dark = prefs.get("dark_mode", True)
+                data = json.loads(self.SETTINGS_PATH.read_text())
+                if "theme" in data:
+                    self.theme = data["theme"]
             except (json.JSONDecodeError, OSError):
                 pass
 
     def _save_theme(self) -> None:
-        """Save theme preference to disk."""
+        """Save current theme."""
         import json
 
-        prefs_path = self._get_prefs_path()
-        prefs_path.parent.mkdir(parents=True, exist_ok=True)
+        self.SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+        if self.SETTINGS_PATH.exists():
+            try:
+                data = json.loads(self.SETTINGS_PATH.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        data["theme"] = self.theme
         try:
-            prefs = {}
-            if prefs_path.exists():
-                try:
-                    prefs = json.loads(prefs_path.read_text())
-                except (json.JSONDecodeError, OSError):
-                    pass
-            prefs["dark_mode"] = self.dark
-            prefs_path.write_text(json.dumps(prefs))
+            self.SETTINGS_PATH.write_text(json.dumps(data))
         except OSError:
             pass
 
-    def action_toggle_dark(self) -> None:
-        """Toggle dark mode and save preference."""
-        self.dark = not self.dark
+    def watch_theme(self, theme: str) -> None:
+        """Save theme when changed."""
         self._save_theme()
 
     def _get_syntax_theme(self) -> str:
-        """Get syntax highlighting theme matching current dark/light mode."""
-        return "github-dark" if self.dark else "default"
+        """Get syntax highlighting theme matching current UI theme."""
+        # Map Textual themes to Pygments themes
+        dark_themes = {"textual-dark", "monokai", "dracula", "nord", "gruvbox"}
+        if self.theme in dark_themes or "dark" in self.theme.lower():
+            return "monokai"
+        return "default"
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -740,7 +767,7 @@ class MossTUI(App):
             Input(placeholder="Enter command...", id="command-input"),
             HoverTooltip(id="hover-tooltip"),
         )
-        yield Footer()
+        yield KeybindBar()
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
