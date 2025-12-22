@@ -763,9 +763,10 @@ class MossTUI(App):
     #command-input {
         dock: bottom;
         display: none;
-        height: 1;
+        height: 3;
         margin: 0 1;
-        padding: 0;
+        padding: 0 1;
+        border: solid $primary;
     }
 
     .log-entry {
@@ -858,15 +859,14 @@ class MossTUI(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit"),
         Binding("ctrl+c", "handle_ctrl_c", "Interrupt", show=False),
+        Binding("ctrl+p", "command_palette", "Palette", priority=True),
         Binding("t", "toggle_dark", "Theme"),
         Binding("v", "primitive_view", "View"),
         Binding("e", "primitive_edit", "Edit"),
         Binding("a", "primitive_analyze", "Analyze"),
-        Binding("ctrl+p", "goto_node", "Goto", priority=True),
-        Binding("ctrl+shift+p", "toggle_command", "Cmd", priority=True),
         Binding("minus", "cd_up", "Up"),
-        Binding("slash", "toggle_command", "Cmd", show=False),  # Keep as alias
-        Binding("g", "goto_node", "Goto", show=False),  # Keep as alias
+        Binding("slash", "toggle_command", "Cmd", show=False),
+        Binding("g", "goto_node", "Goto", show=False),  # Keep for quick access
         Binding("tab", "next_mode", "Mode", show=False),
         Binding("enter", "enter_dir", "Enter", show=False),
         Binding("escape", "hide_command", show=False),
@@ -1339,9 +1339,24 @@ class MossTUI(App):
 
         yield from super().get_system_commands(screen)
         yield SystemCommand(
+            "Goto File",
+            "Fuzzy search and jump to a file (g)",
+            self.action_goto_node,
+        )
+        yield SystemCommand(
             "Toggle Transparency",
             "Enable/disable transparent background for terminal opacity",
             self.action_toggle_transparency,
+        )
+        yield SystemCommand(
+            "View Selected",
+            "View the currently selected file or symbol (v)",
+            self.action_primitive_view,
+        )
+        yield SystemCommand(
+            "Analyze Selected",
+            "Analyze the currently selected file (a)",
+            self.action_primitive_analyze,
         )
 
     async def _update_git_view(self) -> None:
