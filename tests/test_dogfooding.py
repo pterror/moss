@@ -438,9 +438,10 @@ class TestDocChecker:
         """Test that stale references are flagged."""
         from moss.check_docs import DocChecker
 
-        # Create README with reference to non-existent module
+        # Reference must be in project namespace (pkg.*) to be checked
+        # External references like 'other.module' are correctly skipped
         readme = tmp_path / "README.md"
-        readme.write_text("# Project\n\nSee `nonexistent.module` for details.\n")
+        readme.write_text("# Project\n\nSee `pkg.nonexistent` for details.\n")
 
         # Create a minimal package
         src_dir = tmp_path / "src"

@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from moss.summarize import ProjectSummary, Summarizer
 
@@ -259,8 +259,14 @@ class DocChecker:
 
         def add_from_package(pkg, prefix: str = ""):
             pkg_prefix = f"{prefix}{pkg.name}." if prefix else f"{pkg.name}."
+            # Add the package itself (e.g., moss.plugins)
+            modules.add(f"{prefix}{pkg.name}")
             for f in pkg.files:
-                modules.add(f"{prefix}{pkg.name}.{f.module_name}")
+                full_name = f"{prefix}{pkg.name}.{f.module_name}"
+                modules.add(full_name)
+                # For __init__.py, also add without the __init__ suffix
+                if f.module_name == "__init__":
+                    modules.add(f"{prefix}{pkg.name}")
             for sub in pkg.subpackages:
                 add_from_package(sub, pkg_prefix)
 
@@ -312,16 +318,15 @@ class DocChecker:
                 if self._looks_like_module(ref):
                     refs.append((ref, i))
 
-            # Match code block language hints
-            if line.strip().startswith("```python"):
-                # Could extract imports from code blocks
-                pass
-
         return refs
 
     def _looks_like_module(self, ref: str) -> bool:
-        """Check if a reference looks like a module name."""
-        # Skip common non-module patterns
+        """Check if a reference looks like a module name.
+
+        Uses structural checks only - external references are filtered in _module_exists
+        by checking if the reference root matches any project module roots.
+        """
+        # Skip non-module patterns
         if ref in {"true", "false", "null", "None", "True", "False"}:
             return False
         if ref.startswith("--") or ref.startswith("-"):  # CLI flags
@@ -330,32 +335,23 @@ class DocChecker:
             return False
         if ref.startswith("http"):
             return False
+        if ref.startswith("self."):  # Instance attribute, not a module
+            return False
+        if ref.endswith("."):  # Incomplete reference
+            return False
+
+        # Skip common config/data file extensions (not Python modules)
+        config_extensions = {".toml", ".yaml", ".yml", ".json", ".xml", ".ini", ".cfg"}
+        for ext in config_extensions:
+            if ref.endswith(ext):
+                return False
 
         # Looks like a module if it has dots or ends with .py
-        return "." in ref or ref.endswith(".py") or ref.startswith("moss")
-
-    # Files that are generated, not in source tree
-    GENERATED_FILES: ClassVar[set[str]] = {"moss_config.py", "moss.toml"}
-
-    # Entry point group names (not modules)
-    ENTRY_POINT_GROUPS: ClassVar[set[str]] = {
-        "moss.plugins",
-        "moss.synthesis.generators",
-        "moss.synthesis.validators",
-        "moss.synthesis.strategies",
-        "moss.synthesis.libraries",
-    }
+        # The project_roots check in _module_exists handles external references
+        return "." in ref or ref.endswith(".py")
 
     def _module_exists(self, ref: str, all_modules: set[str]) -> bool:
         """Check if a reference matches an existing module or file."""
-        # Skip known generated files
-        if ref in self.GENERATED_FILES:
-            return True
-
-        # Skip entry point group names
-        if ref in self.ENTRY_POINT_GROUPS:
-            return True
-
         # Check if it's a file path that exists
         if "/" in ref or ref.endswith(".py") or ref.endswith(".md"):
             file_path = self.root / ref
@@ -365,6 +361,13 @@ class DocChecker:
         normalized = self._normalize_module_name(ref)
         if not normalized:
             return True  # Can't verify, assume it's fine
+
+        # Only check references that share a root module with our codebase
+        # This avoids flagging external library references (textual.app, etc.)
+        ref_root = normalized.split(".")[0]
+        project_roots = {m.split(".")[0] for m in all_modules}
+        if ref_root not in project_roots:
+            return True  # External reference, assume it exists
 
         # Direct match
         if normalized in all_modules:
