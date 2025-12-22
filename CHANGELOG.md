@@ -13,11 +13,22 @@
 - Removed 4 obsolete skipped tests for consolidated CLI commands
 
 **check-docs False Positives Fixed** (Dec 22 2025)
-- Reduced warnings from 48 to 6 (remaining are legitimate stale refs)
+- Reduced warnings from 48 to 0 (all were false positives or fixed)
 - Added project_roots check: only flag refs whose root matches project modules
 - Fixed package discovery: add names without `__init__` suffix (`moss.plugins`)
 - Skip config extensions (`.toml`, `.yaml`, `.json`, etc.)
 - Skip `self.*` references and incomplete refs ending with dot
+- Added entry point group detection from pyproject.toml
+- Skip references inside code blocks (triple backticks)
+- Added `doc-check: ignore` comment syntax for exceptions
+
+**Synthesis Plugin Refactoring** (Dec 22 2025)
+- Aligned module paths with entry point group names
+- `moss.synthesis.generators` (was `moss.synthesis.plugins.generators`)
+- `moss.synthesis.validators` (was `moss.synthesis.plugins.validators`)
+- `moss.synthesis.libraries` (was `moss.synthesis.plugins.libraries`)
+- All plugin exports now available from `moss.synthesis`
+- Backward compatibility shims in `synthesis/plugins/`
 
 ### Features
 
