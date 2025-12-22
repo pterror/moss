@@ -63,6 +63,13 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [x] Extract shared code from moss-cli and moss-daemon into moss-core crate
 - [x] Share: tree-sitter parsers, Language detection, SymbolKind types
 - [ ] Consider: consolidate index.rs, symbols.rs (different designs for CLI vs daemon)
+- [ ] Refactor file extension matching: ugly SQL with 12+ ORs in refresh_call_graph, use helper or IN clause
+
+**Call Graph Improvements:**
+- [ ] Call extraction only works for Python (find_callees_with_lines is Python-specific)
+- [ ] Add call extraction for: Java, TypeScript, JavaScript, Go, Rust
+- [ ] Missing language support: Scala, Vue (no tree-sitter grammars yet)
+- [ ] "(no ext)" files are high count (~6k) - likely binary/lockfiles, consider filtering
 
 **Skeleton Language Support:**
 - [x] Added 16 tree-sitter grammars: Python, Rust, Markdown, JavaScript, TypeScript, TSX, JSON, YAML, HTML, CSS, Go, C, C++, Java, Ruby, Bash, TOML
