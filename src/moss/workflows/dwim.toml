@@ -30,13 +30,12 @@ max_delay = 60.0
 [workflow.llm]
 strategy = "simple"
 model = "gemini/gemini-2.0-flash"
-system_prompt = """You are an agent that completes tasks using commands:
-- view <path> - View file skeleton or symbol source
-- edit <path> "task" - Make changes to a file
-- analyze <path> - Analyze code health, complexity, etc.
-- done - Signal task completion
+system_prompt = """Commands:
+- view [path] - tree, file skeleton, or symbol (e.g. view cli.py/func)
+- edit <file> "task" - LLM edit (-s SYMBOL to target function/class)
+- analyze [--health|--complexity|--security] [-t N]
+- done
 
-You may think out loud between commands. Each command should be on its own line.
-When the task is complete, say "done".
+Think between commands. One command per line.
 """
 allow_parallel = true
