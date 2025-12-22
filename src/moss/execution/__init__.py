@@ -687,6 +687,16 @@ LLM_STRATEGIES: dict[str, type[LLMStrategy]] = {
 
 
 @dataclass
+class WorkflowStep:
+    """A predefined step in a workflow."""
+
+    name: str
+    action: str  # Command to execute (e.g., "view main.py", "analyze --health")
+    on_error: str = "fail"  # "fail", "skip", "retry"
+    max_retries: int = 1
+
+
+@dataclass
 class WorkflowConfig:
     """Parsed workflow configuration."""
 
@@ -697,6 +707,7 @@ class WorkflowConfig:
     cache: CacheStrategy | None = None
     retry: RetryStrategy | None = None
     llm: LLMStrategy | None = None
+    steps: list[WorkflowStep] | None = None  # If set, run step-based instead of agentic
 
 
 def load_workflow(path: str) -> WorkflowConfig:
@@ -766,6 +777,20 @@ def load_workflow(path: str) -> WorkflowConfig:
             actions = llm_cfg.get("actions", ["done"])
             llm = NoLLM(actions=actions)
 
+    # Parse steps (for step-based workflows)
+    steps = None
+    if steps_cfg := wf.get("steps"):
+        steps = []
+        for step_cfg in steps_cfg:
+            steps.append(
+                WorkflowStep(
+                    name=step_cfg.get("name", "step"),
+                    action=step_cfg.get("action", ""),
+                    on_error=step_cfg.get("on_error", "fail"),
+                    max_retries=step_cfg.get("max_retries", 1),
+                )
+            )
+
     return WorkflowConfig(
         name=wf.get("name", "unnamed"),
         description=wf.get("description", ""),
@@ -774,20 +799,97 @@ def load_workflow(path: str) -> WorkflowConfig:
         cache=cache,
         retry=retry,
         llm=llm,
+        steps=steps,
     )
 
 
-def run_workflow(path: str, task: str) -> str:
+def step_loop(
+    steps: list[WorkflowStep],
+    context: ContextStrategy | None = None,
+    cache: CacheStrategy | None = None,
+    retry: RetryStrategy | None = None,
+    initial_context: dict[str, str] | None = None,
+) -> str:
+    """Run predefined steps in sequence.
+
+    Args:
+        steps: List of workflow steps to execute
+        context: Context strategy (default: FlatContext)
+        cache: Cache strategy (default: InMemoryCache)
+        retry: Retry strategy (default: NoRetry)
+        initial_context: Initial context values (e.g., {"file_path": "main.py"})
+
+    Returns:
+        Final context string
+    """
+    scope = Scope(
+        context=context or FlatContext(),
+        cache=cache or InMemoryCache(),
+        retry=retry or NoRetry(),
+    )
+
+    # Add initial context
+    if initial_context:
+        for key, value in initial_context.items():
+            scope.context.add(key, value)
+
+    # Run each step
+    for step in steps:
+        scope.context.add("step", step.name)
+
+        try:
+            result = scope.run(step.action)
+            scope.context.add("result", result)
+        except Exception as e:
+            if step.on_error == "skip":
+                scope.context.add("skipped", f"{step.name}: {e}")
+                continue
+            elif step.on_error == "retry" and step.max_retries > 1:
+                # Simple retry
+                for _attempt in range(step.max_retries - 1):
+                    try:
+                        result = scope.run(step.action)
+                        scope.context.add("result", result)
+                        break
+                    except Exception:
+                        continue
+                else:
+                    scope.context.add("error", f"{step.name}: {e}")
+            else:
+                scope.context.add("error", f"{step.name}: {e}")
+                break
+
+    return scope.context.get_context()
+
+
+def run_workflow(path: str, task: str = "", initial_context: dict[str, str] | None = None) -> str:
     """Load and run a workflow from TOML.
+
+    Automatically detects agentic vs step-based:
+    - If workflow has steps: runs step_loop
+    - If workflow has llm: runs agent_loop
 
     Args:
         path: Path to workflow TOML file
-        task: Task description
+        task: Task description (for agentic workflows)
+        initial_context: Initial context (for step-based workflows)
 
     Returns:
         Final context string
     """
     config = load_workflow(path)
+
+    # Step-based workflow
+    if config.steps:
+        return step_loop(
+            steps=config.steps,
+            context=config.context,
+            cache=config.cache,
+            retry=config.retry,
+            initial_context=initial_context,
+        )
+
+    # Agentic workflow
     return agent_loop(
         task=task,
         context=config.context,

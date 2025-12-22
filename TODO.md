@@ -68,7 +68,8 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
     - `moss workflow run dwim "task"` - agentic (dwim is just a workflow)
     - `moss workflow run validate-fix` - step-based
     - `moss agent` becomes alias for `moss workflow run dwim`
-    - Requires: extend execution primitives for step-based workflows
+    - Nested steps (step type that runs sub-steps) - for grouping
+    - State machine workflows (states + transitions) - see design doc
     - Then: remove AgentLoop, MossToolExecutor, old workflow loader
   - [x] DWIMLoop removed - replaced by composable execution primitives (src/moss/execution/)
   - Python edit → redundant with agent, remove
