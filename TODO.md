@@ -27,12 +27,17 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [x] `CLAUDE.md` - updated dogfooding section for 3 primitives
 - [ ] Remaining: prior-art.md, hybrid-loops.md, etc. (lower priority)
 
+**Unified Plumbing for 3 Primitives:**
+- [ ] view/edit/analyze should share: path resolution, node targeting, filtering, output formatting
+- [ ] Same filters work everywhere: `--type`, `--calls`, `--called-by`, `--deps`
+- [ ] Deduplicate any redundant implementations (Python vs Rust, per-command logic)
+- [ ] Interface stays separate (clear intent), plumbing unifies (DRY)
+
 **CLI Cleanup:**
 - [ ] `dwim` - may no longer be necessary with 3 primitives
 - [ ] `workflow` vs `loop` - redundant? consolidate?
 - [ ] `patterns`, `git-hotspots` - slow, consider Rust port
 - [ ] Missing `--compact` mode on `roadmap` and other commands
-- [ ] Many commands need reconsidering: generalize, redesign, merge, or remove
 
 **Keys:** see `.env.example` for ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 
