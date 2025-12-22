@@ -4,6 +4,17 @@
 
 ### Features
 
+**Multi-Language Symbol Support** (Dec 22 2025)
+- Extended symbol parsing to Java, TypeScript, TSX, JavaScript, Go (in addition to Python/Rust)
+- Call graph indexer now includes all supported languages
+- Added `moss index-stats` command to show DB size vs codebase size ratio
+- Data file key extraction: JSON/YAML/TOML keys become navigable symbols
+  - Objects/sections become "class" symbols with children
+  - Leaf values become "variable" symbols
+  - `moss view pyproject.toml` now shows TOML structure as tree
+  - `moss symbols config.json` lists all keys hierarchically
+- Tested on 72k file repo: 66k symbols indexed at 3.4% DB size ratio
+
 **Markdown Support** (Dec 22 2025)
 - Added tree-sitter-md to Rust CLI for proper markdown parsing
 - `moss skeleton README.md` extracts headings as nested symbols

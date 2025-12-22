@@ -66,7 +66,9 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 **Skeleton Language Support:**
 - [x] Added 16 tree-sitter grammars: Python, Rust, Markdown, JavaScript, TypeScript, TSX, JSON, YAML, HTML, CSS, Go, C, C++, Java, Ruby, Bash, TOML
-- [x] Skeleton extraction for: Python, Rust, Markdown, JavaScript, TypeScript, Go, Java, C, C++, Ruby
+- [x] Skeleton extraction for: Python, Rust, Markdown, JavaScript, TypeScript, Go, Java, C, C++, Ruby, JSON, YAML, TOML
+- [x] Symbol parsing for call graph: Python, Rust, Java, TypeScript, TSX, JavaScript, Go, JSON, YAML, TOML
+- [x] Data file key extraction: JSON/YAML/TOML keys become symbols (objects=class, values=variable)
 
 **Explore TUI Keybinds:**
 - [ ] Modal keybinds like Blender (mode-specific keys that change based on context)
