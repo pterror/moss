@@ -2,7 +2,20 @@
 
 ## Unreleased
 
+### Features
+
+**Nested Steps** (Dec 23 2025)
+- WorkflowStep now supports compound steps (with sub-steps)
+- Compound steps execute in child Scope with inherited strategies
+- Recursive step parsing in load_workflow for nested TOML structures
+- Design doc for multi-agent communication: docs/nested-execution.md
+
 ### Refactoring
+
+**Code Cleanup** (Dec 23 2025)
+- SkeletonAPI.expand now uses rust_view() instead of raw call_rust()
+- Documented TUI modal keybinds architecture (needs design before implementation)
+- Python edit assessment: EditAPI (file ops) is used; complexity-routed edit() is stubs
 
 **Workflow Unification** (Dec 23 2025)
 - Unified `moss agent` and `moss workflow run` under execution primitives

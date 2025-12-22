@@ -46,10 +46,10 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
-- [x] Nested steps: step type that runs sub-steps (see docs/nested-execution.md)
-- [x] rust_shim cleanup: SkeletonAPI.expand now uses rust_view() instead of raw call_rust()
 - [ ] Explore TUI: jump-to-node shortcut (fuzzy search navigation)
-- [x] Python edit assessment: EditAPI (file ops) is used; complexity-routed edit() is 80% stubs - leave as-is, agent handles edits
+- [ ] Context modes for nested steps: implement shared/inherited (see docs/nested-execution.md)
+- [ ] State machine workflows (states + transitions) - design doc needed
+- [ ] Define clear Rust/Python boundaries (what goes where, why)
 
 ## Backlog
 
