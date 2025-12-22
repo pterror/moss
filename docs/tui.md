@@ -31,6 +31,8 @@ Textual uses Rich markup but with its own escaping rules:
 - `on_tree_node_selected` fires on single click/enter, not double-click
 - Implement double-click manually with timestamp tracking
 - `on_tree_node_highlighted` fires on cursor movement (hover/arrow keys)
+- Indentation controlled by `guide_depth` property (default 4), not CSS
+- Set `self.guide_depth = 2` in `__init__` for minimal indent
 
 ## Command Palette
 
