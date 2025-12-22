@@ -29,6 +29,7 @@ Do not:
 - Use `os.path` - use `pathlib`
 - Catch generic `Exception` - catch specific errors
 - Leave work uncommitted
+- Create special cases - design to avoid them; if stuck, ask user rather than special-casing
 
 Our system prompt for sub-agents (`src/moss/agent_loop.py:LLMConfig.system_prompt`):
 "Be terse. No preamble, no summary, no markdown formatting. Plain text only. For analysis: short bullet points, max 5 items, no code."
