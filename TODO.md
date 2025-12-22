@@ -63,10 +63,11 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Stop and plan before adding more features
 - [ ] Consolidate redundant layers discovered Dec 22:
   - [x] SkeletonAPI.expand → now uses `view path/symbol` via rust_shim
-  - SkeletonAPI.format/extract already use rust_shim (rust_skeleton, rust_skeleton_json)
-  - MossToolExecutor: only used by old AgentLoop/workflows path; new execution primitives bypass entirely
+  - rust_shim naming: `rust_skeleton` → should be `rust_view` (calls `view` not `skeleton`)
+  - AgentLoop + MossToolExecutor: only used by `moss workflow` command
+    - `moss agent` now uses execution primitives, bypasses this entirely
+    - Consider: remove `workflow` command? Or migrate to execution primitives?
   - [x] DWIMLoop removed - replaced by composable execution primitives (src/moss/execution/)
-  - AgentLoop: generic step executor - consider renaming to StepExecutor
   - Python edit → redundant with agent, remove
   - Rust edit vs Python edit → same name, different behavior
 - [ ] Define clear boundaries: what's Rust, what's Python, why
@@ -112,6 +113,9 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [ ] Modifier key layers (Ctrl/Alt/Shift combos for power users)
 - [ ] Jump-to-node shortcut (fuzzy search to quickly navigate tree)
 - [ ] View/Edit/Analyze mode indicator (replace 3 visible bindings with single indicator + dropdown, cycle with ctrl+tab)
+
+**Editor Integration:**
+- [ ] LSP refactor actions (rename symbol across files via language server)
 
 **Telemetry** (see `docs/telemetry.md`):
 - [x] `moss telemetry` CLI with aggregate analysis
