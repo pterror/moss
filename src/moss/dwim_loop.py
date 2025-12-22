@@ -69,12 +69,22 @@ class TurnResult:
     duration_ms: int = 0
 
 
+class FallbackStrategy(Enum):
+    """What to do when retry loop is detected."""
+
+    SKIP = auto()  # Skip the operation and continue
+    REPORT = auto()  # Report to user and exit
+    ALTERNATIVE = auto()  # Try to suggest alternative approach
+
+
 @dataclass
 class LoopConfig:
     """Configuration for the DWIM loop."""
 
     max_turns: int = 50
-    stall_threshold: int = 5  # Max turns without progress
+    stall_threshold: int = 5  # Max identical intents before stall
+    retry_threshold: int = 3  # Max failures on similar operations before fallback
+    fallback_strategy: FallbackStrategy = FallbackStrategy.SKIP
     confidence_threshold: float = CLARIFY_THRESHOLD  # Below this, ask for clarification
     model: str = "gemini/gemini-3-flash-preview"
     temperature: float = 0.0
@@ -404,6 +414,8 @@ class DWIMLoop:
         self._last_result: str | None = None
         self._task_type: TaskType = TaskType.UNKNOWN
         self._successful_results: int = 0  # Count of successful tool results
+        self._failure_counts: dict[str, int] = {}  # Track failures by operation key
+        self._skipped_operations: set[str] = set()  # Operations skipped due to retry limit
         self._ephemeral_cache = EphemeralCache(
             max_entries=50,
             default_ttl=600.0,  # 10 minutes for agent session
@@ -860,6 +872,67 @@ Do NOT repeat the same command. Never output prose."""
 
         return False
 
+    def _get_operation_key(self, intent: ParsedIntent) -> str:
+        """Get a normalized key for tracking similar operations.
+
+        Groups operations by verb and normalized target (without specific details).
+        E.g., 'view src/foo.py' and 'view src/foo.py/bar' -> 'view:src/foo.py'
+        """
+        verb = intent.verb.lower()
+        target = intent.target or ""
+
+        # Normalize target: strip symbol paths, keep file/directory
+        if "/" in target and "." in target:
+            # Looks like file.py/symbol - keep just the file part
+            parts = target.split("/")
+            for i, part in enumerate(parts):
+                if "." in part and not part.startswith("."):
+                    # Found file extension, keep up to here
+                    target = "/".join(parts[: i + 1])
+                    break
+
+        return f"{verb}:{target}"
+
+    def _record_failure(self, intent: ParsedIntent) -> None:
+        """Record a failed operation for retry tracking."""
+        key = self._get_operation_key(intent)
+        self._failure_counts[key] = self._failure_counts.get(key, 0) + 1
+
+    def _record_success(self, intent: ParsedIntent) -> None:
+        """Record a successful operation, resetting its failure count."""
+        key = self._get_operation_key(intent)
+        if key in self._failure_counts:
+            del self._failure_counts[key]
+
+    def _check_retry_limit(self, intent: ParsedIntent) -> tuple[bool, str | None]:
+        """Check if operation has exceeded retry limit.
+
+        Returns:
+            (exceeded, fallback_message): Whether limit exceeded and optional message
+        """
+        key = self._get_operation_key(intent)
+
+        # Already skipped?
+        if key in self._skipped_operations:
+            return True, f"Operation '{key}' was previously skipped due to repeated failures"
+
+        # Check failure count
+        failures = self._failure_counts.get(key, 0)
+        if failures >= self.config.retry_threshold:
+            self._skipped_operations.add(key)
+
+            if self.config.fallback_strategy == FallbackStrategy.SKIP:
+                msg = f"Skipping '{key}' after {failures} failures. Try different approach."
+                return True, msg
+            elif self.config.fallback_strategy == FallbackStrategy.REPORT:
+                msg = f"Retry limit for '{key}' ({failures}x). Manual intervention needed."
+                return True, msg
+            else:  # ALTERNATIVE
+                msg = f"'{key}' failed {failures}x. Try: different file or broader search."
+                return True, msg
+
+        return False, None
+
     async def run(self, task: str) -> LoopResult:
         """Run the DWIM loop on a task.
 
@@ -874,6 +947,8 @@ Do NOT repeat the same command. Never output prose."""
         self._last_result = None
         self._task_type = classify_task(task)
         self._successful_results = 0
+        self._failure_counts.clear()  # Reset failure tracking
+        self._skipped_operations.clear()
         self._ephemeral_cache.clear()  # Fresh cache for new run
         start_time = datetime.now(UTC)
 
@@ -959,12 +1034,48 @@ Do NOT repeat the same command. Never output prose."""
                     )
                     continue
 
+                # Check retry limit before execution
+                exceeded, fallback_msg = self._check_retry_limit(intent)
+                if exceeded:
+                    output = None
+                    error = fallback_msg
+                    self._last_result = f"Fallback: {error}"
+                    duration = int((datetime.now(UTC) - turn_start).total_seconds() * 1000)
+                    self._turns.append(
+                        TurnResult(
+                            intent=intent,
+                            tool_match=tool_match,
+                            tool_output=None,
+                            error=error,
+                            duration_ms=duration,
+                        )
+                    )
+                    # For REPORT strategy, exit the loop
+                    if self.config.fallback_strategy == FallbackStrategy.REPORT:
+                        total_duration = int(
+                            (datetime.now(UTC) - start_time).total_seconds() * 1000
+                        )
+                        return LoopResult(
+                            state=LoopState.FAILED,
+                            turns=self._turns,
+                            final_output=None,
+                            error=fallback_msg,
+                            total_duration_ms=total_duration,
+                        )
+                    continue
+
                 try:
                     output = await self._execute_tool(tool_name, params)
                     error = None
                 except Exception as e:
                     output = None
                     error = str(e)
+
+                # Track success/failure for retry detection
+                if error:
+                    self._record_failure(intent)
+                else:
+                    self._record_success(intent)
 
                 # Store result with preview
                 if output:

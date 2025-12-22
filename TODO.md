@@ -44,7 +44,6 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Next Up
 
-- [ ] Symbol-level token tracking in telemetry (extend file tokens to symbol paths)
 - [ ] Agent stuck in retry loop fallback strategy (see Known Issues above)
 
 ## Backlog
@@ -56,7 +55,7 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 - [x] File-level token tracking (`file_tokens` in SessionAnalysis)
 - [x] Gemini CLI log parser
 - [x] Real-time telemetry mode (`--watch`)
-- [ ] Tokens per function/symbol (extend file tracking)
+- [x] Symbol-level token tracking (moss view/analyze symbol paths)
 
 **Memory System** (see `docs/memory-system.md`):
 - [ ] Layered memory for cross-session learning
