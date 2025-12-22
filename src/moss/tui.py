@@ -1598,17 +1598,17 @@ class MossTUI(App):
         matches.sort(key=lambda x: (x[0], x[1]))
         best_match = matches[0][1]
 
-        # Navigate to the file
+        # Navigate to the file in tree
         target_path = tree._tree_root / best_match
         if target_path.exists():
-            # Change directory to parent if needed
-            parent = target_path.parent
-            if parent != tree._tree_root:
-                self.action_cd_to(str(parent))
+            # Expand path and select node in tree
+            self._expand_and_select_path(tree, best_match)
 
-            # Select and view the file
+            # Update selection state
             self._selected_path = str(target_path)
             self._selected_type = "file"
+
+            # Show the file content
             self._execute_primitive("view", str(target_path))
 
             # Log matches if there are alternatives
@@ -1618,6 +1618,54 @@ class MossTUI(App):
                 self._log(f"[dim]Also matched: {alts}[/]")
         else:
             self._log(f"[red]File not found: {best_match}[/]")
+
+    def _expand_and_select_path(self, tree: ProjectTree, rel_path: str) -> None:
+        """Expand tree nodes along path and select the final node."""
+        parts = rel_path.split("/")
+        current_node = tree.root
+
+        # Expand root first
+        if not current_node.is_expanded:
+            current_node.expand()
+
+        # Traverse each path component
+        for i, part in enumerate(parts):
+            is_last = i == len(parts) - 1
+
+            # Find child node matching this path part
+            found = None
+            for child in current_node.children:
+                if child.data:
+                    child_path = child.data.get("path")
+                    if child_path and child_path.name == part:
+                        found = child
+                        break
+
+            if not found:
+                # Node not loaded yet - expand parent to trigger lazy load
+                if not current_node.data or not current_node.data.get("loaded"):
+                    current_node.expand()
+                    # Try again after expansion
+                    for child in current_node.children:
+                        if child.data:
+                            child_path = child.data.get("path")
+                            if child_path and child_path.name == part:
+                                found = child
+                                break
+
+            if found:
+                if is_last:
+                    # Select the final node
+                    tree.select_node(found)
+                    found.expand()  # Show symbols if it's a file
+                else:
+                    # Expand intermediate directory
+                    if not found.is_expanded:
+                        found.expand()
+                    current_node = found
+            else:
+                self._log(f"[dim]Could not find node: {part}[/]")
+                break
 
     def action_primitive_view(self) -> None:
         """View the currently selected node."""
