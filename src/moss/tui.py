@@ -172,6 +172,23 @@ class CommitMode:
         await app._update_git_view()
 
 
+class ExploreMode:
+    """Unified exploration mode using tree + three primitives (view/edit/analyze)."""
+
+    name = "EXPLORE"
+    color = "cyan"
+    placeholder = "view <path> | edit <path> | analyze [--health|--complexity|--security]"
+
+    async def on_enter(self, app: MossTUI) -> None:
+        app.query_one("#log-view").display = False
+        app.query_one("#git-view").display = False
+        app.query_one("#session-view").display = False
+        app.query_one("#swarm-view").display = False
+        app.query_one("#explore-view").display = True
+        app.query_one("#content-header").update("Explore")
+        app._update_tree("file")
+
+
 class ModeRegistry:
     """Registry for extensible TUI modes.
 
@@ -193,9 +210,8 @@ class ModeRegistry:
     """
 
     _BUILTIN_MODES: ClassVar[list[type]] = [
+        ExploreMode,  # Default mode - tree + primitives
         PlanMode,
-        ReadMode,
-        WriteMode,
         DiffMode,
         SessionMode,
         BranchMode,
@@ -327,6 +343,36 @@ class ModeIndicator(Static):
 
     def render(self) -> str:
         return f"Mode: [{self.mode_color} b]{self.mode_name}[/]"
+
+
+class ActionBar(Static):
+    """Action bar showing available primitives for current selection."""
+
+    selected_path = reactive("")
+    selected_type = reactive("")  # "file", "dir", "symbol"
+
+    def render(self) -> str:
+        if not self.selected_path:
+            return "[dim]Select a node to see actions[/]"
+
+        # Context-sensitive labels
+        if self.selected_type == "dir":
+            view_label = "tree"
+        elif self.selected_type == "symbol":
+            view_label = "source"
+        else:  # file
+            view_label = "skeleton"
+
+        path_display = self.selected_path
+        if len(path_display) > 40:
+            path_display = "..." + path_display[-37:]
+
+        return (
+            f"[dim]{path_display}[/]  "
+            f"[[@click=app.primitive_view()]V[/]][b]iew[/] ({view_label})  "
+            f"[[@click=app.primitive_edit()]E[/]][b]dit[/]  "
+            f"[[@click=app.primitive_analyze()]A[/]][b]nalyze[/]"
+        )
 
 
 class HoverTooltip(Static):
@@ -504,6 +550,26 @@ class MossTUI(App):
         display: none;
     }
 
+    #explore-view {
+        display: none;
+        height: 1fr;
+    }
+
+    #explore-detail {
+        height: 1fr;
+        border: solid $secondary;
+        padding: 1;
+        overflow-y: auto;
+    }
+
+    #action-bar {
+        dock: bottom;
+        height: auto;
+        padding: 0 1;
+        background: $surface-lighten-1;
+        border-top: solid $primary;
+    }
+
     #diff-view {
         height: 1fr;
         border: solid $secondary;
@@ -539,6 +605,9 @@ class MossTUI(App):
         ("d", "toggle_dark", "Toggle Dark Mode"),
         ("shift+tab", "next_mode", "Next Mode"),
         ("h", "toggle_tooltip", "Toggle Tooltip"),
+        ("v", "primitive_view", "View"),
+        ("e", "primitive_edit", "Edit"),
+        ("a", "primitive_analyze", "Analyze"),
     ]
 
     current_mode_name = reactive("PLAN")
@@ -594,10 +663,15 @@ class MossTUI(App):
                         Tree("Workers", id="swarm-tree"),
                         id="swarm-view",
                     ),
+                    Container(
+                        RichLog(id="explore-detail", highlight=True, markup=True),
+                        id="explore-view",
+                    ),
                     id="content-area",
                 ),
                 id="main-container",
             ),
+            ActionBar(id="action-bar"),
             Input(placeholder="Enter command...", id="command-input"),
             HoverTooltip(id="hover-tooltip"),
         )
@@ -608,8 +682,11 @@ class MossTUI(App):
         self.title = "Moss TUI"
         self.sub_title = f"Project: {self.api.root.name}"
         self.query_one("#command-input").focus()
-        # Initialize first mode
-        self.current_mode_name = "PLAN"
+        # Initialize first mode (EXPLORE is default)
+        self.current_mode_name = "EXPLORE"
+        # Track selected node for action bar
+        self._selected_path: str = ""
+        self._selected_type: str = ""
 
         # Subscribe to tool calls to show resources
         from moss.events import Event, EventType
@@ -659,6 +736,7 @@ class MossTUI(App):
         self.query_one("#git-view").display = False
         self.query_one("#session-view").display = False
         self.query_one("#swarm-view").display = False
+        self.query_one("#explore-view").display = False
 
         await mode.on_enter(self)
 
@@ -704,9 +782,14 @@ class MossTUI(App):
             return
 
         tooltip = self.query_one("#hover-tooltip", HoverTooltip)
+        action_bar = self.query_one("#action-bar", ActionBar)
 
         if data["type"] == "file":
             path = data["path"]
+            self._selected_path = str(path)
+            self._selected_type = "file"
+            action_bar.selected_path = str(path)
+            action_bar.selected_type = "file"
             tooltip.file_path = path  # Enable syntax highlighting
             # Show file skeleton summary in tooltip
             try:
@@ -718,9 +801,23 @@ class MossTUI(App):
                 tooltip.content = summary
             except (OSError, ValueError):
                 tooltip.content = f"File: {path.name}"
+        elif data["type"] == "dir":
+            path = data["path"]
+            self._selected_path = str(path)
+            self._selected_type = "dir"
+            action_bar.selected_path = str(path)
+            action_bar.selected_type = "dir"
+            tooltip.file_path = None
+            tooltip.content = f"Directory: {path.name}"
         elif data["type"] == "symbol":
             symbol = data["symbol"]
             path = data["path"]
+            # Build symbol path like src/foo.py/ClassName
+            symbol_path = f"{path}/{symbol.name}"
+            self._selected_path = symbol_path
+            self._selected_type = "symbol"
+            action_bar.selected_path = symbol_path
+            action_bar.selected_type = "symbol"
             tooltip.file_path = path  # Enable syntax highlighting for signature
             # Build symbol info display
             lines = [symbol.signature]
@@ -742,9 +839,14 @@ class MossTUI(App):
             tooltip.content = f"Goal: {node.goal}\nStatus: {node.status.name}"
             if node.summary:
                 tooltip.content += f"\nSummary: {node.summary}"
+            # Clear action bar for tasks
+            action_bar.selected_path = ""
+            action_bar.selected_type = ""
         else:
             tooltip.file_path = None
             tooltip.content = ""
+            action_bar.selected_path = ""
+            action_bar.selected_type = ""
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle tree node selection (click/enter)."""
@@ -754,18 +856,33 @@ class MossTUI(App):
 
         if data["type"] == "file":
             path = data["path"]
-            self._log(f"Opened file: {path.name}")
-            # Automatically run skeleton command for selected file
-            self.query_one("#command-input").value = f"skeleton {path}"
-            # Focus input so user can press enter
-            self.query_one("#command-input").focus()
+            self._selected_path = str(path)
+            self._selected_type = "file"
+            # In EXPLORE mode, double-click triggers view
+            if self.current_mode_name == "EXPLORE":
+                self.action_primitive_view()
+            else:
+                self._log(f"Opened file: {path.name}")
+                self.query_one("#command-input").value = f"view {path}"
+                self.query_one("#command-input").focus()
+        elif data["type"] == "dir":
+            path = data["path"]
+            self._selected_path = str(path)
+            self._selected_type = "dir"
+            if self.current_mode_name == "EXPLORE":
+                self.action_primitive_view()
         elif data["type"] == "symbol":
             symbol = data["symbol"]
             path = data["path"]
-            self._log(f"Symbol: {symbol.name} at {path.name}:{symbol.lineno}")
-            # Pre-fill with file:line for editor navigation
-            self.query_one("#command-input").value = f"{path}:{symbol.lineno}"
-            self.query_one("#command-input").focus()
+            symbol_path = f"{path}/{symbol.name}"
+            self._selected_path = symbol_path
+            self._selected_type = "symbol"
+            if self.current_mode_name == "EXPLORE":
+                self.action_primitive_view()
+            else:
+                self._log(f"Symbol: {symbol.name} at {path.name}:{symbol.lineno}")
+                self.query_one("#command-input").value = f"view {symbol_path}"
+                self.query_one("#command-input").focus()
 
     def action_toggle_tooltip(self) -> None:
         """Toggle tooltip visibility."""
@@ -856,11 +973,104 @@ class MossTUI(App):
             return
 
         self.query_one("#command-input").value = ""
-        self._log(f"[{self.current_mode_name}] {command}")
 
-        # TODO: Integrate with AgentLoop or DWIM
         if command == "exit":
             self.exit()
+            return
+
+        # In EXPLORE mode, parse and route primitive commands
+        if self.current_mode_name == "EXPLORE":
+            self._handle_explore_command(command)
+        else:
+            self._log(f"[{self.current_mode_name}] {command}")
+
+    def _handle_explore_command(self, command: str) -> None:
+        """Parse and execute explore mode commands."""
+        import shlex
+
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            parts = command.split()
+
+        if not parts:
+            return
+
+        cmd = parts[0].lower()
+        args = parts[1:] if len(parts) > 1 else []
+
+        # Support both explicit (view foo) and implicit (foo -> view foo)
+        if cmd in ("view", "v"):
+            target = args[0] if args else self._selected_path
+            if target:
+                self._execute_primitive("view", target)
+            else:
+                self._log("[dim]Usage: view <path>[/]")
+        elif cmd in ("edit", "e"):
+            if args:
+                # Parse edit options: edit <target> --delete, --replace "...", etc.
+                target = args[0]
+                self._handle_edit_command(target, args[1:])
+            else:
+                self._log("[dim]Usage: edit <path> [--delete|--replace '...'][/]")
+        elif cmd in ("analyze", "a"):
+            target = args[0] if args else self._selected_path or "."
+            # Parse analyze flags
+            flags = {"health": False, "complexity": False, "security": False}
+            for arg in args[1:]:
+                if arg in ("--health", "-h"):
+                    flags["health"] = True
+                elif arg in ("--complexity", "-c"):
+                    flags["complexity"] = True
+                elif arg in ("--security", "-s"):
+                    flags["security"] = True
+            self._execute_primitive("analyze", target, **flags)
+        else:
+            # Try as implicit view (just a path)
+            self._selected_path = command
+            self._execute_primitive("view", command)
+
+    def _handle_edit_command(self, target: str, args: list[str]) -> None:
+        """Handle edit command with options."""
+        from moss.core_api import EditAPI
+
+        explore_detail = self.query_one("#explore-detail")
+        explore_detail.clear()
+
+        # Parse edit options
+        delete = "--delete" in args or "-d" in args
+        dry_run = "--dry-run" in args
+
+        replace_content = None
+        for i, arg in enumerate(args):
+            if arg in ("--replace", "-r") and i + 1 < len(args):
+                replace_content = args[i + 1]
+                break
+
+        try:
+            api = EditAPI(self.api.root)
+            if delete:
+                result = api.delete(target, dry_run=dry_run)
+            elif replace_content:
+                result = api.replace(target, replace_content, dry_run=dry_run)
+            else:
+                explore_detail.write("[dim]Edit options: --delete, --replace '...'[/]\n")
+                explore_detail.write(f"Target: {target}\n")
+                return
+
+            explore_detail.write(f"[b]EDIT: {result.target}[/] ({result.operation})\n\n")
+            if dry_run:
+                explore_detail.write("[yellow]DRY RUN[/]\n\n")
+            if result.success:
+                explore_detail.write(f"[green]SUCCESS:[/] {result.message}\n")
+            else:
+                explore_detail.write(f"[red]FAILED:[/] {result.message}\n")
+            if result.diff:
+                explore_detail.write("\n[b]Diff:[/]\n")
+                explore_detail.write(result.diff)
+
+        except Exception as e:
+            explore_detail.write(f"[red]Error: {e}[/]")
 
     def navigate(self, target: str) -> None:
         """Navigate to a specific file or symbol."""
@@ -868,6 +1078,92 @@ class MossTUI(App):
         self.query_one("#command-input").value = f"expand {target}"
         self.query_one("#command-input").focus()
         # In a full implementation, this would also highlight the node in the tree
+
+    def action_primitive_view(self) -> None:
+        """View the currently selected node."""
+        if not self._selected_path:
+            self._log("[dim]No node selected[/]")
+            return
+        self._execute_primitive("view", self._selected_path)
+
+    def action_primitive_edit(self) -> None:
+        """Edit the currently selected node."""
+        if not self._selected_path:
+            self._log("[dim]No node selected[/]")
+            return
+        # Pre-fill command for edit (user needs to specify operation)
+        self.query_one("#command-input").value = f"edit {self._selected_path} "
+        self.query_one("#command-input").focus()
+
+    def action_primitive_analyze(self) -> None:
+        """Analyze the currently selected node."""
+        if not self._selected_path:
+            self._log("[dim]No node selected[/]")
+            return
+        self._execute_primitive("analyze", self._selected_path)
+
+    def _execute_primitive(self, primitive: str, target: str, **kwargs) -> None:
+        """Execute a primitive (view/edit/analyze) and display results."""
+        from moss.core_api import AnalyzeAPI, ViewAPI
+
+        explore_detail = self.query_one("#explore-detail")
+        explore_detail.clear()
+
+        try:
+            if primitive == "view":
+                api = ViewAPI(self.api.root)
+                result = api.view(target=target, depth=kwargs.get("depth", 1))
+                explore_detail.write(f"[b]VIEW: {result.target}[/] ({result.kind})\n\n")
+                # Format content based on kind
+                if result.kind == "directory":
+                    files = result.content.get("files", [])
+                    explore_detail.write(f"Files: {len(files)}\n")
+                    for f in files[:20]:
+                        explore_detail.write(f"  {f}\n")
+                    if len(files) > 20:
+                        explore_detail.write(f"  ... and {len(files) - 20} more\n")
+                elif result.kind == "file":
+                    # Show skeleton or raw content
+                    skeleton = result.content.get("skeleton", "")
+                    if skeleton:
+                        explore_detail.write(skeleton)
+                    else:
+                        explore_detail.write(str(result.content))
+                else:  # symbol
+                    signature = result.content.get("signature", "")
+                    source = result.content.get("source", "")
+                    if signature:
+                        explore_detail.write(f"{signature}\n\n")
+                    if source:
+                        explore_detail.write(source)
+
+            elif primitive == "analyze":
+                api = AnalyzeAPI(self.api.root)
+                result = api.analyze(target=target)
+                explore_detail.write(f"[b]ANALYZE: {result.target}[/]\n\n")
+                if result.health:
+                    explore_detail.write("[b]Health:[/]\n")
+                    for k, v in result.health.items():
+                        explore_detail.write(f"  {k}: {v}\n")
+                if result.complexity:
+                    explore_detail.write("\n[b]Complexity:[/]\n")
+                    funcs = result.complexity.get("functions", [])
+                    for f in funcs[:10]:
+                        name = f.get("name", "?")
+                        score = f.get("complexity", 0)
+                        explore_detail.write(f"  {name}: {score}\n")
+                    if len(funcs) > 10:
+                        explore_detail.write(f"  ... and {len(funcs) - 10} more\n")
+                if result.security:
+                    findings = result.security.get("findings", [])
+                    explore_detail.write(f"\n[b]Security:[/] {len(findings)} findings\n")
+                    for f in findings[:5]:
+                        sev = f.get("severity", "?")
+                        msg = f.get("message", "")
+                        explore_detail.write(f"  [{sev}] {msg}\n")
+
+        except Exception as e:
+            explore_detail.write(f"[red]Error: {e}[/]")
 
     def _log(self, message: str) -> None:
         """Add a message to the log view."""

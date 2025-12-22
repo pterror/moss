@@ -1082,13 +1082,32 @@ def cmd_gen(args: Namespace) -> int:
 
 
 def cmd_tui(args: Namespace) -> int:
-    """Start the interactive terminal UI."""
+    """Start the interactive terminal UI (API explorer)."""
     output = setup_output(args)
     try:
         from moss.gen.tui import run_tui
 
         directory = Path(getattr(args, "directory", ".")).resolve()
         run_tui(directory)
+        return 0
+    except ImportError as e:
+        output.error("TUI dependencies not installed. Install with: pip install 'moss[tui]'")
+        output.debug(f"Details: {e}")
+        return 1
+    except KeyboardInterrupt:
+        return 0
+
+
+def cmd_explore(args: Namespace) -> int:
+    """Start the explore TUI (tree + view/edit/analyze primitives)."""
+    output = setup_output(args)
+    try:
+        from moss.moss_api import MossAPI
+        from moss.tui import run_tui
+
+        directory = Path(getattr(args, "directory", ".")).resolve()
+        api = MossAPI(directory)
+        run_tui(api)
         return 0
     except ImportError as e:
         output.error("TUI dependencies not installed. Install with: pip install 'moss[tui]'")
@@ -4541,7 +4560,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     gen_parser.set_defaults(func=cmd_gen)
 
-    # tui command
+    # tui command (API explorer - technical)
     tui_parser = subparsers.add_parser("tui", help="Interactive terminal UI for exploring MossAPI")
     tui_parser.add_argument(
         "directory",
@@ -4571,17 +4590,17 @@ def create_parser() -> argparse.ArgumentParser:
     )
     shell_parser.set_defaults(func=cmd_shell)
 
-    # explore command (alias for shell with better discoverability)
+    # explore command - tree + primitives TUI
     explore_parser = subparsers.add_parser(
-        "explore", help="Interactive REPL for codebase exploration (alias for shell)"
+        "explore", help="Explore codebase with tree navigation + view/edit/analyze"
     )
     explore_parser.add_argument(
         "directory",
         nargs="?",
         default=".",
-        help="Workspace directory (default: current)",
+        help="Project root directory (default: current)",
     )
-    explore_parser.set_defaults(func=cmd_shell)
+    explore_parser.set_defaults(func=cmd_explore)
 
     # watch command
     watch_parser = subparsers.add_parser("watch", help="Watch files and re-run tests on changes")
