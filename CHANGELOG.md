@@ -4,6 +4,11 @@
 
 ### Performance
 
+**Explore TUI Instant Startup** (Dec 22 2025)
+- Fixed slow startup on large repos (was scanning ~100k files upfront)
+- Directories now lazy-load children on expand (same as symbols)
+- Added more skip dirs: `.venv`, `venv`, `dist`, `build`
+
 **Reindexing 20x Faster** (Dec 22 2025)
 - Fixed redundant parsing: `find_callees_for_symbol` takes pre-parsed Symbol
 - Added parallel file processing with rayon (uses all CPU cores)
