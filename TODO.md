@@ -58,6 +58,11 @@ Dogfooding and CLI improvement are the same work stream. The goal is to make `mo
 
 ## Backlog
 
+**Explore TUI Keybinds:**
+- [ ] Modal keybinds like Blender (mode-specific keys that change based on context)
+- [ ] Live footer keybind updates when mode/context changes
+- [ ] Modifier key layers (Ctrl/Alt/Shift combos for power users)
+
 **Telemetry** (see `docs/telemetry.md`):
 - [x] `moss telemetry` CLI with aggregate analysis
 - [x] HTML dashboard output
