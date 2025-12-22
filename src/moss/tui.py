@@ -562,9 +562,9 @@ class ProjectTree(Tree[Any]):
                 pass
 
     def _extract_markdown_headings(self, path: Path) -> list:
-        """Extract headings from markdown file as pseudo-symbols."""
+        """Extract headings from markdown file as a nested tree."""
         import re
-        from dataclasses import dataclass
+        from dataclasses import dataclass, field
 
         @dataclass
         class HeadingSymbol:
@@ -573,27 +573,44 @@ class ProjectTree(Tree[Any]):
             signature: str = ""
             docstring: str | None = None
             lineno: int = 0
-            children: list = None
+            level: int = 1
+            children: list = field(default_factory=list)
 
-            def __post_init__(self):
-                if self.children is None:
-                    self.children = []
-
-        headings = []
         content = path.read_text()
+        all_headings = []
         for i, line in enumerate(content.splitlines(), 1):
             match = re.match(r"^(#{1,6})\s+(.+)$", line)
             if match:
                 level = len(match.group(1))
                 title = match.group(2).strip()
-                headings.append(
+                all_headings.append(
                     HeadingSymbol(
                         name=title,
                         signature=f"{'#' * level} {title}",
                         lineno=i,
+                        level=level,
                     )
                 )
-        return headings
+
+        # Build tree: each heading contains children with higher level numbers
+        def build_tree(headings: list, parent_level: int = 0) -> list:
+            result = []
+            i = 0
+            while i < len(headings):
+                h = headings[i]
+                if h.level <= parent_level:
+                    break
+                # Find children (higher level numbers until same or lower)
+                children_start = i + 1
+                children_end = children_start
+                while children_end < len(headings) and headings[children_end].level > h.level:
+                    children_end += 1
+                h.children = build_tree(headings[children_start:children_end], h.level)
+                result.append(h)
+                i = children_end if children_end > children_start else i + 1
+            return result
+
+        return build_tree(all_headings)
 
 
 class MossTUI(App):
@@ -713,6 +730,10 @@ class MossTUI(App):
         padding-left: 0;
     }
 
+    Tree.-compact .tree--guides {
+        width: 2;
+    }
+
     CommandPalette > .command-palette--input {
         height: 1;
         padding: 0 1;
@@ -815,7 +836,7 @@ class MossTUI(App):
                 Vertical(
                     Static("Navigation", id="sidebar-header"),
                     Breadcrumb(id="breadcrumb"),
-                    ProjectTree("Project", id="project-tree"),
+                    ProjectTree("Project", id="project-tree", classes="-compact"),
                     id="sidebar",
                 ),
                 Vertical(
@@ -1112,6 +1133,8 @@ class MossTUI(App):
             symbol_path = f"{path}/{symbol.name}"
             self._selected_path = symbol_path
             self._selected_type = "symbol"
+            self._selected_symbol = symbol  # Keep symbol object for markdown headings
+            self._selected_file = path
             if self.current_mode_name == "EXPLORE":
                 self.action_primitive_view()
             else:
@@ -1351,7 +1374,47 @@ class MossTUI(App):
         if not self._selected_path:
             self._log("[dim]No node selected[/]")
             return
-        self._execute_primitive("view", self._selected_path)
+        # Handle markdown headings specially (not supported by ViewAPI)
+        if (
+            self._selected_type == "symbol"
+            and hasattr(self, "_selected_file")
+            and str(self._selected_file).endswith(".md")
+        ):
+            self._view_markdown_section()
+        else:
+            self._execute_primitive("view", self._selected_path)
+
+    def _view_markdown_section(self) -> None:
+        """View a markdown section from heading to next heading."""
+        explore_header = self.query_one("#explore-header", Static)
+        explore_detail = self.query_one("#explore-detail")
+        explore_detail.clear()
+
+        symbol = getattr(self, "_selected_symbol", None)
+        file_path = getattr(self, "_selected_file", None)
+        if not symbol or not file_path:
+            explore_detail.write("[dim](no section data)[/]")
+            return
+
+        try:
+            content = file_path.read_text()
+            lines = content.splitlines()
+            start = symbol.lineno - 1  # 0-indexed
+            # Find next heading at same or higher level
+            level = len(symbol.signature) - len(symbol.signature.lstrip("#"))
+            end = len(lines)
+            for i in range(start + 1, len(lines)):
+                line = lines[i]
+                if line.startswith("#"):
+                    next_level = len(line) - len(line.lstrip("#"))
+                    if next_level <= level:
+                        end = i
+                        break
+            section = "\n".join(lines[start:end])
+            explore_header.update(f"{symbol.signature} ({end - start} lines)")
+            explore_detail.write(section)
+        except OSError as e:
+            explore_detail.write(f"[red]Error: {e}[/]")
 
     def action_primitive_edit(self) -> None:
         """Edit the currently selected node."""
