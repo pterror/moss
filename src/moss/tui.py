@@ -970,16 +970,13 @@ class MossTUI(App):
                 current = current.parent
             breadcrumb.path_parts = parts
 
-    def cd_to(self, path: str) -> None:
+    def action_cd_to(self, path: str) -> None:
         """Navigate to a specific directory."""
         target = Path(path)
         if target.is_dir():
             self._tree_root = target
             self._update_tree("file")
             self._log(f"Changed to: {target.name}")
-
-    # Action wrapper for @click handlers
-    action_cd_to = cd_to
 
     def action_cd_up(self) -> None:
         """Navigate up one directory."""
@@ -995,13 +992,10 @@ class MossTUI(App):
             self._update_tree("file")
             self._log("Changed to project root")
 
-    # Keep non-action alias for internal use
-    cd_root = action_cd_root
-
     def action_enter_dir(self) -> None:
         """Enter selected directory (navigate into it)."""
         if self._selected_type == "dir" and self._selected_path:
-            self.cd_to(self._selected_path)
+            self.action_cd_to(self._selected_path)
 
     def action_toggle_command(self) -> None:
         """Toggle command input visibility."""
@@ -1109,7 +1103,7 @@ class MossTUI(App):
                     self._selected_path == path_str
                     and now - getattr(self, "_last_dir_click", 0) < 0.5
                 ):
-                    self.cd_to(path_str)
+                    self.action_cd_to(path_str)
                 self._last_dir_click = now
             self._selected_path = path_str
         elif data["type"] == "symbol":
@@ -1295,7 +1289,7 @@ class MossTUI(App):
                 if not target_path.is_absolute():
                     target_path = self._tree_root / args[0]
                 if target_path.is_dir():
-                    self.cd_to(str(target_path))
+                    self.action_cd_to(str(target_path))
                 else:
                     self._log(f"[red]Not a directory: {args[0]}[/]")
         else:
