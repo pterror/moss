@@ -16,7 +16,7 @@ Packages scaffolded in `packages/`:
 Remaining work:
 - [x] Fix internal imports in moss-orchestration (converted to relative)
 - [x] Add uv workspace configuration for local development
-- [ ] Integration tests for package boundaries
+- [x] Integration tests for package boundaries (tests/test_packages.py)
 
 **Migration strategy** (sub-packages currently wrap moss.* imports):
 1. Sub-packages provide API structure, delegate to main moss
