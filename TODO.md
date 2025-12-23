@@ -47,6 +47,19 @@ Test Status: 2120 passing, 0 failing, 50 skipped
 
 ## Backlog
 
+**File Boundaries Don't Exist:**
+- Imports in existing files ARE context - when editing a file, its imports define scope
+- Already support pulling in types; need to extend to suggested imports
+- Design needed: when suggesting new imports, pull in that module's context too
+- Goal: seamless cross-file awareness without explicit "add to context" steps
+
+**Test Coverage Heuristics:**
+- Autodetect missing tests (like coverage but cheaper, no execution needed)
+- Heuristically detect test file naming patterns per-repo (test_*.py, *_test.go, etc.)
+- Handle in-file tests (Rust's `#[cfg(test)]` modules)
+- Report: files without corresponding tests based on observed pattern
+- Could be `moss analyze --test-coverage` or separate `moss test-gaps` command
+
 **TUI as Library Interface:**
 - Consider ScopesAPI for public/private symbol stats (or add to SkeletonAPI)
 
