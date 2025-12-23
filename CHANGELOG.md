@@ -56,6 +56,11 @@
 - Modal keybinds: TUIMode.bindings, active_bindings property, KeybindBar refresh on mode change
 - Mode indicator in footer bar (right side, next to palette) - clickable, color-coded
 
+**Rust Crate Consolidation** (Dec 23 2025)
+- Merged moss-daemon into moss-cli - `moss daemon run` now runs daemon in foreground
+- Single binary: moss-cli now includes all daemon functionality
+- ~1000 lines of duplicate code removed
+
 ### Bug Fixes
 
 **CLI Fixes** (Dec 23 2025)

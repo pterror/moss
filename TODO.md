@@ -11,7 +11,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 - Selective import resolution (e.g., `--fisheye=moss.config` to expand only that import)
 
 **2. Rust Module Cleanup**
-- Consider consolidating moss-daemon into moss-cli (reduce crate count)
+- [x] Consolidated moss-daemon into moss-cli (now `moss daemon run`)
 - Many "dead code" warnings are serde false positives (daemon Request/Response types)
 
 **3. TUI: View/Edit/Analyze Mode Refactor**
