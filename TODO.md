@@ -22,16 +22,13 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 - Mode indicator (bottom right, near palette) OR tabbed content view
 - Better integration of primitives into TUI workflow
 
-**5. Research: ampcode.com**
-- Agent coding tool, potential inspiration for agent loop
-
-**6. Reference Resolution**
+**5. Reference Resolution**
 - Full import graph with alias tracking
 - Variable scoping analysis
 - Type inference for method calls
 - Cross-language tracking (Python ↔ Rust)
 
-**7. Distribution**
+**6. Distribution**
 - Auto-updates
 - Portable single binary
 - Pre-built binaries (GitHub Actions)
