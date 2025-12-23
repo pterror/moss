@@ -8,19 +8,17 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 Completed:
 - [x] moss-intelligence is source of truth (28 modules migrated)
-- [x] MossAPI removed
+- [x] MossAPI removed (intentionally - gen/introspect.py and architect_editor.py depend on it)
 - [x] src/moss/ deleted entirely (72k lines)
-- [x] moss-cli package scaffolded
+- [x] moss-cli package scaffolded with recovered modules (config, help, metrics, etc.)
+- [x] moss-orchestration recovered modules (events, validators, synthesis, gen, etc.)
+- [x] moss-context recovered modules (context, context_memory, memory)
+- [x] All imports fixed across sub-packages
 
-Remaining (orphaned modules need homes):
-- [ ] moss-orchestration: agents.py, drivers.py, session.py, shadow_git.py, events.py, execution/
-- [ ] moss-context: context.py, context_memory.py
-- [ ] moss-cli: output.py, config.py, progress.py, terminal.py
-- [ ] moss-mcp: mcp_server.py, mcp_server_full.py
-- [ ] moss-lsp: lsp_server.py
-- [ ] moss-tui: tui.py
-- [ ] moss-acp: acp_server.py
-- [ ] Tests: update all imports from moss.* to sub-packages
+Remaining:
+- [ ] Frontend packages need server files: moss-mcp, moss-lsp, moss-tui, moss-acp
+- [ ] Tests: update all imports from moss.* to sub-packages (60 test files)
+- [ ] Verify packages can be installed and CLI works
 
 **Deferred:**
 - Driver integration improvements
