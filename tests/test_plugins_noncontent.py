@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.views import ViewTarget
+from moss_intelligence.views import ViewTarget
 
 # =============================================================================
 # Markdown Plugin Tests
@@ -15,7 +15,7 @@ class TestMarkdownStructureExtraction:
     """Tests for Markdown structure extraction functions."""
 
     def test_extract_headings(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = """# Title
 ## Section 1
@@ -32,7 +32,7 @@ class TestMarkdownStructureExtraction:
         assert structure.headings[2].level == 3
 
     def test_extract_code_blocks(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = """# Code Example
 
@@ -53,7 +53,7 @@ console.log("test");
         assert structure.code_blocks[1].language == "javascript"
 
     def test_extract_code_block_no_language(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = """```
 plain text
@@ -65,7 +65,7 @@ plain text
         assert structure.code_blocks[0].language is None
 
     def test_extract_links(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = """Check [the docs](https://example.com/docs) for info.
 Also see [local file](./README.md) and [anchor](#section).
@@ -83,7 +83,7 @@ Also see [local file](./README.md) and [anchor](#section).
         assert len(internal) == 2
 
     def test_extract_front_matter(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = """---
 title: Test Doc
@@ -100,7 +100,7 @@ author: Test Author
             assert structure.front_matter.get("title") == "Test Doc"
 
     def test_no_front_matter(self):
-        from moss.plugins.markdown import extract_markdown_structure
+        from moss_orchestration.plugins.markdown import extract_markdown_structure
 
         source = "# Just a heading\n\nSome content."
         structure = extract_markdown_structure(source)
@@ -108,7 +108,10 @@ author: Test Author
         assert structure.front_matter is None
 
     def test_format_structure(self):
-        from moss.plugins.markdown import extract_markdown_structure, format_markdown_structure
+        from moss_orchestration.plugins.markdown import (
+            extract_markdown_structure,
+            format_markdown_structure,
+        )
 
         source = """# Title
 
@@ -136,7 +139,7 @@ class TestMarkdownPlugin:
 
     @pytest.fixture
     def plugin(self):
-        from moss.plugins.markdown import MarkdownStructurePlugin
+        from moss_orchestration.plugins.markdown import MarkdownStructurePlugin
 
         return MarkdownStructurePlugin()
 
@@ -192,7 +195,7 @@ class TestJSONSchemaPlugin:
 
     @pytest.fixture
     def plugin(self):
-        from moss.plugins.data_files import JSONSchemaPlugin
+        from moss_orchestration.plugins.data_files import JSONSchemaPlugin
 
         return JSONSchemaPlugin()
 
@@ -242,13 +245,13 @@ class TestSchemaInference:
     """Tests for schema inference."""
 
     def test_infer_string(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema("hello")
         assert schema.value_type == "string"
 
     def test_infer_number(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema(42)
         assert schema.value_type == "number"
@@ -257,33 +260,33 @@ class TestSchemaInference:
         assert schema.value_type == "number"
 
     def test_infer_boolean(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema(True)
         assert schema.value_type == "boolean"
 
     def test_infer_null(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema(None)
         assert schema.value_type == "null"
 
     def test_infer_array(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema([1, 2, 3])
         assert schema.value_type == "array"
         assert schema.array_item_type == "number"
 
     def test_infer_object(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         schema = infer_schema({"a": 1, "b": "two"})
         assert schema.value_type == "object"
         assert len(schema.children) == 2
 
     def test_infer_nested(self):
-        from moss.plugins.data_files import infer_schema
+        from moss_orchestration.plugins.data_files import infer_schema
 
         data = {
             "config": {
@@ -309,7 +312,7 @@ class TestYAMLSchemaPlugin:
 
     @pytest.fixture
     def plugin(self):
-        from moss.plugins.data_files import YAMLSchemaPlugin
+        from moss_orchestration.plugins.data_files import YAMLSchemaPlugin
 
         return YAMLSchemaPlugin()
 
@@ -362,7 +365,7 @@ class TestTOMLSchemaPlugin:
 
     @pytest.fixture
     def plugin(self):
-        from moss.plugins.data_files import TOMLSchemaPlugin
+        from moss_orchestration.plugins.data_files import TOMLSchemaPlugin
 
         return TOMLSchemaPlugin()
 
@@ -409,7 +412,7 @@ class TestPluginRegistration:
     """Test that non-code plugins are properly registered."""
 
     def test_plugins_registered(self):
-        from moss.plugins import get_registry, reset_registry
+        from moss_orchestration.plugins import get_registry, reset_registry
 
         reset_registry()
         registry = get_registry()
@@ -423,7 +426,7 @@ class TestPluginRegistration:
         reset_registry()
 
     def test_find_plugin_for_markdown(self, tmp_path: Path):
-        from moss.plugins import get_registry, reset_registry
+        from moss_orchestration.plugins import get_registry, reset_registry
 
         reset_registry()
         registry = get_registry()
@@ -440,7 +443,7 @@ class TestPluginRegistration:
         reset_registry()
 
     def test_find_plugin_for_json(self, tmp_path: Path):
-        from moss.plugins import get_registry, reset_registry
+        from moss_orchestration.plugins import get_registry, reset_registry
 
         reset_registry()
         registry = get_registry()

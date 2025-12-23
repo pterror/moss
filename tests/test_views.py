@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.views import (
+from moss_intelligence.views import (
     Intent,
     RawViewProvider,
     View,

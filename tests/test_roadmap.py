@@ -5,7 +5,7 @@ from textwrap import dedent
 
 import pytest
 
-from moss.roadmap import (
+from moss_cli.roadmap import (
     Phase,
     PhaseStatus,
     Roadmap,

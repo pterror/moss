@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.tree_sitter import (
+from moss_intelligence.tree_sitter import (
     LanguageType,
     TreeNode,
     TreeSitterParser,

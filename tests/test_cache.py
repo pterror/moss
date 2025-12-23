@@ -4,7 +4,7 @@ import ast
 import time
 from pathlib import Path
 
-from moss.cache import CacheEntry, CacheStats, ParseCache, clear_cache, get_cache
+from moss_orchestration.cache import CacheEntry, CacheStats, ParseCache, clear_cache, get_cache
 
 
 class TestCacheEntry:

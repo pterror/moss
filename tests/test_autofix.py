@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.autofix import (
+from moss_orchestration.autofix import (
     Conflict,
     ConflictResolver,
     Fix,

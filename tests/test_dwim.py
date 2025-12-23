@@ -11,7 +11,7 @@ Comprehensive test suite covering:
 
 import pytest
 
-from moss.dwim import (
+from moss_orchestration.dwim import (
     TOOL_ALIASES,
     TOOL_REGISTRY,
     ToolMatch,
@@ -1394,7 +1394,7 @@ class TestCorePrimitives:
 
     def test_exact_match_all_primitives(self):
         """Test exact match for all 4 core primitives."""
-        from moss.dwim import CORE_PRIMITIVES, resolve_core_primitive
+        from moss_orchestration.dwim import CORE_PRIMITIVES, resolve_core_primitive
 
         for primitive in CORE_PRIMITIVES:
             result, confidence = resolve_core_primitive(primitive)
@@ -1403,7 +1403,7 @@ class TestCorePrimitives:
 
     def test_alias_view(self):
         """Test aliases resolve to 'view'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         aliases = ["show", "look", "see", "display", "read", "skeleton", "tree", "expand"]
         for alias in aliases:
@@ -1413,7 +1413,7 @@ class TestCorePrimitives:
 
     def test_alias_edit(self):
         """Test aliases resolve to 'edit'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         aliases = ["modify", "change", "update", "patch", "fix", "replace", "delete"]
         for alias in aliases:
@@ -1423,7 +1423,7 @@ class TestCorePrimitives:
 
     def test_alias_analyze(self):
         """Test aliases resolve to 'analyze'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         aliases = ["check", "health", "complexity", "security", "lint", "audit"]
         for alias in aliases:
@@ -1433,7 +1433,7 @@ class TestCorePrimitives:
 
     def test_alias_search(self):
         """Test aliases resolve to 'search'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         # Note: search aliases now fold into view (search is done via view with filters)
         aliases = ["find", "grep", "query", "locate", "lookup", "search"]
@@ -1444,7 +1444,7 @@ class TestCorePrimitives:
 
     def test_typo_correction_view(self):
         """Test typo correction for 'view'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         typos = ["veiw", "viwe", "vew", "veuw"]
         for typo in typos:
@@ -1454,7 +1454,7 @@ class TestCorePrimitives:
 
     def test_typo_correction_edit(self):
         """Test typo correction for 'edit'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         typos = ["eidt", "edti", "edi", "editr"]
         for typo in typos:
@@ -1464,7 +1464,7 @@ class TestCorePrimitives:
 
     def test_typo_correction_analyze(self):
         """Test typo correction for 'analyze'."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         typos = ["analize", "analyz", "analyez", "anayze"]
         for typo in typos:
@@ -1474,7 +1474,7 @@ class TestCorePrimitives:
 
     def test_typo_correction_search(self):
         """Test typo correction for 'search' (alias for 'view')."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         # "search" is an alias for "view", so typos resolve to the target "view"
         typos = ["serach", "saerch", "seach", "searh"]
@@ -1485,7 +1485,7 @@ class TestCorePrimitives:
 
     def test_no_match_gibberish(self):
         """Test that gibberish returns no match."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         gibberish = ["xyz", "foobar", "asdfgh", "qwerty123"]
         for word in gibberish:
@@ -1495,7 +1495,7 @@ class TestCorePrimitives:
 
     def test_case_insensitive(self):
         """Test case-insensitive matching."""
-        from moss.dwim import resolve_core_primitive
+        from moss_orchestration.dwim import resolve_core_primitive
 
         cases = ["VIEW", "View", "vIeW", "EDIT", "Edit", "ANALYZE", "SEARCH"]
         for case in cases:

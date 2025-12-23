@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.shadow_git import (
+from moss_orchestration.shadow_git import (
     CommitHandle,
     DiffHunk,
     GitError,

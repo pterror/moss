@@ -2,7 +2,7 @@
 
 import logging
 
-from moss.logging import (
+from moss_cli.logging import (
     LogContext,
     LogFormat,
     MossLogger,

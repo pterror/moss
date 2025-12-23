@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.config import (
+from moss_cli.config import (
     FAST_DISTRO,
     LENIENT_DISTRO,
     PYTHON_DISTRO,
@@ -20,7 +20,7 @@ from moss.config import (
     load_config_file,
     register_distro,
 )
-from moss.validators import SyntaxValidator
+from moss_orchestration.validators import SyntaxValidator
 
 
 class TestValidatorConfig:
@@ -301,7 +301,7 @@ class TestLoadConfigFile:
     def test_load_config_with_variable(self, tmp_path: Path):
         config_file = tmp_path / "moss_config.py"
         config_file.write_text("""
-from moss.config import MossConfig
+from moss_cli.config import MossConfig
 
 config = MossConfig()
 config.project_name = "loaded-project"
@@ -314,7 +314,7 @@ config.project_name = "loaded-project"
     def test_load_config_with_function(self, tmp_path: Path):
         config_file = tmp_path / "moss_config.py"
         config_file.write_text("""
-from moss.config import MossConfig
+from moss_cli.config import MossConfig
 
 def configure():
     config = MossConfig()

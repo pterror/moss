@@ -6,8 +6,8 @@ import argparse
 
 import pytest
 
-from moss.cli import cmd_synthesize
-from moss.output import set_output
+from moss_cli import cmd_synthesize
+from moss_orchestration.output import set_output
 
 
 @pytest.fixture(autouse=True)

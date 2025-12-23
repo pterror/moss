@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from moss.anchors import Anchor, AnchorType, find_anchors
-from moss.cfg import build_cfg
-from moss.dependencies import extract_dependencies
-from moss.elided_literals import elide_literals
-from moss.skeleton import extract_python_skeleton, format_skeleton
+from moss_intelligence.anchors import Anchor, AnchorType, find_anchors
+from moss_intelligence.cfg import build_cfg
+from moss_intelligence.dependencies import extract_dependencies
+from moss_intelligence.elided_literals import elide_literals
+from moss_intelligence.skeleton import extract_python_skeleton, format_skeleton
 
 
 class TestSelfAnalysis:
@@ -308,7 +308,7 @@ class TestSummarizer:
 
     def test_summarize_file(self, tmp_path: Path):
         """Test single file summarization."""
-        from moss.summarize import Summarizer
+        from moss_intelligence.summarize import Summarizer
 
         # Create a test file
         test_file = tmp_path / "example.py"
@@ -339,7 +339,7 @@ class Greeter:
 
     def test_summarize_package(self, tmp_path: Path):
         """Test package summarization."""
-        from moss.summarize import Summarizer
+        from moss_intelligence.summarize import Summarizer
 
         # Create a package
         pkg_dir = tmp_path / "mypackage"
@@ -357,7 +357,7 @@ class Greeter:
 
     def test_summarize_project(self, tmp_path: Path):
         """Test project summarization."""
-        from moss.summarize import Summarizer
+        from moss_intelligence.summarize import Summarizer
 
         # Create src/pkg structure
         src_dir = tmp_path / "src"
@@ -378,7 +378,7 @@ class Greeter:
 
     def test_exclude_private_files(self, tmp_path: Path):
         """Test that private files are excluded by default."""
-        from moss.summarize import Summarizer
+        from moss_intelligence.summarize import Summarizer
 
         pkg_dir = tmp_path / "pkg"
         pkg_dir.mkdir()
@@ -396,7 +396,7 @@ class Greeter:
 
     def test_exclude_test_files(self, tmp_path: Path):
         """Test that test files are excluded by default."""
-        from moss.summarize import Summarizer
+        from moss_intelligence.summarize import Summarizer
 
         pkg_dir = tmp_path / "pkg"
         pkg_dir.mkdir()
@@ -418,7 +418,7 @@ class TestDocChecker:
 
     def test_check_finds_missing_readme(self, tmp_path: Path):
         """Test that missing README is flagged as error."""
-        from moss.check_docs import DocChecker
+        from moss_intelligence.check_docs import DocChecker
 
         # Create a package but no README
         src_dir = tmp_path / "src"
@@ -436,7 +436,7 @@ class TestDocChecker:
 
     def test_check_finds_stale_references(self, tmp_path: Path):
         """Test that stale references are flagged."""
-        from moss.check_docs import DocChecker
+        from moss_intelligence.check_docs import DocChecker
 
         # Reference must be in project namespace (pkg.*) to be checked
         # External references like 'other.module' are correctly skipped
@@ -459,7 +459,7 @@ class TestDocChecker:
 
     def test_coverage_calculation(self, tmp_path: Path):
         """Test coverage is calculated correctly."""
-        from moss.check_docs import DocChecker
+        from moss_intelligence.check_docs import DocChecker
 
         # Create README mentioning one module
         readme = tmp_path / "README.md"
@@ -487,7 +487,7 @@ class TestTodoChecker:
 
     def test_parse_todo_md(self, tmp_path: Path):
         """Test parsing TODO.md checkbox items."""
-        from moss.check_todos import TodoChecker, TodoStatus
+        from moss_intelligence.check_todos import TodoChecker, TodoStatus
 
         todo_file = tmp_path / "TODO.md"
         todo_file.write_text("""# TODO
@@ -511,7 +511,7 @@ class TestTodoChecker:
 
     def test_scan_code_todos(self, tmp_path: Path):
         """Test scanning code for TODO comments."""
-        from moss.check_todos import TodoChecker
+        from moss_intelligence.check_todos import TodoChecker
 
         code_file = tmp_path / "example.py"
         code_file.write_text('''"""Module."""
@@ -535,7 +535,7 @@ def bar():
 
     def test_orphan_detection(self, tmp_path: Path):
         """Test that orphaned TODOs are detected."""
-        from moss.check_todos import TodoChecker, TodoStatus
+        from moss_intelligence.check_todos import TodoChecker, TodoStatus
 
         # Create TODO.md with one item
         todo_file = tmp_path / "TODO.md"
@@ -554,7 +554,7 @@ def bar():
 
     def test_category_tracking(self, tmp_path: Path):
         """Test that categories are tracked from headers."""
-        from moss.check_todos import TodoChecker
+        from moss_intelligence.check_todos import TodoChecker
 
         todo_file = tmp_path / "TODO.md"
         todo_file.write_text("""# TODO
@@ -578,7 +578,7 @@ class TestStructuralAnalysis:
 
     def test_detect_too_many_params(self, tmp_path: Path):
         """Test detection of functions with too many parameters."""
-        from moss.structural_analysis import StructuralAnalyzer, StructuralThresholds
+        from moss_intelligence.structural_analysis import StructuralAnalyzer, StructuralThresholds
 
         pkg_dir = tmp_path / "pkg"
         pkg_dir.mkdir()
@@ -604,7 +604,7 @@ def ok(a, b, c):
 
     def test_detect_deep_nesting(self, tmp_path: Path):
         """Test detection of deep nesting."""
-        from moss.structural_analysis import StructuralAnalyzer, StructuralThresholds
+        from moss_intelligence.structural_analysis import StructuralAnalyzer, StructuralThresholds
 
         pkg_dir = tmp_path / "pkg"
         pkg_dir.mkdir()
@@ -629,7 +629,7 @@ def deeply_nested():
 
     def test_detect_long_function(self, tmp_path: Path):
         """Test detection of long functions."""
-        from moss.structural_analysis import StructuralAnalyzer, StructuralThresholds
+        from moss_intelligence.structural_analysis import StructuralAnalyzer, StructuralThresholds
 
         pkg_dir = tmp_path / "pkg"
         pkg_dir.mkdir()
@@ -652,7 +652,7 @@ class TestDependencyAnalysis:
 
     def test_analyze_basic(self, tmp_path: Path):
         """Test basic dependency analysis."""
-        from moss.dependencies import build_dependency_graph
+        from moss_intelligence.dependencies import build_dependency_graph
 
         # Create a minimal project with Python files
         pkg_dir = tmp_path / "pkg"
@@ -669,7 +669,7 @@ class TestDependencyAnalysis:
 
     def test_circular_dep_detection(self, tmp_path: Path):
         """Test circular dependency detection."""
-        from moss.dependency_analysis import DependencyAnalyzer
+        from moss_intelligence.dependency_analysis import DependencyAnalyzer
 
         # Test the cycle detection algorithm directly
         analyzer = DependencyAnalyzer(tmp_path)
@@ -688,7 +688,7 @@ class TestDependencyAnalysis:
 
     def test_self_loop_skipped(self, tmp_path: Path):
         """Test that self-loops are not reported as cycles."""
-        from moss.dependency_analysis import DependencyAnalyzer
+        from moss_intelligence.dependency_analysis import DependencyAnalyzer
 
         analyzer = DependencyAnalyzer(tmp_path)
 
@@ -701,7 +701,7 @@ class TestDependencyAnalysis:
 
     def test_fan_in_calculation(self, tmp_path: Path):
         """Test fan-in (how many modules import this) calculation."""
-        from moss.dependency_analysis import ModuleMetrics
+        from moss_intelligence.dependency_analysis import ModuleMetrics
 
         # Test the metrics calculation logic directly
         graph = {
@@ -737,7 +737,7 @@ class TestAPISurfaceAnalysis:
 
     def test_public_export_detection(self, tmp_path: Path):
         """Test that public exports are detected."""
-        from moss.api_surface_analysis import APISurfaceAnalyzer
+        from moss_intelligence.api_surface_analysis import APISurfaceAnalyzer
 
         # Create a minimal project
         src = tmp_path / "src"
@@ -774,7 +774,7 @@ class _PrivateClass:
 
     def test_undocumented_detection(self, tmp_path: Path):
         """Test that undocumented exports are flagged."""
-        from moss.api_surface_analysis import APISurfaceAnalyzer
+        from moss_intelligence.api_surface_analysis import APISurfaceAnalyzer
 
         src = tmp_path / "src"
         src.mkdir()
@@ -798,7 +798,7 @@ def undocumented():
 
     def test_naming_convention_detection(self, tmp_path: Path):
         """Test that naming issues are detected."""
-        from moss.api_surface_analysis import APISurfaceAnalyzer
+        from moss_intelligence.api_surface_analysis import APISurfaceAnalyzer
 
         src = tmp_path / "src"
         src.mkdir()
@@ -914,7 +914,7 @@ class TestStatusChecker:
 
     def test_status_health_score(self, tmp_path: Path):
         """Test health score calculation."""
-        from moss.status import StatusChecker
+        from moss_orchestration.status import StatusChecker
 
         # Create minimal project
         readme = tmp_path / "README.md"
@@ -934,7 +934,7 @@ class TestStatusChecker:
 
     def test_status_to_markdown(self, tmp_path: Path):
         """Test markdown output."""
-        from moss.status import StatusChecker
+        from moss_orchestration.status import StatusChecker
 
         readme = tmp_path / "README.md"
         readme.write_text("# Test\n")
@@ -949,7 +949,7 @@ class TestStatusChecker:
 
     def test_status_to_dict(self, tmp_path: Path):
         """Test JSON dict output."""
-        from moss.status import StatusChecker
+        from moss_orchestration.status import StatusChecker
 
         readme = tmp_path / "README.md"
         readme.write_text("# Test\n")

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.hooks import (
+from moss_orchestration.hooks import (
     HOOK_SCRIPT,
     check_hooks_installed,
     generate_hook_config,

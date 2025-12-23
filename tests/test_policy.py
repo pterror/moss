@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.policy import (
+from moss_orchestration.policy import (
     PathPolicy,
     Policy,
     PolicyDecision,
@@ -17,7 +17,7 @@ from moss.policy import (
     VelocityPolicy,
     create_default_policy_engine,
 )
-from moss.trust import Decision, TrustLevel, TrustManager, TrustRule
+from moss_orchestration.trust import Decision, TrustLevel, TrustManager, TrustRule
 
 
 class TestPolicyResult:

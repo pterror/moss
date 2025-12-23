@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.cli import (
+from moss_cli import (
     cmd_cfg,
     cmd_config,
     cmd_context,
@@ -19,7 +19,7 @@ from moss.cli import (
     create_parser,
     main,
 )
-from moss.output import set_output
+from moss_orchestration.output import set_output
 
 
 @pytest.fixture(autouse=True)
@@ -192,7 +192,7 @@ class TestCmdConfig:
         config_file = tmp_path / "moss_config.py"
         config_file.write_text("""
 from pathlib import Path
-from moss.config import MossConfig
+from moss_cli.config import MossConfig
 
 config = MossConfig().with_project(Path(__file__).parent, "test-project")
 """)
@@ -210,7 +210,7 @@ config = MossConfig().with_project(Path(__file__).parent, "test-project")
         config_file = tmp_path / "moss_config.py"
         config_file.write_text("""
 from pathlib import Path
-from moss.config import MossConfig
+from moss_cli.config import MossConfig
 
 config = MossConfig().with_project(Path(__file__).parent, "test-project")
 """)

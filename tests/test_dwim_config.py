@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from moss.dwim_config import (
+from moss_orchestration.dwim_config import (
     CustomTool,
     DWIMConfig,
     IntentPattern,

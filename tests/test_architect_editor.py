@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from moss.architect_editor import (
+from moss_orchestration.architect_editor import (
     ArchitectEditorLoop,
     EditPlan,
     EditResult,

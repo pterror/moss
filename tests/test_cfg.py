@@ -2,7 +2,7 @@
 
 import pytest
 
-from moss.cfg import (
+from moss_intelligence.cfg import (
     CFGBuilder,
     CFGEdge,
     CFGNode,

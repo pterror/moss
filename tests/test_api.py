@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.api import (
+from moss_orchestration.api import (
     APIHandler,
     CheckpointRequest,
     CheckpointResponse,
@@ -18,8 +18,8 @@ from moss.api import (
     TaskResponse,
     create_api_handler,
 )
-from moss.events import EventBus
-from moss.shadow_git import ShadowGit
+from moss_orchestration.events import EventBus
+from moss_orchestration.shadow_git import ShadowGit
 
 
 @pytest.fixture
@@ -301,7 +301,7 @@ class TestAPIHandler:
 
     @pytest.fixture
     def handler(self, shadow_git: ShadowGit, event_bus: EventBus):
-        from moss.agents import create_manager
+        from moss_orchestration.agents import create_manager
 
         manager = create_manager(shadow_git, event_bus)
         return create_api_handler(manager, event_bus)
@@ -400,7 +400,7 @@ class TestCreateAPIHandler:
     """Tests for create_api_handler."""
 
     def test_creates_handler(self, shadow_git: ShadowGit, event_bus: EventBus):
-        from moss.agents import create_manager
+        from moss_orchestration.agents import create_manager
 
         manager = create_manager(shadow_git, event_bus)
         handler = create_api_handler(manager, event_bus)

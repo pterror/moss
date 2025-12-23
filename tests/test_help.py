@@ -2,7 +2,7 @@
 
 import pytest
 
-from moss.help import (
+from moss_cli.help import (
     CATEGORIES,
     COMMANDS,
     CommandExample,

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from moss.diff_analysis import DiffAnalysis, FileDiff, SymbolChange
-from moss.pr_review import (
+from moss_orchestration.diff_analysis import DiffAnalysis, FileDiff, SymbolChange
+from moss_orchestration.pr_review import (
     ChangeCategory,
     Issue,
     PRReview,

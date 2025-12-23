@@ -10,7 +10,7 @@ class TestProgressConfig:
     """Tests for ProgressConfig."""
 
     def test_default_config(self):
-        from moss.progress import ProgressConfig
+        from moss_orchestration.progress import ProgressConfig
 
         config = ProgressConfig()
 
@@ -21,7 +21,7 @@ class TestProgressConfig:
         assert config.bar_width == 30
 
     def test_custom_config(self):
-        from moss.progress import ProgressConfig
+        from moss_orchestration.progress import ProgressConfig
 
         output = io.StringIO()
         config = ProgressConfig(
@@ -40,7 +40,7 @@ class TestProgressTracker:
     """Tests for ProgressTracker."""
 
     def test_create_tracker(self):
-        from moss.progress import ProgressTracker
+        from moss_orchestration.progress import ProgressTracker
 
         tracker = ProgressTracker("Test", total=100)
 
@@ -49,7 +49,7 @@ class TestProgressTracker:
         assert tracker.current == 0
 
     def test_advance(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -63,7 +63,7 @@ class TestProgressTracker:
         assert tracker.current == 6
 
     def test_update(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -74,7 +74,7 @@ class TestProgressTracker:
         assert tracker.current == 50
 
     def test_percentage(self):
-        from moss.progress import ProgressTracker
+        from moss_orchestration.progress import ProgressTracker
 
         tracker = ProgressTracker("Test", total=100)
 
@@ -87,13 +87,13 @@ class TestProgressTracker:
         assert tracker.percentage == 100.0
 
     def test_percentage_no_total(self):
-        from moss.progress import ProgressTracker
+        from moss_orchestration.progress import ProgressTracker
 
         tracker = ProgressTracker("Test")
         assert tracker.percentage is None
 
     def test_elapsed(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -105,7 +105,7 @@ class TestProgressTracker:
         assert tracker.elapsed >= 0.1
 
     def test_rate(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -120,7 +120,7 @@ class TestProgressTracker:
         assert rate > 0
 
     def test_eta(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -135,7 +135,7 @@ class TestProgressTracker:
         assert eta > 0
 
     def test_context_manager(self):
-        from moss.progress import ProgressConfig, ProgressTracker
+        from moss_orchestration.progress import ProgressConfig, ProgressTracker
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -147,7 +147,7 @@ class TestProgressTracker:
         assert tracker._finished is True
 
     def test_format_time(self):
-        from moss.progress import ProgressTracker
+        from moss_orchestration.progress import ProgressTracker
 
         tracker = ProgressTracker("Test")
 
@@ -160,7 +160,7 @@ class TestProgressContext:
     """Tests for progress_context."""
 
     def test_context_basic(self):
-        from moss.progress import ProgressConfig, progress_context
+        from moss_orchestration.progress import ProgressConfig, progress_context
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -176,7 +176,7 @@ class TestTrackIterable:
     """Tests for track_iterable."""
 
     def test_track_list(self):
-        from moss.progress import ProgressConfig, track_iterable
+        from moss_orchestration.progress import ProgressConfig, track_iterable
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -187,7 +187,7 @@ class TestTrackIterable:
         assert result == items
 
     def test_track_with_total(self):
-        from moss.progress import ProgressConfig, track_iterable
+        from moss_orchestration.progress import ProgressConfig, track_iterable
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -204,7 +204,7 @@ class TestFileProgress:
     """Tests for FileProgress."""
 
     def test_create_file_progress(self):
-        from moss.progress import FileProgress
+        from moss_orchestration.progress import FileProgress
 
         progress = FileProgress("Processing", total=10)
 
@@ -212,7 +212,7 @@ class TestFileProgress:
         assert progress.total == 10
 
     def test_set_current_file(self):
-        from moss.progress import FileProgress, ProgressConfig
+        from moss_orchestration.progress import FileProgress, ProgressConfig
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -228,7 +228,7 @@ class TestMultiStageProgress:
     """Tests for MultiStageProgress."""
 
     def test_create_multi_stage(self):
-        from moss.progress import MultiStageProgress
+        from moss_orchestration.progress import MultiStageProgress
 
         stages = ["Scan", "Analyze", "Report"]
         progress = MultiStageProgress(stages)
@@ -237,7 +237,7 @@ class TestMultiStageProgress:
         assert progress.current_stage == 0
 
     def test_start_stages(self):
-        from moss.progress import MultiStageProgress, ProgressConfig
+        from moss_orchestration.progress import MultiStageProgress, ProgressConfig
 
         output = io.StringIO()
         config = ProgressConfig(output=output, use_colors=False)
@@ -256,7 +256,7 @@ class TestMultiStageProgress:
         tracker2.finish()
 
     def test_all_stages_complete_raises(self):
-        from moss.progress import MultiStageProgress
+        from moss_orchestration.progress import MultiStageProgress
 
         progress = MultiStageProgress(["Only"])
         tracker = progress.start_stage()
@@ -270,7 +270,7 @@ class TestCreateProgress:
     """Tests for create_progress."""
 
     def test_create_normal(self):
-        from moss.progress import create_progress
+        from moss_orchestration.progress import create_progress
 
         progress = create_progress("Test", total=10)
 
@@ -279,7 +279,7 @@ class TestCreateProgress:
         assert progress.config.show_percentage is True
 
     def test_create_quiet(self):
-        from moss.progress import create_progress
+        from moss_orchestration.progress import create_progress
 
         progress = create_progress("Test", total=10, quiet=True)
 

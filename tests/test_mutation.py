@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from moss.mutation import (
+from moss_orchestration.mutation import (
     MutationAnalyzer,
     MutationResult,
     SurvivingMutant,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.watcher import (
+from moss_orchestration.watcher import (
     EventBus,
     EventType,
     FileWatcher,

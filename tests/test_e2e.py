@@ -8,15 +8,15 @@ import subprocess
 
 import pytest
 
-from moss.anchors import Anchor, AnchorType
-from moss.events import EventBus, EventType
-from moss.handles import FileHandle
-from moss.memory import Action, Outcome, StateSnapshot, create_memory_manager
-from moss.patches import Patch, PatchType, apply_patch
-from moss.policy import PolicyEngine, ToolCallContext, create_default_policy_engine
-from moss.shadow_git import ShadowGit
-from moss.skeleton import extract_python_skeleton, format_skeleton
-from moss.validators import SyntaxValidator, create_python_validator_chain
+from moss_intelligence.anchors import Anchor, AnchorType
+from moss_orchestration.events import EventBus, EventType
+from moss_orchestration.handles import FileHandle
+from moss_context.memory import Action, Outcome, StateSnapshot, create_memory_manager
+from moss_intelligence.patches import Patch, PatchType, apply_patch
+from moss_orchestration.policy import PolicyEngine, ToolCallContext, create_default_policy_engine
+from moss_orchestration.shadow_git import ShadowGit
+from moss_intelligence.skeleton import extract_python_skeleton, format_skeleton
+from moss_orchestration.validators import SyntaxValidator, create_python_validator_chain
 
 
 class TestCodeModificationWorkflow:
@@ -243,7 +243,7 @@ class TestPolicyEnforcedWorkflow:
     @pytest.mark.asyncio
     async def test_blocked_path_rejected(self, tmp_path):
         """Test that dangerous paths are blocked."""
-        from moss.policy import PathPolicy
+        from moss_orchestration.policy import PathPolicy
 
         engine = PolicyEngine()
         engine.add_policy(PathPolicy(blocked_patterns=["secret", ".env"]))

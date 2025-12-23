@@ -2,7 +2,7 @@
 
 import time
 
-from moss.observability import (
+from moss_cli.observability import (
     MetricsCollector,
     MetricType,
     Span,

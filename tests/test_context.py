@@ -4,8 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from moss.context import CompiledContext, ContextHost, StaticContext, elide_view_with_anchors
-from moss.views import Intent, View, ViewTarget, ViewType
+from moss_context.context import (
+    CompiledContext,
+    ContextHost,
+    StaticContext,
+    elide_view_with_anchors,
+)
+from moss_intelligence.views import Intent, View, ViewTarget, ViewType
 
 
 class TestStaticContext:

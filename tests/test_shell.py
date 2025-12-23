@@ -7,7 +7,7 @@ class TestMossShell:
     """Tests for MossShell."""
 
     def test_create_shell(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
 
@@ -15,7 +15,7 @@ class TestMossShell:
         assert shell.running is True
 
     def test_shell_commands_registered(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
 
@@ -39,7 +39,7 @@ class TestMossShell:
             assert cmd in shell.commands
 
     def test_cmd_exit(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         assert shell.running is True
@@ -49,16 +49,16 @@ class TestMossShell:
         assert shell.running is False
 
     def test_cmd_pwd(self, tmp_path: Path, capsys):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         shell.cmd_pwd([])
 
         # Output should contain the workspace path
-        # (output goes through moss.output, not directly to capsys)
+        # (output goes through moss_orchestration.output, not directly to capsys)
 
     def test_cmd_cd(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         subdir = tmp_path / "subdir"
         subdir.mkdir()
@@ -69,7 +69,7 @@ class TestMossShell:
         assert shell.workspace == subdir
 
     def test_cmd_cd_invalid(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         original = shell.workspace
@@ -80,7 +80,7 @@ class TestMossShell:
         assert shell.workspace == original
 
     def test_cmd_ls(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         (tmp_path / "test.py").write_text("# test")
         (tmp_path / "other.txt").write_text("other")
@@ -91,7 +91,7 @@ class TestMossShell:
         # Should not raise
 
     def test_cmd_skeleton(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         test_file = tmp_path / "test.py"
         test_file.write_text('''
@@ -110,7 +110,7 @@ class Greeter:
         # Should not raise
 
     def test_cmd_skeleton_not_found(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         shell.cmd_skeleton(["nonexistent.py"])
@@ -118,7 +118,7 @@ class Greeter:
         # Should not raise, just show error
 
     def test_resolve_path_absolute(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
 
@@ -127,7 +127,7 @@ class Greeter:
         assert result == Path("/absolute/path")
 
     def test_resolve_path_relative(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
 
@@ -136,7 +136,7 @@ class Greeter:
         assert result == tmp_path / "relative" / "path"
 
     def test_execute_unknown_command(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         shell._execute("unknowncommand arg1 arg2")
@@ -144,7 +144,7 @@ class Greeter:
         # Should not raise, just show error
 
     def test_execute_help(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         shell._execute("help")
@@ -152,7 +152,7 @@ class Greeter:
         # Should not raise
 
     def test_get_prompt(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         prompt = shell._get_prompt()
@@ -165,7 +165,7 @@ class TestStartShell:
     """Tests for start_shell function."""
 
     def test_start_shell_returns_int(self, tmp_path: Path):
-        from moss.shell import MossShell
+        from moss_orchestration.shell import MossShell
 
         shell = MossShell(tmp_path)
         shell.running = False  # Exit immediately

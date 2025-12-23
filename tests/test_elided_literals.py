@@ -1,6 +1,6 @@
 """Tests for Elided Literals module."""
 
-from moss.elided_literals import (
+from moss_intelligence.elided_literals import (
     ElidedLiteralsProvider,
     ElisionConfig,
     ElisionStats,

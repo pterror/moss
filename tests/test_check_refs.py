@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from moss.check_refs import (
+from moss_intelligence.check_refs import (
     CodeReference,
     DocReference,
     RefChecker,

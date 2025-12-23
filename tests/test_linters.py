@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.plugins.linters import (
+from moss_orchestration.plugins.linters import (
     LinterIssue,
     LinterMetadata,
     LinterPlugin,
@@ -548,18 +548,18 @@ class TestLinterPluginProtocol:
 class TestLinterValidatorAdapter:
     @pytest.fixture
     def ruff_adapter(self):
-        from moss.validators import LinterValidatorAdapter
+        from moss_orchestration.validators import LinterValidatorAdapter
 
         return LinterValidatorAdapter(RuffPlugin())
 
     def test_create_adapter(self, ruff_adapter):
-        from moss.validators import Validator
+        from moss_orchestration.validators import Validator
 
         assert isinstance(ruff_adapter, Validator)
         assert ruff_adapter.name == "ruff"
 
     def test_create_with_invalid_plugin(self):
-        from moss.validators import LinterValidatorAdapter
+        from moss_orchestration.validators import LinterValidatorAdapter
 
         with pytest.raises(TypeError, match="Expected LinterPlugin"):
             LinterValidatorAdapter("not a plugin")
@@ -577,7 +577,7 @@ class TestLinterValidatorAdapter:
 
     @pytest.mark.asyncio
     async def test_validate_file_with_errors(self, ruff_adapter, tmp_path: Path):
-        from moss.validators import ValidationIssue, ValidationSeverity
+        from moss_orchestration.validators import ValidationIssue, ValidationSeverity
 
         bad_file = tmp_path / "bad.py"
         bad_file.write_text("import os\nprint(x)\n")
@@ -592,7 +592,7 @@ class TestLinterValidatorAdapter:
     @pytest.mark.asyncio
     async def test_adapter_in_chain(self, tmp_path: Path):
         """Test using adapter in a ValidatorChain."""
-        from moss.validators import (
+        from moss_orchestration.validators import (
             LinterValidatorAdapter,
             SyntaxValidator,
             ValidatorChain,

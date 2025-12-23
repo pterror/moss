@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from moss.check_refs import RefChecker
+from moss_intelligence.check_refs import RefChecker
 
 
 def test_rust_refs(tmp_path):

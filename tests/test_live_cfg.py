@@ -29,7 +29,7 @@ class TestLiveCFGConfig:
     """Tests for LiveCFGConfig."""
 
     def test_default_config(self):
-        from moss.live_cfg import LiveCFGConfig
+        from moss_orchestration.live_cfg import LiveCFGConfig
 
         config = LiveCFGConfig()
 
@@ -39,7 +39,7 @@ class TestLiveCFGConfig:
         assert config.debounce_ms == 500
 
     def test_custom_config(self):
-        from moss.live_cfg import LiveCFGConfig
+        from moss_orchestration.live_cfg import LiveCFGConfig
 
         config = LiveCFGConfig(
             host="0.0.0.0",
@@ -58,7 +58,7 @@ class TestCFGState:
     """Tests for CFGState."""
 
     def test_create_state(self, simple_python_file: Path):
-        from moss.live_cfg import CFGState
+        from moss_orchestration.live_cfg import CFGState
 
         state = CFGState(path=simple_python_file)
 
@@ -68,7 +68,7 @@ class TestCFGState:
         assert state.cfgs == []
 
     def test_update_state(self, simple_python_file: Path):
-        from moss.live_cfg import CFGState
+        from moss_orchestration.live_cfg import CFGState
 
         state = CFGState(path=simple_python_file)
         state.update()
@@ -84,7 +84,7 @@ class TestCFGState:
         assert "complex_func" in names
 
     def test_update_with_function_filter(self, simple_python_file: Path):
-        from moss.live_cfg import CFGState
+        from moss_orchestration.live_cfg import CFGState
 
         state = CFGState(path=simple_python_file, function_name="simple")
         state.update()
@@ -93,7 +93,7 @@ class TestCFGState:
         assert state.cfgs[0]["name"] == "simple"
 
     def test_update_with_invalid_file(self, tmp_path: Path):
-        from moss.live_cfg import CFGState
+        from moss_orchestration.live_cfg import CFGState
 
         # File with syntax error
         bad_file = tmp_path / "bad.py"
@@ -105,7 +105,7 @@ class TestCFGState:
         assert state.error is not None
 
     def test_to_json(self, simple_python_file: Path):
-        from moss.live_cfg import CFGState
+        from moss_orchestration.live_cfg import CFGState
 
         state = CFGState(path=simple_python_file)
         state.update()
@@ -123,7 +123,7 @@ class TestLiveCFGServer:
     """Tests for LiveCFGServer."""
 
     def test_create_server(self, simple_python_file: Path):
-        from moss.live_cfg import LiveCFGConfig, LiveCFGServer
+        from moss_orchestration.live_cfg import LiveCFGConfig, LiveCFGServer
 
         config = LiveCFGConfig(auto_open=False)
         server = LiveCFGServer(simple_python_file, config=config)
@@ -132,7 +132,7 @@ class TestLiveCFGServer:
         assert server.config.auto_open is False
 
     def test_initial_state_update(self, simple_python_file: Path):
-        from moss.live_cfg import LiveCFGConfig, LiveCFGServer
+        from moss_orchestration.live_cfg import LiveCFGConfig, LiveCFGServer
 
         config = LiveCFGConfig(auto_open=False)
         server = LiveCFGServer(simple_python_file, config=config)
@@ -147,7 +147,7 @@ class TestLiveCFGHandler:
     """Tests for HTTP handler."""
 
     def test_html_template_formatting(self):
-        from moss.live_cfg import LIVE_HTML_TEMPLATE
+        from moss_orchestration.live_cfg import LIVE_HTML_TEMPLATE
 
         # Template should be valid HTML
         html = LIVE_HTML_TEMPLATE.format(path="test.py")
@@ -162,6 +162,6 @@ class TestStartLiveCfg:
     """Tests for CLI integration function."""
 
     def test_function_exists(self):
-        from moss.live_cfg import start_live_cfg
+        from moss_orchestration.live_cfg import start_live_cfg
 
         assert callable(start_live_cfg)

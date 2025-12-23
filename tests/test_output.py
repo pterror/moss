@@ -7,7 +7,7 @@ class TestVerbosity:
     """Tests for Verbosity enum."""
 
     def test_verbosity_levels(self):
-        from moss.output import Verbosity
+        from moss_orchestration.output import Verbosity
 
         assert Verbosity.QUIET == 0
         assert Verbosity.NORMAL == 1
@@ -15,7 +15,7 @@ class TestVerbosity:
         assert Verbosity.DEBUG == 3
 
     def test_verbosity_ordering(self):
-        from moss.output import Verbosity
+        from moss_orchestration.output import Verbosity
 
         assert Verbosity.QUIET < Verbosity.NORMAL
         assert Verbosity.NORMAL < Verbosity.VERBOSE
@@ -26,7 +26,7 @@ class TestOutputStyle:
     """Tests for OutputStyle."""
 
     def test_default_style(self):
-        from moss.output import OutputStyle
+        from moss_orchestration.output import OutputStyle
 
         style = OutputStyle()
 
@@ -37,7 +37,7 @@ class TestOutputStyle:
         assert "error" in style.emoji
 
     def test_custom_style(self):
-        from moss.output import OutputStyle
+        from moss_orchestration.output import OutputStyle
 
         style = OutputStyle(use_colors=False, use_emoji=False, indent_size=4)
 
@@ -50,7 +50,7 @@ class TestTextFormatter:
     """Tests for TextFormatter."""
 
     def test_format_message_with_emoji(self):
-        from moss.output import OutputStyle, TextFormatter
+        from moss_orchestration.output import OutputStyle, TextFormatter
 
         formatter = TextFormatter()
         style = OutputStyle(use_colors=False, use_emoji=True)
@@ -59,7 +59,7 @@ class TestTextFormatter:
         assert "[X] Test error" in result
 
     def test_format_message_no_emoji(self):
-        from moss.output import OutputStyle, TextFormatter
+        from moss_orchestration.output import OutputStyle, TextFormatter
 
         formatter = TextFormatter()
         style = OutputStyle(use_colors=False, use_emoji=False)
@@ -68,7 +68,7 @@ class TestTextFormatter:
         assert result == "Test info"
 
     def test_format_dict(self):
-        from moss.output import OutputStyle, TextFormatter
+        from moss_orchestration.output import OutputStyle, TextFormatter
 
         formatter = TextFormatter()
         style = OutputStyle()
@@ -80,7 +80,7 @@ class TestTextFormatter:
         assert "key2: value2" in result
 
     def test_format_list(self):
-        from moss.output import OutputStyle, TextFormatter
+        from moss_orchestration.output import OutputStyle, TextFormatter
 
         formatter = TextFormatter()
         style = OutputStyle()
@@ -96,7 +96,7 @@ class TestJSONFormatter:
     """Tests for JSONFormatter."""
 
     def test_format_message(self):
-        from moss.output import JSONFormatter, OutputStyle
+        from moss_orchestration.output import JSONFormatter, OutputStyle
 
         formatter = JSONFormatter()
         style = OutputStyle()
@@ -109,7 +109,7 @@ class TestJSONFormatter:
     def test_format_data(self):
         import json
 
-        from moss.output import JSONFormatter, OutputStyle
+        from moss_orchestration.output import JSONFormatter, OutputStyle
 
         formatter = JSONFormatter()
         style = OutputStyle()
@@ -125,7 +125,7 @@ class TestCompactFormatter:
     """Tests for CompactFormatter."""
 
     def test_format_message(self):
-        from moss.output import CompactFormatter, OutputStyle
+        from moss_orchestration.output import CompactFormatter, OutputStyle
 
         formatter = CompactFormatter()
         style = OutputStyle()
@@ -134,7 +134,7 @@ class TestCompactFormatter:
         assert result == "[E] Test"
 
     def test_format_data(self):
-        from moss.output import CompactFormatter, OutputStyle
+        from moss_orchestration.output import CompactFormatter, OutputStyle
 
         formatter = CompactFormatter()
         style = OutputStyle()
@@ -149,14 +149,14 @@ class TestOutput:
     """Tests for Output class."""
 
     def test_create_output(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         output = Output(verbosity=Verbosity.VERBOSE)
 
         assert output.verbosity == Verbosity.VERBOSE
 
     def test_error_output(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -168,7 +168,7 @@ class TestOutput:
         assert "Error message" in stderr.getvalue()
 
     def test_info_output(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -179,7 +179,7 @@ class TestOutput:
         assert "Info message" in stdout.getvalue()
 
     def test_quiet_mode(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -193,7 +193,7 @@ class TestOutput:
         assert "Error message" in stderr.getvalue()
 
     def test_verbose_mode(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.VERBOSE, stdout=stdout)
@@ -204,7 +204,7 @@ class TestOutput:
         assert "Verbose message" in stdout.getvalue()
 
     def test_verbose_hidden_in_normal(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -214,7 +214,7 @@ class TestOutput:
         assert stdout.getvalue() == ""
 
     def test_debug_mode(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.DEBUG, stdout=stdout)
@@ -225,7 +225,7 @@ class TestOutput:
         assert "Debug message" in stdout.getvalue()
 
     def test_set_verbosity(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         output = Output()
 
@@ -239,7 +239,7 @@ class TestOutput:
         assert output.verbosity == Verbosity.DEBUG
 
     def test_use_json(self):
-        from moss.output import JSONFormatter, Output
+        from moss_orchestration.output import JSONFormatter, Output
 
         output = Output()
         output.use_json()
@@ -248,7 +248,7 @@ class TestOutput:
         assert output.style.use_colors is False
 
     def test_indentation(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -270,7 +270,7 @@ class TestOutput:
         assert lines[3].startswith("  ")  # Back to single
 
     def test_header(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -283,7 +283,7 @@ class TestOutput:
         assert "-" in result
 
     def test_data_output(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -293,7 +293,7 @@ class TestOutput:
         assert "key" in stdout.getvalue()
 
     def test_success_warning_step(self):
-        from moss.output import Output, Verbosity
+        from moss_orchestration.output import Output, Verbosity
 
         stdout = io.StringIO()
         output = Output(verbosity=Verbosity.NORMAL, stdout=stdout)
@@ -312,13 +312,13 @@ class TestGlobalOutput:
     """Tests for global output functions."""
 
     def test_get_output(self):
-        from moss.output import get_output
+        from moss_orchestration.output import get_output
 
         output = get_output()
         assert output is not None
 
     def test_configure_output(self):
-        from moss.output import Verbosity, configure_output, get_output
+        from moss_orchestration.output import Verbosity, configure_output, get_output
 
         configure_output(verbosity=Verbosity.VERBOSE, no_color=True)
 
@@ -327,8 +327,8 @@ class TestGlobalOutput:
         assert output.style.use_colors is False
 
     def test_convenience_functions(self):
-        import moss.output as out
-        from moss.output import Output, Verbosity, set_output
+        import moss_orchestration.output as out
+        from moss_orchestration.output import Output, Verbosity, set_output
 
         stdout = io.StringIO()
         stderr = io.StringIO()

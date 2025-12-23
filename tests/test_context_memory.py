@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.context_memory import (
+from moss_context.context_memory import (
     ChatlogStore,
     ChatMessage,
     ChatSession,

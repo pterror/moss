@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from moss.events import Event, EventBus, EventType
+from moss_orchestration.events import Event, EventBus, EventType
 
 
 class TestEvent:

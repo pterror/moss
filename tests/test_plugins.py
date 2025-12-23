@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.plugins import (
+from moss_orchestration.plugins import (
     PluginMetadata,
     PluginRegistry,
     ViewPlugin,
@@ -12,7 +12,7 @@ from moss.plugins import (
     get_registry,
     reset_registry,
 )
-from moss.views import ViewOptions, ViewTarget
+from moss_intelligence.views import ViewOptions, ViewTarget
 
 # =============================================================================
 # PluginMetadata Tests
@@ -82,7 +82,7 @@ class MockPlugin:
         return target.path.suffix == ".py"
 
     async def render(self, target: ViewTarget, options: ViewOptions | None = None):
-        from moss.views import View, ViewType
+        from moss_intelligence.views import View, ViewType
 
         return View(
             target=target,
@@ -265,7 +265,7 @@ class TestDetectLanguage:
 class TestPythonSkeletonPlugin:
     @pytest.fixture
     def plugin(self):
-        from moss.skeleton import PythonSkeletonPlugin
+        from moss_intelligence.skeleton import PythonSkeletonPlugin
 
         return PythonSkeletonPlugin()
 
@@ -310,7 +310,7 @@ def baz(): pass
 class TestPythonDependencyPlugin:
     @pytest.fixture
     def plugin(self):
-        from moss.dependencies import PythonDependencyPlugin
+        from moss_intelligence.dependencies import PythonDependencyPlugin
 
         return PythonDependencyPlugin()
 
@@ -342,7 +342,7 @@ def main(): pass
 class TestPythonCFGPlugin:
     @pytest.fixture
     def plugin(self):
-        from moss.cfg import PythonCFGPlugin
+        from moss_intelligence.cfg import PythonCFGPlugin
 
         return PythonCFGPlugin()
 
@@ -384,9 +384,9 @@ class TestViewPluginProtocol:
 
     def test_builtin_plugins_are_view_plugin(self):
         """Verify builtin plugins satisfy ViewPlugin protocol."""
-        from moss.cfg import PythonCFGPlugin
-        from moss.dependencies import PythonDependencyPlugin
-        from moss.skeleton import PythonSkeletonPlugin
+        from moss_intelligence.cfg import PythonCFGPlugin
+        from moss_intelligence.dependencies import PythonDependencyPlugin
+        from moss_intelligence.skeleton import PythonSkeletonPlugin
 
         assert isinstance(PythonSkeletonPlugin(), ViewPlugin)
         assert isinstance(PythonDependencyPlugin(), ViewPlugin)

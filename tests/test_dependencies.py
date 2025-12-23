@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from moss.dependencies import (
+from moss_intelligence.dependencies import (
     PythonDependencyProvider,
     extract_dependencies,
     format_dependencies,
 )
-from moss.views import ViewTarget, ViewType
+from moss_intelligence.views import ViewTarget, ViewType
 
 
 class TestExtractDependencies:

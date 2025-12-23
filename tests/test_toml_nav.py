@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.toml_nav import (
+from moss_cli.toml_nav import (
     format_result,
     list_keys,
     parse_toml,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from moss.anchors import (
+from moss_intelligence.anchors import (
     Anchor,
     AnchorNotFoundError,
     AnchorType,

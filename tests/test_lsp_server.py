@@ -65,7 +65,7 @@ class TestMossLSPConfig:
     """Tests for MossLSPConfig."""
 
     def test_default_config(self):
-        from moss.lsp_server import MossLSPConfig
+        from moss_lsp.server import MossLSPConfig
 
         config = MossLSPConfig()
 
@@ -75,7 +75,7 @@ class TestMossLSPConfig:
         assert config.enable_hover is True
 
     def test_custom_config(self):
-        from moss.lsp_server import MossLSPConfig
+        from moss_lsp.server import MossLSPConfig
 
         config = MossLSPConfig(
             complexity_warning_threshold=5,
@@ -92,7 +92,7 @@ class TestAnalysisCache:
     """Tests for AnalysisCache."""
 
     def test_get_set(self):
-        from moss.lsp_server import AnalysisCache, DocumentAnalysis
+        from moss_lsp.server import AnalysisCache, DocumentAnalysis
 
         cache = AnalysisCache()
 
@@ -104,7 +104,7 @@ class TestAnalysisCache:
         assert result.uri == "file:///test.py"
 
     def test_get_wrong_version(self):
-        from moss.lsp_server import AnalysisCache, DocumentAnalysis
+        from moss_lsp.server import AnalysisCache, DocumentAnalysis
 
         cache = AnalysisCache()
 
@@ -115,7 +115,7 @@ class TestAnalysisCache:
         assert result is None
 
     def test_invalidate(self):
-        from moss.lsp_server import AnalysisCache, DocumentAnalysis
+        from moss_lsp.server import AnalysisCache, DocumentAnalysis
 
         cache = AnalysisCache()
 
@@ -128,7 +128,7 @@ class TestAnalysisCache:
         assert result is None
 
     def test_clear(self):
-        from moss.lsp_server import AnalysisCache, DocumentAnalysis
+        from moss_lsp.server import AnalysisCache, DocumentAnalysis
 
         cache = AnalysisCache()
 
@@ -145,7 +145,7 @@ class TestMossLanguageServer:
     """Tests for MossLanguageServer."""
 
     def test_create_server(self):
-        from moss.lsp_server import MossLanguageServer
+        from moss_lsp.server import MossLanguageServer
 
         server = MossLanguageServer()
 
@@ -155,7 +155,7 @@ class TestMossLanguageServer:
         assert server.cache is not None
 
     def test_analyze_python(self, simple_python_source: str):
-        from moss.lsp_server import MossLanguageServer
+        from moss_lsp.server import MossLanguageServer
 
         server = MossLanguageServer()
 
@@ -170,7 +170,7 @@ class TestMossLanguageServer:
         assert "complex_function" in names
 
     def test_generate_diagnostics(self, simple_python_source: str):
-        from moss.lsp_server import MossLanguageServer
+        from moss_lsp.server import MossLanguageServer
 
         server = MossLanguageServer()
         # Lower thresholds for testing
@@ -193,7 +193,7 @@ class TestMossLanguageServer:
         assert has_complexity_diagnostic
 
     def test_extract_symbols(self, simple_python_source: str):
-        from moss.lsp_server import MossLanguageServer
+        from moss_lsp.server import MossLanguageServer
 
         server = MossLanguageServer()
 
@@ -211,25 +211,25 @@ class TestSymbolKind:
     """Tests for symbol kind conversion."""
 
     def test_class_kind(self):
-        from moss.lsp_server import _symbol_kind
+        from moss_lsp.server import _symbol_kind
 
         kind = _symbol_kind("class")
         assert kind == lsp.SymbolKind.Class
 
     def test_function_kind(self):
-        from moss.lsp_server import _symbol_kind
+        from moss_lsp.server import _symbol_kind
 
         kind = _symbol_kind("function")
         assert kind == lsp.SymbolKind.Function
 
     def test_method_kind(self):
-        from moss.lsp_server import _symbol_kind
+        from moss_lsp.server import _symbol_kind
 
         kind = _symbol_kind("method")
         assert kind == lsp.SymbolKind.Method
 
     def test_unknown_kind(self):
-        from moss.lsp_server import _symbol_kind
+        from moss_lsp.server import _symbol_kind
 
         kind = _symbol_kind("unknown")
         assert kind == lsp.SymbolKind.Variable
@@ -239,7 +239,7 @@ class TestGetWordAtPosition:
     """Tests for word extraction."""
 
     def test_simple_word(self):
-        from moss.lsp_server import _get_word_at_position
+        from moss_lsp.server import _get_word_at_position
 
         source = "def hello_world():\n    pass"
         pos = lsp.Position(line=0, character=6)
@@ -248,7 +248,7 @@ class TestGetWordAtPosition:
         assert word == "hello_world"
 
     def test_at_start_of_word(self):
-        from moss.lsp_server import _get_word_at_position
+        from moss_lsp.server import _get_word_at_position
 
         source = "variable = 123"
         pos = lsp.Position(line=0, character=0)
@@ -257,7 +257,7 @@ class TestGetWordAtPosition:
         assert word == "variable"
 
     def test_no_word(self):
-        from moss.lsp_server import _get_word_at_position
+        from moss_lsp.server import _get_word_at_position
 
         source = "x = 1"
         pos = lsp.Position(line=0, character=2)  # at the space
@@ -266,7 +266,7 @@ class TestGetWordAtPosition:
         assert word is None or word == ""
 
     def test_out_of_bounds(self):
-        from moss.lsp_server import _get_word_at_position
+        from moss_lsp.server import _get_word_at_position
 
         source = "x = 1"
         pos = lsp.Position(line=5, character=0)  # line doesn't exist
@@ -279,7 +279,7 @@ class TestCreateServer:
     """Tests for server creation."""
 
     def test_creates_server_with_handlers(self):
-        from moss.lsp_server import create_server
+        from moss_lsp.server import create_server
 
         server = create_server()
 
@@ -293,7 +293,7 @@ class TestStartServer:
     """Tests for server startup."""
 
     def test_unknown_transport_raises(self):
-        from moss.lsp_server import start_server
+        from moss_lsp.server import start_server
 
         with pytest.raises(ValueError, match="Unknown transport"):
             start_server("unknown")

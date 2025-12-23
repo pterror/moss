@@ -1,6 +1,6 @@
 """Tests for single-tool MCP server."""
 
-from moss.mcp_server import _execute_command, create_server
+from moss_mcp.server import _execute_command, create_server
 
 
 class TestExecuteCommand:

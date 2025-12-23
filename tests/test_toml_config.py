@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from moss.config import MossConfig
-from moss.toml_config import (
+from moss_cli.config import MossConfig
+from moss_cli.toml_config import (
     config_to_toml,
     find_config_file,
     load_toml_config,
@@ -114,7 +114,7 @@ timeout_seconds = 120
 [tool.moss.project]
 name = "pyproject-project"
 
-[tool.moss.validators]
+[tool.moss_orchestration.validators]
 pytest = true
 """)
 
@@ -221,7 +221,7 @@ class TestMergeConfigs:
         assert merged.project_name == "base"
 
     def test_custom_validators_combined(self):
-        from moss.validators import SyntaxValidator
+        from moss_orchestration.validators import SyntaxValidator
 
         base = MossConfig()
         base.validators.custom = [SyntaxValidator()]

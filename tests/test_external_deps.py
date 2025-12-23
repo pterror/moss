@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from moss.external_deps import (
+from moss_intelligence.external_deps import (
     Dependency,
     DependencyAnalysisResult,
     ExternalDependencyAnalyzer,

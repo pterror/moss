@@ -1,6 +1,6 @@
-"""Tests for moss.execution module."""
+"""Tests for moss_orchestration.execution module."""
 
-from moss.execution import (
+from moss_orchestration.execution import (
     FlatContext,
     InheritedContext,
     Scope,

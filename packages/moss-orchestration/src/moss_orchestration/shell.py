@@ -26,7 +26,7 @@ import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from moss_cli.output import Output, Verbosity
+from moss_orchestration.output import Output, Verbosity
 
 if TYPE_CHECKING:
     pass

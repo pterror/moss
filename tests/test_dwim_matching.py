@@ -10,7 +10,7 @@ The goal is to ensure users can find tools naturally regardless of:
 
 import pytest
 
-from moss.dwim import analyze_intent
+from moss_orchestration.dwim import analyze_intent
 
 # Expected matches: (query, expected_tool, min_confidence)
 # These define the contract for how DWIM should behave

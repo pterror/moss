@@ -6,11 +6,11 @@ and unusual code patterns gracefully without crashing.
 
 import pytest
 
-from moss.anchors import Anchor, AnchorType, find_anchors
-from moss.cfg import build_cfg
-from moss.elided_literals import elide_literals
-from moss.patches import Patch, PatchType, apply_patch, apply_text_patch
-from moss.skeleton import extract_python_skeleton
+from moss_intelligence.anchors import Anchor, AnchorType, find_anchors
+from moss_intelligence.cfg import build_cfg
+from moss_intelligence.elided_literals import elide_literals
+from moss_intelligence.patches import Patch, PatchType, apply_patch, apply_text_patch
+from moss_intelligence.skeleton import extract_python_skeleton
 
 
 class TestSkeletonFuzzing:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from moss.terminal import (
+from moss_orchestration.terminal import (
     PersistentShell,
     ShellConfig,
     ShellResult,

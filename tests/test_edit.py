@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.edit import (
+from moss_intelligence.edit import (
     EditContext,
     TaskComplexity,
     analyze_complexity,
@@ -211,7 +211,7 @@ class TestEditAsync:
     @pytest.mark.asyncio
     async def test_structural_edit_rename(self):
         """Test structural edit for rename returns correct method."""
-        from moss.edit import structural_edit
+        from moss_intelligence.edit import structural_edit
 
         ctx = EditContext(project_root=Path("."))
         result = await structural_edit("rename something_else to something_else", ctx)
@@ -222,7 +222,7 @@ class TestEditAsync:
     @pytest.mark.asyncio
     async def test_structural_edit_unknown_type(self):
         """Test structural edit for unknown task type."""
-        from moss.edit import structural_edit
+        from moss_intelligence.edit import structural_edit
 
         ctx = EditContext(project_root=Path("."))
         result = await structural_edit("do something weird", ctx)
@@ -233,7 +233,7 @@ class TestEditAsync:
     @pytest.mark.asyncio
     async def test_multi_agent_edit_not_implemented(self):
         """Test multi-agent edit returns not implemented."""
-        from moss.edit import multi_agent_edit
+        from moss_intelligence.edit import multi_agent_edit
 
         ctx = EditContext(project_root=Path("."))
         result = await multi_agent_edit("refactor the class", ctx)
@@ -248,7 +248,7 @@ class TestExtractSpecification:
 
     def test_basic_extraction(self):
         """Test basic specification extraction."""
-        from moss.edit import extract_specification
+        from moss_intelligence.edit import extract_specification
 
         ctx = EditContext(project_root=Path("."))
         spec = extract_specification("implement user login", ctx)
@@ -258,7 +258,7 @@ class TestExtractSpecification:
 
     def test_extraction_with_symbol(self):
         """Test extraction includes symbol context."""
-        from moss.edit import extract_specification
+        from moss_intelligence.edit import extract_specification
 
         ctx = EditContext(project_root=Path("."), target_symbol="UserManager")
         spec = extract_specification("add validation", ctx)
@@ -267,7 +267,7 @@ class TestExtractSpecification:
 
     def test_extraction_with_constraints(self):
         """Test extraction includes constraints."""
-        from moss.edit import extract_specification
+        from moss_intelligence.edit import extract_specification
 
         ctx = EditContext(
             project_root=Path("."),
@@ -279,7 +279,7 @@ class TestExtractSpecification:
 
     def test_extraction_with_must_clauses(self):
         """Test extraction extracts must/should clauses."""
-        from moss.edit import extract_specification
+        from moss_intelligence.edit import extract_specification
 
         ctx = EditContext(project_root=Path("."))
         spec = extract_specification(
@@ -295,7 +295,7 @@ class TestEditAPI:
 
     def test_write_file(self, tmp_path):
         """Test writing a new file."""
-        from moss.edit import EditAPI
+        from moss_intelligence.edit import EditAPI
 
         api = EditAPI(tmp_path)
         file_path = "test.txt"
@@ -309,7 +309,7 @@ class TestEditAPI:
 
     def test_replace_text(self, tmp_path):
         """Test replacing text in a file."""
-        from moss.edit import EditAPI
+        from moss_intelligence.edit import EditAPI
 
         api = EditAPI(tmp_path)
         file_path = "test.txt"
@@ -328,7 +328,7 @@ class TestEditAPI:
 
     def test_insert_line(self, tmp_path):
         """Test inserting lines."""
-        from moss.edit import EditAPI
+        from moss_intelligence.edit import EditAPI
 
         api = EditAPI(tmp_path)
         file_path = "test.txt"

@@ -2,7 +2,7 @@
 
 import pytest
 
-from moss.task_tree import NoteExpiry, TaskNode, TaskStatus, TaskTree
+from moss_orchestration.task_tree import NoteExpiry, TaskNode, TaskStatus, TaskTree
 
 
 class TestTaskNode:

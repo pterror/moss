@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.handles import (
+from moss_orchestration.handles import (
     BinaryFileHandle,
     DeferredHandle,
     FileHandle,

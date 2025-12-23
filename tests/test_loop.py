@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from moss.anchors import Anchor, AnchorType
-from moss.events import EventBus
-from moss.loop import (
+from moss_intelligence.anchors import Anchor, AnchorType
+from moss_orchestration.events import EventBus
+from moss_orchestration.loop import (
     LoopConfig,
     LoopStatus,
     SilentLoop,
     VelocityMetrics,
 )
-from moss.patches import Patch, PatchType
-from moss.shadow_git import ShadowGit
-from moss.validators import SyntaxValidator, ValidatorChain
+from moss_intelligence.patches import Patch, PatchType
+from moss_orchestration.shadow_git import ShadowGit
+from moss_orchestration.validators import SyntaxValidator, ValidatorChain
 
 
 @pytest.fixture

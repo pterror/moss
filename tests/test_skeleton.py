@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from moss.skeleton import (
+from moss_intelligence.skeleton import (
     PythonSkeletonProvider,
     extract_python_skeleton,
     format_skeleton,
 )
-from moss.views import ViewOptions, ViewTarget, ViewType
+from moss_intelligence.views import ViewOptions, ViewTarget, ViewType
 
 
 class TestPythonSkeletonExtractor:

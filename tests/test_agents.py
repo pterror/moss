@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.agents import (
+from moss_orchestration.agents import (
     Constraint,
     Manager,
     MergeStrategy,
@@ -21,8 +21,8 @@ from moss.agents import (
     create_manager,
     create_swarm_coordinator,
 )
-from moss.handles import HandleRef
-from moss.shadow_git import ShadowBranch, ShadowGit
+from moss_orchestration.handles import HandleRef
+from moss_orchestration.shadow_git import ShadowBranch, ShadowGit
 
 
 @pytest.fixture

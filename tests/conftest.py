@@ -2,7 +2,7 @@
 
 import pytest
 
-from moss.output import reset_output
+from moss_orchestration.output import reset_output
 
 
 @pytest.fixture(autouse=True)

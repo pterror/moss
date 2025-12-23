@@ -2,7 +2,7 @@
 
 import time
 
-from moss.profiling import (
+from moss_cli.profiling import (
     BenchmarkSuite,
     Profiler,
     Timer,

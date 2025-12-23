@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.parallel import (
+from moss_orchestration.parallel import (
     AnalysisResult,
     BatchStats,
     ParallelAnalyzer,

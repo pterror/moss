@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.validators import (
+from moss_orchestration.validators import (
     CommandValidator,
     PytestValidator,
     RuffValidator,

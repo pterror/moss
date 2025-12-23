@@ -1,7 +1,7 @@
 """Tests for Patch Application."""
 
-from moss.anchors import Anchor, AnchorType
-from moss.patches import (
+from moss_intelligence.anchors import Anchor, AnchorType
+from moss_intelligence.patches import (
     Patch,
     PatchType,
     apply_patch,

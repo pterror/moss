@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from moss.diff_analysis import (
+from moss_orchestration.diff_analysis import (
     DiffAnalysis,
     FileDiff,
     SymbolChange,
@@ -507,7 +507,7 @@ class TestGitIntegration:
         """Test getting diff between commits."""
         import subprocess
 
-        from moss.diff_analysis import get_commit_diff
+        from moss_orchestration.diff_analysis import get_commit_diff
 
         # Make a change
         (git_repo / "new.py").write_text("def hello():\n    pass\n")
@@ -527,7 +527,7 @@ class TestGitIntegration:
         """Test getting staged diff."""
         import subprocess
 
-        from moss.diff_analysis import get_staged_diff
+        from moss_orchestration.diff_analysis import get_staged_diff
 
         # Stage a change
         (git_repo / "staged.py").write_text("x = 1\n")
@@ -540,7 +540,7 @@ class TestGitIntegration:
 
     def test_get_working_diff(self, git_repo: Path):
         """Test getting working directory diff."""
-        from moss.diff_analysis import get_working_diff
+        from moss_orchestration.diff_analysis import get_working_diff
 
         # Modify tracked file without staging
         (git_repo / "initial.py").write_text("# modified\n")
@@ -555,7 +555,7 @@ class TestGitIntegration:
         """Test full commit analysis."""
         import subprocess
 
-        from moss.diff_analysis import analyze_commits
+        from moss_orchestration.diff_analysis import analyze_commits
 
         # Make some changes
         (git_repo / "feature.py").write_text("def feature():\n    return 42\n")

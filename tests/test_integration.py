@@ -8,10 +8,10 @@ import subprocess
 
 import pytest
 
-from moss.anchors import Anchor, AnchorType, find_anchors, resolve_anchor
-from moss.events import Event, EventBus, EventType
-from moss.handles import FileHandle, HandleRegistry, MemoryHandle
-from moss.memory import (
+from moss_intelligence.anchors import Anchor, AnchorType, find_anchors, resolve_anchor
+from moss_orchestration.events import Event, EventBus, EventType
+from moss_orchestration.handles import FileHandle, HandleRegistry, MemoryHandle
+from moss_context.memory import (
     Action,
     Outcome,
     SemanticRule,
@@ -19,25 +19,25 @@ from moss.memory import (
     StateSnapshot,
     create_memory_manager,
 )
-from moss.patches import Patch, PatchType, apply_patch
-from moss.policy import (
+from moss_intelligence.patches import Patch, PatchType, apply_patch
+from moss_orchestration.policy import (
     PathPolicy,
     PolicyEngine,
     RateLimitPolicy,
     ToolCallContext,
     create_default_policy_engine,
 )
-from moss.shadow_git import ShadowGit
-from moss.skeleton import (
+from moss_orchestration.shadow_git import ShadowGit
+from moss_intelligence.skeleton import (
     extract_python_skeleton,
     format_skeleton,
 )
-from moss.validators import (
+from moss_orchestration.validators import (
     SyntaxValidator,
     ValidatorChain,
     create_python_validator_chain,
 )
-from moss.views import ViewOptions, ViewTarget, ViewType, create_default_registry
+from moss_intelligence.views import ViewOptions, ViewTarget, ViewType, create_default_registry
 
 
 class TestContextHostWithViewProviders:

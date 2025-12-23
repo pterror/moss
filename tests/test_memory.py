@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 import pytest
 
-from moss.memory import (
+from moss_context.memory import (
     Action,
     Episode,
     EpisodicStore,

@@ -20,9 +20,12 @@ Completed:
 - [x] CLI broken imports fixed (cmd_explore, cmd_telemetry refactored)
 
 Remaining:
-- [ ] Tests: update all imports from moss.* to sub-packages (60 test files)
+- [ ] Recover missing plugin modules: data_files.py, markdown.py (needed for full test suite)
+- [ ] Recover missing modules: llm/, rules/, refactoring.py, visualization.py, etc. (21 tests skipped)
 - [ ] Verify CLI commands work end-to-end
 - [ ] Telemetry: migrate session stats to new architecture (currently stubbed)
+
+Test Status: 1797 passing, 122 failing, 57 skipped (modules not yet migrated)
 
 **Deferred:**
 - Driver integration improvements
