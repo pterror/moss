@@ -1922,6 +1922,17 @@ fn cmd_view_file(
                     "line": i.line
                 })
             }).collect::<Vec<_>>());
+
+            if !deps.reexports.is_empty() {
+                output["reexports"] = serde_json::json!(deps.reexports.iter().map(|r| {
+                    serde_json::json!({
+                        "module": r.module,
+                        "names": r.names,
+                        "is_star": r.is_star,
+                        "line": r.line
+                    })
+                }).collect::<Vec<_>>());
+            }
         }
 
         println!("{}", output);
@@ -1937,6 +1948,17 @@ fn cmd_view_file(
                         println!("  import {}", imp.module);
                     } else {
                         println!("  from {} import {}", imp.module, imp.names.join(", "));
+                    }
+                }
+            }
+
+            if show_deps && !deps.reexports.is_empty() {
+                println!("\n## Re-exports");
+                for reexp in &deps.reexports {
+                    if reexp.is_star {
+                        println!("  export * from '{}'", reexp.module);
+                    } else {
+                        println!("  export {{ {} }} from '{}'", reexp.names.join(", "), reexp.module);
                     }
                 }
             }
@@ -1968,6 +1990,8 @@ fn cmd_view_file(
 
             if !resolved.is_empty() {
                 println!("\n## Imported Modules (Skeletons)");
+                let mut deps_extractor = deps::DepsExtractor::new();
+
                 for (module_name, rel_path) in resolved {
                     let import_full_path = root.join(&rel_path);
                     if let Ok(import_content) = std::fs::read_to_string(&import_full_path) {
@@ -1983,6 +2007,36 @@ fn cmd_view_file(
                         if !formatted.is_empty() {
                             println!("\n### {} ({})", module_name, rel_path.display());
                             println!("{}", formatted);
+                        }
+
+                        // Check for barrel file re-exports and follow them
+                        let import_deps = deps_extractor.extract(&import_full_path, &import_content);
+                        for reexp in &import_deps.reexports {
+                            if let Some(reexp_path) = resolve_import(&reexp.module, &import_full_path, root) {
+                                if let Ok(reexp_content) = std::fs::read_to_string(&reexp_path) {
+                                    let mut reexp_extractor = skeleton::SkeletonExtractor::new();
+                                    let reexp_skeleton = reexp_extractor.extract(&reexp_path, &reexp_content);
+                                    let reexp_skeleton = if types_only {
+                                        reexp_skeleton.filter_types()
+                                    } else {
+                                        reexp_skeleton
+                                    };
+
+                                    let formatted = reexp_skeleton.format(false);
+                                    if !formatted.is_empty() {
+                                        let reexp_rel = reexp_path.strip_prefix(root)
+                                            .map(|p| p.display().to_string())
+                                            .unwrap_or_else(|_| reexp_path.display().to_string());
+                                        let export_desc = if reexp.is_star {
+                                            format!("export * from '{}'", reexp.module)
+                                        } else {
+                                            format!("export {{ {} }} from '{}'", reexp.names.join(", "), reexp.module)
+                                        };
+                                        println!("\n### {} → {} ({})", module_name, export_desc, reexp_rel);
+                                        println!("{}", formatted);
+                                    }
+                                }
+                            }
                         }
                     }
                 }

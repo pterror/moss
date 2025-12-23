@@ -23,10 +23,20 @@ pub struct Export {
     pub line: usize,
 }
 
+/// A re-export statement (export * from './module' or export { foo } from './module')
+#[derive(Debug, Clone)]
+pub struct ReExport {
+    pub module: String,
+    pub names: Vec<String>, // Empty for "export * from", specific names for "export { x } from"
+    pub is_star: bool,      // true for "export * from"
+    pub line: usize,
+}
+
 /// Dependency information for a file
 pub struct DepsResult {
     pub imports: Vec<Import>,
     pub exports: Vec<Export>,
+    pub reexports: Vec<ReExport>,
     pub file_path: String,
 }
 
@@ -63,6 +73,22 @@ impl DepsResult {
             for exp in &self.exports {
                 if exp.kind != "variable" {
                     lines.push(format!("{}: {}", exp.kind, exp.name));
+                }
+            }
+            lines.push(String::new());
+        }
+
+        if !self.reexports.is_empty() {
+            lines.push("# Re-exports".to_string());
+            for reexp in &self.reexports {
+                if reexp.is_star {
+                    lines.push(format!("export * from '{}'", reexp.module));
+                } else {
+                    lines.push(format!(
+                        "export {{ {} }} from '{}'",
+                        reexp.names.join(", "),
+                        reexp.module
+                    ));
                 }
             }
         }
@@ -117,18 +143,25 @@ impl DepsExtractor {
 
     pub fn extract(&mut self, path: &Path, content: &str) -> DepsResult {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let (imports, exports) = match ext {
-            "py" => self.extract_python(content),
-            "rs" => self.extract_rust(content),
+        let (imports, exports, reexports) = match ext {
+            "py" => {
+                let (i, e) = self.extract_python(content);
+                (i, e, Vec::new())
+            }
+            "rs" => {
+                let (i, e) = self.extract_rust(content);
+                (i, e, Vec::new())
+            }
             "ts" | "mts" => self.extract_typescript(content),
             "tsx" => self.extract_tsx(content),
             "js" | "mjs" | "jsx" => self.extract_javascript(content),
-            _ => (Vec::new(), Vec::new()),
+            _ => (Vec::new(), Vec::new(), Vec::new()),
         };
 
         DepsResult {
             imports,
             exports,
+            reexports,
             file_path: path.to_string_lossy().to_string(),
         }
     }
@@ -407,26 +440,26 @@ impl DepsExtractor {
         }
     }
 
-    fn extract_typescript(&mut self, content: &str) -> (Vec<Import>, Vec<Export>) {
+    fn extract_typescript(&mut self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
         let tree = match self.typescript_parser.parse(content, None) {
             Some(t) => t,
-            None => return (Vec::new(), Vec::new()),
+            None => return (Vec::new(), Vec::new(), Vec::new()),
         };
         self.extract_js_ts_deps(&tree, content)
     }
 
-    fn extract_tsx(&mut self, content: &str) -> (Vec<Import>, Vec<Export>) {
+    fn extract_tsx(&mut self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
         let tree = match self.tsx_parser.parse(content, None) {
             Some(t) => t,
-            None => return (Vec::new(), Vec::new()),
+            None => return (Vec::new(), Vec::new(), Vec::new()),
         };
         self.extract_js_ts_deps(&tree, content)
     }
 
-    fn extract_javascript(&mut self, content: &str) -> (Vec<Import>, Vec<Export>) {
+    fn extract_javascript(&mut self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
         let tree = match self.javascript_parser.parse(content, None) {
             Some(t) => t,
-            None => return (Vec::new(), Vec::new()),
+            None => return (Vec::new(), Vec::new(), Vec::new()),
         };
         self.extract_js_ts_deps(&tree, content)
     }
@@ -436,14 +469,15 @@ impl DepsExtractor {
         &self,
         tree: &tree_sitter::Tree,
         content: &str,
-    ) -> (Vec<Import>, Vec<Export>) {
+    ) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
         let mut imports = Vec::new();
         let mut exports = Vec::new();
+        let mut reexports = Vec::new();
         let root = tree.root_node();
         let mut cursor = root.walk();
 
-        self.collect_js_ts_deps(&mut cursor, content, &mut imports, &mut exports);
-        (imports, exports)
+        self.collect_js_ts_deps(&mut cursor, content, &mut imports, &mut exports, &mut reexports);
+        (imports, exports, reexports)
     }
 
     fn collect_js_ts_deps(
@@ -452,6 +486,7 @@ impl DepsExtractor {
         content: &str,
         imports: &mut Vec<Import>,
         exports: &mut Vec<Export>,
+        reexports: &mut Vec<ReExport>,
     ) {
         loop {
             let node = cursor.node();
@@ -496,10 +531,36 @@ impl DepsExtractor {
                 // export function foo() {}
                 // export class Bar {}
                 // export const baz = ...
+                // export * from './module'
+                // export { foo, bar } from './module'
+                // export * as helpers from './helpers'
                 "export_statement" => {
+                    // Check if this is a re-export (has a source module)
+                    let mut source_module = None;
+                    let mut is_star = false;
+                    let mut named_exports: Vec<String> = Vec::new();
+
                     for i in 0..node.child_count() {
                         if let Some(child) = node.child(i) {
                             match child.kind() {
+                                "string" => {
+                                    // The source module in 'export ... from "module"'
+                                    let text = &content[child.byte_range()];
+                                    source_module =
+                                        Some(text.trim_matches(|c| c == '"' || c == '\'').to_string());
+                                }
+                                "*" => {
+                                    // export * from './module'
+                                    is_star = true;
+                                }
+                                "namespace_export" => {
+                                    // export * as foo from './module'
+                                    is_star = true;
+                                }
+                                "export_clause" => {
+                                    // export { foo, bar } from './module'
+                                    self.collect_export_clause_names(child, content, &mut named_exports);
+                                }
                                 "function_declaration" | "generator_function_declaration" => {
                                     if let Some(name_node) = child.child_by_field_name("name") {
                                         exports.push(Export {
@@ -520,11 +581,26 @@ impl DepsExtractor {
                                 }
                                 "lexical_declaration" => {
                                     // export const foo = ..., bar = ...
-                                    self.collect_variable_names(child, content, exports, node.start_position().row + 1);
+                                    self.collect_variable_names(
+                                        child,
+                                        content,
+                                        exports,
+                                        node.start_position().row + 1,
+                                    );
                                 }
                                 _ => {}
                             }
                         }
+                    }
+
+                    // If we found a source module, this is a re-export
+                    if let Some(module) = source_module {
+                        reexports.push(ReExport {
+                            module,
+                            names: named_exports,
+                            is_star,
+                            line: node.start_position().row + 1,
+                        });
                     }
                 }
                 // Top-level function/class (could be exported via export default later)
@@ -557,12 +633,49 @@ impl DepsExtractor {
 
             // Recurse into children
             if cursor.goto_first_child() {
-                self.collect_js_ts_deps(cursor, content, imports, exports);
+                self.collect_js_ts_deps(cursor, content, imports, exports, reexports);
                 cursor.goto_parent();
             }
 
             if !cursor.goto_next_sibling() {
                 break;
+            }
+        }
+    }
+
+    /// Collect names from export clause: export { foo, bar } from ...
+    fn collect_export_clause_names(
+        &self,
+        node: tree_sitter::Node,
+        content: &str,
+        names: &mut Vec<String>,
+    ) {
+        // Walk through children directly
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i) {
+                match child.kind() {
+                    "export_specifier" => {
+                        // { foo as bar } - get the first identifier (original name)
+                        // or check for "name" field
+                        if let Some(name) = child.child_by_field_name("name") {
+                            names.push(content[name.byte_range()].to_string());
+                        } else {
+                            // Find first identifier child
+                            for j in 0..child.child_count() {
+                                if let Some(id) = child.child(j) {
+                                    if id.kind() == "identifier" {
+                                        names.push(content[id.byte_range()].to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // Recurse into other nodes
+                        self.collect_export_clause_names(child, content, names);
+                    }
+                }
             }
         }
     }
@@ -702,5 +815,33 @@ export const VERSION = "1.0.0";
         assert!(result.imports.iter().any(|i| i.module == "./utils"));
         assert!(result.exports.iter().any(|e| e.name == "greet"));
         assert!(result.exports.iter().any(|e| e.name == "User"));
+    }
+
+    #[test]
+    fn test_typescript_barrel_reexports() {
+        let mut extractor = DepsExtractor::new();
+        let content = r#"
+export * from './utils';
+export * as helpers from './helpers';
+export { foo, bar } from './specific';
+"#;
+        let result = extractor.extract(&PathBuf::from("index.ts"), content);
+
+        assert_eq!(result.reexports.len(), 3);
+
+        // Star re-export
+        let star = result.reexports.iter().find(|r| r.module == "./utils").unwrap();
+        assert!(star.is_star);
+        assert!(star.names.is_empty());
+
+        // Namespace re-export (export * as helpers)
+        let namespace = result.reexports.iter().find(|r| r.module == "./helpers").unwrap();
+        assert!(namespace.is_star);
+
+        // Named re-export
+        let named = result.reexports.iter().find(|r| r.module == "./specific").unwrap();
+        assert!(!named.is_star);
+        assert!(named.names.contains(&"foo".to_string()));
+        assert!(named.names.contains(&"bar".to_string()));
     }
 }

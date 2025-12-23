@@ -5,9 +5,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 ## Next Up
 
 **1. View Primitive Polish**
-- Barrel file hoisting: detect `export * from` and surface re-exported symbols
+- [x] Barrel file hoisting: detect `export * from` and surface re-exported symbols
 - Useless docstring detection: skip "Sets the user id" on `setUserId()`
-- Fisheye for TypeScript (Python and Rust now supported)
+- [x] Fisheye for TypeScript/JavaScript (Python, Rust, TS/JS all supported)
 - Selective import resolution (e.g., `--fisheye=moss.config` to expand only that import)
 
 **2. Rust Module Cleanup**
@@ -34,6 +34,12 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 **Deferred:**
 - Python edit separate targeting (LLM-based, intentionally different)
 - Remaining docs: prior-art.md, hybrid-loops.md (lower priority)
+
+**Fisheye for Other Languages:**
+- Go (import resolution from go.mod)
+- Java (package/class resolution)
+- C/C++ (#include resolution)
+- Ruby (require resolution)
 
 **Call Graph:**
 - Missing language support: Scala, Vue (no tree-sitter grammars yet)
