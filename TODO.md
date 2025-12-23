@@ -4,22 +4,29 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 ## Next Up
 
-**1. First Release**
-- Create first GitHub release to test distribution pipeline:
-  ```bash
-  git tag v0.1.0
-  git push --tags
-  ```
-- Verify cross-platform builds succeed in GitHub Actions
-- Test `moss update` against the real release
+**TUI Redesign** (see `docs/tui-design.md`)
 
-**2. TUI Integration**
-- Quick access to new primitives:
-  - `moss scopes` for variable/scope inspection
-  - `moss imports --graph` for dependency visualization
-  - `moss imports --who-imports` for reverse lookups
-- Type-aware code navigation (use inferred types for jump-to-definition)
-- Scope-aware autocomplete suggestions
+Phase 1 - Unified task model:
+- Unify session/workflow/swarm into "task" concept
+- Each task gets shadow branch `shadow/task-{id}`
+- Task tree shows all work (active, paused, completed)
+- Tasks are persistent, shadow branches never deleted
+
+Phase 2 - Simplify panels:
+- Remove redundant modes (PLAN, READ, WRITE, DIFF, SESSION, BRANCH, SWARM, COMMIT)
+- Three panels: Code, Analysis, Tasks
+- Analysis has sub-views: Complexity, Security, Scopes, Imports
+- Diff is accessed through task's changes, not separate mode
+
+Phase 3 - No commands:
+- Remove command input
+- Direct manipulation only (navigate + contextual actions)
+- Footer shows available actions for current context
+- `e` on file opens edit task input (the one text input we need)
+
+Immediate fixes (while redesigning):
+- Gracefully handle missing Shadow Git in current DIFF mode
+- Mode names to title case (temporary until modes removed)
 
 ## Implementation Notes
 
@@ -82,3 +89,14 @@ See `docs/philosophy.md`. Key goals:
 
 ### API Keys
 See `.env.example` for ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+
+## When Ready
+
+**First Release**
+- Create first GitHub release to test distribution pipeline:
+  ```bash
+  git tag v0.1.0
+  git push --tags
+  ```
+- Verify cross-platform builds succeed in GitHub Actions
+- Test `moss update` against the real release
