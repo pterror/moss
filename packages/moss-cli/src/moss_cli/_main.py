@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from moss.output import Output, Verbosity, configure_output, get_output
+from moss_orchestration.output import Output, Verbosity, configure_output, get_output
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 def get_version() -> str:
     """Get the moss version."""
-    from moss import __version__
+    from moss_cli import __version__
 
     return __version__
 
@@ -90,7 +90,7 @@ def cmd_init(args: Namespace) -> int:
 
 from pathlib import Path
 
-from moss.config import MossConfig, get_distro
+from moss_cli.config import MossConfig, get_distro
 
 # Start from a base distro
 base = get_distro("{distro_name}")
@@ -137,9 +137,9 @@ config = (
 def cmd_run(args: Namespace) -> int:
     """Run a task through moss."""
     from moss_orchestration.agents import create_manager
-    from moss.api import TaskRequest, create_api_handler
-    from moss.config import load_config_file
-    from moss.events import EventBus
+    from moss_orchestration.task_api import TaskRequest, create_api_handler
+    from moss_cli.config import load_config_file
+    from moss_orchestration.events import EventBus
     from moss_orchestration.shadow_git import ShadowGit
 
     output = setup_output(args)
@@ -178,7 +178,7 @@ def cmd_run(args: Namespace) -> int:
             f"  {status} {tool} ({duration}ms) | RAM: {mem:.1f} MB{bd_str} | Context: {ctx} tokens"
         )
 
-    from moss.events import EventType
+    from moss_orchestration.events import EventType
 
     event_bus.subscribe(EventType.TOOL_CALL, on_tool_call)
 
@@ -227,9 +227,9 @@ def cmd_run(args: Namespace) -> int:
 def cmd_status(args: Namespace) -> int:
     """Show status of moss tasks and workers."""
     from moss_orchestration.agents import create_manager
-    from moss.api import create_api_handler
-    from moss.config import load_config_file
-    from moss.events import EventBus
+    from moss_orchestration.task_api import create_api_handler
+    from moss_cli.config import load_config_file
+    from moss_orchestration.events import EventBus
     from moss_orchestration.shadow_git import ShadowGit
 
     output = setup_output(args)
@@ -284,7 +284,7 @@ def cmd_status(args: Namespace) -> int:
 
 def cmd_config(args: Namespace) -> int:
     """Show or validate configuration."""
-    from moss.config import list_distros, load_config_file
+    from moss_cli.config import list_distros, load_config_file
 
     output = setup_output(args)
 
@@ -346,7 +346,7 @@ def cmd_config(args: Namespace) -> int:
 
 def cmd_distros(args: Namespace) -> int:
     """List available configuration distros."""
-    from moss.config import get_distro, list_distros
+    from moss_cli.config import get_distro, list_distros
 
     output = setup_output(args)
     distros = list_distros()
@@ -457,7 +457,7 @@ def cmd_cfg(args: Namespace) -> int:
 
     # Handle --live mode
     if getattr(args, "live", False):
-        from moss.live_cfg import start_live_cfg
+        from moss_orchestration.live_cfg import start_live_cfg
 
         start_live_cfg(
             path=path,
@@ -1137,7 +1137,7 @@ def cmd_lsp(args: Namespace) -> int:
 
 def cmd_shell(args: Namespace) -> int:
     """Start interactive shell."""
-    from moss.shell import start_shell
+    from moss_orchestration.shell import start_shell
 
     directory = Path(getattr(args, "directory", ".")).resolve()
     return start_shell(directory)
@@ -1233,13 +1233,13 @@ def cmd_hooks(args: Namespace) -> int:
 
 def cmd_rules(args: Namespace) -> int:
     """Check code against custom rules."""
-    from moss.rules import (
+    from moss_orchestration.rules_single import (
         EngineConfig,
         Severity,
         create_engine_with_builtins,
         load_rules_from_config,
     )
-    from moss.sarif import SARIFConfig, generate_sarif, write_sarif
+    from moss_orchestration.sarif import SARIFConfig, generate_sarif, write_sarif
 
     output = setup_output(args)
     directory = Path(getattr(args, "directory", ".")).resolve()
@@ -1656,7 +1656,7 @@ def cmd_synthesize(args: Namespace) -> int:
 
 def cmd_metrics(args: Namespace) -> int:
     """Generate codebase metrics dashboard."""
-    from moss.metrics import collect_metrics, generate_dashboard
+    from moss_cli.metrics import collect_metrics, generate_dashboard
 
     output = setup_output(args)
     directory = Path(getattr(args, "directory", ".")).resolve()
@@ -1718,7 +1718,7 @@ def cmd_metrics(args: Namespace) -> int:
 
 def cmd_pr(args: Namespace) -> int:
     """Generate PR review summary."""
-    from moss.pr_review import analyze_pr
+    from moss_orchestration.pr_review import analyze_pr
 
     output = setup_output(args)
     repo_path = Path(getattr(args, "directory", ".")).resolve()
@@ -1755,7 +1755,7 @@ def cmd_pr(args: Namespace) -> int:
 
 def cmd_diff(args: Namespace) -> int:
     """Analyze git diff and show symbol changes."""
-    from moss.diff_analysis import (
+    from moss_orchestration.diff_analysis import (
         analyze_diff,
         get_commit_diff,
         get_staged_diff,
@@ -1812,7 +1812,7 @@ def cmd_mutate(args: Namespace) -> int:
     """Run mutation testing to find undertested code."""
     import asyncio
 
-    from moss.mutation import MutationAnalyzer
+    from moss_orchestration.mutation import MutationAnalyzer
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -1962,7 +1962,7 @@ def cmd_external_deps(args: Namespace) -> int:
 
 def cmd_roadmap(args: Namespace) -> int:
     """Show project roadmap and progress from TODO.md."""
-    from moss.roadmap import display_roadmap, find_todo_md
+    from moss_cli.roadmap import display_roadmap, find_todo_md
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3132,7 +3132,7 @@ def cmd_rag(args: Namespace) -> int:
     import asyncio
 
     from moss import MossAPI
-    from moss.rag import format_search_results
+    from moss_orchestration.rag import format_search_results
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3456,7 +3456,7 @@ def cmd_toml(args: Namespace) -> int:
         moss toml Cargo.toml ".dependencies | keys" # List dependency names
         moss toml moss.toml --keys                  # List all keys
     """
-    from moss.toml_nav import (
+    from moss_cli.toml_nav import (
         format_result,
         list_keys,
         parse_toml,
@@ -3581,7 +3581,7 @@ def cmd_agent(args: Namespace) -> int:
 
 def cmd_report(args: Namespace) -> int:
     """Generate comprehensive project report (verbose health)."""
-    from moss.status import StatusChecker
+    from moss_orchestration.status import StatusChecker
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3617,7 +3617,7 @@ def cmd_overview(args: Namespace) -> int:
     Supports presets for common configurations.
     """
     from moss import MossAPI
-    from moss.presets import AVAILABLE_CHECKS, get_preset, list_presets
+    from moss_orchestration.presets import AVAILABLE_CHECKS, get_preset, list_presets
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -4130,7 +4130,7 @@ def cmd_eval(args: Namespace) -> int:
 
 def cmd_help(args: Namespace) -> int:
     """Show detailed help for commands."""
-    from moss.help import (
+    from moss_cli.help import (
         format_category_list,
         format_command_help,
         get_command_help,

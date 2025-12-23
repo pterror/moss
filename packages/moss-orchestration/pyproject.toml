@@ -20,6 +20,7 @@ classifiers = [
 
 dependencies = [
     "moss-context",
+    "moss-intelligence",
 ]
 
 [project.optional-dependencies]

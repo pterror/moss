@@ -10,8 +10,8 @@ from datetime import UTC, datetime
 from enum import Enum, auto
 from typing import Any
 
-from moss.events import EventBus, EventEmitterMixin, EventType
-from moss.handles import HandleRef
+from moss_orchestration.events import EventBus, EventEmitterMixin, EventType
+from moss_orchestration.handles import HandleRef
 from .shadow_git import CommitHandle, ShadowBranch, ShadowGit
 
 

@@ -19,7 +19,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from moss.events import EventBus, EventType
+from moss_orchestration.events import EventBus, EventType
 
 
 class SessionStatus(Enum):

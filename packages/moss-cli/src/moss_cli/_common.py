@@ -8,7 +8,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, Any
 
-from moss.output import Output, Verbosity, configure_output, get_output
+from moss_orchestration.output import Output, Verbosity, configure_output, get_output
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def get_version() -> str:
     """Get the moss version."""
-    from moss import __version__
+    from moss_cli import __version__
 
     return __version__
 

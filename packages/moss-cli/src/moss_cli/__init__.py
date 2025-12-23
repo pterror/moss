@@ -16,8 +16,10 @@ Planned splits (not yet done):
 # See: docs/cli/commands.md
 """
 
-# Re-export everything from _main for backwards compatibility
-from moss.cli._main import (
+__version__ = "0.1.0"
+
+# Re-export everything from _main
+from moss_cli._main import (
     cmd_acp_server,
     cmd_agent,
     cmd_analyze_session,

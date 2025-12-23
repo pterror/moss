@@ -21,7 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from moss.output import Output, get_output
+from moss_cli.output import Output, get_output
 from .watcher import EventType, FileWatcher, WatchConfig, WatchEvent
 
 
