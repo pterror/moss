@@ -14,10 +14,11 @@ Packages scaffolded in `packages/`:
 - moss-mcp, moss-lsp, moss-tui, moss-acp: Frontend wrappers
 
 Remaining work:
-- [ ] Fix moss.* imports in moss-orchestration (still references old locations)
-- [ ] Wire main moss package to use sub-packages
-- [ ] Add integration tests for package boundaries
-- [ ] Update pyproject.toml to depend on sub-packages
+- [x] Fix internal imports in moss-orchestration (converted to relative)
+- [ ] Migrate infrastructure modules to base package (events, handles, output, etc.)
+- [ ] Update main moss to re-export from sub-packages
+- [ ] Add workspace configuration for local development
+- [ ] Integration tests for package boundaries
 
 **Deferred:**
 - Driver Integration improvements
