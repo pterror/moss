@@ -4,21 +4,18 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 ## Next Up
 
-**1. Reference Resolution**
-- Full import graph with alias tracking
-- Variable scoping analysis
-- Type inference for method calls
-- Cross-language tracking (Python ↔ Rust)
-
-**2. TUI Integration**
-- Better integration of primitives into TUI workflow
-
-**3. Distribution**
+**1. Distribution**
 - Auto-updates
 - Portable single binary
 - Pre-built binaries (GitHub Actions)
 
+**2. TUI Integration**
+- Better integration of primitives into TUI workflow
+
 ## Backlog
+
+**Reference Resolution (partial):**
+- Cross-language tracking (Python ↔ Rust) - see `docs/rust-python-boundary.md` for design
 
 **Deferred:**
 - Python edit separate targeting (LLM-based, intentionally different)
