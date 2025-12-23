@@ -246,3 +246,50 @@ def _private(): pass
 
         assert "Parse error" in view.content
         assert "error" in view.metadata
+
+    async def test_render_with_expand_imports(
+        self, provider: PythonSkeletonProvider, tmp_path: Path
+    ):
+        """Test skeleton includes import context when expand_imports=True."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "models.py").write_text("""
+class User:
+    id: int
+    email: str
+""")
+        (pkg / "api.py").write_text("""
+from .models import User
+
+def get_user(user_id: int) -> User:
+    pass
+""")
+        target = ViewTarget(path=pkg / "api.py")
+        opts = ViewOptions(expand_imports=True, project_root=tmp_path)
+
+        view = await provider.render(target, opts)
+
+        # Should include the imported User class skeleton
+        assert "# Imported Types:" in view.content
+        assert "User" in view.content
+        assert "class User" in view.content
+        assert view.metadata["imports_expanded"] is True
+
+    async def test_render_without_expand_imports(
+        self, provider: PythonSkeletonProvider, tmp_path: Path
+    ):
+        """Test skeleton does not include import context by default."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "models.py").write_text("class User: pass")
+        (pkg / "api.py").write_text("from .models import User\ndef get_user(): pass")
+
+        target = ViewTarget(path=pkg / "api.py")
+
+        view = await provider.render(target)
+
+        # Should NOT include imported types
+        assert "# Imported Types:" not in view.content
+        assert view.metadata["imports_expanded"] is False

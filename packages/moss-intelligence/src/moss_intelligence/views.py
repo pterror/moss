@@ -37,6 +37,8 @@ class ViewOptions:
     include_private: bool = False  # Include _private members
     include_docstrings: bool = True  # Include documentation
     line_range: tuple[int, int] | None = None  # Restrict to line range
+    expand_imports: bool = False  # Include skeleton of imported symbols
+    project_root: Path | None = None  # Root for import resolution
     extra: dict[str, Any] = field(default_factory=dict)
 
 

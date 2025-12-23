@@ -10,7 +10,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 - TUI: ScopesAPI for public/private symbol stats
 - Call Graph: wire FunctionComplexity.short_name() into output
 
-Test Status: 2098 passing, 0 failing, 42 skipped (all optional deps)
+Test Status: 2108 passing, 0 failing, 42 skipped (all optional deps)
 
 **Deferred:**
 - Driver integration improvements
