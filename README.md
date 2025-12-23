@@ -6,6 +6,12 @@ Moss implements a "Compiled Context" approach that prioritizes architectural awa
 
 **[Documentation](https://pterror.github.io/moss/)** | **[GitHub](https://github.com/pterror/moss)** | **[LLM Guide](LLMS.md)**
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pterror/moss/master/install.sh | bash
+```
+
 ## Features
 
 - **Event-Driven Architecture**: Async communication via EventBus (`UserMessage`, `PlanGenerated`, `ToolCall`, `ValidationFailed`, `ShadowCommit`)

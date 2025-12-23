@@ -4,11 +4,14 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 ## Next Up
 
-**1. Distribution (in progress)**
-- [x] Auto-updates (`moss update` command)
-- [x] GitHub Actions release workflow
-- [x] Self-update binary replacement with SHA256 verification
-- [ ] Test cross-platform builds
+**1. First Release**
+- Create first GitHub release to test distribution pipeline:
+  ```bash
+  git tag v0.1.0
+  git push --tags
+  ```
+- Verify cross-platform builds succeed in GitHub Actions
+- Test `moss update` against the real release
 
 **2. TUI Integration**
 - Quick access to new primitives:
@@ -17,6 +20,14 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
   - `moss imports --who-imports` for reverse lookups
 - Type-aware code navigation (use inferred types for jump-to-definition)
 - Scope-aware autocomplete suggestions
+
+## Implementation Notes
+
+**Self-update (`moss update`):**
+- GITHUB_REPO constant in main.rs:4004 is set to "pterror/moss"
+- Uses custom SHA256 implementation (no external crypto dep) in main.rs:4220-4310
+- Expects GitHub release with SHA256SUMS.txt containing checksums
+- Binary replacement creates temp file then renames (atomic on Unix)
 
 ## Backlog
 
