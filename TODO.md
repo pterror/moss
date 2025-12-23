@@ -6,7 +6,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 **1. View Primitive Polish**
 - [x] Barrel file hoisting: detect `export * from` and surface re-exported symbols
-- Useless docstring detection: skip "Sets the user id" on `setUserId()`
+- [x] Useless docstring detection: skip "Sets the user id" on `setUserId()`
 - [x] Fisheye for TypeScript/JavaScript (Python, Rust, TS/JS all supported)
 - Selective import resolution (e.g., `--fisheye=moss.config` to expand only that import)
 

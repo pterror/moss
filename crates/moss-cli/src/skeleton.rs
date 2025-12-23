@@ -89,7 +89,8 @@ fn format_symbols(
             if let Some(doc) = &sym.docstring {
                 // First line only for brevity
                 let first_line = doc.lines().next().unwrap_or("").trim();
-                if !first_line.is_empty() {
+                // Skip useless docstrings that just repeat the function name
+                if !first_line.is_empty() && !is_useless_docstring(&sym.name, first_line) {
                     lines.push(format!("{}    \"\"\"{}\"\"\"", prefix, first_line));
                 }
             }
@@ -103,6 +104,77 @@ fn format_symbols(
 
         lines.push(String::new()); // Blank line between symbols
     }
+}
+
+/// Check if a docstring is "useless" - just repeats the function name
+/// Examples: setUserId → "Sets the user id", getUser → "Gets user"
+fn is_useless_docstring(name: &str, docstring: &str) -> bool {
+    // Common filler words to ignore
+    const FILLER_WORDS: &[&str] = &[
+        "the", "a", "an", "this", "that", "given", "specified", "provided",
+        "returns", "return", "get", "gets", "set", "sets", "is", "are",
+        "for", "from", "to", "of", "with", "by", "in", "on", "as",
+    ];
+
+    // Split function name into words (handle camelCase and snake_case)
+    let name_words: Vec<String> = split_identifier(name)
+        .into_iter()
+        .map(|w| w.to_lowercase())
+        .collect();
+
+    // Clean docstring: lowercase, remove punctuation, split into words
+    let doc_clean: String = docstring
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .collect();
+    let doc_words: Vec<String> = doc_clean
+        .split_whitespace()
+        .map(|w| w.to_lowercase())
+        .filter(|w| !FILLER_WORDS.contains(&w.as_str()))
+        .collect();
+
+    // If all doc words are in the function name words, it's useless
+    if doc_words.is_empty() {
+        return true; // Only filler words
+    }
+
+    // Check if doc words are subset of name words (or very close)
+    let matching = doc_words
+        .iter()
+        .filter(|dw| name_words.iter().any(|nw| nw == *dw || nw.contains(dw.as_str()) || dw.contains(nw.as_str())))
+        .count();
+
+    // If most doc words match name words, it's useless
+    matching >= doc_words.len().saturating_sub(1) && doc_words.len() <= name_words.len() + 2
+}
+
+/// Split an identifier into words (camelCase, PascalCase, snake_case)
+fn split_identifier(name: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current_word = String::new();
+
+    for c in name.chars() {
+        if c == '_' {
+            if !current_word.is_empty() {
+                words.push(current_word);
+                current_word = String::new();
+            }
+        } else if c.is_uppercase() {
+            if !current_word.is_empty() {
+                words.push(current_word);
+                current_word = String::new();
+            }
+            current_word.push(c.to_ascii_lowercase());
+        } else {
+            current_word.push(c);
+        }
+    }
+
+    if !current_word.is_empty() {
+        words.push(current_word);
+    }
+
+    words
 }
 
 pub struct SkeletonExtractor {
@@ -1930,5 +2002,34 @@ end
         assert!(names.contains(&"MyModule"), "Should have module");
         // Functions should be filtered out
         assert!(!names.contains(&"helper"));
+    }
+
+    #[test]
+    fn test_useless_docstring_detection() {
+        // Useless docstrings - just repeat the function name
+        assert!(is_useless_docstring("setUserId", "Sets the user id"));
+        assert!(is_useless_docstring("setUserId", "Set user id."));
+        assert!(is_useless_docstring("getUser", "Gets the user"));
+        assert!(is_useless_docstring("get_user", "Get the user."));
+        assert!(is_useless_docstring("processData", "Process data"));
+        assert!(is_useless_docstring("handleRequest", "Handle request."));
+        assert!(is_useless_docstring("parse", "Parse."));
+        assert!(is_useless_docstring("init", "Initialize."));
+
+        // Useful docstrings - provide additional context
+        assert!(!is_useless_docstring("setUserId", "Update the user ID from the authentication token"));
+        assert!(!is_useless_docstring("parse", "Parse JSON string into structured data"));
+        assert!(!is_useless_docstring("getUser", "Fetch user from database by ID"));
+        assert!(!is_useless_docstring("process", "Apply validation rules and normalize input"));
+        assert!(!is_useless_docstring("init", "Set up database connection pool with retry logic"));
+    }
+
+    #[test]
+    fn test_split_identifier() {
+        assert_eq!(split_identifier("setUserId"), vec!["set", "user", "id"]);
+        assert_eq!(split_identifier("get_user_id"), vec!["get", "user", "id"]);
+        assert_eq!(split_identifier("HTTPRequest"), vec!["h", "t", "t", "p", "request"]);
+        assert_eq!(split_identifier("parseJSON"), vec!["parse", "j", "s", "o", "n"]);
+        assert_eq!(split_identifier("simple"), vec!["simple"]);
     }
 }
