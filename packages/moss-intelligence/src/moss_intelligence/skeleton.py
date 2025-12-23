@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .views import View, ViewOptions, ViewProvider, ViewTarget, ViewType
@@ -352,6 +353,143 @@ def get_enum_values(source: str, enum_name: str) -> list[str] | None:
 # =============================================================================
 # Plugin Wrapper
 # =============================================================================
+
+
+@dataclass
+class QueryResult:
+    """Result from a symbol query."""
+
+    file: str
+    line: int
+    kind: str
+    name: str
+    signature: str
+    docstring: str | None = None
+    context: str | None = None
+
+    def to_dict(self) -> dict:
+        """Convert to serializable dictionary."""
+        result = {
+            "file": self.file,
+            "line": self.line,
+            "kind": self.kind,
+            "name": self.name,
+            "signature": self.signature,
+        }
+        if self.docstring:
+            result["docstring"] = self.docstring
+        if self.context:
+            result["context"] = self.context
+        return result
+
+
+def query_symbols(
+    path: Path,
+    pattern: str = "**/*.py",
+    kind: str | None = None,
+    name: str | None = None,
+    signature: str | None = None,
+    inherits: str | None = None,
+    min_lines: int | None = None,
+    max_lines: int | None = None,
+) -> list[QueryResult]:
+    """Query symbols in files matching a pattern.
+
+    Args:
+        path: File or directory to search
+        pattern: Glob pattern for files (default: **/*.py)
+        kind: Filter by symbol kind (class, function, method)
+        name: Filter by name (regex pattern)
+        signature: Filter by signature (regex pattern)
+        inherits: Filter classes by base class name
+        min_lines: Minimum lines in symbol
+        max_lines: Maximum lines in symbol
+
+    Returns:
+        List of QueryResult objects matching the filters
+    """
+    import re
+
+    results: list[QueryResult] = []
+
+    # Get files to search
+    if path.is_file():
+        files = [path]
+    else:
+        files = list(path.glob(pattern))
+
+    for file_path in files:
+        if not file_path.is_file():
+            continue
+
+        try:
+            source = file_path.read_text()
+            symbols = extract_python_skeleton(source, include_private=True)
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+
+        def collect_symbols(
+            syms: list[Symbol], context: str | None = None
+        ) -> list[tuple[Symbol, str | None]]:
+            """Recursively collect all symbols with their context."""
+            collected = []
+            for sym in syms:
+                collected.append((sym, context))
+                if sym.children:
+                    child_context = sym.name if sym.kind == "class" else context
+                    collected.extend(collect_symbols(sym.children, child_context))
+            return collected
+
+        all_symbols = collect_symbols(symbols)
+
+        for sym, ctx in all_symbols:
+            # Filter by kind
+            if kind and sym.kind != kind:
+                continue
+
+            # Filter by name (regex)
+            if name and not re.search(name, sym.name):
+                continue
+
+            # Filter by signature (regex)
+            if signature and not re.search(signature, sym.signature):
+                continue
+
+            # Filter by inheritance (for classes)
+            if inherits:
+                if sym.kind != "class":
+                    continue
+                # Check if base class is in signature
+                if (
+                    f"({inherits})" not in sym.signature
+                    and f", {inherits})" not in sym.signature
+                    and f"({inherits}," not in sym.signature
+                ):
+                    continue
+
+            # Filter by line count
+            if min_lines or max_lines:
+                line_count = sym.line_count
+                if line_count is None:
+                    continue
+                if min_lines and line_count < min_lines:
+                    continue
+                if max_lines and line_count > max_lines:
+                    continue
+
+            results.append(
+                QueryResult(
+                    file=str(file_path),
+                    line=sym.lineno,
+                    kind=sym.kind,
+                    name=sym.name,
+                    signature=sym.signature,
+                    docstring=sym.docstring,
+                    context=ctx,
+                )
+            )
+
+    return results
 
 
 class PythonSkeletonPlugin:

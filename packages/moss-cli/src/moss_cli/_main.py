@@ -136,11 +136,11 @@ config = (
 
 def cmd_run(args: Namespace) -> int:
     """Run a task through moss."""
-    from moss_orchestration.agents import create_manager
-    from moss_orchestration.task_api import TaskRequest, create_api_handler
     from moss_cli.config import load_config_file
+    from moss_orchestration.agents import create_manager
     from moss_orchestration.events import EventBus
     from moss_orchestration.shadow_git import ShadowGit
+    from moss_orchestration.task_api import TaskRequest, create_api_handler
 
     output = setup_output(args)
     project_dir = Path(args.directory).resolve()
@@ -226,11 +226,11 @@ def cmd_run(args: Namespace) -> int:
 
 def cmd_status(args: Namespace) -> int:
     """Show status of moss tasks and workers."""
-    from moss_orchestration.agents import create_manager
-    from moss_orchestration.task_api import create_api_handler
     from moss_cli.config import load_config_file
+    from moss_orchestration.agents import create_manager
     from moss_orchestration.events import EventBus
     from moss_orchestration.shadow_git import ShadowGit
+    from moss_orchestration.task_api import create_api_handler
 
     output = setup_output(args)
     project_dir = Path(args.directory).resolve()
@@ -379,7 +379,7 @@ def cmd_distros(args: Namespace) -> int:
 
 def cmd_query(args: Namespace) -> int:
     """Query code with pattern matching and filters."""
-    from moss import MossAPI
+    from moss_intelligence.skeleton import query_symbols
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -388,10 +388,7 @@ def cmd_query(args: Namespace) -> int:
         output.error(f"Path {path} does not exist")
         return 1
 
-    # Use project root for API, pass path as search path
-    api = MossAPI.for_project(path if path.is_dir() else path.parent)
-
-    results = api.search.query(
+    results = query_symbols(
         path=path,
         pattern=args.pattern or "**/*.py",
         kind=args.type if args.type != "all" else None,
@@ -442,7 +439,7 @@ def cmd_query(args: Namespace) -> int:
 
 def cmd_cfg(args: Namespace) -> int:
     """Build and display control flow graph."""
-    from moss import MossAPI
+    from moss_intelligence.cfg import build_cfg
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -466,17 +463,13 @@ def cmd_cfg(args: Namespace) -> int:
         )
         return 0
 
-    api = MossAPI.for_project(path.parent)
-
     try:
-        cfg_objects = api.cfg.build(path)
+        source = path.read_text()
+        # build_cfg handles function filtering internally
+        cfg_objects = build_cfg(source, args.function)
     except Exception as e:
         output.error(f"Failed to build CFG: {e}")
         return 1
-
-    # Filter by function name if specified
-    if args.function:
-        cfg_objects = [cfg for cfg in cfg_objects if cfg.name == args.function]
 
     if not cfg_objects:
         output.warning("No functions found")
@@ -584,7 +577,13 @@ def cmd_cfg(args: Namespace) -> int:
 
 def cmd_deps(args: Namespace) -> int:
     """Extract dependencies (imports/exports) from code."""
-    from moss import MossAPI
+    from moss_intelligence.dependencies import (
+        build_dependency_graph,
+        dependency_graph_to_dot,
+        extract_dependencies,
+        find_reverse_dependencies,
+        format_dependencies,
+    )
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -593,8 +592,6 @@ def cmd_deps(args: Namespace) -> int:
         output.error(f"Path {path} does not exist")
         return 1
 
-    api = MossAPI.for_project(path if path.is_dir() else path.parent)
-
     # Handle --dot mode: generate dependency graph visualization
     if getattr(args, "dot", False):
         if not path.is_dir():
@@ -602,13 +599,13 @@ def cmd_deps(args: Namespace) -> int:
             return 1
 
         pattern = args.pattern or "**/*.py"
-        graph = api.dependencies.build_graph(path, pattern)
+        graph = build_dependency_graph(str(path), pattern)
 
         if not graph:
             output.warning("No internal dependencies found")
             return 1
 
-        dot_output = api.dependencies.graph_to_dot(graph, title=path.name)
+        dot_output = dependency_graph_to_dot(graph, title=path.name)
         output.print(dot_output)
         return 0
 
@@ -616,7 +613,7 @@ def cmd_deps(args: Namespace) -> int:
     if args.reverse:
         search_dir = args.search_dir or "."
         pattern = args.pattern or "**/*.py"
-        reverse_deps = api.dependencies.find_reverse(args.reverse, search_dir, pattern)
+        reverse_deps = find_reverse_dependencies(args.reverse, search_dir, pattern)
 
         if getattr(args, "json", False):
             results = [
@@ -651,8 +648,9 @@ def cmd_deps(args: Namespace) -> int:
 
     for file_path in files:
         try:
-            info = api.dependencies.extract(file_path)
-            content = api.dependencies.format(file_path)
+            source = file_path.read_text()
+            info = extract_dependencies(source)
+            content = format_dependencies(info)
 
             if getattr(args, "json", False):
                 results.append(
@@ -686,9 +684,9 @@ def cmd_deps(args: Namespace) -> int:
 
 def cmd_context(args: Namespace) -> int:
     """Generate compiled context for a file (skeleton + deps + summary)."""
+    from moss_intelligence.dependencies import extract_dependencies, format_dependencies
     from moss_intelligence.rust_shim import rust_available, rust_context
-
-    from moss import MossAPI
+    from moss_intelligence.skeleton import extract_python_skeleton, format_skeleton
 
     output = setup_output(args)
     path = Path(args.path).resolve()
@@ -746,19 +744,20 @@ def cmd_context(args: Namespace) -> int:
                     output.verbose("(no symbols)")
             return 0
 
-    api = MossAPI.for_project(path.parent)
+    # Read source file
+    source = path.read_text()
 
     # Get skeleton and dependencies
     try:
-        symbols = api.skeleton.extract(path)
-        skeleton_content = api.skeleton.format(path)
+        symbols = extract_python_skeleton(source)
+        skeleton_content = format_skeleton(symbols)
     except Exception as e:
         output.error(f"Failed to extract skeleton: {e}")
         return 1
 
     try:
-        deps_info = api.dependencies.extract(path)
-        deps_content = api.dependencies.format(path)
+        deps_info = extract_dependencies(source)
+        deps_content = format_dependencies(deps_info)
     except Exception as e:
         output.error(f"Failed to extract dependencies: {e}")
         return 1
@@ -781,7 +780,6 @@ def cmd_context(args: Namespace) -> int:
         return counts
 
     counts = count_symbols(symbols)
-    source = path.read_text()
     line_count = len(source.splitlines())
 
     if getattr(args, "json", False):
@@ -2914,9 +2912,9 @@ def cmd_complexity(args: Namespace) -> int:
 
 def cmd_clones(args: Namespace) -> int:
     """Detect structural clones via AST hashing."""
-    from moss_intelligence.clones import format_clone_analysis
-
     from moss import MossAPI
+
+    from moss_intelligence.clones import format_clone_analysis
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -2947,9 +2945,9 @@ def cmd_clones(args: Namespace) -> int:
 
 def cmd_security(args: Namespace) -> int:
     """Run security analysis with multiple tools."""
-    from moss_intelligence.security import format_security_analysis
-
     from moss import MossAPI
+
+    from moss_intelligence.security import format_security_analysis
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3022,13 +3020,13 @@ def cmd_patterns(args: Namespace) -> int:
 
 def cmd_weaknesses(args: Namespace) -> int:
     """Identify architectural weaknesses and gaps in the codebase."""
+    from moss import MossAPI
+
     from moss_intelligence.weaknesses import (
         format_weakness_fixes,
         get_fixable_weaknesses,
         weaknesses_to_sarif,
     )
-
-    from moss import MossAPI
 
     output = setup_output(args)
     root = Path(getattr(args, "directory", ".")).resolve()
@@ -3114,6 +3112,7 @@ def cmd_rag(args: Namespace) -> int:
     import asyncio
 
     from moss import MossAPI
+
     from moss_orchestration.rag import format_search_results
 
     output = setup_output(args)
@@ -3599,6 +3598,7 @@ def cmd_overview(args: Namespace) -> int:
     Supports presets for common configurations.
     """
     from moss import MossAPI
+
     from moss_orchestration.presets import AVAILABLE_CHECKS, get_preset, list_presets
 
     output = setup_output(args)
