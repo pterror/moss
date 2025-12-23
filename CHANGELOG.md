@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 (Dec 24 2025)
 
-### Test Suite Cleanup (Dec 24 2025)
+First release. See `docs/` for design docs and `README.md` for usage.
 
-- Reduced skipped tests from 82 to 50
+### Test Suite Cleanup
+
+- Removed obsolete tests for deleted MossAPI/health module (8 tests)
 - Removed 70 obsolete DWIM NL matching tests (xfail/xpass → deleted)
-- Final count: 2120 passed, 50 skipped
+- Final count: 2098 passed, 42 skipped (all optional deps)
 
 **Executor Refactoring:**
 - CLIExecutor and MCPToolExecutor now use `_get_tool_dispatcher()` instead of MossAPI
