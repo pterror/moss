@@ -1317,6 +1317,159 @@
     }
   },
   {
+    "name": "go_imports_analyze_go_imports",
+    "description": "Analyze Go imports for a project. GoImportReport with module info, packages, and external imports",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Project root directory"
+        }
+      },
+      "required": [
+        "root"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_extract_go_exports",
+    "description": "Extract exported symbols from a Go source file. Exported symbols in Go are those starting with an uppercase letter. List of exported symbol names",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "go_file": {
+          "type": "string",
+          "description": "Path to a .go file"
+        }
+      },
+      "required": [
+        "go_file"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_extract_go_imports",
+    "description": "Extract imports from a Go source file. List of GoImport objects",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "go_file": {
+          "type": "string",
+          "description": "Path to a .go file"
+        }
+      },
+      "required": [
+        "go_file"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_get_go_package_exports",
+    "description": "Get exported symbols from a Go package. List of exported symbol names",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "import_path": {
+          "type": "string",
+          "description": "Import path of the package"
+        },
+        "root": {
+          "type": "string",
+          "description": "Project root directory"
+        },
+        "module": {
+          "type": "string",
+          "description": "Parsed GoModule"
+        }
+      },
+      "required": [
+        "import_path",
+        "root",
+        "module"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_get_package_name",
+    "description": "Get the package name from a Go source file. Package name, or None if not found",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "go_file": {
+          "type": "string",
+          "description": "Path to a .go file"
+        }
+      },
+      "required": [
+        "go_file"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_parse_go_mod",
+    "description": "Parse a go.mod file. GoModule with parsed information, or None if parsing fails",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "go_mod_path": {
+          "type": "string",
+          "description": "Path to go.mod file"
+        }
+      },
+      "required": [
+        "go_mod_path"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_resolve_go_import",
+    "description": "Resolve a Go import path to a local directory. Path to the package directory, or None if external/not found",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "import_path": {
+          "type": "string",
+          "description": "Import path to resolve"
+        },
+        "root": {
+          "type": "string",
+          "description": "Project root directory"
+        },
+        "module": {
+          "type": "string",
+          "description": "Parsed GoModule"
+        }
+      },
+      "required": [
+        "import_path",
+        "root",
+        "module"
+      ]
+    }
+  },
+  {
+    "name": "go_imports_scan_go_packages",
+    "description": "Scan a Go project for packages. List of GoPackage objects",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Project root directory (containing go.mod)"
+        },
+        "module": {
+          "type": "string",
+          "description": "Parsed GoModule"
+        }
+      },
+      "required": [
+        "root",
+        "module"
+      ]
+    }
+  },
+  {
     "name": "dwim_analyze_intent",
     "description": "Analyze a natural language query to find the best matching tools. This is the main entry point for semantic routing. List of ToolMatch sorted by confidence (highest first)",
     "inputSchema": {
