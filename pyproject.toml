@@ -1,4 +1,17 @@
-# Workspace configuration - no "moss" package, just sub-packages in packages/
+[project]
+name = "moss-workspace"
+version = "0.0.0"
+requires-python = ">=3.13"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.8.0",
+    "basedpyright>=1.22.0",
+    "mutmut>=3.0.0",
+]
 
 [tool.ruff]
 line-length = 100
