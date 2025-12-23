@@ -10,7 +10,7 @@
 - Built-in drivers: UserDriver, LLMDriver, WorkflowDriver, StateMachineDriver
 - DriverRegistry with entry point discovery for plugin drivers
 - Generic `run_task()` loop works with any driver
-- Legacy adapters: wrap existing agent_loop, step_loop, state_machine_loop
+- Sync adapters: wrap agent_loop, step_loop, state_machine_loop for async use
 - See `docs/driver-architecture.md` for design details
 
 **TUI Cleanup** (Dec 23 2025)

@@ -1,13 +1,7 @@
-"""Adapter drivers that wrap existing execution loops.
+"""Adapter drivers that wrap synchronous execution loops.
 
-These adapters allow existing synchronous loops to be used through the
-driver API, enabling gradual migration to the unified driver model.
-
-Migration path:
-1. Keep existing agent_loop, step_loop, state_machine_loop working
-2. These adapters wrap them for driver API compatibility
-3. Gradually migrate callers to use driver API
-4. Eventually deprecate direct loop functions
+These adapters allow synchronous loops to be used through the async
+driver API by running them in thread pool executors.
 """
 
 from __future__ import annotations
@@ -23,14 +17,14 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class LegacyAgentDriver:
-    """Adapter driver wrapping the legacy agent_loop.
+class SyncAgentDriver:
+    """Adapter driver wrapping agent_loop.
 
     Runs the synchronous agent_loop in a thread pool to maintain
     async compatibility.
     """
 
-    name = "legacy_agent"
+    name = "sync_agent"
 
     # agent_loop configuration
     max_turns: int = 10
@@ -97,13 +91,13 @@ class LegacyAgentDriver:
 
 
 @dataclass
-class LegacyStepDriver:
-    """Adapter driver wrapping the legacy step_loop.
+class SyncStepDriver:
+    """Adapter driver wrapping step_loop.
 
     Takes workflow steps and runs them through the existing step_loop.
     """
 
-    name = "legacy_step"
+    name = "sync_step"
 
     # step_loop configuration
     steps: list[dict] = field(default_factory=list)
@@ -167,13 +161,13 @@ class LegacyStepDriver:
 
 
 @dataclass
-class LegacyStateMachineDriver:
-    """Adapter driver wrapping the legacy state_machine_loop.
+class SyncStateMachineDriver:
+    """Adapter driver wrapping state_machine_loop.
 
     Takes state definitions and runs them through the existing loop.
     """
 
-    name = "legacy_state_machine"
+    name = "sync_state_machine"
 
     # state_machine_loop configuration
     states: list[dict] = field(default_factory=list)
@@ -243,13 +237,13 @@ class LegacyStateMachineDriver:
 
 
 @dataclass
-class LegacyWorkflowDriver:
+class SyncWorkflowDriver:
     """Adapter driver for loading and running TOML workflow files.
 
     Wraps run_workflow() to execute .toml workflow definitions.
     """
 
-    name = "legacy_workflow"
+    name = "sync_workflow"
 
     # Workflow configuration
     workflow_path: str = ""
@@ -292,15 +286,15 @@ class LegacyWorkflowDriver:
 
 
 # Register adapter drivers
-DriverRegistry.register(LegacyAgentDriver)
-DriverRegistry.register(LegacyStepDriver)
-DriverRegistry.register(LegacyStateMachineDriver)
-DriverRegistry.register(LegacyWorkflowDriver)
+DriverRegistry.register(SyncAgentDriver)
+DriverRegistry.register(SyncStepDriver)
+DriverRegistry.register(SyncStateMachineDriver)
+DriverRegistry.register(SyncWorkflowDriver)
 
 
 __all__ = [
-    "LegacyAgentDriver",
-    "LegacyStateMachineDriver",
-    "LegacyStepDriver",
-    "LegacyWorkflowDriver",
+    "SyncAgentDriver",
+    "SyncStateMachineDriver",
+    "SyncStepDriver",
+    "SyncWorkflowDriver",
 ]
