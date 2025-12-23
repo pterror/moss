@@ -4,9 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 ## Next Up
 
-- CLI/MCP integration for test_gaps module
-- CLI/MCP integration for scopes module
-
 Test Status: 2184 passing, 0 failing, 42 skipped (all optional deps)
 
 **Deferred:**
@@ -33,8 +30,15 @@ Test Status: 2184 passing, 0 failing, 42 skipped (all optional deps)
 - Module: `moss_intelligence.test_gaps`
 - Functions: `detect_test_patterns()`, `find_untested_files()`, `analyze_test_coverage()`
 - Supports: Python, Go, Rust, JavaScript, TypeScript patterns
-- TODO: Handle in-file tests (Rust's `#[cfg(test)]` modules)
-- TODO: CLI/MCP integration (`moss analyze --test-coverage` or `moss test-gaps`)
+- CLI: `moss analyze --test-coverage`
+- MCP: `test_gaps_*` tools
+- Future: Handle in-file tests (Rust's `#[cfg(test)]` modules)
+
+**Scopes Analysis:** ✓ COMPLETE
+- Module: `moss_intelligence.scopes`
+- Functions: `analyze_file_scopes()`, `analyze_project_scopes()`, `format_scope_report()`
+- CLI: `moss analyze --scopes`
+- MCP: `scopes_*` tools
 
 **TUI as Library Interface:**
 - Consider ScopesAPI for public/private symbol stats (or add to SkeletonAPI)

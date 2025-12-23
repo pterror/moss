@@ -27,6 +27,12 @@ First release. See `docs/` for design docs and `README.md` for usage.
 
 ### Features
 
+**CLI/MCP Integration for Analysis Modules** (Dec 24 2025)
+- Added `moss analyze --test-coverage` flag for test coverage analysis via `moss_intelligence.test_gaps`
+- Added `moss analyze --scopes` flag for public/private symbol statistics via `moss_intelligence.scopes`
+- Regenerated `specs/mcp_tools.json` to include `test_gaps_*` and `scopes_*` MCP tools
+- Both modules now accessible via CLI and MCP
+
 **Package Restructuring** (Dec 23 2025)
 - Extracted core functionality into separate installable packages:
   - `moss-intelligence`: Code analysis (skeleton, complexity, security, deps, clones)
