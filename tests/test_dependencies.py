@@ -8,8 +8,10 @@ from moss_intelligence.dependencies import (
     PythonDependencyProvider,
     expand_import_context,
     extract_dependencies,
+    format_available_modules,
     format_dependencies,
     format_import_context,
+    get_available_modules,
     resolve_relative_import,
 )
 from moss_intelligence.views import ViewTarget, ViewType
@@ -317,6 +319,82 @@ def get_user(user_id: int) -> User:
         assert context == {}
 
 
+class TestTransitiveImportContext:
+    """Tests for expand_import_context with depth > 1 (Phase 3)."""
+
+    @pytest.fixture
+    def project(self, tmp_path: Path) -> Path:
+        """Create a project with transitive imports."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+
+        # address.py - no imports
+        (pkg / "address.py").write_text("""
+class Address:
+    street: str
+    city: str
+""")
+
+        # user.py - imports Address
+        (pkg / "user.py").write_text("""
+from .address import Address
+
+class User:
+    name: str
+    address: Address
+""")
+
+        # api.py - imports User (transitively needs Address)
+        (pkg / "api.py").write_text("""
+from .user import User
+
+def get_user(user_id: int) -> User:
+    pass
+""")
+        return tmp_path
+
+    def test_depth_1_only_direct(self, project: Path):
+        """Depth 1 only includes direct imports."""
+        api_file = project / "mypackage" / "api.py"
+
+        context = expand_import_context(api_file, project, depth=1)
+
+        # Should have User but not Address
+        assert any("User" in k for k in context.keys())
+        assert not any("Address" in k for k in context.keys())
+
+    def test_depth_2_includes_transitive(self, project: Path):
+        """Depth 2 includes transitive imports."""
+        api_file = project / "mypackage" / "api.py"
+
+        context = expand_import_context(api_file, project, depth=2)
+
+        # Should have both User (from direct import) and address module (transitive)
+        assert any("User" in k for k in context.keys())
+        # Transitive imports use module name as key, content contains Address
+        assert any("address" in k for k in context.keys())
+        # Verify Address class is in the content
+        address_content = next(v for k, v in context.items() if "address" in k)
+        assert "class Address" in address_content
+
+    def test_handles_cycles(self, tmp_path: Path):
+        """Handles circular imports gracefully."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+
+        # a.py imports from b.py
+        (pkg / "a.py").write_text("from .b import B\nclass A: pass")
+        # b.py imports from a.py (cycle!)
+        (pkg / "b.py").write_text("from .a import A\nclass B: pass")
+
+        # Should not infinite loop
+        context = expand_import_context(pkg / "a.py", tmp_path, depth=10)
+
+        assert len(context) >= 1  # At least got something
+
+
 class TestFormatImportContext:
     """Tests for format_import_context."""
 
@@ -336,5 +414,139 @@ class TestFormatImportContext:
     def test_empty_context(self):
         """Empty context returns empty string."""
         output = format_import_context({})
+
+        assert output == ""
+
+
+class TestGetAvailableModules:
+    """Tests for get_available_modules (Phase 2)."""
+
+    @pytest.fixture
+    def project(self, tmp_path: Path) -> Path:
+        """Create a sample project with multiple modules."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("from .models import User\n__all__ = ['User']")
+        (pkg / "models.py").write_text("""
+class User:
+    pass
+
+class Session:
+    pass
+
+def create_user():
+    pass
+""")
+        (pkg / "auth.py").write_text("""
+def verify_token(token: str) -> bool:
+    pass
+
+def create_token(user_id: int) -> str:
+    pass
+
+def _internal_helper():
+    pass
+""")
+        (pkg / "utils.py").write_text("""
+__all__ = ["retry", "timeout"]
+
+def retry():
+    pass
+
+def timeout():
+    pass
+
+def not_exported():
+    pass
+""")
+        (pkg / "_private.py").write_text("def secret(): pass")
+        (pkg / "api.py").write_text("from .models import User")
+        return tmp_path
+
+    def test_finds_sibling_modules(self, project: Path):
+        """Finds exports from sibling modules."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        assert "models" in available
+        assert "auth" in available
+        assert "utils" in available
+
+    def test_excludes_current_file(self, project: Path):
+        """Does not include current file in results."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        assert "api" not in available
+
+    def test_excludes_private_modules(self, project: Path):
+        """Does not include _private.py modules."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        assert "_private" not in available
+
+    def test_respects_all_exports(self, project: Path):
+        """Uses __all__ when defined."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        # utils.py has __all__ = ["retry", "timeout"]
+        assert available["utils"] == ["retry", "timeout"]
+        assert "not_exported" not in available["utils"]
+
+    def test_excludes_private_symbols(self, project: Path):
+        """Does not include _private symbols."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        # auth.py has _internal_helper which should be excluded
+        assert "_internal_helper" not in available["auth"]
+
+    def test_includes_package_init(self, project: Path):
+        """Includes __init__.py exports as (package)."""
+        api_file = project / "mypackage" / "api.py"
+
+        available = get_available_modules(api_file, project)
+
+        assert "(package)" in available
+        assert "User" in available["(package)"]
+
+
+class TestFormatAvailableModules:
+    """Tests for format_available_modules."""
+
+    def test_formats_modules(self):
+        """Formats available modules as compact text."""
+        available = {
+            "models": ["User", "Session"],
+            "auth": ["verify_token", "create_token"],
+        }
+
+        output = format_available_modules(available)
+
+        assert "# Available in this package:" in output
+        assert "models.py: User, Session" in output
+        assert "auth.py: verify_token, create_token" in output
+
+    def test_truncates_long_lists(self):
+        """Truncates modules with many exports."""
+        available = {
+            "big_module": [f"func{i}" for i in range(20)],
+        }
+
+        output = format_available_modules(available, max_symbols=5)
+
+        assert "func0, func1, func2, func3, func4" in output
+        assert "(+15 more)" in output
+
+    def test_empty_available(self):
+        """Empty available returns empty string."""
+        output = format_available_modules({})
 
         assert output == ""

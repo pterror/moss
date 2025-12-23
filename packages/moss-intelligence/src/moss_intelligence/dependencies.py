@@ -271,16 +271,20 @@ def expand_import_context(
     file_path: Path,
     root: Path,
     symbols_only: bool = True,
+    depth: int = 1,
+    _visited: set[str] | None = None,
 ) -> dict[str, str]:
     """Expand imports to their skeleton context.
 
-    This implements Phase 1 of "File Boundaries Don't Exist":
+    This implements Phases 1 & 3 of "File Boundaries Don't Exist":
     imports ARE context, automatically include skeleton of imported symbols.
 
     Args:
         file_path: Path to the file to analyze
         root: Project root directory
         symbols_only: If True, only include imported symbols (not full module)
+        depth: How many levels of transitive imports to follow (default 1)
+        _visited: Internal - tracks visited files to prevent cycles
 
     Returns:
         Dict mapping "module:symbol" to skeleton text
@@ -292,8 +296,20 @@ def expand_import_context(
             id: int
             email: str
             def validate(self) -> bool: ...
+
+        # With depth=2, also includes types referenced by User
+        >>> context = expand_import_context(Path("api.py"), Path("."), depth=2)
     """
     from .skeleton import extract_python_skeleton, format_skeleton
+
+    if _visited is None:
+        _visited = set()
+
+    # Prevent cycles
+    file_key = str(file_path.resolve())
+    if file_key in _visited:
+        return {}
+    _visited.add(file_key)
 
     try:
         source = file_path.read_text()
@@ -334,6 +350,13 @@ def expand_import_context(
             key = module_name
             context[key] = format_skeleton(all_symbols, include_docstrings=False)
 
+        # Phase 3: Follow transitive imports if depth > 1
+        if depth > 1:
+            transitive = expand_import_context(
+                resolved, root, symbols_only=False, depth=depth - 1, _visited=_visited
+            )
+            context.update(transitive)
+
     return context
 
 
@@ -358,6 +381,91 @@ def format_import_context(context: dict[str, str]) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def get_available_modules(
+    file_path: Path,
+    root: Path,
+) -> dict[str, list[str]]:
+    """Get available modules and their exports in the same package.
+
+    This implements Phase 2 of "File Boundaries Don't Exist":
+    show what's importable BEFORE the agent writes code.
+
+    Args:
+        file_path: Path to the current file
+        root: Project root directory
+
+    Returns:
+        Dict mapping module name to list of exported symbol names
+
+    Example:
+        >>> available = get_available_modules(Path("mypackage/api.py"), Path("."))
+        >>> print(available)
+        {'models': ['User', 'Session'], 'auth': ['verify_token', 'create_token']}
+    """
+    package_dir = file_path.parent
+    current_name = file_path.stem
+
+    available: dict[str, list[str]] = {}
+
+    # Scan sibling Python files
+    for sibling in package_dir.glob("*.py"):
+        # Skip private modules (except __init__.py)
+        if sibling.name.startswith("_") and sibling.name not in ("__init__.py",):
+            continue
+        if sibling.stem == current_name:
+            continue  # Skip the current file
+
+        try:
+            source = sibling.read_text()
+            deps = extract_dependencies(source)
+        except (OSError, SyntaxError):
+            continue
+
+        # Get exports (prefer __all__ if defined)
+        if deps.all_exports:
+            exports = deps.all_exports
+        else:
+            exports = [e.name for e in deps.exports if not e.name.startswith("_")]
+
+        if exports:
+            module_name = sibling.stem
+            if module_name == "__init__":
+                module_name = "(package)"
+            available[module_name] = exports
+
+    return available
+
+
+def format_available_modules(available: dict[str, list[str]], max_symbols: int = 8) -> str:
+    """Format available modules as compact text.
+
+    Args:
+        available: Dict from get_available_modules()
+        max_symbols: Max symbols to show per module before truncating
+
+    Returns:
+        Formatted text suitable for LLM context
+    """
+    if not available:
+        return ""
+
+    lines = ["# Available in this package:"]
+    for module, exports in sorted(available.items()):
+        if len(exports) > max_symbols:
+            shown = exports[:max_symbols]
+            suffix = f" (+{len(exports) - max_symbols} more)"
+        else:
+            shown = exports
+            suffix = ""
+
+        # Format symbols: functions get (), classes don't
+        # For simplicity, just list names - caller can check if needed
+        symbols_str = ", ".join(shown) + suffix
+        lines.append(f"# {module}.py: {symbols_str}")
+
+    return "\n".join(lines)
 
 
 def format_dependencies(info: DependencyInfo, include_exports: bool = True) -> str:

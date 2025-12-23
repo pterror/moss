@@ -228,17 +228,30 @@ class PythonSkeletonProvider(ViewProvider):
 
         content = format_skeleton(extractor.symbols, include_docstrings=opts.include_docstrings)
 
+        # Build context sections
+        context_sections = []
+
+        # Optionally show available modules in package
+        if opts.show_available and opts.project_root:
+            from .dependencies import format_available_modules, get_available_modules
+
+            available = get_available_modules(target.path, opts.project_root)
+            if available:
+                context_sections.append(format_available_modules(available))
+
         # Optionally expand imports to include their skeletons
-        import_context_str = ""
         if opts.expand_imports and opts.project_root:
             from .dependencies import expand_import_context, format_import_context
 
-            context = expand_import_context(target.path, opts.project_root)
+            context = expand_import_context(
+                target.path, opts.project_root, depth=opts.import_depth
+            )
             if context:
-                import_context_str = format_import_context(context)
+                context_sections.append(format_import_context(context))
 
-        if import_context_str:
-            content = f"{import_context_str}\n\n{content}"
+        if context_sections:
+            context_str = "\n\n".join(context_sections)
+            content = f"{context_str}\n\n{content}"
 
         return View(
             target=target,
@@ -249,6 +262,7 @@ class PythonSkeletonProvider(ViewProvider):
                 "symbols": [_symbol_to_dict(s) for s in extractor.symbols],
                 "language": "python",
                 "imports_expanded": opts.expand_imports,
+                "available_shown": opts.show_available,
             },
         )
 

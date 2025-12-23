@@ -293,3 +293,48 @@ def get_user(user_id: int) -> User:
         # Should NOT include imported types
         assert "# Imported Types:" not in view.content
         assert view.metadata["imports_expanded"] is False
+
+    async def test_render_with_show_available(
+        self, provider: PythonSkeletonProvider, tmp_path: Path
+    ):
+        """Test skeleton shows available modules when show_available=True."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "models.py").write_text("class User: pass\nclass Session: pass")
+        (pkg / "auth.py").write_text("def verify_token(): pass")
+        (pkg / "api.py").write_text("def get_user(): pass")
+
+        target = ViewTarget(path=pkg / "api.py")
+        opts = ViewOptions(show_available=True, project_root=tmp_path)
+
+        view = await provider.render(target, opts)
+
+        # Should show available modules
+        assert "# Available in this package:" in view.content
+        assert "models.py:" in view.content
+        assert "User" in view.content
+        assert "auth.py:" in view.content
+        assert view.metadata["available_shown"] is True
+
+    async def test_render_with_both_options(self, provider: PythonSkeletonProvider, tmp_path: Path):
+        """Test skeleton with both expand_imports and show_available."""
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "models.py").write_text("class User:\n    id: int")
+        (pkg / "utils.py").write_text("def helper(): pass")
+        (pkg / "api.py").write_text("from .models import User\ndef get_user(): pass")
+
+        target = ViewTarget(path=pkg / "api.py")
+        opts = ViewOptions(expand_imports=True, show_available=True, project_root=tmp_path)
+
+        view = await provider.render(target, opts)
+
+        # Should have both sections
+        assert "# Available in this package:" in view.content
+        assert "# Imported Types:" in view.content
+        # Available should come before Imported
+        available_pos = view.content.find("# Available in this package:")
+        imported_pos = view.content.find("# Imported Types:")
+        assert available_pos < imported_pos

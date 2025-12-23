@@ -38,6 +38,8 @@ class ViewOptions:
     include_docstrings: bool = True  # Include documentation
     line_range: tuple[int, int] | None = None  # Restrict to line range
     expand_imports: bool = False  # Include skeleton of imported symbols
+    show_available: bool = False  # Show available modules in package
+    import_depth: int = 1  # Transitive import depth (1=direct only, 2+=transitive)
     project_root: Path | None = None  # Root for import resolution
     extra: dict[str, Any] = field(default_factory=dict)
 
