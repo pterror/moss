@@ -15,6 +15,7 @@ mod health;
 mod index;
 mod overview;
 mod path_resolve;
+mod scopes;
 mod skeleton;
 mod summarize;
 mod symbols;
@@ -416,6 +417,24 @@ enum Commands {
         query: Option<String>,
     },
 
+    /// Analyze variable scopes and bindings
+    Scopes {
+        /// File to analyze
+        file: String,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Line number to show bindings at
+        #[arg(short, long)]
+        line: Option<usize>,
+
+        /// Find definition of a name at a line
+        #[arg(short, long)]
+        find: Option<String>,
+    },
+
     /// Show module dependencies (imports and exports)
     Deps {
         /// File to analyze
@@ -746,6 +765,12 @@ fn main() {
         Commands::Anchors { file, root, query } => {
             cmd_anchors(&file, root.as_deref(), query.as_deref(), cli.json)
         }
+        Commands::Scopes {
+            file,
+            root,
+            line,
+            find,
+        } => cmd_scopes(&file, root.as_deref(), line, find.as_deref(), cli.json),
         Commands::Deps {
             file,
             root,
@@ -2978,6 +3003,129 @@ fn cmd_anchors(file: &str, root: Option<&Path>, query: Option<&str>, json: bool)
                 );
             }
         }
+    }
+
+    0
+}
+
+fn cmd_scopes(
+    file: &str,
+    root: Option<&Path>,
+    line: Option<usize>,
+    find: Option<&str>,
+    json: bool,
+) -> i32 {
+    let root = root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    // Resolve the file
+    let matches = path_resolve::resolve(file, &root);
+    let file_match = match matches.iter().find(|m| m.kind == "file") {
+        Some(m) => m,
+        None => {
+            eprintln!("File not found: {}", file);
+            return 1;
+        }
+    };
+
+    let file_path = root.join(&file_match.path);
+    let content = match std::fs::read_to_string(&file_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading file: {}", e);
+            return 1;
+        }
+    };
+
+    let mut analyzer = scopes::ScopeAnalyzer::new();
+    let result = analyzer.analyze(&file_path, &content);
+
+    // Find mode: find where a name is defined at a line
+    if let (Some(name), Some(ln)) = (find, line) {
+        if let Some(binding) = result.find_definition(name, ln) {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "name": binding.name,
+                        "kind": binding.kind.as_str(),
+                        "line": binding.line,
+                        "column": binding.column
+                    })
+                );
+            } else {
+                println!(
+                    "{} {} defined at line {} column {}",
+                    binding.kind.as_str(),
+                    binding.name,
+                    binding.line,
+                    binding.column
+                );
+            }
+        } else {
+            eprintln!("'{}' not found in scope at line {}", name, ln);
+            return 1;
+        }
+        return 0;
+    }
+
+    // Line mode: show all bindings visible at a line
+    if let Some(ln) = line {
+        let bindings = result.bindings_at_line(ln);
+        if json {
+            let output: Vec<_> = bindings
+                .iter()
+                .map(|b| {
+                    serde_json::json!({
+                        "name": b.name,
+                        "kind": b.kind.as_str(),
+                        "line": b.line,
+                        "column": b.column
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        } else {
+            println!("# Bindings visible at line {} in {}", ln, file_match.path);
+            if bindings.is_empty() {
+                println!("  (none)");
+            } else {
+                for b in &bindings {
+                    println!(
+                        "  {} {} (defined line {})",
+                        b.kind.as_str(),
+                        b.name,
+                        b.line
+                    );
+                }
+            }
+        }
+        return 0;
+    }
+
+    // Default: show full scope tree
+    if json {
+        fn scope_to_json(scope: &scopes::Scope) -> serde_json::Value {
+            serde_json::json!({
+                "kind": scope.kind.as_str(),
+                "name": scope.name,
+                "start_line": scope.start_line,
+                "end_line": scope.end_line,
+                "bindings": scope.bindings.iter().map(|b| {
+                    serde_json::json!({
+                        "name": b.name,
+                        "kind": b.kind.as_str(),
+                        "line": b.line,
+                        "column": b.column
+                    })
+                }).collect::<Vec<_>>(),
+                "children": scope.children.iter().map(scope_to_json).collect::<Vec<_>>()
+            })
+        }
+        println!("{}", serde_json::to_string_pretty(&scope_to_json(&result.root)).unwrap());
+    } else {
+        println!("{}", result.format());
     }
 
     0

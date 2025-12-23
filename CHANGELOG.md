@@ -4,6 +4,18 @@
 
 ### Features
 
+**Variable Scope Analysis** (Dec 23 2025)
+- `moss scopes <file>`: show scope hierarchy with all variable bindings
+  - Tracks functions, classes, loops, comprehensions, lambdas
+  - Shows parameters, variables, imports, for-loop targets
+  - Supports Python and Rust
+- `moss scopes <file> --line N`: show bindings visible at a specific line
+  - Lists all variables/functions in scope at that point
+  - Useful for understanding what names are available
+- `moss scopes <file> --line N --find <name>`: find where a name is defined
+  - Shows the exact definition location for a name at a given line
+  - Handles shadowing correctly (returns innermost definition)
+
 **Import Graph Commands** (Dec 23 2025)
 - `moss imports --graph <file>`: bidirectional import graph
   - Shows what the file imports
