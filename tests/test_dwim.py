@@ -325,79 +325,6 @@ class TestParameterResolution:
         assert normalized == {"path": "test.py", "inherits": "Parent"}
 
 
-@pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-class TestNLMarkerProtection:
-    """Tests ensuring NL markers (show/find/get) don't hijack queries.
-
-    This is critical - common English words at the start of queries
-    should NOT match tool names or aliases.
-
-    NOTE: These tests require the embedding-based semantic matching that was
-    removed. They are marked xfail until NL matching is re-implemented or
-    the tests are updated for the simplified 4-primitive system.
-    """
-
-    def test_show_does_not_match_shadow(self):
-        """'show' should not match 'shadow_git_*' tools."""
-        matches = analyze_intent("show code structure")
-        tool_names = [m.tool for m in matches[:5]]
-        shadow_tools = [t for t in tool_names if "shadow" in t]
-        assert len(shadow_tools) == 0, f"'show' matched shadow tools: {shadow_tools}"
-
-    def test_find_does_not_match_query_in_nl(self):
-        """'find' in NL context should not immediately resolve to 'query'."""
-        # "find all classes" should use semantic matching, not alias
-        matches = analyze_intent("find all classes in this module")
-        # Should get anchors or query through semantic matching, not alias shortcut
-        assert len(matches) > 0
-        # First result should NOT be query with 100% confidence
-        if matches[0].tool == "query":
-            assert matches[0].confidence < 1.0, "find shouldn't be alias-matched in NL"
-
-    def test_get_does_not_hijack_queries(self):
-        """'get' should not hijack natural language queries."""
-        matches = analyze_intent("get the list of all functions")
-        assert len(matches) > 0
-        # Should find function-related tools via semantic matching
-        tool_names = [m.tool for m in matches[:5]]
-        assert any(t in tool_names for t in ["anchors", "skeleton", "query"]), f"Got: {tool_names}"
-
-    def test_show_with_structure_finds_skeleton(self):
-        """'show code structure' should find skeleton via embeddings."""
-        matches = analyze_intent("show code structure")
-        tool_names = [m.tool for m in matches[:5]]
-        structure_tools = {"skeleton", "view", "context", "health_analyze_structure"}
-        assert any(t in structure_tools for t in tool_names), f"Got: {tool_names}"
-
-    def test_find_imports_finds_deps(self):
-        """'find imports and dependencies' should find deps tools."""
-        matches = analyze_intent("find imports and dependencies")
-        tool_names = [m.tool for m in matches[:5]]
-        dep_tools = {"deps", "dependencies_extract", "dependencies_analyze"}
-        assert any(t in dep_tools for t in tool_names), f"Got: {tool_names}"
-
-    def test_show_me_the_functions(self):
-        """Natural phrasing 'show me the functions' should work."""
-        matches = analyze_intent("show me the functions in this file")
-        tool_names = [m.tool for m in matches[:5]]
-        func_tools = {"anchors", "skeleton", "query"}
-        assert any(t in func_tools for t in tool_names), f"Got: {tool_names}"
-
-    def test_find_where_class_is_defined(self):
-        """'find where class X is defined' should work semantically."""
-        matches = analyze_intent("find where class MyClass is defined")
-        tool_names = [m.tool for m in matches[:5]]
-        search_tools = {"query", "anchors", "search_find_definitions"}
-        assert any(t in search_tools for t in tool_names), f"Got: {tool_names}"
-
-    def test_get_all_todos(self):
-        """'get all todos' should find todo tools."""
-        matches = analyze_intent("get all todos in the codebase")
-        tool_names = [m.tool for m in matches[:5]]
-        todo_tools = {"todo_list", "todo_search", "health_check_todos"}
-        assert any(t in todo_tools for t in tool_names), f"Got: {tool_names}"
-
-
 class TestToolRouter:
     """Tests for the ToolRouter class."""
 
@@ -409,80 +336,6 @@ class TestToolRouter:
 
     # === Skeleton/Structure queries ===
 
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_analyze_intent_skeleton(self):
-        """Test analyzing intent for skeleton."""
-        router = ToolRouter()
-        matches = router.analyze_intent("show code structure")
-        assert len(matches) > 0
-        tool_names = [m.tool for m in matches[:5]]
-        structure_tools = {"skeleton", "context", "search_summarize_module", "view"}
-        assert any(t in structure_tools for t in tool_names)
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_skeleton_various_phrasings(self):
-        """Test various phrasings for skeleton intent."""
-        phrasings = [
-            "what functions are in this file",
-            "list all classes and methods",
-            "code outline",
-            "show the file structure",
-            "give me an overview of this module",
-            "what's in this file",
-        ]
-        router = ToolRouter()
-        structure_tools = {"skeleton", "anchors", "context", "view", "search_summarize_module"}
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in structure_tools for t in tool_names), (
-                f"'{phrase}' should match structure tools, got: {tool_names}"
-            )
-
-    # === Dependencies queries ===
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_analyze_intent_deps(self):
-        """Test analyzing intent for dependencies."""
-        router = ToolRouter()
-        matches = router.analyze_intent("find imports and dependencies")
-        assert len(matches) > 0
-        tool_names = [m.tool for m in matches[:5]]
-        dep_related = {
-            "deps",
-            "dependencies_extract",
-            "dependencies_format",
-            "dependencies_analyze",
-        }
-        assert any(t in dep_related for t in tool_names), f"Got: {tool_names}"
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_deps_various_phrasings(self):
-        """Test various phrasings for dependencies intent."""
-        phrasings = [
-            "show dependencies",
-            "what does this module import",
-            "import graph",
-            "list all imports",
-        ]
-        router = ToolRouter()
-        dep_tools = {
-            "deps",
-            "dependencies_extract",
-            "dependencies_analyze",
-            "external_deps_list_direct",
-        }
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in dep_tools for t in tool_names), (
-                f"'{phrase}' should match dep tools, got: {tool_names}"
-            )
-
-    # === Query/Search queries ===
-
     def test_analyze_intent_query(self):
         """Test analyzing intent for query."""
         router = ToolRouter()
@@ -490,109 +343,6 @@ class TestToolRouter:
         assert len(matches) > 0
         tool_names = [m.tool for m in matches[:3]]
         assert "query" in tool_names
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_query_various_phrasings(self):
-        """Test various phrasings for query intent."""
-        phrasings = [
-            "find large functions over 100 lines",
-            "search for pattern in code",
-            "functions with more than 5 parameters",
-        ]
-        router = ToolRouter()
-        # Query and anchors both handle search-type queries
-        search_tools = {"query", "search_query", "search_find_definitions", "anchors"}
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in search_tools for t in tool_names), (
-                f"'{phrase}' should match search tools, got: {tool_names}"
-            )
-
-    # === CFG queries ===
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_analyze_intent_cfg(self):
-        """Test analyzing intent for CFG."""
-        router = ToolRouter()
-        matches = router.analyze_intent("show control flow graph")
-        assert len(matches) > 0
-        tool_names = [m.tool for m in matches[:3]]
-        assert "cfg" in tool_names
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_cfg_various_phrasings(self):
-        """Test various phrasings for CFG intent."""
-        phrasings = [
-            "control flow graph",
-            "show execution paths",
-            "analyze branches",
-            "what paths can this function take",
-            "visualize the control flow",
-        ]
-        router = ToolRouter()
-        cfg_tools = {"cfg", "cfg_build"}
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in cfg_tools for t in tool_names), (
-                f"'{phrase}' should match cfg tools, got: {tool_names}"
-            )
-
-    # === Anchors queries ===
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_anchors_various_phrasings(self):
-        """Test various phrasings for anchors intent."""
-        phrasings = [
-            "find all classes",
-            "locate function definitions",
-            "where is this method defined",
-            "list all function names",
-            "show class definitions",
-        ]
-        router = ToolRouter()
-        anchor_tools = {"anchors", "anchor_find", "search_find_definitions"}
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in anchor_tools for t in tool_names), (
-                f"'{phrase}' should match anchor tools, got: {tool_names}"
-            )
-
-    # === Context queries ===
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_context_various_phrasings(self):
-        """Test various phrasings for context intent."""
-        phrasings = [
-            "explain this file",
-            "what does this code do",
-            "summarize the module",
-            "give me context about this",
-        ]
-        router = ToolRouter()
-        context_tools = {"context", "search_summarize_module", "view"}
-
-        for phrase in phrasings:
-            matches = router.analyze_intent(phrase)
-            tool_names = [m.tool for m in matches[:5]]
-            assert any(t in context_tools for t in tool_names), (
-                f"'{phrase}' should match context tools, got: {tool_names}"
-            )
-
-    # === Tool suggestion ===
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_suggest_tool(self):
-        """Test tool suggestion."""
-        router = ToolRouter()
-        suggestion = router.suggest_tool("show classes functions methods structure outline")
-        assert suggestion is not None
-        assert suggestion.tool in ("skeleton", "anchors", "context", "view")
 
     def test_suggest_tool_returns_none_for_vague(self):
         """Test that vague queries may return None."""
@@ -640,13 +390,6 @@ class TestToolRouter:
 
 class TestModuleFunctions:
     """Tests for module-level convenience functions."""
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_analyze_intent(self):
-        """Test analyze_intent function."""
-        matches = analyze_intent("show file overview")
-        assert len(matches) > 0
-        assert all(isinstance(m, ToolMatch) for m in matches)
 
     def test_analyze_intent_returns_sorted(self):
         """Test that analyze_intent returns results sorted by confidence."""
@@ -829,15 +572,6 @@ class TestEdgeCases:
 
     # === Case variations ===
 
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_all_caps_query(self):
-        """Test handling all caps query."""
-        matches = analyze_intent("SHOW CODE STRUCTURE")
-        assert isinstance(matches, list)
-        # Should still work
-        tool_names = [m.tool for m in matches[:5]]
-        assert any(t in ["skeleton", "view", "context"] for t in tool_names)
-
     def test_mixed_case_query(self):
         """Test handling mixed case query."""
         matches = analyze_intent("ShOw CoDe StRuCtUrE")
@@ -913,14 +647,6 @@ class TestConfidenceScoring:
         """Test that typos get reduced confidence."""
         matches = analyze_intent("skelton")
         assert 0.7 < matches[0].confidence < 1.0
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_nl_query_moderate_confidence(self):
-        """Test that NL queries get moderate confidence."""
-        matches = analyze_intent("show me the code structure please")
-        assert len(matches) > 0
-        # NL queries should have moderate, not perfect confidence
-        assert matches[0].confidence < 1.0
 
     def test_vague_query_low_confidence(self):
         """Test that vague queries get lower confidence."""
@@ -1035,13 +761,6 @@ class TestWordOrderVariations:
 class TestMultipleToolsInQuery:
     """Tests for queries that could match multiple tools."""
 
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_ambiguous_query_returns_multiple(self):
-        """Test that ambiguous queries return multiple options."""
-        matches = analyze_intent("analyze code")
-        # Should return multiple potential matches
-        assert len(matches) >= 2
-
     def test_specific_query_ranks_correctly(self):
         """Test that specific queries rank the right tool first."""
         # "skeleton" should rank skeleton first
@@ -1124,36 +843,6 @@ class TestAliasMatching:
             assert len(matches) > 0
             assert matches[0].tool == expected_tool
             assert matches[0].confidence == 1.0
-
-
-@pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-class TestNaturalLanguageQueries:
-    """Parametrized tests for natural language queries."""
-
-    @pytest.mark.parametrize(
-        "query,expected_tools",
-        [
-            # Structure queries
-            ("show code structure", {"skeleton", "view", "context"}),
-            ("what functions are in this file", {"skeleton", "anchors"}),
-            ("list all classes", {"anchors", "skeleton", "query"}),
-            ("code outline", {"skeleton", "view", "context"}),
-            # Dependency queries
-            ("show dependencies", {"deps", "dependencies_extract", "dependencies_analyze"}),
-            ("what does this import", {"deps", "dependencies_extract"}),
-            # Search queries
-            ("find classes that inherit from Base", {"query", "anchors"}),
-            ("search for pattern", {"query", "search_query", "search_grep"}),
-            # CFG queries
-            ("control flow graph", {"cfg", "cfg_build"}),
-            ("show execution paths", {"cfg", "cfg_build"}),
-        ],
-    )
-    def test_nl_query_finds_relevant_tools(self, query, expected_tools):
-        """Test that NL queries find relevant tools."""
-        matches = analyze_intent(query)
-        tool_names = {m.tool for m in matches[:5]}
-        assert tool_names & expected_tools, f"Query '{query}' got {tool_names}"
 
 
 class TestToolWithArguments:
@@ -1325,11 +1014,7 @@ class TestHyphenUnderscore:
 
 
 class TestKnownGaps:
-    """Tests for queries that should work but don't yet.
-
-    These are marked xfail to document expected behavior.
-    When fixing DWIM matching, use these as targets.
-    """
+    """Tests for edge cases in DWIM matching."""
 
     def test_module_dependencies_finds_deps(self):
         """'module dependencies' should find deps tools."""
@@ -1337,36 +1022,6 @@ class TestKnownGaps:
         tool_names = [m.tool for m in matches[:5]]
         dep_tools = {"deps", "dependencies_extract", "dependencies_analyze"}
         assert any(t in dep_tools for t in tool_names), f"Got: {tool_names}"
-
-    @pytest.mark.xfail(reason="'module imports' matches search_summarize_module")
-    def test_module_imports_finds_deps(self):
-        """'module imports' should find deps tools."""
-        matches = analyze_intent("module imports")
-        tool_names = [m.tool for m in matches[:5]]
-        dep_tools = {"deps", "dependencies_extract"}
-        assert any(t in dep_tools for t in tool_names), f"Got: {tool_names}"
-
-    @pytest.mark.xfail(reason="Vague query, matches anchors instead of query")
-    def test_classes_inherit_finds_query(self):
-        """'classes that inherit from Base' should find query tool."""
-        matches = analyze_intent("classes that inherit from Base")
-        tool_names = [m.tool for m in matches[:3]]
-        assert "query" in tool_names, f"Got: {tool_names}"
-
-    @pytest.mark.xfail(reason="NL matching requires embeddings which were removed")
-    def test_what_packages_finds_deps(self):
-        """'what packages are used' should find deps tools."""
-        matches = analyze_intent("what packages are used")
-        tool_names = [m.tool for m in matches[:5]]
-        dep_tools = {"deps", "dependencies_extract", "external_deps_list_direct"}
-        assert any(t in dep_tools for t in tool_names), f"Got: {tool_names}"
-
-    @pytest.mark.xfail(reason="'subprocess' not in any tool embeddings")
-    def test_methods_call_subprocess_finds_query(self):
-        """'methods that call subprocess' should find query tool."""
-        matches = analyze_intent("methods that call subprocess")
-        tool_names = [m.tool for m in matches[:5]]
-        assert "query" in tool_names, f"Got: {tool_names}"
 
     def test_hyphen_full_confidence(self):
         """Hyphen-to-underscore should give high confidence."""
