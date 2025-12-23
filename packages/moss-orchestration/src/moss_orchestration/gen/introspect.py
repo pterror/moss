@@ -292,6 +292,8 @@ INTELLIGENCE_MODULES = {
     "weaknesses": "moss_intelligence.weaknesses",
     "edit": "moss_intelligence.edit",
     "summarize": "moss_intelligence.summarize",
+    "scopes": "moss_intelligence.scopes",
+    "test_gaps": "moss_intelligence.test_gaps",
 }
 
 # Modules to introspect from moss-orchestration
