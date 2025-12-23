@@ -5,10 +5,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 ## Next Up
 
 **1. View Primitive Polish**
-- `--visibility public|all` or `--exported` filter for semantic zoom
 - Barrel file hoisting: detect `export * from` and surface re-exported symbols
 - Useless docstring detection: skip "Sets the user id" on `setUserId()`
-- Fisheye for Rust/TypeScript (currently Python-only import resolution)
+- Fisheye for TypeScript (Python and Rust now supported)
 - Selective import resolution (e.g., `--fisheye=moss.config` to expand only that import)
 
 **2. Rust Crate Consolidation**

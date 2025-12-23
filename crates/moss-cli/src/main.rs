@@ -1599,7 +1599,89 @@ fn cmd_view_directory(dir: &Path, root: &Path, depth: i32, json: bool) -> i32 {
     0
 }
 
-/// Try to resolve a Python import module to a local file path
+/// Resolve an import to a local file path based on the source file's language
+fn resolve_import(module: &str, current_file: &Path, root: &Path) -> Option<PathBuf> {
+    let ext = current_file.extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ext {
+        "py" => resolve_python_import(module, current_file, root),
+        "rs" => resolve_rust_import(module, current_file, root),
+        // TypeScript/JavaScript would go here
+        _ => None,
+    }
+}
+
+/// Resolve a Rust import to a local file path
+/// Only resolves crate-local imports (crate::, self::, super::)
+fn resolve_rust_import(module: &str, current_file: &Path, root: &Path) -> Option<PathBuf> {
+    // Find the crate root (directory containing Cargo.toml)
+    let crate_root = find_crate_root(current_file, root)?;
+
+    if module.starts_with("crate::") {
+        // crate::foo::bar -> src/foo/bar.rs or src/foo/bar/mod.rs
+        let path_part = module.strip_prefix("crate::")?.replace("::", "/");
+        let src_dir = crate_root.join("src");
+
+        // Try foo/bar.rs
+        let direct = src_dir.join(format!("{}.rs", path_part));
+        if direct.exists() {
+            return Some(direct);
+        }
+
+        // Try foo/bar/mod.rs
+        let mod_file = src_dir.join(&path_part).join("mod.rs");
+        if mod_file.exists() {
+            return Some(mod_file);
+        }
+    } else if module.starts_with("super::") {
+        // super::foo -> parent directory's foo
+        let current_dir = current_file.parent()?;
+        let parent_dir = current_dir.parent()?;
+        let path_part = module.strip_prefix("super::")?.replace("::", "/");
+
+        // Try parent/foo.rs
+        let direct = parent_dir.join(format!("{}.rs", path_part));
+        if direct.exists() {
+            return Some(direct);
+        }
+
+        // Try parent/foo/mod.rs
+        let mod_file = parent_dir.join(&path_part).join("mod.rs");
+        if mod_file.exists() {
+            return Some(mod_file);
+        }
+    } else if module.starts_with("self::") {
+        // self::foo -> same directory's foo
+        let current_dir = current_file.parent()?;
+        let path_part = module.strip_prefix("self::")?.replace("::", "/");
+
+        // Try foo.rs
+        let direct = current_dir.join(format!("{}.rs", path_part));
+        if direct.exists() {
+            return Some(direct);
+        }
+
+        // Try foo/mod.rs
+        let mod_file = current_dir.join(&path_part).join("mod.rs");
+        if mod_file.exists() {
+            return Some(mod_file);
+        }
+    }
+
+    None
+}
+
+/// Find the crate root by looking for Cargo.toml
+fn find_crate_root(start: &Path, root: &Path) -> Option<PathBuf> {
+    let mut current = start.parent()?;
+    while current.starts_with(root) {
+        if current.join("Cargo.toml").exists() {
+            return Some(current.to_path_buf());
+        }
+        current = current.parent()?;
+    }
+    None
+}
+
 fn resolve_python_import(module: &str, current_file: &Path, root: &Path) -> Option<PathBuf> {
     // Handle relative imports (starting with .)
     if module.starts_with('.') {
@@ -1810,7 +1892,7 @@ fn cmd_view_file(
             // Collect resolved imports
             let mut resolved: Vec<(String, PathBuf)> = Vec::new();
             for imp in &deps.imports {
-                if let Some(resolved_path) = resolve_python_import(&imp.module, &full_path, root) {
+                if let Some(resolved_path) = resolve_import(&imp.module, &full_path, root) {
                     // Make path relative to root
                     if let Ok(rel_path) = resolved_path.strip_prefix(root) {
                         resolved.push((imp.module.clone(), rel_path.to_path_buf()));
@@ -1853,7 +1935,7 @@ fn cmd_view_file(
                     continue; // Skip bare "import x" statements
                 }
 
-                if let Some(resolved_path) = resolve_python_import(&imp.module, &full_path, root) {
+                if let Some(resolved_path) = resolve_import(&imp.module, &full_path, root) {
                     if let Ok(import_content) = std::fs::read_to_string(&resolved_path) {
                         let mut import_extractor = skeleton::SkeletonExtractor::new();
                         let import_skeleton = import_extractor.extract(&resolved_path, &import_content);

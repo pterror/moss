@@ -10,6 +10,7 @@
   - Works with all skeleton output (Python, Rust, TypeScript, etc.)
 - `--fisheye` mode: shows target file at full detail, plus skeletons of imported modules
   - Resolves Python imports (relative and absolute) to local files
+  - Resolves Rust crate-local imports (`crate::`, `self::`, `super::`)
   - Shows imported module skeletons at signature level (depth 1)
   - Combines with `--types-only` for types-only fisheye view
 - `--resolve-imports`: shows only the specific imported symbols (more focused than fisheye)
