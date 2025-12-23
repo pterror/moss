@@ -79,22 +79,20 @@ def my_function():
 """)
         return py_file
 
-    @pytest.mark.skip(reason="find_anchors requires both source and anchor params")
     async def test_finds_anchors(self, tools, python_file: Path):
         result = await _execute_tool(
             "anchors_find_anchors",
-            {"file_path": str(python_file)},
+            {"file_path": str(python_file), "anchor": "function:my_function"},
             tools,
         )
 
         assert isinstance(result, list)
-        assert len(result) >= 1  # Should find MyClass and my_function
+        assert len(result) >= 1  # Should find my_function
 
-    @pytest.mark.skip(reason="resolve_anchor requires both source and anchor params")
     async def test_resolves_anchor(self, tools, python_file: Path, tmp_path: Path):
         result = await _execute_tool(
             "anchors_resolve_anchor",
-            {"root": str(tmp_path), "anchor": "sample.py/my_function"},
+            {"file_path": str(python_file), "anchor": "function:my_function"},
             tools,
         )
 
@@ -305,21 +303,6 @@ def my_function(x: int) -> int:
 
         assert isinstance(serialized, str), f"Expected str, got {type(serialized)}: {serialized!r}"
         assert "os" in serialized or "pathlib" in serialized
-        # Should NOT be JSON-wrapped
-        assert not serialized.startswith("{")
-
-    @pytest.mark.skip(reason="health_check tool not implemented")
-    async def test_health_check_returns_compact_string(self, tools, tmp_path: Path):
-        """health_check should return a compact string with status info."""
-        # Create a minimal project
-        (tmp_path / "sample.py").write_text("def foo(): pass")
-
-        result = await _execute_tool("health_check", {"root": str(tmp_path)}, tools)
-        serialized = _serialize_result(result)
-
-        assert isinstance(serialized, str), f"Expected str, got {type(serialized)}: {serialized!r}"
-        # Should be compact format: "status: X (Y%) | ..."
-        assert "status:" in serialized or "|" in serialized
         # Should NOT be JSON-wrapped
         assert not serialized.startswith("{")
 

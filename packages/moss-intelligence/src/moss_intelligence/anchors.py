@@ -27,6 +27,35 @@ class Anchor:
     context: str | None = None  # Parent class/function name
     signature: str | None = None  # For disambiguation (e.g., arg types)
 
+    @classmethod
+    def parse(cls, anchor_str: str) -> Anchor:
+        """Parse an anchor string like 'function:my_func' or 'class:MyClass'.
+
+        Format: type:name or type:context.name
+        """
+        if ":" not in anchor_str:
+            # Default to function type
+            return cls(type=AnchorType.FUNCTION, name=anchor_str)
+
+        type_str, rest = anchor_str.split(":", 1)
+        type_str = type_str.upper()
+
+        # Parse type
+        try:
+            anchor_type = AnchorType[type_str]
+        except KeyError:
+            # Try common aliases
+            type_map = {"FUNC": AnchorType.FUNCTION, "DEF": AnchorType.FUNCTION}
+            anchor_type = type_map.get(type_str, AnchorType.FUNCTION)
+
+        # Parse name and optional context (e.g., "MyClass.my_method")
+        if "." in rest:
+            context, name = rest.rsplit(".", 1)
+        else:
+            context, name = None, rest
+
+        return cls(type=anchor_type, name=name, context=context)
+
 
 @dataclass
 class AnchorMatch:

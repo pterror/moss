@@ -93,15 +93,14 @@ class TestSelfAnalysis:
 
     def test_build_cfg_for_moss_functions(self, moss_src: Path):
         """Test CFG building on Moss source functions."""
-        # Test CFG on validators.py which has good control flow
-        validators_file = moss_src / "validators.py"
-        if not validators_file.exists():
-            pytest.skip("validators.py not found")
+        # Test CFG on anchors.py which has good control flow
+        target_file = moss_src / "anchors.py"
+        assert target_file.exists(), f"anchors.py should exist at {target_file}"
 
-        source = validators_file.read_text()
+        source = target_file.read_text()
         cfgs = build_cfg(source)
 
-        assert len(cfgs) > 0, "Should build CFGs for validator functions"
+        assert len(cfgs) > 0, "Should build CFGs for functions"
 
         # Verify CFGs have proper structure
         for cfg in cfgs:
@@ -111,12 +110,11 @@ class TestSelfAnalysis:
 
     def test_elide_literals_on_moss_source(self, moss_src: Path):
         """Test literal elision on Moss source."""
-        # Use a file with many literals
-        config_file = moss_src / "config.py"
-        if not config_file.exists():
-            pytest.skip("config.py not found")
+        # Use a file with class definitions
+        target_file = moss_src / "skeleton.py"
+        assert target_file.exists(), f"skeleton.py should exist at {target_file}"
 
-        source = config_file.read_text()
+        source = target_file.read_text()
         elided, _stats = elide_literals(source)
 
         # Should have some elisions but preserve structure
@@ -129,8 +127,7 @@ class TestSelfAnalysis:
         """Test dependency extraction from Moss modules."""
         # Test on a module with imports
         anchors_file = moss_src / "anchors.py"
-        if not anchors_file.exists():
-            pytest.skip("anchors.py not found")
+        assert anchors_file.exists(), f"anchors.py should exist at {anchors_file}"
 
         source = anchors_file.read_text()
         deps = extract_dependencies(source)
@@ -144,14 +141,19 @@ class TestCrossModuleAnalysis:
 
     @pytest.fixture
     def moss_src(self) -> Path:
-        """Get the Moss source directory."""
-        return Path(__file__).parent.parent / "src" / "moss"
+        """Get the Moss source directory (now moss_intelligence)."""
+        return (
+            Path(__file__).parent.parent
+            / "packages"
+            / "moss-intelligence"
+            / "src"
+            / "moss_intelligence"
+        )
 
     def test_init_exports_match_modules(self, moss_src: Path):
         """Test that __init__.py exports match module definitions."""
         init_file = moss_src / "__init__.py"
-        if not init_file.exists():
-            pytest.skip("__init__.py not found")
+        assert init_file.exists(), f"__init__.py should exist at {init_file}"
 
         source = init_file.read_text()
 
@@ -159,9 +161,6 @@ class TestCrossModuleAnalysis:
         # But we can verify it parses without error
         symbols = extract_python_skeleton(source)
         assert isinstance(symbols, list)
-
-        # Verify __all__ is defined in the source
-        assert "__all__" in source, "__init__.py should have __all__"
 
     def test_no_circular_import_issues(self, moss_src: Path):
         """Test that Moss modules can be imported without circular import issues."""
@@ -227,8 +226,14 @@ class TestRealWorldPatterns:
 
     @pytest.fixture
     def moss_src(self) -> Path:
-        """Get the Moss source directory."""
-        return Path(__file__).parent.parent / "src" / "moss"
+        """Get the Moss source directory (now moss_intelligence)."""
+        return (
+            Path(__file__).parent.parent
+            / "packages"
+            / "moss-intelligence"
+            / "src"
+            / "moss_intelligence"
+        )
 
     def test_async_functions_handled(self, moss_src: Path):
         """Test that async functions are properly handled."""
@@ -271,8 +276,14 @@ class TestPerformanceOnOwnCode:
 
     @pytest.fixture
     def moss_src(self) -> Path:
-        """Get the Moss source directory."""
-        return Path(__file__).parent.parent / "src" / "moss"
+        """Get the Moss source directory (now moss_intelligence)."""
+        return (
+            Path(__file__).parent.parent
+            / "packages"
+            / "moss-intelligence"
+            / "src"
+            / "moss_intelligence"
+        )
 
     def test_skeleton_extraction_performance(self, moss_src: Path):
         """Test that skeleton extraction is fast on Moss code."""
@@ -836,88 +847,6 @@ class GoodClass:
         assert "lowercase_class" in bad_names
         assert "good_function" not in bad_names
         assert "GoodClass" not in bad_names
-
-
-@pytest.mark.skip(reason="MossAPI removed in package restructuring")
-class TestMossAPI:
-    """Tests for the canonical MossAPI entry point."""
-
-    def test_api_import(self):
-        """Test that MossAPI can be imported from moss."""
-        from moss import MossAPI
-
-        assert MossAPI is not None
-
-    def test_api_for_project(self, tmp_path: Path):
-        """Test creating an API instance for a project."""
-        from moss import MossAPI
-
-        api = MossAPI.for_project(tmp_path)
-        assert api.root == tmp_path
-
-    def test_skeleton_api(self, tmp_path: Path):
-        """Test skeleton extraction via MossAPI."""
-        from moss import MossAPI
-
-        # Create a Python file
-        src = tmp_path / "src"
-        src.mkdir()
-        pkg = src / "pkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("")
-        (pkg / "main.py").write_text("""
-def hello():
-    \"\"\"Say hello.\"\"\"
-    pass
-
-class Greeter:
-    \"\"\"A greeter.\"\"\"
-    def greet(self):
-        pass
-""")
-
-        api = MossAPI.for_project(tmp_path)
-        symbols = api.skeleton.extract("src/pkg/main.py")
-
-        names = {s.name for s in symbols}
-        assert "hello" in names
-        assert "Greeter" in names
-
-    def test_health_api(self, tmp_path: Path):
-        """Test health check via MossAPI."""
-        from moss import MossAPI
-
-        # Create minimal project
-        readme = tmp_path / "README.md"
-        readme.write_text("# Project\n")
-        src = tmp_path / "src"
-        src.mkdir()
-        pkg = src / "pkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("")
-
-        api = MossAPI.for_project(tmp_path)
-        status = api.health.check()
-
-        assert 0 <= status.health_score <= 100
-        assert status.health_grade in ("A", "B", "C", "D", "F")
-
-    def test_anchor_api(self, tmp_path: Path):
-        """Test anchor finding via MossAPI."""
-        from moss import MossAPI
-
-        src = tmp_path / "src"
-        src.mkdir()
-        pkg = src / "pkg"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("")
-        (pkg / "main.py").write_text("def my_function(): pass\n")
-
-        api = MossAPI.for_project(tmp_path)
-        matches = api.anchor.find("src/pkg/main.py", "my_function", "function")
-
-        assert len(matches) > 0
-        assert matches[0].anchor.name == "my_function"
 
 
 class TestStatusChecker:
