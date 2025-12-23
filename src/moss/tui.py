@@ -119,18 +119,24 @@ class DiffMode:
         app._update_tree("task")
 
 
-class SessionMode:
-    name = "Session"
+class TasksMode:
+    """Unified task view showing all work (sessions, workflows, agents)."""
+
+    name = "Tasks"
     color = "yellow"
-    placeholder = "Manage sessions... (resume <id> to continue)"
+    placeholder = "View all tasks..."
     bindings: ClassVar[list] = []
 
     async def on_enter(self, app: MossTUI) -> None:
         app.query_one("#log-view").display = False
         app.query_one("#git-view").display = False
         app.query_one("#session-view").display = True
-        app.query_one("#content-header").update("Sessions")
-        await app._update_session_view()
+        app.query_one("#content-header").update("Tasks")
+        await app._update_task_view()
+
+
+# Backwards compatibility alias
+SessionMode = TasksMode
 
 
 class AgentMode(Enum):
@@ -235,7 +241,7 @@ class ModeRegistry:
         ExploreMode,  # Default mode - tree + primitives
         PlanMode,
         DiffMode,
-        SessionMode,
+        TasksMode,  # Unified task view (sessions, workflows, agents)
         BranchMode,
         SwarmMode,
         CommitMode,
@@ -1390,6 +1396,22 @@ class MossTUI(App):
         self.current_mode_name = next_mode.name
         self._log(f"Switched to {self.current_mode_name} mode")
 
+    def action_resume_task(self, task_id: str) -> None:
+        """Resume a task by ID."""
+        from moss.session import SessionManager
+
+        manager = SessionManager(self.api.root / ".moss" / "sessions")
+        task = manager.get(task_id)
+        if task:
+            self._log(f"Resuming task: {task.task[:50]}")
+            self._log(f"Shadow branch: {task.shadow_branch}")
+            # In a full implementation, this would:
+            # 1. Checkout the shadow branch
+            # 2. Load the task's context
+            # 3. Resume the agent loop
+        else:
+            self._log(f"Task not found: {task_id}")
+
     def action_toggle_transparency(self) -> None:
         """Toggle transparent background for terminal opacity support."""
         self._transparent_bg = not getattr(self, "_transparent_bg", False)
@@ -1472,28 +1494,61 @@ class MossTUI(App):
             history.clear()
             history.root.label = "Error"
 
-    async def _update_session_view(self) -> None:
-        """Fetch and display past sessions."""
+    async def _update_task_view(self) -> None:
+        """Fetch and display all tasks (unified: sessions, workflows, agents)."""
         try:
-            # For this TUI we want the full list, so let's use SessionManager directly
-            from moss.session import SessionManager
+            from moss.session import SessionManager, SessionStatus
 
             manager = SessionManager(self.api.root / ".moss" / "sessions")
-            sessions = manager.list_sessions()
+            root_tasks = manager.list_root_tasks()
 
             tree = self.query_one("#session-tree")
             tree.clear()
             root = tree.root
-            root.label = f"Sessions ({len(sessions)})"
+            root.label = f"Tasks ({len(root_tasks)})"
 
-            for s in sessions:
-                label = f"[@click=app.navigate('{s.id}')]{s.id}[/]: {s.task[:50]}"
-                if len(s.task) > 50:
-                    label += "..."
-                root.add_leaf(label)
+            # Status icons
+            status_icon = {
+                SessionStatus.CREATED: "○",
+                SessionStatus.RUNNING: "●",
+                SessionStatus.PAUSED: "◐",
+                SessionStatus.COMPLETED: "✓",
+                SessionStatus.FAILED: "✗",
+                SessionStatus.CANCELLED: "⊘",
+            }
+
+            def add_task_node(parent_node: Any, task: Any, indent: int = 0) -> None:
+                """Recursively add task and its children to tree."""
+                icon = status_icon.get(task.status, "?")
+                task_desc = task.task[:40] if task.task else "(no description)"
+                if len(task.task) > 40:
+                    task_desc += "..."
+
+                # Color based on driver (cyan=user, magenta=agent)
+                color = "cyan" if task.driver.name == "USER" else "magenta"
+                click = f"[@click=app.resume_task('{task.id}')]"
+                label = f"{icon} {click}[{color}]{task.id}[/][/]: {task_desc}"
+
+                if task.children:
+                    # Has children - add as expandable node
+                    node = parent_node.add(label)
+                    for child_id in task.children:
+                        child = manager.get(child_id)
+                        if child:
+                            add_task_node(node, child, indent + 1)
+                else:
+                    # Leaf task
+                    parent_node.add_leaf(label)
+
+            for task in root_tasks:
+                add_task_node(root, task)
+
             root.expand()
         except Exception as e:
-            self._log(f"Failed to fetch session data: {e}")
+            self._log(f"Failed to fetch task data: {e}")
+
+    # Backwards compatibility alias
+    _update_session_view = _update_task_view
 
     async def _update_swarm_view(self) -> None:
         """Fetch and display multi-agent swarm status."""
