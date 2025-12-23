@@ -4,38 +4,24 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs. See `docs/do
 
 ## Next Up
 
-**Package Restructuring** (see `docs/restructuring-plan.md`, `docs/api-boundaries.md`)
+**Package Consolidation** (see `docs/restructuring-plan.md`, `docs/api-boundaries.md`)
 
-Phase 1: Extract moss-intelligence
-- [ ] Create `packages/moss-intelligence/` with pyproject.toml
-- [ ] Move core analysis modules (skeleton, tree, complexity, security, deps, etc.)
-- [ ] Define public API surface (Intelligence class)
-- [ ] Update imports in remaining moss code
+Packages scaffolded in `packages/`:
+- moss-intelligence: Code analysis (skeleton, complexity, security, deps)
+- moss-context: Working memory (domain-agnostic)
+- moss-orchestration: Agent loops, sessions, drivers
+- moss-llm: litellm adapters (LLMSummarizer, LLMDecider)
+- moss-mcp, moss-lsp, moss-tui, moss-acp: Frontend wrappers
 
-Phase 2: Extract moss-context
-- [ ] Create `packages/moss-context/` with pyproject.toml
-- [ ] Move context/memory modules (context.py, context_memory.py, cache.py)
-- [ ] Define WorkingMemory API and protocols (Summarizer, etc.)
-- [ ] Make it domain-agnostic (no code-specific logic)
+Remaining work:
+- [ ] Fix moss.* imports in moss-orchestration (still references old locations)
+- [ ] Wire main moss package to use sub-packages
+- [ ] Add integration tests for package boundaries
+- [ ] Update pyproject.toml to depend on sub-packages
 
-Phase 3: Extract moss-orchestration
-- [ ] Create `packages/moss-orchestration/` with pyproject.toml
-- [ ] Move agent/session modules (drivers, execution, session, shadow_git)
-- [ ] Define Agent/Session/Driver protocols
-- [ ] Wire to use moss-intelligence and moss-context
-
-Phase 4: Extract moss-llm
-- [ ] Create `packages/moss-llm/` with pyproject.toml
-- [ ] Add litellm dependency
-- [ ] Implement protocol adapters (LLMSummarizer, LLMDecider)
-
-Phase 5: Extract frontends
-- [ ] moss-mcp, moss-tui, moss-lsp as separate packages
-- [ ] Each imports what it needs, wires together
-
-**Deferred (until after restructuring):**
-- Driver Integration (will be part of moss-orchestration)
-- Call Graph Improvements
+**Deferred:**
+- Driver Integration improvements
+- Call Graph language support
 
 ## Implementation Notes
 

@@ -4,6 +4,21 @@
 
 ### Features
 
+**Package Restructuring** (Dec 23 2025)
+- Extracted core functionality into separate installable packages:
+  - `moss-intelligence`: Code analysis (skeleton, complexity, security, deps, clones)
+  - `moss-context`: Generic working memory (domain-agnostic, token-budgeted)
+  - `moss-orchestration`: Agent loops, sessions, drivers, shadow git
+  - `moss-llm`: LLM adapters using litellm for provider abstraction
+- Created frontend wrapper packages:
+  - `moss-mcp`: MCP server (single-tool and multi-tool modes)
+  - `moss-lsp`: Language Server Protocol for IDE integration
+  - `moss-tui`: Textual-based terminal UI
+  - `moss-acp`: Agent Client Protocol for Zed/JetBrains
+- Clean separation of concerns: code intelligence, context management, orchestration
+- Plugin architecture: core packages define protocols, callers provide implementations
+- See `docs/restructuring-plan.md` and `docs/api-boundaries.md`
+
 **Driver Plugin Architecture** (Dec 23 2025)
 - Unified execution model: all task automation flows through pluggable drivers
 - Driver protocol: `decide_next_step()` and `on_action_complete()`
