@@ -216,6 +216,10 @@ enum Commands {
         /// Show all symbols including private ones (normally filtered by convention)
         #[arg(long)]
         all: bool,
+
+        /// Show full source code (for symbols: complete implementation, for files: raw content)
+        #[arg(long)]
+        full: bool,
     },
 
     /// Edit a node in the codebase tree (structural code modification)
@@ -681,6 +685,7 @@ fn main() {
             focus,
             resolve_imports,
             all,
+            full,
         } => cmd_view(
             target.as_deref(),
             root.as_deref(),
@@ -694,6 +699,7 @@ fn main() {
             focus.as_deref(),
             resolve_imports,
             all,
+            full,
             cli.json,
         ),
         Commands::SearchTree { query, root, limit } => {
@@ -953,6 +959,7 @@ fn cmd_view(
     focus: Option<&str>,
     resolve_imports: bool,
     show_all: bool,
+    full: bool,
     json: bool,
 ) -> i32 {
     let root = root
@@ -997,8 +1004,9 @@ fn cmd_view(
         // View directory
         cmd_view_directory(&root.join(&unified.file_path), &root, depth, json)
     } else if unified.symbol_path.is_empty() {
-        // View file
-        cmd_view_file(&unified.file_path, &root, depth, line_numbers, show_deps, types_only, focus, resolve_imports, show_all, json)
+        // View file (--full overrides depth to show raw content)
+        let effective_depth = if full { -1 } else { depth };
+        cmd_view_file(&unified.file_path, &root, effective_depth, line_numbers, show_deps, types_only, focus, resolve_imports, show_all, json)
     } else {
         // View symbol within file
         cmd_view_symbol(
@@ -1007,6 +1015,7 @@ fn cmd_view(
             &root,
             depth,
             line_numbers,
+            full,
             json,
         )
     }
@@ -2160,6 +2169,7 @@ fn cmd_view_symbol(
     root: &Path,
     depth: i32,
     _line_numbers: bool,
+    full: bool,
     json: bool,
 ) -> i32 {
     let full_path = root.join(file_path);
@@ -2219,6 +2229,37 @@ fn cmd_view_symbol(
 
         if let Some(sym) = find_symbol(&skeleton_result.symbols, symbol_name) {
             let full_symbol_path = format!("{}/{}", file_path, symbol_path.join("/"));
+
+            // When --full is requested, extract source using line numbers
+            if full && sym.start_line > 0 && sym.end_line > 0 {
+                let lines: Vec<&str> = content.lines().collect();
+                let start = (sym.start_line - 1) as usize;
+                let end = std::cmp::min(sym.end_line as usize, lines.len());
+                let source: String = lines[start..end].join("\n");
+
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "type": "symbol",
+                            "path": full_symbol_path,
+                            "file": file_path,
+                            "symbol": symbol_name,
+                            "source": source,
+                            "start_line": sym.start_line,
+                            "end_line": sym.end_line
+                        })
+                    );
+                } else {
+                    if depth >= 0 {
+                        println!("# {}", full_symbol_path);
+                    }
+                    println!("{}", source);
+                }
+                return 0;
+            }
+
+            // Default: show skeleton (signature + docstring)
             if json {
                 println!(
                     "{}",
