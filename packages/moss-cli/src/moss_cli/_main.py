@@ -907,9 +907,9 @@ def cmd_mcp_server(args: Namespace) -> int:
     output = setup_output(args)
     try:
         if getattr(args, "full", False):
-            from moss.mcp_server_full import main as mcp_main
+            from moss_mcp.server_full import main as mcp_main
         else:
-            from moss.mcp_server import main as mcp_main
+            from moss_mcp.server import main as mcp_main
 
         mcp_main()
         return 0
@@ -924,7 +924,7 @@ def cmd_mcp_server(args: Namespace) -> int:
 def cmd_acp_server(args: Namespace) -> int:
     """Start the ACP server for IDE integration (Zed, JetBrains)."""
     try:
-        from moss.acp_server import run_acp_server
+        from moss_acp.server import run_acp_server
 
         run_acp_server()
         return 0
@@ -1122,13 +1122,13 @@ def cmd_lsp(args: Namespace) -> int:
     """Start the LSP server for IDE integration."""
     output = setup_output(args)
     try:
-        from moss.lsp_server import start_server
+        from moss_lsp.server import start_server
 
         transport = getattr(args, "transport", "stdio")
         start_server(transport)
         return 0
     except ImportError as e:
-        output.error("LSP dependencies not installed. Install with: pip install 'moss[lsp]'")
+        output.error("LSP dependencies not installed. Install with: pip install 'moss-lsp'")
         output.debug(f"Details: {e}")
         return 1
     except KeyboardInterrupt:

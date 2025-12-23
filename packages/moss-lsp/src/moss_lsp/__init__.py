@@ -41,12 +41,12 @@ def get_server():
     global _server
     if _server is None:
         try:
-            from moss.lsp_server import create_server
+            from moss_lsp.server import create_server
 
             _server = create_server()
         except ImportError as e:
             raise ImportError(
-                f"Failed to import LSP server. Ensure moss[lsp] is installed: {e}"
+                f"Failed to import LSP server. Ensure moss-lsp is installed: {e}"
             ) from e
     return _server
 
@@ -54,11 +54,11 @@ def get_server():
 def run_server():
     """Entry point for moss-lsp command."""
     try:
-        from moss.lsp_server import main
+        from moss_lsp.server import start_server
 
-        main()
+        start_server()
     except ImportError as e:
-        print(f"Error: LSP dependencies not installed. Install with: pip install 'moss[lsp]'")
+        print(f"Error: LSP dependencies not installed. Install with: pip install 'moss-lsp'")
         print(f"Details: {e}")
         raise SystemExit(1)
 

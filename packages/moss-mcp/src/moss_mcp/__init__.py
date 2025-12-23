@@ -48,12 +48,12 @@ def get_server():
     global _server
     if _server is None:
         try:
-            from moss.mcp_server import create_server
+            from moss_mcp.server import create_server
 
             _server = create_server()
         except ImportError as e:
             raise ImportError(
-                f"Failed to import MCP server. Ensure moss is installed: {e}"
+                f"Failed to import MCP server. Ensure moss-mcp is installed: {e}"
             ) from e
     return _server
 
@@ -63,12 +63,12 @@ def get_server_full():
     global _server_full
     if _server_full is None:
         try:
-            from moss.mcp_server_full import create_server
+            from moss_mcp.server_full import create_server
 
             _server_full = create_server()
         except ImportError as e:
             raise ImportError(
-                f"Failed to import MCP server. Ensure moss is installed: {e}"
+                f"Failed to import MCP server. Ensure moss-mcp is installed: {e}"
             ) from e
     return _server_full
 
@@ -86,11 +86,11 @@ def run_server():
     args = parser.parse_args()
 
     if args.full:
-        from moss.mcp_server_full import main
+        from moss_mcp.server_full import main
 
         main()
     else:
-        from moss.mcp_server import main
+        from moss_mcp.server import main
 
         main()
 

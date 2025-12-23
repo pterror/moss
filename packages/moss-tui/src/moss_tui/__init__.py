@@ -42,12 +42,12 @@ def get_app(project_root: Path | None = None):
         MossApp instance ready to run.
     """
     try:
-        from moss.tui import MossApp
+        from moss_tui.app import MossApp
 
         return MossApp(project_root=project_root)
     except ImportError as e:
         raise ImportError(
-            f"Failed to import TUI. Ensure moss[tui] is installed: {e}"
+            f"Failed to import TUI. Ensure moss-tui is installed: {e}"
         ) from e
 
 

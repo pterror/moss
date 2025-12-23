@@ -14,11 +14,14 @@ Completed:
 - [x] moss-orchestration recovered modules (events, validators, synthesis, gen, etc.)
 - [x] moss-context recovered modules (context, context_memory, memory)
 - [x] All imports fixed across sub-packages
+- [x] Frontend server files recovered: moss-mcp (server.py, server_full.py), moss-lsp, moss-acp
+- [x] Frontend package imports fixed (MCP, LSP, ACP servers work)
 
 Remaining:
-- [ ] Frontend packages need server files: moss-mcp, moss-lsp, moss-tui, moss-acp
+- [ ] TUI depends on deleted MossAPI/core_api (3 imports to resolve)
+- [ ] CLI commands using MossAPI need refactoring (many commands)
 - [ ] Tests: update all imports from moss.* to sub-packages (60 test files)
-- [ ] Verify packages can be installed and CLI works
+- [ ] Verify CLI commands work end-to-end
 
 **Deferred:**
 - Driver integration improvements

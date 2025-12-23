@@ -47,12 +47,12 @@ def get_server():
     global _server
     if _server is None:
         try:
-            from moss.acp_server import ACPServer
+            from moss_acp.server import ACPServer
 
             _server = ACPServer()
         except ImportError as e:
             raise ImportError(
-                f"Failed to import ACP server. Ensure moss is installed: {e}"
+                f"Failed to import ACP server. Ensure moss-acp is installed: {e}"
             ) from e
     return _server
 
@@ -60,9 +60,9 @@ def get_server():
 def run_server():
     """Entry point for moss-acp command."""
     try:
-        from moss.acp_server import main
+        from moss_acp.server import run_acp_server
 
-        main()
+        run_acp_server()
     except ImportError as e:
         print(f"Error: Failed to import ACP server: {e}")
         raise SystemExit(1)
