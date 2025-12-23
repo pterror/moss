@@ -67,7 +67,7 @@ class TUIMode(Protocol):
 
 
 class PlanMode:
-    name = "PLAN"
+    name = "Plan"
     color = "blue"
     placeholder = "What is the plan? (e.g. breakdown...)"
     bindings: ClassVar[list] = []
@@ -80,7 +80,7 @@ class PlanMode:
 
 
 class ReadMode:
-    name = "READ"
+    name = "Read"
     color = "green"
     placeholder = "Explore codebase... (e.g. skeleton, grep, expand)"
     bindings: ClassVar[list] = []
@@ -93,7 +93,7 @@ class ReadMode:
 
 
 class WriteMode:
-    name = "WRITE"
+    name = "Write"
     color = "red"
     placeholder = "Modify code... (e.g. write, replace, insert)"
     bindings: ClassVar[list] = []
@@ -106,7 +106,7 @@ class WriteMode:
 
 
 class DiffMode:
-    name = "DIFF"
+    name = "Diff"
     color = "magenta"
     placeholder = "Review changes... (revert <file> <line> to undo)"
     bindings: ClassVar[list] = []  # Future: r=revert, a=accept, n=next, p=prev
@@ -120,7 +120,7 @@ class DiffMode:
 
 
 class SessionMode:
-    name = "SESSION"
+    name = "Session"
     color = "yellow"
     placeholder = "Manage sessions... (resume <id> to continue)"
     bindings: ClassVar[list] = []
@@ -147,7 +147,7 @@ class AgentMode(Enum):
 
 
 class BranchMode:
-    name = "BRANCH"
+    name = "Branch"
     color = "cyan"
     placeholder = "Manage branches... (branch <name> to switch)"
     bindings: ClassVar[list] = []
@@ -161,7 +161,7 @@ class BranchMode:
 
 
 class SwarmMode:
-    name = "SWARM"
+    name = "Swarm"
     color = "white"
     placeholder = "Manage swarm... (wait for workers to complete)"
     bindings: ClassVar[list] = []
@@ -176,7 +176,7 @@ class SwarmMode:
 
 
 class CommitMode:
-    name = "COMMIT"
+    name = "Commit"
     color = "green"
     placeholder = "Review commit actions... (select a hunk to view)"
     bindings: ClassVar[list] = []
@@ -193,7 +193,7 @@ class CommitMode:
 class ExploreMode:
     """Unified exploration mode using tree + three primitives (view/edit/analyze)."""
 
-    name = "EXPLORE"
+    name = "Explore"
     color = "cyan"
     placeholder = ""
     bindings: ClassVar[list] = []  # View/Edit/Analyze already in global bindings
@@ -355,7 +355,7 @@ class ModeRegistry:
 class ModeIndicator(Static):
     """Widget to display the current agent mode."""
 
-    mode_name = reactive("PLAN")
+    mode_name = reactive("Plan")
     mode_color = reactive("blue")
 
     def render(self) -> str:
@@ -404,7 +404,7 @@ class KeybindBar(Static):
         left = " ".join(parts)
 
         # Mode indicator + Palette on the right
-        mode_name = getattr(self.app, "current_mode_name", "EXPLORE") if self.app else "EXPLORE"
+        mode_name = getattr(self.app, "current_mode_name", "Explore") if self.app else "Explore"
         mode = self.app._mode_registry.get_mode(mode_name) if self.app else None
         mode_color = getattr(mode, "color", "cyan") if mode else "cyan"
         mode_indicator = f"\\[Tab] [{mode_color}]{mode_name}[/]"
@@ -913,7 +913,7 @@ class MossTUI(App):
         Binding("right", "tree_expand", "Expand", show=False),
     ]
 
-    current_mode_name = reactive("EXPLORE")
+    current_mode_name = reactive("Explore")
 
     @property
     def active_bindings(self) -> list[Binding]:
@@ -1126,13 +1126,21 @@ class MossTUI(App):
 
     async def _update_branch_view(self) -> None:
         """Fetch and display all shadow branches."""
+        tree = self.query_one("#history-tree")
+        diff_view = self.query_one("#diff-view")
+
         try:
             branches = await self.api.shadow_git.list_branches()
-            tree = self.query_one("#history-tree")
             tree.clear()
             root = tree.root
-            root.label = f"Shadow Branches ({len(branches)})"
 
+            if not branches:
+                root.label = "No shadow branches"
+                diff_view.clear()
+                diff_view.write("[dim]No shadow branches yet.[/]\n\nStart a task to track changes.")
+                return
+
+            root.label = f"Shadow Branches ({len(branches)})"
             for b in branches:
                 label = f"[@click=app.navigate_branch('{b}')]{b}[/]"
                 root.add_leaf(label)
@@ -1140,10 +1148,16 @@ class MossTUI(App):
 
             # Show current diff in diff-view
             diff = await self.api.shadow_git.get_diff("shadow/current")
-            self.query_one("#diff-view").clear()
-            self.query_one("#diff-view").write(diff)
+            diff_view.clear()
+            if diff.strip():
+                diff_view.write(diff)
+            else:
+                diff_view.write("[dim]No changes on current branch.[/]")
         except Exception as e:
-            self._log(f"Failed to fetch branch data: {e}")
+            tree.clear()
+            tree.root.label = "Error"
+            diff_view.clear()
+            diff_view.write(f"[red]Error loading branches:[/] {e}")
 
     def navigate_branch(self, branch_name: str) -> None:
         """Switch to a specific branch and update view."""
@@ -1306,8 +1320,8 @@ class MossTUI(App):
             tooltip.file_path = None
             tooltip.content = ""
 
-        # Auto-update preview on arrow navigation in EXPLORE mode (throttled)
-        if self.current_mode_name == "EXPLORE" and data["type"] in ("file", "symbol"):
+        # Auto-update preview on arrow navigation in Explore mode (throttled)
+        if self.current_mode_name == "Explore" and data["type"] in ("file", "symbol"):
             import time
 
             now = time.time() * 1000  # ms
@@ -1325,8 +1339,8 @@ class MossTUI(App):
             path = data["path"]
             self._selected_path = str(path)
             self._selected_type = "file"
-            # In EXPLORE mode, double-click triggers view
-            if self.current_mode_name == "EXPLORE":
+            # In Explore mode, double-click triggers view
+            if self.current_mode_name == "Explore":
                 self.action_primitive_view()
             else:
                 self._log(f"Opened file: {path.name}")
@@ -1339,7 +1353,7 @@ class MossTUI(App):
             path_str = str(path)
             self._selected_type = "dir"
             # Double-click detection: navigate on second click within 0.5s
-            if self.current_mode_name == "EXPLORE":
+            if self.current_mode_name == "Explore":
                 import time
 
                 now = time.time()
@@ -1358,7 +1372,7 @@ class MossTUI(App):
             self._selected_type = "symbol"
             self._selected_symbol = symbol  # Keep symbol object for markdown headings
             self._selected_file = path
-            if self.current_mode_name == "EXPLORE":
+            if self.current_mode_name == "Explore":
                 self.action_primitive_view()
             else:
                 self._log(f"Symbol: {symbol.name} at {path.name}:{symbol.lineno}")
@@ -1420,20 +1434,32 @@ class MossTUI(App):
 
     async def _update_git_view(self) -> None:
         """Fetch and display shadow git data."""
+        diff_view = self.query_one("#diff-view")
+        history = self.query_one("#history-tree")
+
         try:
+            # Check if any shadow branches exist
+            branches = await self.api.shadow_git.list_branches()
+            if not branches:
+                diff_view.clear()
+                diff_view.write("[dim]No shadow branches yet.[/]\n\nStart a task to track changes.")
+                history.clear()
+                history.root.label = "No changes"
+                return
+
             # Get current shadow branch diff
-            # In a real TUI we'd track the current branch
             diff = await self.api.shadow_git.get_diff("shadow/current")
-            diff_view = self.query_one("#diff-view")
             diff_view.clear()
-            diff_view.write(diff)
+            if diff.strip():
+                diff_view.write(diff)
+            else:
+                diff_view.write("[dim]No changes on current branch.[/]")
 
             # Update history (hunks)
             hunks = await self.api.shadow_git.get_hunks("shadow/current")
-            history = self.query_one("#history-tree")
             history.clear()
             root = history.root
-            root.label = "Current Hunks"
+            root.label = f"Current Hunks ({len(hunks)})"
             for hunk in hunks:
                 symbol = hunk["symbol"] or "no symbol"
                 path = hunk["file_path"]
@@ -1441,7 +1467,10 @@ class MossTUI(App):
                 root.add_leaf(label)
             root.expand()
         except Exception as e:
-            self._log(f"Failed to fetch git data: {e}")
+            diff_view.clear()
+            diff_view.write(f"[red]Error loading diff:[/] {e}")
+            history.clear()
+            history.root.label = "Error"
 
     async def _update_session_view(self) -> None:
         """Fetch and display past sessions."""
@@ -1504,8 +1533,8 @@ class MossTUI(App):
             self.exit()
             return
 
-        # In EXPLORE mode, parse and route primitive commands
-        if self.current_mode_name == "EXPLORE":
+        # In Explore mode, parse and route primitive commands
+        if self.current_mode_name == "Explore":
             self._handle_explore_command(command)
         else:
             self._log(f"[{self.current_mode_name}] {command}")
