@@ -228,20 +228,20 @@ This gives LangGraph:
                          Frontends (wire everything)
                     ┌────────────────────────────────────┐
                     │  moss-tui, moss-mcp, moss-langgraph │
-                    │         ↓ imports ↓                │
-                    │   LLM (anthropic, openai, etc.)    │
                     └─────┬──────────┬──────────┬────────┘
                           │          │          │
+                          │          v          │
+                          │      moss-llm ──────┼──→ anthropic, openai, etc.
+                          │     (LLM impls)     │
          ┌────────────────┘          │          └────────────────┐
          v                           v                           v
   moss-orchestration           moss-context            moss-intelligence
-  (protocols only,             (protocols only,              │
-   no LLM dep)                  no LLM dep)                  │
+  (protocols only)             (protocols only)              │
                                                              v
                                                         (Rust CLI)
 ```
 
-**Core packages define protocols. Frontends plug in implementations.**
+**Core packages define protocols. moss-llm provides implementations. Frontends wire together.**
 
 LangGraph-specific:
 ```
@@ -295,7 +295,7 @@ Different tools, can share name or not. Structural edit stays "edit", not "patch
 
 ### LLM as Plugin (Everywhere)
 
-LLM is outside all core packages. Each defines protocols, frontends plug in implementations.
+LLM is outside all core packages. Each defines protocols, `moss-llm` provides implementations.
 
 ```python
 # moss-context: defines protocol
@@ -305,29 +305,69 @@ class Summarizer(Protocol):
 # moss-orchestration: defines protocol
 class DecisionMaker(Protocol):
     async def decide(self, context: Context) -> Action: ...
+```
 
-# Frontend (e.g., moss-tui) wires everything together
+**moss-llm** - Utility package providing LLM-backed implementations via litellm:
+
+```python
+# moss-llm: implements protocols using litellm (provider-agnostic)
+from moss_llm import LLMSummarizer, LLMDecider
+import litellm
+
+class LLMSummarizer:
+    """Implements Summarizer protocol using litellm."""
+    def __init__(self, model: str = "claude-3-haiku-20240307"):
+        self.model = model
+
+    def summarize(self, items: list[str]) -> str:
+        prompt = f"Summarize concisely:\n{chr(10).join(items)}"
+        response = litellm.completion(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+
+class LLMDecider:
+    """Implements DecisionMaker protocol using litellm."""
+    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+        self.model = model
+
+    async def decide(self, context: Context) -> Action:
+        response = await litellm.acompletion(
+            model=self.model,
+            messages=[...]
+        )
+        # ... parse response into Action
+```
+
+**Frontend wires everything together:**
+
+```python
+# moss-tui (or any frontend)
 from moss_intelligence import Intelligence
 from moss_context import WorkingMemory
 from moss_orchestration import Agent
-from anthropic import Anthropic  # or whatever
+from moss_llm import LLMSummarizer, LLMDecider
 
-llm = Anthropic()
+# Just set env vars for provider auth
+# ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
 
 memory = WorkingMemory(
-    summarizer=LLMSummarizer(llm)  # Plug in LLM
+    summarizer=LLMSummarizer(model="claude-3-haiku-20240307")
 )
 
 agent = Agent(
-    intelligence=intel,
+    intelligence=Intelligence(root),
     memory=memory,
-    decision_maker=LLMDecider(llm)  # Plug in LLM
+    decision_maker=LLMDecider(model="claude-sonnet-4-20250514")
 )
 ```
 
-**Result**: Core packages have no LLM dependency. Frontends import what they need and wire together.
-
-This is plugin architecture - each package defines extension points, apps compose them.
+**Result**:
+- Core packages (intelligence, context, orchestration) have no LLM dependency
+- moss-llm uses litellm for provider abstraction
+- Switch providers by changing model string, not code
+- Frontends can use moss-llm or provide custom protocol implementations
 
 ## Open Questions
 
