@@ -11,7 +11,9 @@
 - `--fisheye` mode: shows target file at full detail, plus skeletons of imported modules
   - Resolves Python imports (relative and absolute) to local files
   - Resolves Rust crate-local imports (`crate::`, `self::`, `super::`)
+  - Resolves TypeScript/JavaScript imports (relative paths with extension inference)
   - Shows imported module skeletons at signature level (depth 1)
+  - Barrel file hoisting: traces through re-exports (`export * from`, `export { x } from`)
   - Combines with `--types-only` for types-only fisheye view
 - `--resolve-imports`: shows only the specific imported symbols (more focused than fisheye)
   - Lists each imported symbol with its signature, grouped by module
