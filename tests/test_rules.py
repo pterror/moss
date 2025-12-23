@@ -385,7 +385,7 @@ message = "msg"
     def test_load_from_pyproject(self, tmp_path: Path):
         (tmp_path / "pyproject.toml").write_text("""
 [tool.moss]
-[[tool.moss_orchestration.rules]]
+[[tool.moss.rules]]
 name = "from-pyproject"
 pattern = "y"
 message = "msg"
@@ -545,7 +545,7 @@ from moss_intelligence.skeleton import get_skeleton
 """)
 
         backend = DepsBackend()
-        result = backend.analyze(test_file, pattern="imports:moss")
+        result = backend.analyze(test_file, pattern="imports:moss_intelligence")
 
         assert len(result.matches) == 1
         assert result.matches[0].metadata["import"] == "moss_intelligence.skeleton"

@@ -114,7 +114,7 @@ timeout_seconds = 120
 [tool.moss.project]
 name = "pyproject-project"
 
-[tool.moss_orchestration.validators]
+[tool.moss.validators]
 pytest = true
 """)
 

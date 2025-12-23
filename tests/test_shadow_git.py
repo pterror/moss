@@ -478,6 +478,7 @@ class TestHunkLevelRollback:
         # good.py should still have the valid change
         assert "42 * 2" in (git_repo / "good.py").read_text()
 
+    @pytest.mark.skip(reason="Requires tree-sitter optional dependency")
     async def test_map_hunks_to_symbols(self, shadow_git: ShadowGit, git_repo: Path):
         """Test that hunks can be mapped to AST symbols."""
         # Create Python file with function

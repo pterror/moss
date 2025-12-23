@@ -33,7 +33,7 @@ Remaining:
 - [ ] Fix remaining test failures (gen, rules, shadow_git, config tests)
 - [ ] Telemetry: migrate session stats to new architecture (currently stubbed)
 
-Test Status: 2045 passing, 72 failing, 71 skipped
+Test Status: 2062 passing, 47 failing, 79 skipped
 
 **Deferred:**
 - Driver integration improvements
