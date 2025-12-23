@@ -33,6 +33,12 @@ First release. See `docs/` for design docs and `README.md` for usage.
 - Regenerated `specs/mcp_tools.json` to include `test_gaps_*` and `scopes_*` MCP tools
 - Both modules now accessible via CLI and MCP
 
+**File Boundaries** (Dec 24 2025)
+- `expand_import_context()` + ViewOptions.expand_imports
+- `get_available_modules()` + ViewOptions.show_available
+- `expand_import_context(depth=N)` + ViewOptions.import_depth
+- See `docs/file-boundaries.md` for design
+
 **Package Restructuring** (Dec 23 2025)
 - Extracted core functionality into separate installable packages:
   - `moss-intelligence`: Code analysis (skeleton, complexity, security, deps, clones)
