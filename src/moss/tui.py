@@ -953,6 +953,7 @@ class MossTUI(App):
         self._transparent_bg: bool = False  # For terminal opacity support
         self._last_preview_update: float = 0  # Throttle preview updates
         self._preview_throttle_ms: int = 100  # Min ms between updates
+        self._background_tasks: set = set()  # Keep references to background tasks
 
     def action_handle_ctrl_c(self) -> None:
         """Handle Ctrl+C with double-tap to exit."""
@@ -1895,6 +1896,76 @@ class MossTUI(App):
         except Exception as e:
             explore_detail.write(f"[red]Error: {e}[/]")
 
+    async def _run_edit_async(self, task: str, target: str) -> None:
+        """Run an edit task asynchronously and update UI with results."""
+        from moss.edit import EditContext, edit
+
+        explore_detail = self.query_one("#explore-detail")
+        explore_header = self.query_one("#explore-header")
+
+        try:
+            # Build edit context from target
+            target_path = Path(target)
+            if not target_path.is_absolute():
+                target_path = self.api.root / target
+
+            # Check if target contains a symbol (file/symbol format)
+            target_file = None
+            target_symbol = None
+            if "/" in target and target_path.exists():
+                target_file = target_path
+            elif "/" in target:
+                # Might be file/symbol format
+                parts = target.rsplit("/", 1)
+                potential_file = Path(parts[0])
+                if not potential_file.is_absolute():
+                    potential_file = self.api.root / parts[0]
+                if potential_file.exists():
+                    target_file = potential_file
+                    target_symbol = parts[1]
+            else:
+                target_file = target_path if target_path.exists() else None
+
+            context = EditContext(
+                project_root=self.api.root,
+                target_file=target_file,
+                target_symbol=target_symbol,
+            )
+
+            self._log(f"[dim]Running edit: {task[:50]}...[/]")
+            result = await edit(task, context)
+
+            # Update UI with results
+            explore_detail.clear()
+            explore_header.update(f"EDIT: {target}")
+            explore_detail.write(f"[bold]Task:[/] {task}\n")
+            explore_detail.write(f"[bold]Target:[/] {target}\n\n")
+
+            if result.success:
+                self._log(f"[green]Edit completed:[/] {target}")
+                explore_detail.write("[green]Edit completed successfully![/]\n\n")
+
+                if result.changes:
+                    explore_detail.write(f"[bold]Changes:[/] {len(result.changes)} file(s)\n")
+                    for change in result.changes:
+                        explore_detail.write(f"  • {change.path}\n")
+                    explore_detail.write("\n")
+
+                if result.diff:
+                    explore_detail.write("[bold]Diff:[/]\n")
+                    explore_detail.write(result.diff)
+            else:
+                self._log(f"[red]Edit failed:[/] {target}")
+                explore_detail.write("[red]Edit failed[/]\n\n")
+                if result.error:
+                    explore_detail.write(f"[red]Error:[/] {result.error}\n")
+
+        except Exception as e:
+            self._log(f"[red]Edit error:[/] {e}")
+            explore_detail.clear()
+            explore_header.update(f"EDIT: {target}")
+            explore_detail.write(f"[red]Error running edit:[/] {e}\n")
+
     def navigate(self, target: str) -> None:
         """Navigate to a specific file or symbol in the tree."""
         self._log(f"Navigating to: {target}")
@@ -2268,14 +2339,14 @@ class MossTUI(App):
                 explore_header.update(f"EDIT: {target}")
                 explore_detail.write(f"[bold]Task:[/] {task}\n")
                 explore_detail.write(f"[bold]Target:[/] {target}\n\n")
-                explore_detail.write("[dim]Submitting edit task...[/]\n")
+                explore_detail.write("[dim]Running edit...[/]\n")
 
-                # Queue the edit for async execution
-                # The edit system is async - for now just acknowledge
-                self._log(f"Edit queued: {task[:50]}... on {target}")
-                explore_detail.write(
-                    "[yellow]Edit tasks run asynchronously. Check the log for results.[/]"
-                )
+                # Launch async edit execution
+                import asyncio
+
+                edit_task = asyncio.create_task(self._run_edit_async(task, target))
+                self._background_tasks.add(edit_task)
+                edit_task.add_done_callback(self._background_tasks.discard)
 
             elif primitive == "analyze":
                 api = AnalyzeAPI(self.api.root)
