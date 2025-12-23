@@ -39,6 +39,15 @@ impl FunctionComplexity {
         }
     }
 
+    /// Risk classification based on McCabe cyclomatic complexity thresholds.
+    ///
+    /// Industry-standard ranges (similar to SonarQube, Code Climate):
+    /// - 1-5: Low risk - simple, easy to test
+    /// - 6-10: Moderate risk - still manageable, may need review
+    /// - 11-20: High risk - complex, harder to test and maintain
+    /// - 21+: Very high risk - should be refactored, often untestable
+    ///
+    /// McCabe's original paper (1976) suggested 10 as the upper limit.
     pub fn risk_level(&self) -> &'static str {
         match self.complexity {
             1..=5 => "low",

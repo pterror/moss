@@ -35,7 +35,10 @@ impl SkeletonResult {
     /// Returns a new SkeletonResult with only type-like symbols, and strips methods from classes
     pub fn filter_types(&self) -> SkeletonResult {
         fn is_type_kind(kind: &str) -> bool {
-            matches!(kind, "class" | "struct" | "enum" | "trait" | "interface" | "type" | "impl")
+            matches!(
+                kind,
+                "class" | "struct" | "enum" | "trait" | "interface" | "type" | "impl" | "module"
+            )
         }
 
         fn filter_symbol(sym: &SkeletonSymbol) -> Option<SkeletonSymbol> {
@@ -850,6 +853,49 @@ impl SkeletonExtractor {
                 }
                 "arrow_function" | "function_expression" => {
                     // Skip anonymous functions
+                }
+                // TypeScript-specific: interface and type alias declarations
+                "interface_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "interface",
+                            signature: format!("interface {}", name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "type_alias_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "type",
+                            signature: format!("type {}", name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
+                }
+                "enum_declaration" => {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name = content[name_node.byte_range()].to_string();
+                        symbols.push(SkeletonSymbol {
+                            name: name.clone(),
+                            kind: "enum",
+                            signature: format!("enum {}", name),
+                            docstring: None,
+                            start_line: node.start_position().row + 1,
+                            end_line: node.end_position().row + 1,
+                            children: Vec::new(),
+                        });
+                    }
                 }
                 _ => {}
             }
@@ -1715,5 +1761,161 @@ class AnotherClass:
         assert!(filtered.symbols.iter().all(|s| s.kind == "class"));
         assert_eq!(filtered.symbols[0].name, "MyClass");
         assert_eq!(filtered.symbols[1].name, "AnotherClass");
+    }
+
+    #[test]
+    fn test_filter_types_rust() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+fn helper() {}
+
+pub struct MyStruct {
+    field: i32,
+}
+
+impl MyStruct {
+    pub fn method(&self) {}
+}
+
+pub enum MyEnum {
+    A,
+    B,
+}
+
+pub trait MyTrait {
+    fn required(&self);
+}
+
+fn another_function() {}
+"#;
+        let result = extractor.extract(&PathBuf::from("test.rs"), content);
+
+        // Filtered should have struct, enum, trait, impl
+        let filtered = result.filter_types();
+        let kinds: Vec<_> = filtered.symbols.iter().map(|s| s.kind).collect();
+        assert!(kinds.contains(&"struct"), "Should have struct");
+        assert!(kinds.contains(&"enum"), "Should have enum");
+        assert!(kinds.contains(&"trait"), "Should have trait");
+        // Functions should be filtered out
+        assert!(!kinds.contains(&"function"));
+    }
+
+    #[test]
+    fn test_filter_types_typescript() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+function helper() {}
+
+interface MyInterface {
+    method(): void;
+}
+
+class MyClass {
+    method() {}
+}
+
+type MyType = string | number;
+
+enum MyEnum {
+    A,
+    B,
+}
+
+const arrow = () => {};
+"#;
+        let result = extractor.extract(&PathBuf::from("test.ts"), content);
+
+        let filtered = result.filter_types();
+        let kinds: Vec<_> = filtered.symbols.iter().map(|s| s.kind).collect();
+        let names: Vec<_> = filtered.symbols.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"MyInterface"), "Should have interface");
+        assert!(names.contains(&"MyClass"), "Should have class");
+        // Functions should be filtered out
+        assert!(!names.contains(&"helper"));
+        assert!(!names.contains(&"arrow"));
+    }
+
+    #[test]
+    fn test_filter_types_go() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+package main
+
+func helper() {}
+
+type MyStruct struct {
+    Field int
+}
+
+func (m *MyStruct) Method() {}
+
+type MyInterface interface {
+    Required()
+}
+"#;
+        let result = extractor.extract(&PathBuf::from("test.go"), content);
+
+        let filtered = result.filter_types();
+        let names: Vec<_> = filtered.symbols.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"MyStruct"), "Should have struct");
+        assert!(names.contains(&"MyInterface"), "Should have interface");
+        // Functions should be filtered out
+        assert!(!names.contains(&"helper"));
+    }
+
+    #[test]
+    fn test_filter_types_java() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+public class MyClass {
+    public void method() {}
+}
+
+interface MyInterface {
+    void required();
+}
+
+enum MyEnum {
+    A, B
+}
+"#;
+        let result = extractor.extract(&PathBuf::from("Test.java"), content);
+
+        let filtered = result.filter_types();
+        let names: Vec<_> = filtered.symbols.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"MyClass"), "Should have class");
+        assert!(names.contains(&"MyInterface"), "Should have interface");
+        assert!(names.contains(&"MyEnum"), "Should have enum");
+    }
+
+    #[test]
+    fn test_filter_types_ruby() {
+        let mut extractor = SkeletonExtractor::new();
+        let content = r#"
+def helper
+end
+
+class MyClass
+  def method
+  end
+end
+
+module MyModule
+  def module_method
+  end
+end
+"#;
+        let result = extractor.extract(&PathBuf::from("test.rb"), content);
+
+        let filtered = result.filter_types();
+        let names: Vec<_> = filtered.symbols.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"MyClass"), "Should have class");
+        assert!(names.contains(&"MyModule"), "Should have module");
+        // Functions should be filtered out
+        assert!(!names.contains(&"helper"));
     }
 }
