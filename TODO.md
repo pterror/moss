@@ -31,7 +31,7 @@ Completed:
 - [x] CLI commands refactored to remove MossAPI (cmd_deps, cmd_context, cmd_query, cmd_cfg)
 - [x] Telemetry: session stats migrated to use SessionManager from moss_orchestration
 
-Test Status: 2118 passing, 0 failing, 50 skipped, 51 xfailed, 21 xpassed
+Test Status: 2120 passing, 0 failing, 50 skipped, 51 xfailed, 19 xpassed
 
 **Deferred:**
 - Driver integration improvements

@@ -1331,7 +1331,6 @@ class TestKnownGaps:
     When fixing DWIM matching, use these as targets.
     """
 
-    @pytest.mark.xfail(reason="'module' dominates, finds search_summarize_module not deps")
     def test_module_dependencies_finds_deps(self):
         """'module dependencies' should find deps tools."""
         matches = analyze_intent("module dependencies")
@@ -1376,7 +1375,6 @@ class TestKnownGaps:
         # Hyphen to underscore is high confidence but not necessarily 1.0
         assert match.confidence >= 0.9, f"Got {match.confidence}"
 
-    @pytest.mark.xfail(reason="Empty available_tools still searches all tools")
     def test_empty_available_tools_returns_empty(self):
         """Empty available_tools filter should return no results."""
         matches = analyze_intent("find code", available_tools=[])
