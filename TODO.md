@@ -4,7 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Refactor `scopes.rs` to use trait (add scope_kinds, extract_binding to trait)
 - Refactor `edit.rs` to use trait (add byte positions to Symbol)
 - Refactor `cfg.rs` to use trait (add control_flow_kinds to trait)
 - Delete legacy code from `symbols.rs`, `skeleton.rs`, `deps.rs`, `complexity.rs`
@@ -41,7 +40,7 @@ Phase 3 - Integrate (in progress):
 - [x] Refactor `complexity.rs` to use trait (complexity_nodes method)
 - [x] Refactor `symbols.rs` to use trait
 - [x] Refactor `anchors.rs` to use trait
-- [ ] Refactor `scopes.rs` to use trait (add scope_kinds, extract_binding)
+- [x] Refactor `scopes.rs` to use trait (add scope_creating_kinds)
 - [ ] Refactor `edit.rs` to use trait (add byte positions to Symbol)
 - [ ] Refactor `cfg.rs` to use trait (add control_flow_kinds)
 - [ ] Delete old language-specific code from moss-cli
