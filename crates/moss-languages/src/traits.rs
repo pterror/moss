@@ -48,6 +48,23 @@ pub enum Visibility {
     Internal,
 }
 
+/// How a language determines symbol visibility
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisibilityMechanism {
+    /// Explicit export keyword (JS/TS: `export function foo()`)
+    ExplicitExport,
+    /// Access modifier keywords (Java, Scala, C#: `public`, `private`, `protected`)
+    AccessModifier,
+    /// Naming convention (Go: uppercase = public, Python: underscore = private)
+    NamingConvention,
+    /// Header-based (C/C++: symbols in headers are public, source files are private)
+    HeaderBased,
+    /// Everything is public by default (Ruby modules, Lua)
+    AllPublic,
+    /// Not applicable (data formats like JSON, YAML, TOML)
+    NotApplicable,
+}
+
 /// A code symbol extracted from source
 #[derive(Debug, Clone)]
 pub struct Symbol {
@@ -110,8 +127,14 @@ pub trait LanguageSupport: Send + Sync {
     /// Import statement nodes
     fn import_kinds(&self) -> &'static [&'static str];
 
-    /// Export statement nodes
-    fn export_kinds(&self) -> &'static [&'static str];
+    /// AST node kinds that may contain publicly visible symbols.
+    /// For JS/TS: export_statement nodes.
+    /// For Go/Java/Python: function/class/type declaration nodes.
+    /// The extract_public_symbols() method filters by actual visibility.
+    fn public_symbol_kinds(&self) -> &'static [&'static str];
+
+    /// How this language determines symbol visibility
+    fn visibility_mechanism(&self) -> VisibilityMechanism;
 
     // === Symbol Extraction ===
 
@@ -141,8 +164,11 @@ pub trait LanguageSupport: Send + Sync {
         Vec::new()
     }
 
-    /// Extract exports from an export/definition node (may return multiple)
-    fn extract_exports(&self, node: &Node, content: &str) -> Vec<Export> {
+    /// Extract public symbols from a node.
+    /// The node is one of the kinds from public_symbol_kinds().
+    /// For JS/TS: extracts exported names from export statements.
+    /// For Go/Java/Python: checks visibility and returns public symbols.
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
         let _ = (node, content);
         Vec::new()
     }

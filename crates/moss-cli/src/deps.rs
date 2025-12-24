@@ -214,9 +214,9 @@ impl DepsExtractor {
                 imports.extend(lang_imports.iter().map(convert_import));
             }
 
-            // Check for export nodes
-            if support.export_kinds().contains(&kind) {
-                let lang_exports = support.extract_exports(&node, content);
+            // Check for public symbol nodes
+            if support.public_symbol_kinds().contains(&kind) {
+                let lang_exports = support.extract_public_symbols(&node, content);
                 exports.extend(lang_exports.iter().map(convert_export));
             }
 

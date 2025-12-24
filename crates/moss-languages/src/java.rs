@@ -1,6 +1,6 @@
 //! Java language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct JavaSupport;
@@ -22,7 +22,39 @@ impl LanguageSupport for JavaSupport {
     }
 
     fn import_kinds(&self) -> &'static [&'static str] { &["import_declaration"] }
-    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Java uses access modifiers, not export statements
+
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        &["class_declaration", "interface_declaration", "enum_declaration", "method_declaration"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::AccessModifier
+    }
+
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
+        if self.get_visibility(node, content) != Visibility::Public {
+            return Vec::new();
+        }
+
+        let name = match self.node_name(node, content) {
+            Some(n) => n.to_string(),
+            None => return Vec::new(),
+        };
+
+        let kind = match node.kind() {
+            "class_declaration" => SymbolKind::Class,
+            "interface_declaration" => SymbolKind::Interface,
+            "enum_declaration" => SymbolKind::Enum,
+            "method_declaration" | "constructor_declaration" => SymbolKind::Method,
+            _ => return Vec::new(),
+        };
+
+        vec![Export {
+            name,
+            kind,
+            line: node.start_position().row + 1,
+        }]
+    }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
         &["for_statement", "enhanced_for_statement", "while_statement", "do_statement", "try_statement", "catch_clause", "switch_expression", "block"]

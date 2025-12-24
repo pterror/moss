@@ -1,6 +1,6 @@
 //! Go language support.
 
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct GoSupport;
@@ -25,8 +25,12 @@ impl LanguageSupport for GoSupport {
         &["import_declaration"]
     }
 
-    fn export_kinds(&self) -> &'static [&'static str] {
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["function_declaration", "method_declaration", "type_spec", "const_spec", "var_spec"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::NamingConvention
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
@@ -136,7 +140,7 @@ impl LanguageSupport for GoSupport {
         imports
     }
 
-    fn extract_exports(&self, node: &Node, content: &str) -> Vec<Export> {
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
         // Go exports are determined by uppercase first letter
         let name = match self.node_name(node, content) {
             Some(n) if n.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) => n,

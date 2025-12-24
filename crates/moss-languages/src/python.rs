@@ -1,6 +1,6 @@
 //! Python language support.
 
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct PythonSupport;
@@ -30,8 +30,12 @@ impl LanguageSupport for PythonSupport {
         &["import_statement", "import_from_statement"]
     }
 
-    fn export_kinds(&self) -> &'static [&'static str] {
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["function_definition", "async_function_definition", "class_definition"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::NamingConvention
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
@@ -295,7 +299,7 @@ impl LanguageSupport for PythonSupport {
         }
     }
 
-    fn extract_exports(&self, node: &Node, content: &str) -> Vec<Export> {
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
         let line = node.start_position().row + 1;
 
         match node.kind() {

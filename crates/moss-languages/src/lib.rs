@@ -81,4 +81,6 @@ pub mod bash;
 
 // Re-exports
 pub use registry::{get_support, is_supported, supported_languages};
-pub use traits::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility};
+pub use traits::{
+    Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism,
+};

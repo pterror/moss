@@ -1,6 +1,6 @@
 //! C language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct CSupport;
@@ -13,7 +13,14 @@ impl LanguageSupport for CSupport {
     fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
     fn type_kinds(&self) -> &'static [&'static str] { &["struct_specifier", "enum_specifier", "type_definition"] }
     fn import_kinds(&self) -> &'static [&'static str] { &["preproc_include"] }
-    fn export_kinds(&self) -> &'static [&'static str] { &[] } // C uses header files, not export statements
+
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        &["function_definition"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::HeaderBased
+    }
     fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("c: scope_creating_kinds") }
     fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("c: control_flow_kinds") }
     fn complexity_nodes(&self) -> &'static [&'static str] { todo!("c: complexity_nodes") }

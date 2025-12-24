@@ -1,6 +1,6 @@
 //! Vue language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct VueSupport;
@@ -13,7 +13,8 @@ impl LanguageSupport for VueSupport {
     fn function_kinds(&self) -> &'static [&'static str] { &["function_declaration", "method_definition"] }
     fn type_kinds(&self) -> &'static [&'static str] { &[] }
     fn import_kinds(&self) -> &'static [&'static str] { todo!("vue: import_kinds") }
-    fn export_kinds(&self) -> &'static [&'static str] { todo!("vue: export_kinds") }
+    fn public_symbol_kinds(&self) -> &'static [&'static str] { todo!("vue: public_symbol_kinds") }
+    fn visibility_mechanism(&self) -> VisibilityMechanism { VisibilityMechanism::ExplicitExport }
     fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("vue: scope_creating_kinds") }
     fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("vue: control_flow_kinds") }
     fn complexity_nodes(&self) -> &'static [&'static str] { todo!("vue: complexity_nodes") }

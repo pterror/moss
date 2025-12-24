@@ -1,6 +1,6 @@
 //! Bash language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct BashSupport;
@@ -13,7 +13,8 @@ impl LanguageSupport for BashSupport {
     fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
     fn type_kinds(&self) -> &'static [&'static str] { &[] }
     fn import_kinds(&self) -> &'static [&'static str] { &[] }
-    fn export_kinds(&self) -> &'static [&'static str] { &[] }
+    fn public_symbol_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
+    fn visibility_mechanism(&self) -> VisibilityMechanism { VisibilityMechanism::AllPublic }
     fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("bash: scope_creating_kinds") }
     fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("bash: control_flow_kinds") }
     fn complexity_nodes(&self) -> &'static [&'static str] { todo!("bash: complexity_nodes") }

@@ -1,6 +1,6 @@
 //! Ruby language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct RubySupport;
@@ -13,7 +13,14 @@ impl LanguageSupport for RubySupport {
     fn function_kinds(&self) -> &'static [&'static str] { &["method", "singleton_method"] }
     fn type_kinds(&self) -> &'static [&'static str] { &["class", "module"] }
     fn import_kinds(&self) -> &'static [&'static str] { todo!("ruby: import_kinds") }
-    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Ruby doesn't have explicit exports
+
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        &["class", "module", "method", "singleton_method"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::AllPublic // Ruby methods are public by default
+    }
     fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("ruby: scope_creating_kinds") }
     fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("ruby: control_flow_kinds") }
     fn complexity_nodes(&self) -> &'static [&'static str] { todo!("ruby: complexity_nodes") }

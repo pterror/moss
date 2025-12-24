@@ -1,6 +1,6 @@
 //! TypeScript language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct TypeScriptSupport;
@@ -30,8 +30,12 @@ impl LanguageSupport for TypeScriptSupport {
         &["import_statement"]
     }
 
-    fn export_kinds(&self) -> &'static [&'static str] {
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["export_statement"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::ExplicitExport
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {

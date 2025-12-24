@@ -1,6 +1,6 @@
 //! JavaScript language support.
 
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct JavaScriptSupport;
@@ -30,8 +30,12 @@ impl LanguageSupport for JavaScriptSupport {
         &["import_statement"]
     }
 
-    fn export_kinds(&self) -> &'static [&'static str] {
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["export_statement"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::ExplicitExport
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
@@ -131,7 +135,7 @@ impl LanguageSupport for JavaScriptSupport {
         }]
     }
 
-    fn extract_exports(&self, node: &Node, content: &str) -> Vec<Export> {
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
         if node.kind() != "export_statement" {
             return Vec::new();
         }

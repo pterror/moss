@@ -8,7 +8,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
   - Remove `Option` wrappers from `get_support()` where `None` is never returned
   - [x] Remove default impls from `LanguageSupport` trait methods
   - [x] Use `todo!()` for unimplemented trait methods (instead of returning empty arrays)
-  - Fix `export_kinds()` API confusion: currently conflates "export statement nodes" (JS/TS) with "publicly-visible symbol nodes" (Go/Rust). Java/Python/Ruby return `&[]` which means exports never detected. Options: (1) make each lang return checkable nodes + filter in extract_exports, or (2) redesign as `public_symbol_kinds()` + `visibility_mechanism()` enum
+  - [x] Rename `export_kinds()` → `public_symbol_kinds()` + add `visibility_mechanism()` enum
 - Session analysis: detect correction patterns ("You're right", "Good point")
 - Complete daemon integration (FileIndex API methods currently unused)
 

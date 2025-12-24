@@ -1,6 +1,6 @@
 //! Scala language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
+use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::{tree_sitter::Node, Language};
 
 pub struct ScalaSupport;
@@ -13,7 +13,37 @@ impl LanguageSupport for ScalaSupport {
     fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
     fn type_kinds(&self) -> &'static [&'static str] { &["class_definition", "trait_definition"] }
     fn import_kinds(&self) -> &'static [&'static str] { todo!("scala: import_kinds") }
-    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Scala uses visibility modifiers, not export statements
+
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        &["class_definition", "object_definition", "trait_definition", "function_definition"]
+    }
+
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::AccessModifier
+    }
+
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
+        // Scala: public by default, check for private/protected modifiers
+        // TODO: implement proper visibility checking for Scala
+        let name = match self.node_name(node, content) {
+            Some(n) => n.to_string(),
+            None => return Vec::new(),
+        };
+
+        let kind = match node.kind() {
+            "class_definition" => SymbolKind::Class,
+            "object_definition" => SymbolKind::Module,
+            "trait_definition" => SymbolKind::Trait,
+            "function_definition" => SymbolKind::Function,
+            _ => return Vec::new(),
+        };
+
+        vec![Export {
+            name,
+            kind,
+            line: node.start_position().row + 1,
+        }]
+    }
     fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("scala: scope_creating_kinds") }
     fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("scala: control_flow_kinds") }
     fn complexity_nodes(&self) -> &'static [&'static str] { todo!("scala: complexity_nodes") }
