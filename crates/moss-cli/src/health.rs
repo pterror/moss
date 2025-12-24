@@ -217,7 +217,7 @@ pub fn analyze_health(root: &Path) -> HealthReport {
             }
 
             // Create thread-local analyzer
-            let mut analyzer = ComplexityAnalyzer::new();
+            let analyzer = ComplexityAnalyzer::new();
             let report = analyzer.analyze(&path, &content);
 
             let mut functions = 0;

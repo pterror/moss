@@ -397,7 +397,7 @@ pub fn analyze_security(root: &Path) -> SecurityReport {
 /// Analyze complexity of a single file
 pub fn analyze_file_complexity(file_path: &Path) -> Option<ComplexityReport> {
     let content = std::fs::read_to_string(file_path).ok()?;
-    let mut analyzer = ComplexityAnalyzer::new();
+    let analyzer = ComplexityAnalyzer::new();
     Some(analyzer.analyze(file_path, &content))
 }
 
@@ -426,7 +426,7 @@ pub fn analyze_codebase_complexity(root: &Path, limit: usize, threshold: Option<
         .filter_map(|file| {
             let path = root.join(&file.path);
             let content = std::fs::read_to_string(&path).ok()?;
-            let mut analyzer = ComplexityAnalyzer::new();
+            let analyzer = ComplexityAnalyzer::new();
             let report = analyzer.analyze(&path, &content);
             Some(
                 report

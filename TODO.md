@@ -6,11 +6,9 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 - Session analysis: detect correction patterns ("You're right", "Good point")
 - Complete daemon integration (FileIndex API methods currently unused)
-- Manual cleanup: delete legacy parsing methods from `symbols.rs`, `skeleton.rs`, `deps.rs`, `complexity.rs`
-  (trait-based extraction complete, legacy code marked dead; requires manual editing)
 - API cleanup: remove `Option` wrappers from `get_support()` and similar APIs where `None` is never returned
 
-Test Status: 79 passing, 0 failing
+Test Status: 72 passing, 0 failing
 
 ## Backlog
 
@@ -43,7 +41,7 @@ Phase 3 - Integrate: ✅
 - [x] Refactor `scopes.rs` to use trait (add scope_creating_kinds)
 - [x] Refactor `edit.rs` to use trait (uses function_kinds/container_kinds)
 - [x] Refactor `cfg.rs` to use trait (add control_flow_kinds)
-- [x] Legacy code marked as dead (manual deletion deferred)
+- [x] Delete legacy code from symbols.rs, skeleton.rs, deps.rs (~2000 lines removed)
 
 Phase 4 - Expand:
 - [ ] Kotlin, Swift, Dart (mobile)

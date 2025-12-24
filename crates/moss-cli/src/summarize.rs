@@ -112,7 +112,7 @@ pub fn summarize_module(path: &Path, content: &str) -> ModuleSummary {
     let skeleton = skeleton_extractor.extract(path, content);
 
     // Extract dependencies
-    let mut deps_extractor = DepsExtractor::new();
+    let deps_extractor = DepsExtractor::new();
     let deps_result = deps_extractor.extract(path, content);
 
     // Build exports list

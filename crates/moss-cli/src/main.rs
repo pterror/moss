@@ -1598,7 +1598,7 @@ fn cmd_view_filtered(root: &Path, scope: &str, kind: &str, json: bool) -> i32 {
     };
 
     let mut all_symbols: Vec<(String, String, String, usize, Option<String>)> = Vec::new();
-    let mut parser = symbols::SymbolParser::new();
+    let parser = symbols::SymbolParser::new();
 
     for file_path in files_to_search {
         let content = match std::fs::read_to_string(&file_path) {
@@ -2414,7 +2414,7 @@ fn cmd_view_file(
 
     // Get deps if showing deps, focus, or resolve_imports mode
     let deps_result = if show_deps || focus.is_some() || resolve_imports {
-        let mut deps_extractor = deps::DepsExtractor::new();
+        let deps_extractor = deps::DepsExtractor::new();
         Some(deps_extractor.extract(&full_path, &content))
     } else {
         None
@@ -2546,7 +2546,7 @@ fn cmd_view_file(
 
             if !resolved.is_empty() {
                 println!("\n## Imported Modules (Skeletons)");
-                let mut deps_extractor = deps::DepsExtractor::new();
+                let deps_extractor = deps::DepsExtractor::new();
 
                 for (module_name, resolved_path, display) in resolved {
                     if let Ok(import_content) = std::fs::read_to_string(&resolved_path) {
@@ -2940,7 +2940,7 @@ fn cmd_symbols(file: &str, root: Option<&Path>, json: bool, profiler: &mut Profi
     };
     profiler.mark("read_file");
 
-    let mut parser = symbols::SymbolParser::new();
+    let parser = symbols::SymbolParser::new();
     let symbols = parser.parse_file(&file_path, &content);
     profiler.mark("parse_symbols");
 
@@ -3351,7 +3351,7 @@ fn cmd_context(file: &str, root: Option<&Path>, json: bool, profiler: &mut Profi
     profiler.mark("extract_skeleton");
 
     // Extract deps
-    let mut deps_extractor = deps::DepsExtractor::new();
+    let deps_extractor = deps::DepsExtractor::new();
     let deps_result = deps_extractor.extract(&file_path, &content);
     profiler.mark("extract_deps");
 
@@ -3492,7 +3492,7 @@ fn cmd_anchors(file: &str, root: Option<&Path>, query: Option<&str>, json: bool)
         }
     };
 
-    let mut extractor = anchors::AnchorExtractor::new();
+    let extractor = anchors::AnchorExtractor::new();
 
     let anchors_list = if let Some(q) = query {
         extractor.find_anchor(&file_path, &content, q)
@@ -3579,7 +3579,7 @@ fn cmd_scopes(
         }
     };
 
-    let mut analyzer = scopes::ScopeAnalyzer::new();
+    let analyzer = scopes::ScopeAnalyzer::new();
     let result = analyzer.analyze(&file_path, &content);
 
     // Find mode: find where a name is defined at a line
@@ -3717,7 +3717,7 @@ fn cmd_deps(
         }
     };
 
-    let mut extractor = deps::DepsExtractor::new();
+    let extractor = deps::DepsExtractor::new();
     let result = extractor.extract(&file_path, &content);
 
     if json {
@@ -4059,7 +4059,7 @@ fn cmd_imports(
             }
         };
 
-        let mut extractor = deps::DepsExtractor::new();
+        let extractor = deps::DepsExtractor::new();
         let result = extractor.extract(&full_path, &content);
 
         // Convert deps::Import to symbols::Import format for output
@@ -4191,7 +4191,7 @@ fn cmd_complexity(file: &str, root: Option<&Path>, threshold: Option<usize>, jso
         }
     };
 
-    let mut analyzer = complexity::ComplexityAnalyzer::new();
+    let analyzer = complexity::ComplexityAnalyzer::new();
     let report = analyzer.analyze(&file_path, &content);
 
     // Filter by threshold if specified

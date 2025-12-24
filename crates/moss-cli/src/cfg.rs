@@ -3,7 +3,7 @@
 //! Builds a simplified control flow graph for functions.
 
 use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport};
+use moss_languages::get_support;
 use std::path::Path;
 
 /// Type of control flow edge

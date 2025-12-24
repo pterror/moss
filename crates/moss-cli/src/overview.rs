@@ -262,7 +262,7 @@ pub fn analyze_overview(root: &Path) -> OverviewReport {
             }
 
             // Complexity analysis
-            let mut complexity_analyzer = ComplexityAnalyzer::new();
+            let complexity_analyzer = ComplexityAnalyzer::new();
             let complexity_report = complexity_analyzer.analyze(&path, &content);
 
             let mut functions = 0;
@@ -325,7 +325,7 @@ pub fn analyze_overview(root: &Path) -> OverviewReport {
             );
 
             // Dependencies analysis
-            let mut deps_extractor = DepsExtractor::new();
+            let deps_extractor = DepsExtractor::new();
             let deps = deps_extractor.extract(&path, &content);
 
             let imports = deps.imports.len();
