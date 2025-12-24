@@ -14,7 +14,6 @@ mod health;
 mod index;
 mod overview;
 mod path_resolve;
-mod scopes;
 mod sessions;
 mod skeleton;
 mod summarize;
@@ -322,24 +321,6 @@ enum Commands {
         query: Option<String>,
     },
 
-    /// Analyze variable scopes and bindings
-    Scopes {
-        /// File to analyze
-        file: String,
-
-        /// Root directory (defaults to current directory)
-        #[arg(short, long)]
-        root: Option<PathBuf>,
-
-        /// Line number to show bindings at
-        #[arg(short, long)]
-        line: Option<usize>,
-
-        /// Find definition of a name at a line
-        #[arg(short, long)]
-        find: Option<String>,
-    },
-
     /// Show module dependencies (imports and exports)
     Deps {
         /// File to analyze
@@ -380,20 +361,6 @@ enum Commands {
         who_imports: bool,
     },
 
-    /// Show control flow graph
-    Cfg {
-        /// File to analyze
-        file: String,
-
-        /// Root directory (defaults to current directory)
-        #[arg(short, long)]
-        root: Option<PathBuf>,
-
-        /// Specific function to analyze
-        #[arg(short, long)]
-        function: Option<String>,
-    },
-
     /// Manage the moss daemon
     Daemon {
         #[command(subcommand)]
@@ -409,13 +376,6 @@ enum Commands {
         /// Check for updates without installing
         #[arg(short, long)]
         check: bool,
-    },
-
-    /// Show codebase health metrics
-    Health {
-        /// Root directory (defaults to current directory)
-        #[arg(short, long)]
-        root: Option<PathBuf>,
     },
 
     /// Analyze codebase (unified health, complexity, security)
@@ -672,12 +632,6 @@ fn main() {
         Commands::Anchors { file, root, query } => {
             commands::anchors::cmd_anchors(&file, root.as_deref(), query.as_deref(), cli.json)
         }
-        Commands::Scopes {
-            file,
-            root,
-            line,
-            find,
-        } => commands::scopes::cmd_scopes(&file, root.as_deref(), line, find.as_deref(), cli.json),
         Commands::Deps {
             file,
             root,
@@ -691,14 +645,8 @@ fn main() {
             graph,
             who_imports,
         } => commands::imports::cmd_imports(&query, root.as_deref(), resolve, graph, who_imports, cli.json),
-        Commands::Cfg {
-            file,
-            root,
-            function,
-        } => commands::cfg::cmd_cfg(&file, root.as_deref(), function.as_deref(), cli.json),
         Commands::Daemon { action, root } => commands::daemon::cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Update { check } => commands::update::cmd_update(check, cli.json),
-        Commands::Health { root } => commands::health::cmd_health(root.as_deref(), cli.json),
         Commands::Analyze {
             target,
             root,
