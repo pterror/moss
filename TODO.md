@@ -4,10 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Continue splitting main.rs (~2100 lines remaining) into command modules:
-  - [x] Removed Profiler (was adding complexity for marginal value)
-  - [x] Restructured commands/ to one-command-per-file (21 files)
-  - [ ] Extract remaining commands from main.rs: cmd_symbols, cmd_callers, cmd_path, cmd_find_symbols, cmd_tree, cmd_expand, cmd_view, cmd_summarize, cmd_analyze
 - Add moss-languages feature flags to moss-cli Cargo.toml
 - Session analysis: detect correction patterns
 - Complete daemon integration

@@ -4,6 +4,14 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Command Module Extraction
+
+Completed extraction of all commands from main.rs to individual modules:
+- main.rs reduced from 2122 to 821 lines (-62%)
+- 29 command modules in `commands/` directory (one per command)
+- Removed Profiler (added complexity for marginal value)
+- New modules: path_cmd, symbols_cmd, callers, tree_cmd, expand, summarize_cmd, find_symbols, analyze_cmd, view_cmd
+
 ### Remove Language-Specific CLI Code
 
 Removed Python subprocess calls and hardcoded language counters from moss-cli:
