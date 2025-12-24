@@ -45,6 +45,10 @@ fn init_registry() -> LanguageMap {
     #[cfg(feature = "lang-typescript")]
     map.insert(Language::TypeScript, &crate::typescript::TypeScriptSupport as &dyn LanguageSupport);
 
+    // TSX uses the same support as TypeScript (same AST structure for functions, classes, etc.)
+    #[cfg(feature = "lang-typescript")]
+    map.insert(Language::Tsx, &crate::typescript::TypeScriptSupport as &dyn LanguageSupport);
+
     #[cfg(feature = "lang-go")]
     map.insert(Language::Go, &crate::go::GoSupport as &dyn LanguageSupport);
 

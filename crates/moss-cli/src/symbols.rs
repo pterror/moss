@@ -57,6 +57,7 @@ fn convert_symbol_kind(kind: LangSymbolKind) -> SymbolKind {
     }
 }
 
+#[allow(dead_code)]
 fn flatten_symbols(symbols: Vec<LangSymbol>, parent: Option<&str>) -> Vec<Symbol> {
     let mut result = Vec::new();
     for sym in symbols {
@@ -93,15 +94,22 @@ impl SymbolParser {
             None => return Vec::new(),
         };
 
-        // Use trait-based extraction
+        // Use trait-based extraction for all supported languages
         if let Some(support) = get_support(lang) {
             return self.parse_with_trait(lang, content, support);
         }
 
-        // Fall back to legacy methods for languages without trait support
-        self.parse_legacy(lang, content)
+        Vec::new()
     }
 
+    // TODO: Remove legacy parsing methods below - now using trait-based extraction
+    // The following methods are dead code but kept temporarily for reference:
+    // - parse_legacy, parse_python, parse_rust, parse_java, etc.
+    // - collect_python_symbols, collect_rust_symbols, etc.
+    // Keep: parse_python_imports, collect_python_imports (for import analysis)
+    // Keep: find_callees_* methods (for call tracking)
+
+    #[allow(dead_code)]
     fn parse_legacy(&self, lang: Language, content: &str) -> Vec<Symbol> {
         match lang {
             Language::Python => self.parse_python(content),
