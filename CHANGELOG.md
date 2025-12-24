@@ -35,6 +35,8 @@ First release. See `docs/` for design docs and `README.md` for usage.
 - `view --focus` now falls back to external packages when local resolution fails
 - Global package index database: `~/.cache/moss/packages.db` with version ranges (major, minor)
 - PackageIndex API: insert/find packages and symbols with version filtering
+- Lazy indexing: packages indexed on first resolution, cached for future lookups
+- `moss index-packages` command: pre-index Python/Go stdlib and site-packages
 
 **Additional Analysis Modules** (Dec 24 2025)
 - Binary detection in call graph: detects binary files by null byte check (8KB sample)

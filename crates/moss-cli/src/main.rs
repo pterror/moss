@@ -660,6 +660,25 @@ enum Commands {
         #[arg(short, long, default_value = "1000")]
         limit: usize,
     },
+
+    /// Index external packages (stdlib, site-packages) into global cache
+    IndexPackages {
+        /// Index Python packages (stdlib + site-packages)
+        #[arg(long)]
+        python: bool,
+
+        /// Index Go packages (stdlib + mod cache)
+        #[arg(long)]
+        go: bool,
+
+        /// Clear existing index before re-indexing
+        #[arg(long)]
+        clear: bool,
+
+        /// Root directory for finding venv (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -884,6 +903,9 @@ fn main() {
         Commands::IndexStats { root } => cmd_index_stats(root.as_deref(), cli.json),
         Commands::ListFiles { prefix, root, limit } => {
             cmd_list_files(prefix.as_deref(), root.as_deref(), limit, cli.json)
+        }
+        Commands::IndexPackages { python, go, clear, root } => {
+            cmd_index_packages(python, go, clear, root.as_deref(), cli.json)
         }
     };
 
@@ -1703,10 +1725,28 @@ fn resolve_import(module: &str, current_file: &Path, root: &Path) -> Option<Path
 }
 
 /// Resolve a Python import to an external package (stdlib or site-packages).
+/// Uses the global package index for caching.
 fn resolve_python_external(module: &str, root: &Path) -> Option<PathBuf> {
+    // Get current Python version for index queries
+    let version = external_packages::get_python_version(root)
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    // Check the global index first
+    if let Ok(index) = external_packages::PackageIndex::open() {
+        if let Ok(Some(pkg)) = index.find_package("python", module, version) {
+            let path = PathBuf::from(&pkg.path);
+            if path.exists() {
+                return Some(path);
+            }
+            // Path no longer exists, will re-resolve and re-index below
+        }
+    }
+
     // Try stdlib first
     if let Some(stdlib) = external_packages::find_python_stdlib(root) {
         if let Some(pkg) = external_packages::resolve_python_stdlib_import(module, &stdlib) {
+            // Index on cache miss
+            index_python_package(module, &pkg.path, version, true);
             return Some(pkg.path);
         }
     }
@@ -1714,11 +1754,72 @@ fn resolve_python_external(module: &str, root: &Path) -> Option<PathBuf> {
     // Try site-packages
     if let Some(site_packages) = external_packages::find_python_site_packages(root) {
         if let Some(pkg) = external_packages::resolve_python_import(module, &site_packages) {
+            // Index on cache miss
+            index_python_package(module, &pkg.path, version, false);
             return Some(pkg.path);
         }
     }
 
     None
+}
+
+/// Index a Python package into the global cache.
+fn index_python_package(name: &str, path: &Path, version: Option<external_packages::Version>, is_stdlib: bool) {
+    let Ok(index) = external_packages::PackageIndex::open() else { return };
+
+    // Check if already indexed
+    if let Ok(true) = index.is_indexed("python", name) {
+        return;
+    }
+
+    // For stdlib, use the detected version as both min and max
+    // For packages, use min version only (may work with newer)
+    let min_version = version.unwrap_or(external_packages::Version { major: 3, minor: 0 });
+    let max_version = if is_stdlib { version } else { None };
+
+    let Ok(pkg_id) = index.insert_package(
+        "python",
+        name,
+        &path.to_string_lossy(),
+        min_version,
+        max_version,
+    ) else { return };
+
+    // Extract symbols from the package
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    // For a single .py file
+    if path.is_file() && path.extension().map_or(false, |e| e == "py") {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let result = extractor.extract(path, &content);
+            insert_skeleton_symbols(&index, pkg_id, &result.symbols);
+        }
+        return;
+    }
+
+    // For a package directory, index __init__.py
+    let init_path = path.join("__init__.py");
+    if init_path.is_file() {
+        if let Ok(content) = std::fs::read_to_string(&init_path) {
+            let result = extractor.extract(&init_path, &content);
+            insert_skeleton_symbols(&index, pkg_id, &result.symbols);
+        }
+    }
+}
+
+/// Insert skeleton symbols into the package index.
+fn insert_skeleton_symbols(index: &external_packages::PackageIndex, pkg_id: i64, symbols: &[skeleton::SkeletonSymbol]) {
+    for sym in symbols {
+        let _ = index.insert_symbol(
+            pkg_id,
+            &sym.name,
+            sym.kind,
+            &sym.signature,
+            sym.start_line as u32,
+        );
+        // Recurse into children (methods, nested classes)
+        insert_skeleton_symbols(index, pkg_id, &sym.children);
+    }
 }
 
 /// Resolve a Go import to a local file path within the module.
@@ -1741,11 +1842,28 @@ fn resolve_go_import_local(import_path: &str, current_file: &Path, _root: &Path)
 }
 
 /// Resolve a Go import to an external package (stdlib or mod cache).
+/// Uses the global package index for caching.
 fn resolve_go_external(import_path: &str) -> Option<PathBuf> {
+    // Get current Go version for index queries
+    let version = external_packages::get_go_version()
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    // Check the global index first
+    if let Ok(index) = external_packages::PackageIndex::open() {
+        if let Ok(Some(pkg)) = index.find_package("go", import_path, version) {
+            let path = PathBuf::from(&pkg.path);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
     // Try stdlib first
     if external_packages::is_go_stdlib_import(import_path) {
         if let Some(stdlib) = external_packages::find_go_stdlib() {
             if let Some(pkg) = external_packages::resolve_go_stdlib_import(import_path, &stdlib) {
+                // Index on cache miss
+                index_go_package(import_path, &pkg.path, version, true);
                 return Some(pkg.path);
             }
         }
@@ -1754,11 +1872,55 @@ fn resolve_go_external(import_path: &str) -> Option<PathBuf> {
     // Try mod cache
     if let Some(mod_cache) = external_packages::find_go_mod_cache() {
         if let Some(pkg) = external_packages::resolve_go_import(import_path, &mod_cache) {
+            // Index on cache miss
+            index_go_package(import_path, &pkg.path, version, false);
             return Some(pkg.path);
         }
     }
 
     None
+}
+
+/// Index a Go package into the global cache.
+fn index_go_package(name: &str, path: &Path, version: Option<external_packages::Version>, is_stdlib: bool) {
+    let Ok(index) = external_packages::PackageIndex::open() else { return };
+
+    // Check if already indexed
+    if let Ok(true) = index.is_indexed("go", name) {
+        return;
+    }
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 1, minor: 0 });
+    let max_version = if is_stdlib { version } else { None };
+
+    let Ok(pkg_id) = index.insert_package(
+        "go",
+        name,
+        &path.to_string_lossy(),
+        min_version,
+        max_version,
+    ) else { return };
+
+    // Extract symbols from .go files in the directory
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    if path.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let file_path = entry.path();
+                if file_path.extension().map_or(false, |e| e == "go") {
+                    // Skip test files
+                    if file_path.to_string_lossy().ends_with("_test.go") {
+                        continue;
+                    }
+                    if let Ok(content) = std::fs::read_to_string(&file_path) {
+                        let result = extractor.extract(&file_path, &content);
+                        insert_skeleton_symbols(&index, pkg_id, &result.symbols);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Resolve a TypeScript/JavaScript import to a local file path
@@ -5244,4 +5406,345 @@ fn cmd_list_files(prefix: Option<&str>, root: Option<&Path>, limit: usize, json:
     }
 
     0
+}
+
+/// Index external packages into the global cache.
+fn cmd_index_packages(python: bool, go: bool, clear: bool, root: Option<&Path>, json: bool) -> i32 {
+    let root = root.map(|p| p.to_path_buf()).unwrap_or_else(|| {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    });
+
+    // Open or create the index
+    let index = match external_packages::PackageIndex::open() {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("Failed to open package index: {}", e);
+            return 1;
+        }
+    };
+
+    if clear {
+        if let Err(e) = index.clear() {
+            eprintln!("Failed to clear index: {}", e);
+            return 1;
+        }
+        if !json {
+            println!("Cleared existing index");
+        }
+    }
+
+    // Default to both if neither specified
+    let (do_python, do_go) = if !python && !go {
+        (true, true)
+    } else {
+        (python, go)
+    };
+
+    let mut stats = IndexPackagesStats::default();
+
+    if do_python {
+        index_python_packages(&index, &root, &mut stats, json);
+    }
+
+    if do_go {
+        index_go_packages(&index, &mut stats, json);
+    }
+
+    if json {
+        println!("{}", serde_json::json!({
+            "python_packages": stats.python_packages,
+            "python_symbols": stats.python_symbols,
+            "go_packages": stats.go_packages,
+            "go_symbols": stats.go_symbols,
+        }));
+    } else {
+        println!("\nIndexing complete:");
+        if do_python {
+            println!("  Python: {} packages, {} symbols", stats.python_packages, stats.python_symbols);
+        }
+        if do_go {
+            println!("  Go: {} packages, {} symbols", stats.go_packages, stats.go_symbols);
+        }
+    }
+
+    0
+}
+
+#[derive(Default)]
+struct IndexPackagesStats {
+    python_packages: usize,
+    python_symbols: usize,
+    go_packages: usize,
+    go_symbols: usize,
+}
+
+/// Index Python stdlib and site-packages.
+fn index_python_packages(
+    index: &external_packages::PackageIndex,
+    root: &Path,
+    stats: &mut IndexPackagesStats,
+    json: bool,
+) {
+    let version = external_packages::get_python_version(root)
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 3, minor: 0 });
+
+    if !json {
+        println!("Indexing Python packages (version {:?})...", version);
+    }
+
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    // Index stdlib
+    if let Some(stdlib) = external_packages::find_python_stdlib(root) {
+        if !json {
+            println!("  Stdlib: {}", stdlib.display());
+        }
+        if let Ok(entries) = std::fs::read_dir(&stdlib) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                // Skip private modules and __pycache__
+                if name.starts_with('_') || name == "__pycache__" {
+                    continue;
+                }
+
+                // Skip non-Python content
+                if path.is_file() && !name.ends_with(".py") {
+                    continue;
+                }
+
+                let module_name = name.trim_end_matches(".py");
+
+                // Skip if already indexed
+                if let Ok(true) = index.is_indexed("python", module_name) {
+                    continue;
+                }
+
+                let pkg_id = match index.insert_package(
+                    "python",
+                    module_name,
+                    &path.to_string_lossy(),
+                    min_version,
+                    version, // stdlib is version-specific
+                ) {
+                    Ok(id) => id,
+                    Err(_) => continue,
+                };
+
+                stats.python_packages += 1;
+                let symbols = index_python_path(&mut extractor, index, pkg_id, &path);
+                stats.python_symbols += symbols;
+            }
+        }
+    }
+
+    // Index site-packages
+    if let Some(site_packages) = external_packages::find_python_site_packages(root) {
+        if !json {
+            println!("  Site-packages: {}", site_packages.display());
+        }
+        if let Ok(entries) = std::fs::read_dir(&site_packages) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                // Skip private, dist-info, egg-info, __pycache__
+                if name.starts_with('_')
+                    || name.ends_with(".dist-info")
+                    || name.ends_with(".egg-info")
+                    || name == "__pycache__"
+                {
+                    continue;
+                }
+
+                // Skip non-Python content
+                if path.is_file() && !name.ends_with(".py") {
+                    continue;
+                }
+
+                let module_name = name.trim_end_matches(".py");
+
+                // Skip if already indexed
+                if let Ok(true) = index.is_indexed("python", module_name) {
+                    continue;
+                }
+
+                let pkg_id = match index.insert_package(
+                    "python",
+                    module_name,
+                    &path.to_string_lossy(),
+                    min_version,
+                    None, // packages may work with newer versions
+                ) {
+                    Ok(id) => id,
+                    Err(_) => continue,
+                };
+
+                stats.python_packages += 1;
+                let symbols = index_python_path(&mut extractor, index, pkg_id, &path);
+                stats.python_symbols += symbols;
+            }
+        }
+    }
+}
+
+/// Index a Python path (file or directory) and return symbol count.
+fn index_python_path(
+    extractor: &mut skeleton::SkeletonExtractor,
+    index: &external_packages::PackageIndex,
+    pkg_id: i64,
+    path: &Path,
+) -> usize {
+    let mut count = 0;
+
+    if path.is_file() && path.extension().map_or(false, |e| e == "py") {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let result = extractor.extract(path, &content);
+            count += count_and_insert_symbols(index, pkg_id, &result.symbols);
+        }
+    } else if path.is_dir() {
+        // Index __init__.py if it exists
+        let init_path = path.join("__init__.py");
+        if init_path.is_file() {
+            if let Ok(content) = std::fs::read_to_string(&init_path) {
+                let result = extractor.extract(&init_path, &content);
+                count += count_and_insert_symbols(index, pkg_id, &result.symbols);
+            }
+        }
+    }
+
+    count
+}
+
+/// Index Go stdlib and mod cache.
+fn index_go_packages(
+    index: &external_packages::PackageIndex,
+    stats: &mut IndexPackagesStats,
+    json: bool,
+) {
+    let version = external_packages::get_go_version()
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 1, minor: 0 });
+
+    if !json {
+        println!("Indexing Go packages (version {:?})...", version);
+    }
+
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    // Index stdlib
+    if let Some(stdlib) = external_packages::find_go_stdlib() {
+        if !json {
+            println!("  Stdlib: {}", stdlib.display());
+        }
+        index_go_stdlib_recursive(&mut extractor, index, &stdlib, "", min_version, version, stats);
+    }
+
+    // Index mod cache (just top-level for now - full recursive would be slow)
+    if let Some(mod_cache) = external_packages::find_go_mod_cache() {
+        if !json {
+            println!("  Mod cache: {}", mod_cache.display());
+        }
+        // Note: mod cache indexing is lazy (on-demand) for performance
+        // We just report its availability here
+    }
+}
+
+/// Recursively index Go stdlib packages.
+fn index_go_stdlib_recursive(
+    extractor: &mut skeleton::SkeletonExtractor,
+    index: &external_packages::PackageIndex,
+    base: &Path,
+    prefix: &str,
+    min_version: external_packages::Version,
+    max_version: Option<external_packages::Version>,
+    stats: &mut IndexPackagesStats,
+) {
+    let Ok(entries) = std::fs::read_dir(base) else { return };
+
+    let mut has_go_files = false;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden, vendor, internal, testdata
+        if name.starts_with('.') || name == "vendor" || name == "testdata" {
+            continue;
+        }
+
+        if path.is_dir() {
+            // Recurse into subdirectories
+            let sub_prefix = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", prefix, name)
+            };
+            index_go_stdlib_recursive(extractor, index, &path, &sub_prefix, min_version, max_version, stats);
+        } else if name.ends_with(".go") && !name.ends_with("_test.go") {
+            has_go_files = true;
+        }
+    }
+
+    // If this directory has .go files, index it as a package
+    if has_go_files && !prefix.is_empty() {
+        // Skip if already indexed
+        if let Ok(true) = index.is_indexed("go", prefix) {
+            return;
+        }
+
+        let pkg_id = match index.insert_package(
+            "go",
+            prefix,
+            &base.to_string_lossy(),
+            min_version,
+            max_version,
+        ) {
+            Ok(id) => id,
+            Err(_) => return,
+        };
+
+        stats.go_packages += 1;
+
+        // Index all .go files in this directory
+        if let Ok(entries) = std::fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "go") {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    if !name.ends_with("_test.go") {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            let result = extractor.extract(&path, &content);
+                            stats.go_symbols += count_and_insert_symbols(index, pkg_id, &result.symbols);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Count symbols and insert them into the index.
+fn count_and_insert_symbols(
+    index: &external_packages::PackageIndex,
+    pkg_id: i64,
+    symbols: &[skeleton::SkeletonSymbol],
+) -> usize {
+    let mut count = 0;
+    for sym in symbols {
+        let _ = index.insert_symbol(
+            pkg_id,
+            &sym.name,
+            sym.kind,
+            &sym.signature,
+            sym.start_line as u32,
+        );
+        count += 1;
+        count += count_and_insert_symbols(index, pkg_id, &sym.children);
+    }
+    count
 }

@@ -4,8 +4,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Wire PackageIndex into external resolution (lazy index on cache miss)
-- CLI command to pre-index stdlib/site-packages
+(Empty - pick from backlog or add new tasks)
 
 Test Status: 2184 passing, 0 failing, 42 skipped (all optional deps)
 

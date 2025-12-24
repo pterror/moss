@@ -855,6 +855,13 @@ impl PackageIndex {
         self.conn.execute("DELETE FROM packages WHERE id = ?1", params![package_id])?;
         Ok(())
     }
+
+    /// Clear all packages and symbols from the index.
+    pub fn clear(&self) -> Result<(), rusqlite::Error> {
+        self.conn.execute("DELETE FROM symbols", [])?;
+        self.conn.execute("DELETE FROM packages", [])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
