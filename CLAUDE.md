@@ -34,6 +34,7 @@ Do not:
 - Leave work uncommitted
 - Create special cases - design to avoid them; if stuck, ask user rather than special-casing
 - Deprecate things - no users, just remove; deprecation is for backwards compatibility we don't need
+- **Create "legacy" APIs** - one API, one way. If the signature changes, update all callers. No `foo_legacy()` or `foo_v2()`.
 - **Add to the monolith** - implementation goes in sub-packages (`moss-intelligence`, `moss-orchestration`, etc.), never in `src/moss/`. The `moss` package is a meta-package for external convenience only. Internal code imports from sub-packages, not `moss`.
 - **Do half measures** - when adding a trait/abstraction, migrate ALL callers immediately. No "we can consolidate later" or asking whether to do partial vs full migration. Just do the full migration.
 - **Ask permission on design when philosophy is clear** - if "Generalize Don't Multiply" or other tenets point to an obvious answer, don't present options. Just do the right thing.
