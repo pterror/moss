@@ -1,12 +1,14 @@
 //! CSS language support (parse only, minimal skeleton).
 
 use crate::{LanguageSupport, Symbol, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct CssSupport;
+/// CSS language support.
+pub struct Css;
 
-impl LanguageSupport for CssSupport {
-    fn language(&self) -> Language { Language::Css }
+impl LanguageSupport for Css {
+    fn name(&self) -> &'static str { "CSS" }
+    fn extensions(&self) -> &'static [&'static str] { &["css", "scss"] }
     fn grammar_name(&self) -> &'static str { "css" }
 
     // CSS has no functions/containers/types in the traditional sense

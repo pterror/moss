@@ -1,12 +1,14 @@
 //! Ruby language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct RubySupport;
+/// Ruby language support.
+pub struct Ruby;
 
-impl LanguageSupport for RubySupport {
-    fn language(&self) -> Language { Language::Ruby }
+impl LanguageSupport for Ruby {
+    fn name(&self) -> &'static str { "Ruby" }
+    fn extensions(&self) -> &'static [&'static str] { &["rb"] }
     fn grammar_name(&self) -> &'static str { "ruby" }
 
     fn container_kinds(&self) -> &'static [&'static str] { &["class", "module"] }

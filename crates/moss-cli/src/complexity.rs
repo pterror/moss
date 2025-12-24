@@ -3,8 +3,8 @@
 //! Calculates McCabe cyclomatic complexity for functions.
 //! Complexity = number of decision points + 1
 
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport};
 use std::path::Path;
 
 /// Complexity data for a function
@@ -101,22 +101,8 @@ impl ComplexityAnalyzer {
     }
 
     pub fn analyze(&self, path: &Path, content: &str) -> ComplexityReport {
-        let lang = Language::from_path(path);
-
-        // Try trait-based analysis for supported languages
-        let functions = match lang {
-            Some(lang_val) => {
-                if let Some(support) = get_support(lang_val) {
-                    self.analyze_with_trait(lang_val, content, support)
-                } else {
-                    // Fallback to legacy for unsupported languages
-                    match lang_val {
-                        Language::Python => self.analyze_python(content),
-                        Language::Rust => self.analyze_rust(content),
-                        _ => Vec::new(),
-                    }
-                }
-            }
+        let functions = match support_for_path(path) {
+            Some(support) => self.analyze_with_trait(content, support),
             None => Vec::new(),
         };
 
@@ -129,11 +115,10 @@ impl ComplexityAnalyzer {
     /// Analyze using the LanguageSupport trait
     fn analyze_with_trait(
         &self,
-        lang: Language,
         content: &str,
         support: &dyn LanguageSupport,
     ) -> Vec<FunctionComplexity> {
-        let tree = match self.parsers.parse_lang(lang, content) {
+        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -244,7 +229,7 @@ impl ComplexityAnalyzer {
     }
 
     fn analyze_python(&self, content: &str) -> Vec<FunctionComplexity> {
-        let tree = match self.parsers.parse_lang(Language::Python, content) {
+        let tree = match self.parsers.parse_with_grammar("python", content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -371,7 +356,7 @@ impl ComplexityAnalyzer {
     }
 
     fn analyze_rust(&self, content: &str) -> Vec<FunctionComplexity> {
-        let tree = match self.parsers.parse_lang(Language::Rust, content) {
+        let tree = match self.parsers.parse_with_grammar("rust", content) {
             Some(t) => t,
             None => return Vec::new(),
         };

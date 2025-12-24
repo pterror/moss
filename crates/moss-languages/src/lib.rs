@@ -1,8 +1,7 @@
 //! Language support for moss.
 //!
 //! This crate provides the `LanguageSupport` trait and implementations for
-//! various programming languages. Each language implementation is behind
-//! a feature flag matching arborium's pattern.
+//! various programming languages. Each language struct IS its support implementation.
 //!
 //! # Features
 //!
@@ -13,11 +12,15 @@
 //! # Example
 //!
 //! ```ignore
-//! use moss_languages::{get_support, LanguageSupport};
-//! use moss_core::Language;
+//! use moss_languages::{Python, LanguageSupport, support_for_path};
+//! use std::path::Path;
 //!
-//! if let Some(support) = get_support(Language::Python) {
-//!     println!("Python function kinds: {:?}", support.function_kinds());
+//! // Static usage (compile-time known language):
+//! println!("Python function kinds: {:?}", Python.function_kinds());
+//!
+//! // Dynamic lookup (from file path):
+//! if let Some(support) = support_for_path(Path::new("foo.py")) {
+//!     println!("Language: {}", support.name());
 //! }
 //! ```
 
@@ -79,8 +82,65 @@ pub mod css;
 #[cfg(feature = "lang-bash")]
 pub mod bash;
 
-// Re-exports
-pub use registry::{get_support, is_supported, supported_languages};
+// Re-exports from registry
+pub use registry::{support_for_extension, support_for_path, supported_languages};
+
+// Re-exports from traits
 pub use traits::{
     Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism,
 };
+
+// Re-export language structs
+#[cfg(feature = "lang-python")]
+pub use python::Python;
+
+#[cfg(feature = "lang-rust")]
+pub use rust::Rust;
+
+#[cfg(feature = "lang-javascript")]
+pub use javascript::JavaScript;
+
+#[cfg(feature = "lang-typescript")]
+pub use typescript::{TypeScript, Tsx};
+
+#[cfg(feature = "lang-go")]
+pub use go::Go;
+
+#[cfg(feature = "lang-java")]
+pub use java::Java;
+
+#[cfg(feature = "lang-c")]
+pub use c::C;
+
+#[cfg(feature = "lang-cpp")]
+pub use cpp::Cpp;
+
+#[cfg(feature = "lang-ruby")]
+pub use ruby::Ruby;
+
+#[cfg(feature = "lang-scala")]
+pub use scala::Scala;
+
+#[cfg(feature = "lang-vue")]
+pub use vue::Vue;
+
+#[cfg(feature = "lang-markdown")]
+pub use markdown::Markdown;
+
+#[cfg(feature = "lang-json")]
+pub use json::Json;
+
+#[cfg(feature = "lang-yaml")]
+pub use yaml::Yaml;
+
+#[cfg(feature = "lang-toml")]
+pub use toml::Toml;
+
+#[cfg(feature = "lang-html")]
+pub use html::Html;
+
+#[cfg(feature = "lang-css")]
+pub use css::Css;
+
+#[cfg(feature = "lang-bash")]
+pub use bash::Bash;

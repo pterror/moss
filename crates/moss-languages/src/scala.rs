@@ -1,12 +1,14 @@
 //! Scala language support.
 
 use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct ScalaSupport;
+/// Scala language support.
+pub struct Scala;
 
-impl LanguageSupport for ScalaSupport {
-    fn language(&self) -> Language { Language::Scala }
+impl LanguageSupport for Scala {
+    fn name(&self) -> &'static str { "Scala" }
+    fn extensions(&self) -> &'static [&'static str] { &["scala", "sc"] }
     fn grammar_name(&self) -> &'static str { "scala" }
 
     fn container_kinds(&self) -> &'static [&'static str] { &["class_definition", "object_definition", "trait_definition"] }

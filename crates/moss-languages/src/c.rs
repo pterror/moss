@@ -1,12 +1,14 @@
 //! C language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct CSupport;
+/// C language support.
+pub struct C;
 
-impl LanguageSupport for CSupport {
-    fn language(&self) -> Language { Language::C }
+impl LanguageSupport for C {
+    fn name(&self) -> &'static str { "C" }
+    fn extensions(&self) -> &'static [&'static str] { &["c", "h"] }
     fn grammar_name(&self) -> &'static str { "c" }
 
     fn container_kinds(&self) -> &'static [&'static str] { &[] } // C doesn't have containers
@@ -67,7 +69,7 @@ impl LanguageSupport for CSupport {
     }
 }
 
-impl CSupport {
+impl C {
     fn find_identifier<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if node.kind() == "identifier" {
             return Some(&content[node.byte_range()]);

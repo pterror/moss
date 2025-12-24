@@ -1,18 +1,15 @@
 //! Rust language support.
 
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct RustSupport;
+/// Rust language support.
+pub struct Rust;
 
-impl LanguageSupport for RustSupport {
-    fn language(&self) -> Language {
-        Language::Rust
-    }
-
-    fn grammar_name(&self) -> &'static str {
-        "rust"
-    }
+impl LanguageSupport for Rust {
+    fn name(&self) -> &'static str { "Rust" }
+    fn extensions(&self) -> &'static [&'static str] { &["rs"] }
+    fn grammar_name(&self) -> &'static str { "rust" }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["impl_item", "trait_item"]
@@ -328,7 +325,7 @@ impl LanguageSupport for RustSupport {
     }
 }
 
-impl RustSupport {
+impl Rust {
     fn extract_visibility_prefix(&self, node: &Node, content: &str) -> String {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {

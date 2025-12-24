@@ -1,18 +1,15 @@
 //! JavaScript language support.
 
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct JavaScriptSupport;
+/// JavaScript language support.
+pub struct JavaScript;
 
-impl LanguageSupport for JavaScriptSupport {
-    fn language(&self) -> Language {
-        Language::JavaScript
-    }
-
-    fn grammar_name(&self) -> &'static str {
-        "javascript"
-    }
+impl LanguageSupport for JavaScript {
+    fn name(&self) -> &'static str { "JavaScript" }
+    fn extensions(&self) -> &'static [&'static str] { &["js", "mjs", "cjs", "jsx"] }
+    fn grammar_name(&self) -> &'static str { "javascript" }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_declaration", "class"]
@@ -187,7 +184,7 @@ impl LanguageSupport for JavaScriptSupport {
     }
 }
 
-impl JavaScriptSupport {
+impl JavaScript {
     fn collect_import_names(import_clause: &Node, content: &str, names: &mut Vec<String>) {
         let mut cursor = import_clause.walk();
         for child in import_clause.children(&mut cursor) {

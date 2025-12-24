@@ -2,8 +2,8 @@
 //!
 //! Builds a simplified control flow graph for functions.
 
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::get_support;
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::support_for_path;
 use std::path::Path;
 
 /// Type of control flow edge
@@ -161,10 +161,9 @@ impl CfgBuilder {
     }
 
     pub fn build(&mut self, path: &Path, content: &str, function_name: Option<&str>) -> CfgResult {
-        let lang = Language::from_path(path);
-        let graphs = match lang {
-            Some(Language::Python) => self.build_python(content, function_name),
-            Some(Language::Rust) => self.build_rust(content, function_name),
+        let graphs = match support_for_path(path).map(|s| s.grammar_name()) {
+            Some("python") => self.build_python(content, function_name),
+            Some("rust") => self.build_rust(content, function_name),
             _ => Vec::new(),
         };
 
@@ -172,24 +171,6 @@ impl CfgBuilder {
             graphs,
             file_path: path.to_string_lossy().to_string(),
         }
-    }
-
-    /// Check if a node kind is a control flow node using the trait
-    #[allow(dead_code)]
-    fn is_control_flow(&self, lang: Language, kind: &str) -> bool {
-        if let Some(support) = get_support(lang) {
-            return support.control_flow_kinds().contains(&kind);
-        }
-        false
-    }
-
-    /// Check if a node kind is a function using the trait
-    #[allow(dead_code)]
-    fn is_function(&self, lang: Language, kind: &str) -> bool {
-        if let Some(support) = get_support(lang) {
-            return support.function_kinds().contains(&kind);
-        }
-        false
     }
 
     fn new_node(
@@ -209,7 +190,7 @@ impl CfgBuilder {
     }
 
     fn build_python(&mut self, content: &str, filter_name: Option<&str>) -> Vec<ControlFlowGraph> {
-        let tree = match self.parsers.parse_lang(Language::Python, content) {
+        let tree = match self.parsers.parse_with_grammar("python", content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -529,7 +510,7 @@ impl CfgBuilder {
     }
 
     fn build_rust(&mut self, content: &str, filter_name: Option<&str>) -> Vec<ControlFlowGraph> {
-        let tree = match self.parsers.parse_lang(Language::Rust, content) {
+        let tree = match self.parsers.parse_with_grammar("rust", content) {
             Some(t) => t,
             None => return Vec::new(),
         };

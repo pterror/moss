@@ -4,8 +4,8 @@
 //! Supports finding where a variable is defined, what's in scope at a position,
 //! and detecting variable shadowing.
 
-use moss_core::{tree_sitter::Node, Language, Parsers};
-use moss_languages::get_support;
+use moss_core::{tree_sitter::Node, Parsers};
+use moss_languages::support_for_path;
 use std::path::Path;
 
 /// A scope in the code
@@ -198,10 +198,9 @@ impl ScopeAnalyzer {
     }
 
     pub fn analyze(&self, path: &Path, content: &str) -> ScopeResult {
-        let lang = Language::from_path(path);
-        let root = match lang {
-            Some(Language::Python) => self.analyze_python(content),
-            Some(Language::Rust) => self.analyze_rust(content),
+        let root = match support_for_path(path).map(|s| s.grammar_name()) {
+            Some("python") => self.analyze_python(content),
+            Some("rust") => self.analyze_rust(content),
             _ => Scope {
                 kind: ScopeKind::Module,
                 name: None,
@@ -218,27 +217,8 @@ impl ScopeAnalyzer {
         }
     }
 
-    /// Check if a node kind creates a new scope using trait-based detection
-    #[allow(dead_code)]
-    fn is_scope_creating(&self, lang: Language, kind: &str) -> bool {
-        if let Some(support) = get_support(lang) {
-            // Check trait-defined scope-creating kinds
-            if support.scope_creating_kinds().contains(&kind) {
-                return true;
-            }
-            // Functions and containers also create scopes
-            if support.function_kinds().contains(&kind) {
-                return true;
-            }
-            if support.container_kinds().contains(&kind) {
-                return true;
-            }
-        }
-        false
-    }
-
     fn analyze_python(&self, content: &str) -> Scope {
-        let tree = match self.parsers.parse_lang(Language::Python, content) {
+        let tree = match self.parsers.parse_with_grammar("python", content) {
             Some(t) => t,
             None => {
                 return Scope {
@@ -670,7 +650,7 @@ impl ScopeAnalyzer {
     }
 
     fn analyze_rust(&self, content: &str) -> Scope {
-        let tree = match self.parsers.parse_lang(Language::Rust, content) {
+        let tree = match self.parsers.parse_with_grammar("rust", content) {
             Some(t) => t,
             None => {
                 return Scope {

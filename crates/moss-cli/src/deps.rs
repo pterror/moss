@@ -2,8 +2,8 @@
 //!
 //! Extracts imports and exports from source files.
 
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
 use moss_languages::Import as LangImport;
 use moss_languages::Export as LangExport;
 use std::path::Path;
@@ -148,21 +148,18 @@ impl DepsExtractor {
     }
 
     pub fn extract(&self, path: &Path, content: &str) -> DepsResult {
-        let lang = Language::from_path(path);
+        let support = support_for_path(path);
 
-        let (imports, exports, reexports) = match lang {
+        let (imports, exports, reexports) = match support.map(|s| s.grammar_name()) {
             // JS/TS need special handling for re-exports
-            Some(Language::JavaScript) => self.extract_javascript(content),
-            Some(Language::TypeScript) => self.extract_typescript(content),
-            Some(Language::Tsx) => self.extract_tsx(content),
+            Some("javascript") => self.extract_javascript(content),
+            Some("typescript") => self.extract_typescript(content),
+            Some("tsx") => self.extract_tsx(content),
             // All other languages use trait-based extraction
-            Some(l) => {
-                if let Some(support) = get_support(l) {
-                    let (i, e) = self.extract_with_trait(l, content, support);
-                    (i, e, Vec::new())
-                } else {
-                    (Vec::new(), Vec::new(), Vec::new())
-                }
+            Some(_) => {
+                let support = support.unwrap();
+                let (i, e) = self.extract_with_trait(content, support);
+                (i, e, Vec::new())
             }
             None => (Vec::new(), Vec::new(), Vec::new()),
         };
@@ -178,11 +175,10 @@ impl DepsExtractor {
     /// Extract using the LanguageSupport trait
     fn extract_with_trait(
         &self,
-        lang: Language,
         content: &str,
         support: &dyn LanguageSupport,
     ) -> (Vec<Import>, Vec<Export>) {
-        let tree = match self.parsers.parse_lang(lang, content) {
+        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return (Vec::new(), Vec::new()),
         };
@@ -233,7 +229,7 @@ impl DepsExtractor {
     }
 
     fn extract_typescript(&self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
-        let tree = match self.parsers.parse_lang(Language::TypeScript, content) {
+        let tree = match self.parsers.parse_with_grammar("typescript", content) {
             Some(t) => t,
             None => return (Vec::new(), Vec::new(), Vec::new()),
         };
@@ -241,7 +237,7 @@ impl DepsExtractor {
     }
 
     fn extract_tsx(&self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
-        let tree = match self.parsers.parse_lang(Language::Tsx, content) {
+        let tree = match self.parsers.parse_with_grammar("tsx", content) {
             Some(t) => t,
             None => return (Vec::new(), Vec::new(), Vec::new()),
         };
@@ -249,7 +245,7 @@ impl DepsExtractor {
     }
 
     fn extract_javascript(&self, content: &str) -> (Vec<Import>, Vec<Export>, Vec<ReExport>) {
-        let tree = match self.parsers.parse_lang(Language::JavaScript, content) {
+        let tree = match self.parsers.parse_with_grammar("javascript", content) {
             Some(t) => t,
             None => return (Vec::new(), Vec::new(), Vec::new()),
         };

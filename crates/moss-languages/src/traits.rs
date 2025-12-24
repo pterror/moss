@@ -1,6 +1,6 @@
 //! Core trait for language support.
 
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
 /// Symbol kind classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,11 +107,20 @@ pub struct Export {
 /// - Visibility detection
 /// - Edit support (container bodies, docstrings)
 pub trait LanguageSupport: Send + Sync {
-    /// Which Language enum variant this implements
-    fn language(&self) -> Language;
+    /// Display name for this language (e.g., "Python", "C++")
+    fn name(&self) -> &'static str;
+
+    /// File extensions this language handles (e.g., ["py", "pyi", "pyw"])
+    fn extensions(&self) -> &'static [&'static str];
 
     /// Grammar name for arborium (e.g., "python", "rust")
     fn grammar_name(&self) -> &'static str;
+
+    /// Whether this language has code symbols (functions, classes, etc.)
+    /// Default: true if function_kinds or container_kinds is non-empty
+    fn has_symbols(&self) -> bool {
+        !self.function_kinds().is_empty() || !self.container_kinds().is_empty()
+    }
 
     // === Node Classification ===
 

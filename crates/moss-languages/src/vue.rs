@@ -1,12 +1,14 @@
 //! Vue language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct VueSupport;
+/// Vue language support.
+pub struct Vue;
 
-impl LanguageSupport for VueSupport {
-    fn language(&self) -> Language { Language::Vue }
+impl LanguageSupport for Vue {
+    fn name(&self) -> &'static str { "Vue" }
+    fn extensions(&self) -> &'static [&'static str] { &["vue"] }
     fn grammar_name(&self) -> &'static str { "vue" }
 
     fn container_kinds(&self) -> &'static [&'static str] { &["script_element"] }

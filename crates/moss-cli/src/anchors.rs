@@ -3,8 +3,8 @@
 //! Anchors are stable references to code locations (functions, classes, variables)
 //! that can be used for structural edits instead of line numbers.
 
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// Type of code anchor
@@ -89,20 +89,15 @@ impl AnchorExtractor {
     }
 
     pub fn extract(&self, path: &Path, content: &str) -> AnchorsResult {
-        let lang = match Language::from_path(path) {
-            Some(l) => l,
+        let support = match support_for_path(path) {
+            Some(s) => s,
             None => return AnchorsResult {
                 anchors: Vec::new(),
                 file_path: path.to_string_lossy().to_string(),
             },
         };
 
-        // Try trait-based extraction first
-        let anchors = if let Some(support) = get_support(lang) {
-            self.extract_with_trait(lang, content, support)
-        } else {
-            Vec::new()
-        };
+        let anchors = self.extract_with_trait(content, support);
 
         AnchorsResult {
             anchors,
@@ -110,8 +105,8 @@ impl AnchorExtractor {
         }
     }
 
-    fn extract_with_trait(&self, lang: Language, content: &str, support: &dyn LanguageSupport) -> Vec<Anchor> {
-        let tree = match self.parsers.parse_lang(lang, content) {
+    fn extract_with_trait(&self, content: &str, support: &dyn LanguageSupport) -> Vec<Anchor> {
+        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -234,7 +229,7 @@ impl AnchorExtractor {
     // Legacy methods - kept for reference, now using trait-based extraction
     #[allow(dead_code)]
     fn extract_python(&self, content: &str) -> Vec<Anchor> {
-        let tree = match self.parsers.parse_lang(Language::Python, content) {
+        let tree = match self.parsers.parse_with_grammar("python", content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -382,7 +377,7 @@ impl AnchorExtractor {
 
     #[allow(dead_code)]
     fn extract_rust(&self, content: &str) -> Vec<Anchor> {
-        let tree = match self.parsers.parse_lang(Language::Rust, content) {
+        let tree = match self.parsers.parse_with_grammar("rust", content) {
             Some(t) => t,
             None => return Vec::new(),
         };

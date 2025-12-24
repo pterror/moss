@@ -1,12 +1,14 @@
 //! HTML language support (parse only, minimal skeleton).
 
 use crate::{LanguageSupport, Symbol, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct HtmlSupport;
+/// HTML language support.
+pub struct Html;
 
-impl LanguageSupport for HtmlSupport {
-    fn language(&self) -> Language { Language::Html }
+impl LanguageSupport for Html {
+    fn name(&self) -> &'static str { "HTML" }
+    fn extensions(&self) -> &'static [&'static str] { &["html", "htm"] }
     fn grammar_name(&self) -> &'static str { "html" }
 
     // HTML has no functions/containers/types in the traditional sense

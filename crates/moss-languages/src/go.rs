@@ -1,12 +1,14 @@
 //! Go language support.
 
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct GoSupport;
+/// Go language support.
+pub struct Go;
 
-impl LanguageSupport for GoSupport {
-    fn language(&self) -> Language { Language::Go }
+impl LanguageSupport for Go {
+    fn name(&self) -> &'static str { "Go" }
+    fn extensions(&self) -> &'static [&'static str] { &["go"] }
     fn grammar_name(&self) -> &'static str { "go" }
 
     fn container_kinds(&self) -> &'static [&'static str] {
@@ -172,7 +174,7 @@ impl LanguageSupport for GoSupport {
     }
 }
 
-impl GoSupport {
+impl Go {
     fn parse_import_spec(node: &Node, content: &str, line: usize) -> Option<Import> {
         let mut path = String::new();
         let mut alias = None;

@@ -1,5 +1,5 @@
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -69,21 +69,16 @@ impl SymbolParser {
     }
 
     pub fn parse_file(&self, path: &Path, content: &str) -> Vec<Symbol> {
-        let lang = match Language::from_path(path) {
-            Some(l) => l,
+        let support = match support_for_path(path) {
+            Some(s) => s,
             None => return Vec::new(),
         };
 
-        // Use trait-based extraction for all supported languages
-        if let Some(support) = get_support(lang) {
-            return self.parse_with_trait(lang, content, support);
-        }
-
-        Vec::new()
+        self.parse_with_trait(content, support)
     }
 
-    fn parse_with_trait(&self, lang: Language, content: &str, support: &dyn LanguageSupport) -> Vec<Symbol> {
-        let tree = match self.parsers.parse_lang(lang, content) {
+    fn parse_with_trait(&self, content: &str, support: &dyn LanguageSupport) -> Vec<Symbol> {
+        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -170,7 +165,7 @@ impl SymbolParser {
 
     /// Parse Python imports from a file
     pub fn parse_python_imports(&self, content: &str) -> Vec<Import> {
-        let tree = match self.parsers.parse_lang(Language::Python, content) {
+        let tree = match self.parsers.parse_with_grammar("python", content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -347,7 +342,7 @@ impl SymbolParser {
     }
 
     fn find_python_calls(&self, source: &str) -> Vec<String> {
-        let tree = match self.parsers.parse_lang(Language::Python, source) {
+        let tree = match self.parsers.parse_with_grammar("python", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -439,7 +434,7 @@ impl SymbolParser {
         source: &str,
         base_line: usize,
     ) -> Vec<(String, usize, Option<String>)> {
-        let tree = match self.parsers.parse_lang(Language::Python, source) {
+        let tree = match self.parsers.parse_with_grammar("python", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -492,7 +487,7 @@ impl SymbolParser {
         source: &str,
         base_line: usize,
     ) -> Vec<(String, usize, Option<String>)> {
-        let tree = match self.parsers.parse_lang(Language::Rust, source) {
+        let tree = match self.parsers.parse_with_grammar("rust", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -552,12 +547,8 @@ impl SymbolParser {
         base_line: usize,
         is_tsx: bool,
     ) -> Vec<(String, usize, Option<String>)> {
-        let lang = if is_tsx {
-            Language::Tsx
-        } else {
-            Language::TypeScript
-        };
-        let tree = match self.parsers.parse_lang(lang, source) {
+        let grammar = if is_tsx { "tsx" } else { "typescript" };
+        let tree = match self.parsers.parse_with_grammar(grammar, source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -573,7 +564,7 @@ impl SymbolParser {
         source: &str,
         base_line: usize,
     ) -> Vec<(String, usize, Option<String>)> {
-        let tree = match self.parsers.parse_lang(Language::JavaScript, source) {
+        let tree = match self.parsers.parse_with_grammar("javascript", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -627,7 +618,7 @@ impl SymbolParser {
         source: &str,
         base_line: usize,
     ) -> Vec<(String, usize, Option<String>)> {
-        let tree = match self.parsers.parse_lang(Language::Java, source) {
+        let tree = match self.parsers.parse_with_grammar("java", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -679,7 +670,7 @@ impl SymbolParser {
         source: &str,
         base_line: usize,
     ) -> Vec<(String, usize, Option<String>)> {
-        let tree = match self.parsers.parse_lang(Language::Go, source) {
+        let tree = match self.parsers.parse_with_grammar("go", source) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -728,7 +719,7 @@ impl SymbolParser {
     }
 
     fn find_rust_calls(&self, source: &str) -> Vec<String> {
-        let tree = match self.parsers.parse_lang(Language::Rust, source) {
+        let tree = match self.parsers.parse_with_grammar("rust", source) {
             Some(t) => t,
             None => return Vec::new(),
         };

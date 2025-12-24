@@ -1,12 +1,14 @@
 //! C++ language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct CppSupport;
+/// C++ language support.
+pub struct Cpp;
 
-impl LanguageSupport for CppSupport {
-    fn language(&self) -> Language { Language::Cpp }
+impl LanguageSupport for Cpp {
+    fn name(&self) -> &'static str { "C++" }
+    fn extensions(&self) -> &'static [&'static str] { &["cpp", "cc", "cxx", "hpp", "hh", "hxx"] }
     fn grammar_name(&self) -> &'static str { "cpp" }
 
     fn container_kinds(&self) -> &'static [&'static str] { &["class_specifier", "struct_specifier"] }

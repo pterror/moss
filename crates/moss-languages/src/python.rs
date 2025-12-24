@@ -1,18 +1,15 @@
 //! Python language support.
 
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct PythonSupport;
+/// Python language support.
+pub struct Python;
 
-impl LanguageSupport for PythonSupport {
-    fn language(&self) -> Language {
-        Language::Python
-    }
-
-    fn grammar_name(&self) -> &'static str {
-        "python"
-    }
+impl LanguageSupport for Python {
+    fn name(&self) -> &'static str { "Python" }
+    fn extensions(&self) -> &'static [&'static str] { &["py", "pyi", "pyw"] }
+    fn grammar_name(&self) -> &'static str { "python" }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_definition"]
@@ -375,20 +372,20 @@ mod tests {
 
     #[test]
     fn test_python_function_kinds() {
-        let support = PythonSupport;
+        let support = Python;
         assert!(support.function_kinds().contains(&"function_definition"));
         assert!(support.function_kinds().contains(&"async_function_definition"));
     }
 
     #[test]
     fn test_python_extract_function() {
-        let support = PythonSupport;
+        let support = Python;
         let parsers = Parsers::new();
         let content = r#"def foo(x: int) -> str:
     """Convert to string."""
     return str(x)
 "#;
-        let tree = parsers.parse_lang(Language::Python, content).unwrap();
+        let tree = parsers.parse_with_grammar("python", content).unwrap();
         let root = tree.root_node();
 
         // Find function node
@@ -406,13 +403,13 @@ mod tests {
 
     #[test]
     fn test_python_extract_class() {
-        let support = PythonSupport;
+        let support = Python;
         let parsers = Parsers::new();
         let content = r#"class Foo(Bar):
     """A foo class."""
     pass
 "#;
-        let tree = parsers.parse_lang(Language::Python, content).unwrap();
+        let tree = parsers.parse_with_grammar("python", content).unwrap();
         let root = tree.root_node();
 
         let mut cursor = root.walk();
@@ -429,14 +426,14 @@ mod tests {
 
     #[test]
     fn test_python_visibility() {
-        let support = PythonSupport;
+        let support = Python;
         let parsers = Parsers::new();
         let content = r#"def public(): pass
 def _protected(): pass
 def __private(): pass
 def __dunder__(): pass
 "#;
-        let tree = parsers.parse_lang(Language::Python, content).unwrap();
+        let tree = parsers.parse_with_grammar("python", content).unwrap();
         let root = tree.root_node();
 
         let mut cursor = root.walk();

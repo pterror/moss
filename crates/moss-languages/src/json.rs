@@ -1,12 +1,14 @@
 //! JSON language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct JsonSupport;
+/// JSON language support.
+pub struct Json;
 
-impl LanguageSupport for JsonSupport {
-    fn language(&self) -> Language { Language::Json }
+impl LanguageSupport for Json {
+    fn name(&self) -> &'static str { "JSON" }
+    fn extensions(&self) -> &'static [&'static str] { &["json", "jsonc"] }
     fn grammar_name(&self) -> &'static str { "json" }
 
     // JSON is data, not code - no functions/types/control flow

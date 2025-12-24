@@ -1,12 +1,14 @@
 //! Markdown language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct MarkdownSupport;
+/// Markdown language support.
+pub struct Markdown;
 
-impl LanguageSupport for MarkdownSupport {
-    fn language(&self) -> Language { Language::Markdown }
+impl LanguageSupport for Markdown {
+    fn name(&self) -> &'static str { "Markdown" }
+    fn extensions(&self) -> &'static [&'static str] { &["md", "markdown"] }
     fn grammar_name(&self) -> &'static str { "markdown" }
 
     // Markdown is documentation, not code - no functions/types/control flow

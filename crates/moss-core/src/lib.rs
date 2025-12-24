@@ -1,10 +1,8 @@
 //! Shared types and utilities for moss crates.
 
-mod language;
 mod parsers;
 mod paths;
 
-pub use language::Language;
 pub use parsers::Parsers;
 pub use paths::get_moss_dir;
 

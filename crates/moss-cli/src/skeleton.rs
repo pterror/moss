@@ -2,8 +2,8 @@
 //!
 //! Extracts function/class signatures with optional docstrings.
 
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// A code symbol with its signature
@@ -228,18 +228,15 @@ impl SkeletonExtractor {
     }
 
     pub fn extract(&mut self, path: &Path, content: &str) -> SkeletonResult {
-        let lang = Language::from_path(path);
+        let support = support_for_path(path);
 
-        let symbols = match lang {
+        let symbols = match support.map(|s| s.grammar_name()) {
             // Vue needs special handling for script element parsing
-            Some(Language::Vue) => self.extract_vue(content),
+            Some("vue") => self.extract_vue(content),
             // All other languages use trait-based extraction
-            Some(l) => {
-                if let Some(support) = get_support(l) {
-                    self.extract_with_trait(l, content, support)
-                } else {
-                    Vec::new()
-                }
+            Some(_) => {
+                let support = support.unwrap();
+                self.extract_with_trait(content, support)
             }
             None => Vec::new(),
         };
@@ -253,9 +250,8 @@ impl SkeletonExtractor {
     /// Trait-based extraction (for future use when implementations are complete)
     #[allow(dead_code)]
     pub fn extract_with_support(&self, path: &Path, content: &str) -> Option<SkeletonResult> {
-        let lang = Language::from_path(path)?;
-        let support = get_support(lang)?;
-        let symbols = self.extract_with_trait(lang, content, support);
+        let support = support_for_path(path)?;
+        let symbols = self.extract_with_trait(content, support);
         Some(SkeletonResult {
             symbols,
             file_path: path.to_string_lossy().to_string(),
@@ -265,11 +261,10 @@ impl SkeletonExtractor {
     /// Extract using the LanguageSupport trait (new unified approach)
     fn extract_with_trait(
         &self,
-        lang: Language,
         content: &str,
         support: &dyn LanguageSupport,
     ) -> Vec<SkeletonSymbol> {
-        let tree = match self.parsers.parse_lang(lang, content) {
+        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -281,7 +276,7 @@ impl SkeletonExtractor {
         self.collect_with_trait(&mut cursor, content, support, &mut symbols, false);
 
         // Post-process for Rust: merge impl blocks with their types
-        if lang == Language::Rust {
+        if support.grammar_name() == "rust" {
             Self::merge_rust_impl_blocks(&mut symbols);
         }
 
@@ -408,7 +403,7 @@ impl SkeletonExtractor {
 
     // Vue extraction - extracts script section as JavaScript/TypeScript
     fn extract_vue(&mut self, content: &str) -> Vec<SkeletonSymbol> {
-        let tree = match self.parsers.parse_lang(Language::Vue, content) {
+        let tree = match self.parsers.parse_with_grammar("vue", content) {
             Some(t) => t,
             None => return Vec::new(),
         };

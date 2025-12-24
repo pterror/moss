@@ -1,5 +1,5 @@
-use moss_core::{tree_sitter, Language, Parsers};
-use moss_languages::{get_support, LanguageSupport};
+use moss_core::{tree_sitter, Parsers};
+use moss_languages::{support_for_path, LanguageSupport};
 use std::path::Path;
 
 /// Result of finding a symbol in a file
@@ -42,23 +42,11 @@ impl Editor {
 
     /// Find a symbol by name in a file
     pub fn find_symbol(&self, path: &Path, content: &str, name: &str) -> Option<SymbolLocation> {
-        let lang = Language::from_path(path)?;
-
-        // Use trait-based detection for supported languages
-        if let Some(support) = get_support(lang) {
-            let tree = self.parsers.parse_lang(lang, content)?;
-            let root = tree.root_node();
-            return self.find_symbol_with_trait(root, content, name, lang, support);
-        }
-
-        // Legacy fallback
-        let tree = match lang {
-            Language::Python | Language::Rust => self.parsers.parse_lang(lang, content)?,
-            _ => return None,
-        };
-
+        let support = support_for_path(path)?;
+        let grammar = support.grammar_name();
+        let tree = self.parsers.parse_with_grammar(grammar, content)?;
         let root = tree.root_node();
-        self.find_symbol_in_node(root, content, name, lang)
+        self.find_symbol_with_trait(root, content, name, grammar, support)
     }
 
     fn find_symbol_with_trait(
@@ -66,7 +54,7 @@ impl Editor {
         node: tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
         support: &dyn LanguageSupport,
     ) -> Option<SymbolLocation> {
         let kind = node.kind();
@@ -111,7 +99,7 @@ impl Editor {
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(loc) = self.find_symbol_with_trait(child, content, name, lang, support) {
+            if let Some(loc) = self.find_symbol_with_trait(child, content, name, grammar, support) {
                 return Some(loc);
             }
         }
@@ -124,17 +112,17 @@ impl Editor {
         node: tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
     ) -> Option<SymbolLocation> {
         // Check if this node is the symbol we're looking for
-        if let Some(loc) = self.check_node_is_symbol(&node, content, name, lang) {
+        if let Some(loc) = self.check_node_is_symbol(&node, content, name, grammar) {
             return Some(loc);
         }
 
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(loc) = self.find_symbol_in_node(child, content, name, lang) {
+            if let Some(loc) = self.find_symbol_in_node(child, content, name, grammar) {
                 return Some(loc);
             }
         }
@@ -147,16 +135,16 @@ impl Editor {
         node: &tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
     ) -> Option<SymbolLocation> {
         let kind = node.kind();
-        let symbol_kind = match lang {
-            Language::Python => match kind {
+        let symbol_kind = match grammar {
+            "python" => match kind {
                 "function_definition" | "async_function_definition" => Some("function"),
                 "class_definition" => Some("class"),
                 _ => None,
             },
-            Language::Rust => match kind {
+            "rust" => match kind {
                 "function_item" => Some("function"),
                 "struct_item" | "enum_item" | "trait_item" => Some("class"),
                 "impl_item" => Some("impl"),
@@ -370,23 +358,11 @@ impl Editor {
         content: &str,
         name: &str,
     ) -> Option<ContainerBody> {
-        let lang = Language::from_path(path)?;
-
-        // Use trait-based detection for supported languages
-        if let Some(support) = get_support(lang) {
-            let tree = self.parsers.parse_lang(lang, content)?;
-            let root = tree.root_node();
-            return self.find_container_body_with_trait(root, content, name, lang, support);
-        }
-
-        // Legacy fallback
-        let tree = match lang {
-            Language::Python | Language::Rust => self.parsers.parse_lang(lang, content)?,
-            _ => return None,
-        };
-
+        let support = support_for_path(path)?;
+        let grammar = support.grammar_name();
+        let tree = self.parsers.parse_with_grammar(grammar, content)?;
         let root = tree.root_node();
-        self.find_container_body_in_node(root, content, name, lang)
+        self.find_container_body_with_trait(root, content, name, grammar, support)
     }
 
     fn find_container_body_with_trait(
@@ -394,7 +370,7 @@ impl Editor {
         node: tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
         support: &dyn LanguageSupport,
     ) -> Option<ContainerBody> {
         let kind = node.kind();
@@ -420,9 +396,9 @@ impl Editor {
                 let inner_indent = format!("{}    ", container_indent);
 
                 // Use language-specific body analysis
-                return match lang {
-                    Language::Python => self.analyze_python_class_body(&body_node, content, &inner_indent),
-                    Language::Rust => self.analyze_rust_impl_body(&body_node, content, &inner_indent),
+                return match grammar {
+                    "python" => self.analyze_python_class_body(&body_node, content, &inner_indent),
+                    "rust" => self.analyze_rust_impl_body(&body_node, content, &inner_indent),
                     _ => None,
                 };
             }
@@ -431,7 +407,7 @@ impl Editor {
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(body) = self.find_container_body_with_trait(child, content, name, lang, support) {
+            if let Some(body) = self.find_container_body_with_trait(child, content, name, grammar, support) {
                 return Some(body);
             }
         }
@@ -444,17 +420,17 @@ impl Editor {
         node: tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
     ) -> Option<ContainerBody> {
         // Check if this is our target container
-        if let Some(body) = self.check_node_is_container(&node, content, name, lang) {
+        if let Some(body) = self.check_node_is_container(&node, content, name, grammar) {
             return Some(body);
         }
 
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(body) = self.find_container_body_in_node(child, content, name, lang) {
+            if let Some(body) = self.find_container_body_in_node(child, content, name, grammar) {
                 return Some(body);
             }
         }
@@ -467,14 +443,14 @@ impl Editor {
         node: &tree_sitter::Node,
         content: &str,
         name: &str,
-        lang: Language,
+        grammar: &str,
     ) -> Option<ContainerBody> {
         let kind = node.kind();
 
         // Only handle container types (can contain methods/functions)
-        let is_container = match lang {
-            Language::Python => kind == "class_definition",
-            Language::Rust => kind == "impl_item", // Only impl blocks for prepend/append
+        let is_container = match grammar {
+            "python" => kind == "class_definition",
+            "rust" => kind == "impl_item", // Only impl blocks for prepend/append
             _ => false,
         };
 
@@ -509,9 +485,9 @@ impl Editor {
         // Determine inner indent based on language (same for all currently supported)
         let inner_indent = format!("{}    ", container_indent);
 
-        match lang {
-            Language::Python => self.analyze_python_class_body(&body_node, content, &inner_indent),
-            Language::Rust => self.analyze_rust_impl_body(&body_node, content, &inner_indent),
+        match grammar {
+            "python" => self.analyze_python_class_body(&body_node, content, &inner_indent),
+            "rust" => self.analyze_rust_impl_body(&body_node, content, &inner_indent),
             _ => None,
         }
     }

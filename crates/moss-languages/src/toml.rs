@@ -1,12 +1,14 @@
 //! TOML language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct TomlSupport;
+/// TOML language support.
+pub struct Toml;
 
-impl LanguageSupport for TomlSupport {
-    fn language(&self) -> Language { Language::Toml }
+impl LanguageSupport for Toml {
+    fn name(&self) -> &'static str { "TOML" }
+    fn extensions(&self) -> &'static [&'static str] { &["toml"] }
     fn grammar_name(&self) -> &'static str { "toml" }
 
     // TOML is config, not code - no functions/types/control flow

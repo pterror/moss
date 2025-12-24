@@ -1,12 +1,14 @@
 //! Java language support.
 
 use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use moss_core::{tree_sitter::Node, Language};
+use moss_core::tree_sitter::Node;
 
-pub struct JavaSupport;
+/// Java language support.
+pub struct Java;
 
-impl LanguageSupport for JavaSupport {
-    fn language(&self) -> Language { Language::Java }
+impl LanguageSupport for Java {
+    fn name(&self) -> &'static str { "Java" }
+    fn extensions(&self) -> &'static [&'static str] { &["java"] }
     fn grammar_name(&self) -> &'static str { "java" }
 
     fn container_kinds(&self) -> &'static [&'static str] {
