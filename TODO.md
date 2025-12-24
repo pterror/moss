@@ -13,17 +13,17 @@ Test Status: 71 passing, 0 failing
 
 **Language Support Refactor** (see `docs/language-support.md` for full design):
 
-Phase 1 - Scaffold:
-- [ ] Create `crates/moss-languages/` with Cargo.toml, feature flags
-- [ ] Define `LanguageSupport` trait in `traits.rs`
-- [ ] Set up registry with `OnceLock` + `#[cfg(feature)]` gating
+Phase 1 - Scaffold: ✅
+- [x] Create `crates/moss-languages/` with Cargo.toml, feature flags
+- [x] Define `LanguageSupport` trait in `traits.rs`
+- [x] Set up registry with `OnceLock` + `#[cfg(feature)]` gating
 
-Phase 2 - Port existing languages:
-- [ ] Port Python (most complex: docstrings, async, visibility)
-- [ ] Port Rust (impl blocks, doc comments, visibility modifiers)
-- [ ] Port JavaScript/TypeScript/TSX (shared extractor)
-- [ ] Port Go, Java, C, C++, Ruby, Scala, Vue
-- [ ] Port config formats: JSON, YAML, TOML, Markdown
+Phase 2 - Port existing languages: ✅
+- [x] Port Python (most complex: docstrings, async, visibility)
+- [x] Port Rust (impl blocks, doc comments, visibility modifiers)
+- [x] Port JavaScript/TypeScript/TSX (shared extractor)
+- [x] Port Go, Java, C, C++, Ruby, Scala, Vue
+- [x] Port config formats: JSON, YAML, TOML, Markdown
 
 Phase 3 - Integrate:
 - [ ] Refactor `skeleton.rs` to use trait
