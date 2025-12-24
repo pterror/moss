@@ -229,12 +229,12 @@ pub fn analyze_overview(root: &Path) -> OverviewReport {
         .par_iter()
         .filter_map(|file| {
             let path = root.join(&file.path);
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            let lang = moss_languages::support_for_path(&path);
 
-            // Count files by language using moss_languages
-            if let Some(lang) = moss_languages::support_for_extension(ext) {
+            // Count files by language
+            if let Some(l) = lang {
                 let mut counts = files_by_language.lock().unwrap();
-                *counts.entry(lang.name().to_string()).or_insert(0) += 1;
+                *counts.entry(l.name().to_string()).or_insert(0) += 1;
             }
 
             let content = std::fs::read_to_string(&path).ok()?;
@@ -245,7 +245,6 @@ pub fn analyze_overview(root: &Path) -> OverviewReport {
             let fixmes = content.matches("FIXME").count();
 
             // Skip detailed analysis for files without language support
-            let lang = moss_languages::support_for_extension(ext);
             if lang.is_none() || !lang.unwrap().has_symbols() {
                 return Some(FileStats {
                     lines,

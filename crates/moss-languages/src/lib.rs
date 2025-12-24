@@ -87,7 +87,7 @@ pub mod css;
 pub mod bash;
 
 // Re-exports from registry
-pub use registry::{support_for_extension, support_for_path, supported_languages};
+pub use registry::{register, support_for_extension, support_for_path, supported_languages};
 
 // Re-exports from traits
 pub use traits::{

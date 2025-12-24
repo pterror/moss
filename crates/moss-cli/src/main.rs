@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use moss_core::get_moss_dir;
-use moss_languages::{external_packages, support_for_extension};
+use moss_languages::{external_packages, support_for_path};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -3445,19 +3445,15 @@ fn cmd_imports(
 
 /// Check if a file has language support (symbols can be extracted)
 fn has_language_support(path: &str) -> bool {
-    let p = std::path::Path::new(path);
-    p.extension()
-        .and_then(|e| e.to_str())
-        .and_then(support_for_extension)
+    support_for_path(Path::new(path))
         .map(|lang| lang.has_symbols())
         .unwrap_or(false)
 }
 
 /// Convert a file path to a module name using language-specific rules
 fn file_path_to_module(file_path: &str) -> Option<String> {
-    let path = std::path::Path::new(file_path);
-    let ext = path.extension()?.to_str()?;
-    let lang = support_for_extension(ext)?;
+    let path = Path::new(file_path);
+    let lang = support_for_path(path)?;
     lang.file_path_to_module_name(path)
 }
 
