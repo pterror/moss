@@ -5,6 +5,8 @@ Design philosophy: `docs/philosophy.md`. Key tenets: Generalize Don't Multiply, 
 Rust/Python boundary: `docs/rust-python-boundary.md`. Rust = plumbing (fast, deterministic), Python = interface (LLM, orchestration).
 TUI conventions: `docs/tui.md`. Textual framework quirks and lessons learned.
 
+**Index-first architecture:** Core data extraction (symbols, imports, calls) goes in the Rust index. Python layers build on top of indexed data, never bypass it. When adding language support: first add extraction to the indexer (deps.rs, skeleton.rs), then build Python features that query the index. Don't build standalone Python parsers for data that should be indexed. **Never call Python from Rust** - the boundary is one-way (Python calls Rust CLI).
+
 ## Core Rule
 
 ALWAYS NOTE THINGS DOWN. When you discover something important, write it immediately:
