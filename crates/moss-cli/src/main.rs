@@ -1769,8 +1769,10 @@ fn resolve_import(module: &str, current_file: &Path, root: &Path) -> Option<Path
 /// Resolve a Python import to an external package (stdlib or site-packages).
 /// Uses the global package index for caching.
 fn resolve_python_external(module: &str, root: &Path) -> Option<PathBuf> {
+    use resolution::ImportResolver;
+
     // Get current Python version for index queries
-    let version = external_packages::get_python_version(root)
+    let version = moss_languages::Python.get_version(root)
         .and_then(|v| external_packages::Version::parse(&v));
 
     // Check the global index first
@@ -1784,25 +1786,14 @@ fn resolve_python_external(module: &str, root: &Path) -> Option<PathBuf> {
         }
     }
 
-    // Try stdlib first
-    if let Some(stdlib) = external_packages::find_python_stdlib(root) {
-        if let Some(pkg) = external_packages::resolve_python_stdlib_import(module, &stdlib) {
-            // Index on cache miss
-            index_python_package(module, &pkg.path, version, true);
-            return Some(pkg.path);
-        }
-    }
+    // Use trait-based resolution
+    let pkg = moss_languages::Python.resolve_import(module, root)?;
 
-    // Try site-packages
-    if let Some(site_packages) = external_packages::find_python_site_packages(root) {
-        if let Some(pkg) = external_packages::resolve_python_import(module, &site_packages) {
-            // Index on cache miss
-            index_python_package(module, &pkg.path, version, false);
-            return Some(pkg.path);
-        }
-    }
+    // Index on cache miss
+    let is_stdlib = moss_languages::Python.is_stdlib_import(module, root);
+    index_python_package(module, &pkg.path, version, is_stdlib);
 
-    None
+    Some(pkg.path)
 }
 
 /// Index a Python package into the global cache.
@@ -1886,8 +1877,10 @@ fn resolve_go_import_local(import_path: &str, current_file: &Path, _root: &Path)
 /// Resolve a Go import to an external package (stdlib or mod cache).
 /// Uses the global package index for caching.
 fn resolve_go_external(import_path: &str) -> Option<PathBuf> {
-    // Get current Go version for index queries
-    let version = external_packages::get_go_version()
+    use resolution::ImportResolver;
+
+    // Get current Go version for index queries (project_root not needed for Go)
+    let version = moss_languages::Go.get_version(Path::new("."))
         .and_then(|v| external_packages::Version::parse(&v));
 
     // Check the global index first
@@ -1900,27 +1893,14 @@ fn resolve_go_external(import_path: &str) -> Option<PathBuf> {
         }
     }
 
-    // Try stdlib first
-    if external_packages::is_go_stdlib_import(import_path) {
-        if let Some(stdlib) = external_packages::find_go_stdlib() {
-            if let Some(pkg) = external_packages::resolve_go_stdlib_import(import_path, &stdlib) {
-                // Index on cache miss
-                index_go_package(import_path, &pkg.path, version, true);
-                return Some(pkg.path);
-            }
-        }
-    }
+    // Use trait-based resolution
+    let pkg = moss_languages::Go.resolve_import(import_path, Path::new("."))?;
 
-    // Try mod cache
-    if let Some(mod_cache) = external_packages::find_go_mod_cache() {
-        if let Some(pkg) = external_packages::resolve_go_import(import_path, &mod_cache) {
-            // Index on cache miss
-            index_go_package(import_path, &pkg.path, version, false);
-            return Some(pkg.path);
-        }
-    }
+    // Index on cache miss
+    let is_stdlib = moss_languages::Go.is_stdlib_import(import_path, Path::new("."));
+    index_go_package(import_path, &pkg.path, version, is_stdlib);
 
-    None
+    Some(pkg.path)
 }
 
 /// Index a Go package into the global cache.
@@ -1968,13 +1948,15 @@ fn index_go_package(name: &str, path: &Path, version: Option<external_packages::
 /// Resolve a JavaScript import to node_modules.
 /// Uses the global package index for caching.
 fn resolve_js_external(module: &str, current_file: &Path) -> Option<PathBuf> {
+    use resolution::ImportResolver;
+
     // Skip relative imports (handled by resolve_typescript_import)
     if module.starts_with('.') {
         return None;
     }
 
     // Get Node version for index queries
-    let version = external_packages::get_node_version()
+    let version = moss_languages::JavaScript.get_version(current_file)
         .and_then(|v| external_packages::Version::parse(&v));
 
     // Check the global index first
@@ -1987,11 +1969,8 @@ fn resolve_js_external(module: &str, current_file: &Path) -> Option<PathBuf> {
         }
     }
 
-    // Find node_modules
-    let node_modules = external_packages::find_node_modules(current_file)?;
-
-    // Resolve the import
-    let pkg = external_packages::resolve_node_import(module, &node_modules)?;
+    // Use trait-based resolution (current_file used to find node_modules)
+    let pkg = moss_languages::JavaScript.resolve_import(module, current_file)?;
 
     // Index on cache miss
     index_js_package(module, &pkg.path, version);
@@ -2119,11 +2098,9 @@ fn resolve_cpp_relative(include: &str, current_file: &Path) -> Option<PathBuf> {
 /// Resolve a C/C++ include to a system header.
 /// Handles: #include <vector>, #include <stdio.h>
 fn resolve_cpp_external(include: &str) -> Option<PathBuf> {
-    // Get system include paths (cached would be better, but this is simple)
-    let include_paths = external_packages::find_cpp_include_paths();
-
-    // Use the external_packages resolution
-    let pkg = external_packages::resolve_cpp_include(include, &include_paths)?;
+    use resolution::ImportResolver;
+    // Use trait-based resolution (project_root not needed for C++)
+    let pkg = moss_languages::Cpp.resolve_import(include, Path::new("."))?;
     Some(pkg.path)
 }
 
@@ -2165,15 +2142,9 @@ fn resolve_java_local(import: &str, current_file: &Path, root: &Path) -> Option<
 
 /// Resolve a Java import to an external package (Maven/Gradle).
 fn resolve_java_external(import: &str) -> Option<PathBuf> {
-    let maven_repo = external_packages::find_maven_repository();
-    let gradle_cache = external_packages::find_gradle_cache();
-
-    let pkg = external_packages::resolve_java_import(
-        import,
-        maven_repo.as_deref(),
-        gradle_cache.as_deref(),
-    )?;
-
+    use resolution::ImportResolver;
+    // Use trait-based resolution (project_root not needed for Java cache lookup)
+    let pkg = moss_languages::Java.resolve_import(import, Path::new("."))?;
     Some(pkg.path)
 }
 
@@ -2191,6 +2162,8 @@ fn resolve_deno_import(import: &str) -> Option<PathBuf> {
 
 /// Resolve a Rust crate import to cargo registry.
 fn resolve_rust_external(crate_name: &str) -> Option<PathBuf> {
+    use resolution::ImportResolver;
+
     // Skip local module paths
     if crate_name.starts_with("crate::") || crate_name.starts_with("self::") || crate_name.starts_with("super::") {
         return None;
@@ -2201,7 +2174,7 @@ fn resolve_rust_external(crate_name: &str) -> Option<PathBuf> {
 
     // Check the global index first
     if let Ok(index) = external_packages::PackageIndex::open() {
-        let version = external_packages::get_rust_version()
+        let version = moss_languages::Rust.get_version(Path::new("."))
             .and_then(|v| external_packages::Version::parse(&v));
 
         if let Ok(Some(pkg)) = index.find_package("rust", crate_name, version) {
@@ -2212,9 +2185,8 @@ fn resolve_rust_external(crate_name: &str) -> Option<PathBuf> {
         }
     }
 
-    // Try cargo registry
-    let registry = external_packages::find_cargo_registry()?;
-    let pkg = external_packages::resolve_rust_crate(crate_name, &registry)?;
+    // Use trait-based resolution
+    let pkg = moss_languages::Rust.resolve_import(crate_name, Path::new("."))?;
     Some(pkg.path)
 }
 
