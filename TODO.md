@@ -11,20 +11,35 @@ Test Status: 71 passing, 0 failing
 
 ## Backlog
 
-**Language Support Refactor** (prerequisite for expansion):
-- Factor out `LanguageSupport` trait unifying: skeleton, deps, symbols, complexity, scopes, anchors, edit, cfg
-- Each language implements trait (~50 lines vs current ~200+ scattered across 8 files)
-- Registration system mapping Language enum → trait impl
-- See `docs/language-support.md` for 70+ available grammars
+**Language Support Refactor** (see `docs/language-support.md` for full design):
 
-**High-Priority Languages** (after refactor):
-- Kotlin, Swift, Dart (mobile)
-- C#, F# (.NET)
-- PHP, Elixir, Erlang (backends)
-- Zig, Lua (systems/gamedev)
-- SQL, GraphQL (data)
-- Dockerfile, HCL (infra)
-- Svelte, SCSS (frontend)
+Phase 1 - Scaffold:
+- [ ] Create `crates/moss-languages/` with Cargo.toml, feature flags
+- [ ] Define `LanguageSupport` trait in `traits.rs`
+- [ ] Set up registry with `OnceLock` + `#[cfg(feature)]` gating
+
+Phase 2 - Port existing languages:
+- [ ] Port Python (most complex: docstrings, async, visibility)
+- [ ] Port Rust (impl blocks, doc comments, visibility modifiers)
+- [ ] Port JavaScript/TypeScript/TSX (shared extractor)
+- [ ] Port Go, Java, C, C++, Ruby, Scala, Vue
+- [ ] Port config formats: JSON, YAML, TOML, Markdown
+
+Phase 3 - Integrate:
+- [ ] Refactor `skeleton.rs` to use trait
+- [ ] Refactor `deps.rs` to use trait
+- [ ] Refactor `complexity.rs`, `scopes.rs`, `symbols.rs`
+- [ ] Refactor `anchors.rs`, `edit.rs`, `cfg.rs`
+- [ ] Delete old language-specific code from moss-cli
+
+Phase 4 - Expand:
+- [ ] Kotlin, Swift, Dart (mobile)
+- [ ] C#, F# (.NET)
+- [ ] PHP, Elixir, Erlang (backends)
+- [ ] Zig, Lua (systems/gamedev)
+- [ ] SQL, GraphQL (data)
+- [ ] Dockerfile, HCL (infra)
+- [ ] Svelte, SCSS (frontend)
 
 **Integration:**
 - LSP refactor actions (rename symbol across files)
