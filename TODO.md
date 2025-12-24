@@ -4,7 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Refactor `anchors.rs` to use trait (similar to symbols.rs, should be straightforward)
 - Refactor `scopes.rs` to use trait (add scope_kinds, extract_binding to trait)
 - Refactor `edit.rs` to use trait (add byte positions to Symbol)
 - Refactor `cfg.rs` to use trait (add control_flow_kinds to trait)
@@ -41,7 +40,7 @@ Phase 3 - Integrate (in progress):
 - [x] Refactor `deps.rs` to use trait (Python, Rust, JS, Go migrated)
 - [x] Refactor `complexity.rs` to use trait (complexity_nodes method)
 - [x] Refactor `symbols.rs` to use trait
-- [ ] Refactor `anchors.rs` to use trait (similar to symbols.rs)
+- [x] Refactor `anchors.rs` to use trait
 - [ ] Refactor `scopes.rs` to use trait (add scope_kinds, extract_binding)
 - [ ] Refactor `edit.rs` to use trait (add byte positions to Symbol)
 - [ ] Refactor `cfg.rs` to use trait (add control_flow_kinds)
