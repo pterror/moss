@@ -1,6 +1,7 @@
 //! Analyze command - run analysis on target.
 
 use crate::analyze;
+use crate::commands::overview;
 use std::path::Path;
 
 /// Run analysis on a target (file or directory)
@@ -10,10 +11,17 @@ pub fn cmd_analyze(
     health: bool,
     complexity: bool,
     security: bool,
+    show_overview: bool,
+    compact: bool,
     threshold: Option<usize>,
     kind_filter: Option<&str>,
     json: bool,
 ) -> i32 {
+    // --overview runs the overview report
+    if show_overview {
+        return overview::cmd_overview(root, compact, json);
+    }
+
     let root = root
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap());

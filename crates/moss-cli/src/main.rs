@@ -178,28 +178,6 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
-    /// Query imports from the index
-    Imports {
-        /// File to show imports for, or name to resolve
-        query: String,
-
-        /// Root directory (defaults to current directory)
-        #[arg(short, long)]
-        root: Option<PathBuf>,
-
-        /// Resolve a name in context of a file (what module does it come from?)
-        #[arg(short = 'R', long)]
-        resolve: bool,
-
-        /// Show import graph (what this file imports and what imports it)
-        #[arg(short, long)]
-        graph: bool,
-
-        /// Find files that import the given module
-        #[arg(short, long)]
-        who_imports: bool,
-    },
-
     /// Manage the moss daemon
     Daemon {
         #[command(subcommand)]
@@ -217,7 +195,7 @@ enum Commands {
         check: bool,
     },
 
-    /// Analyze codebase (unified health, complexity, security)
+    /// Analyze codebase (unified health, complexity, security, overview)
     Analyze {
         /// Target to analyze (path, file, or directory). Defaults to current directory.
         target: Option<String>,
@@ -238,6 +216,14 @@ enum Commands {
         #[arg(long)]
         security: bool,
 
+        /// Show comprehensive project overview
+        #[arg(long)]
+        overview: bool,
+
+        /// Compact one-line output (for --overview)
+        #[arg(short, long)]
+        compact: bool,
+
         /// Complexity threshold - only show functions above this
         #[arg(short, long)]
         threshold: Option<usize>,
@@ -245,17 +231,6 @@ enum Commands {
         /// Filter by symbol kind: function, method
         #[arg(long)]
         kind: Option<String>,
-    },
-
-    /// Show comprehensive codebase overview
-    Overview {
-        /// Root directory (defaults to current directory)
-        #[arg(short, long)]
-        root: Option<PathBuf>,
-
-        /// Compact one-line output
-        #[arg(short, long)]
-        compact: bool,
     },
 
     /// Search for text patterns in files (fast ripgrep-based search)
@@ -406,13 +381,6 @@ fn main() {
             cli.json,
         ),
         Commands::Index { action, root } => commands::index::cmd_index(action, root.as_deref(), cli.json),
-        Commands::Imports {
-            query,
-            root,
-            resolve,
-            graph,
-            who_imports,
-        } => commands::imports::cmd_imports(&query, root.as_deref(), resolve, graph, who_imports, cli.json),
         Commands::Daemon { action, root } => commands::daemon::cmd_daemon(action, root.as_deref(), cli.json),
         Commands::Update { check } => commands::update::cmd_update(check, cli.json),
         Commands::Analyze {
@@ -421,6 +389,8 @@ fn main() {
             health,
             complexity,
             security,
+            overview,
+            compact,
             threshold,
             kind,
         } => commands::analyze_cmd::cmd_analyze(
@@ -429,13 +399,12 @@ fn main() {
             health,
             complexity,
             security,
+            overview,
+            compact,
             threshold,
             kind.as_deref(),
             cli.json,
         ),
-        Commands::Overview { root, compact } => {
-            commands::overview::cmd_overview(root.as_deref(), compact, cli.json)
-        }
         Commands::Grep {
             pattern,
             root,
