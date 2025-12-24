@@ -301,7 +301,7 @@ fn main() {
             resolve_imports,
             all,
             full,
-        } => commands::view_cmd::cmd_view(
+        } => commands::view::cmd_view(
             target.as_deref(),
             root.as_deref(),
             depth,
@@ -371,7 +371,7 @@ fn main() {
             compact,
             threshold,
             kind,
-        } => commands::analyze_cmd::cmd_analyze(
+        } => commands::analyze::cmd_analyze(
             target.as_deref(),
             root.as_deref(),
             health,
@@ -389,7 +389,7 @@ fn main() {
             glob,
             limit,
             ignore_case,
-        } => commands::grep_cmd::cmd_grep(
+        } => commands::grep::cmd_grep(
             &pattern,
             root.as_deref(),
             glob.as_deref(),

@@ -1,15 +1,10 @@
-//! CLI command implementations - one command per file.
+//! CLI command implementations - one module per top-level command.
 
-pub mod analyze_cmd;
+pub mod analyze;
 pub mod daemon;
 pub mod edit;
-pub mod grep_cmd;
+pub mod grep;
 pub mod index;
-pub mod index_packages;
-pub mod index_stats;
-pub mod list_files;
-pub mod overview;
-pub mod reindex;
 pub mod sessions;
 pub mod update;
-pub mod view_cmd;
+pub mod view;
