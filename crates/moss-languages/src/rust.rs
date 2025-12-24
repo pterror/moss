@@ -502,6 +502,17 @@ impl Language for Rust {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["rs"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        // Skip target, tests directories
+        if is_dir && (name == "target" || name == "tests" || name == "benches" || name == "examples") {
+            return true;
+        }
+        // Only index .rs files
+        !is_dir && !has_extension(name, &["rs"])
+    }
 }
 
 /// Find the crate root (directory containing Cargo.toml).

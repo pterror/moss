@@ -79,4 +79,10 @@ impl Language for Bash {
     fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> {
         None
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        !is_dir && !has_extension(name, &["sh", "bash", "zsh"])
+    }
 }

@@ -99,6 +99,18 @@ pub struct Export {
     pub line: usize,
 }
 
+// === Helper functions for should_skip_package_entry ===
+
+/// Check if name is a dotfile/dotdir (starts with '.')
+pub fn skip_dotfiles(name: &str) -> bool {
+    name.starts_with('.')
+}
+
+/// Check if name has one of the given extensions
+pub fn has_extension(name: &str, extensions: &[&str]) -> bool {
+    extensions.iter().any(|ext| name.ends_with(&format!(".{}", ext)))
+}
+
 /// Unified language support trait.
 ///
 /// Each language implements this trait to provide:
@@ -297,5 +309,31 @@ pub trait Language: Send + Sync {
     /// File extensions to index when caching a package.
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &[]
+    }
+
+    // === Package Indexing ===
+
+    /// Find standard library directory (if applicable).
+    /// Returns None for languages without a separate stdlib to index.
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    /// Should this entry be skipped when indexing packages?
+    /// Called for each file/directory in package directories.
+    /// Use helper functions `skip_dotfiles()` and `has_indexable_extension()` for common checks.
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool;
+
+    /// Get the module/package name from a directory entry name.
+    /// Default: strip common extensions.
+    fn package_module_name(&self, entry_name: &str) -> String {
+        // Strip common extensions
+        for ext in self.indexable_extensions() {
+            let with_dot = format!(".{}", ext);
+            if entry_name.ends_with(&with_dot) {
+                return entry_name.trim_end_matches(&with_dot).to_string();
+            }
+        }
+        entry_name.to_string()
     }
 }

@@ -163,6 +163,12 @@ impl Language for C {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["c", "h"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        !is_dir && !has_extension(name, &["c", "h"])
+    }
 }
 
 impl C {

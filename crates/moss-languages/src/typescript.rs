@@ -79,6 +79,15 @@ impl Language for TypeScript {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["ts", "mts", "cts", "js", "mjs", "cjs"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests") {
+            return true;
+        }
+        !is_dir && !has_extension(name, &["ts", "mts", "cts", "js", "mjs", "cjs", "d.ts"])
+    }
 }
 
 // TSX shares the same implementation as TypeScript, just with a different grammar
@@ -148,5 +157,14 @@ impl Language for Tsx {
 
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["tsx", "ts", "js"]
+    }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests") {
+            return true;
+        }
+        !is_dir && !has_extension(name, &["tsx", "ts", "js", "d.ts"])
     }
 }

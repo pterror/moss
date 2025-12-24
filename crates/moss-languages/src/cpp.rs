@@ -171,6 +171,12 @@ impl Language for Cpp {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["cpp", "hpp", "cc", "hh", "cxx", "hxx", "h"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        !is_dir && !has_extension(name, &["cpp", "hpp", "cc", "hh", "cxx", "hxx", "h"])
+    }
 }
 
 fn find_identifier<'a>(node: &Node, content: &'a str) -> Option<&'a str> {

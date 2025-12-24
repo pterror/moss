@@ -846,6 +846,26 @@ impl Language for Python {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["py"]
     }
+
+    fn find_stdlib(&self, project_root: &Path) -> Option<PathBuf> {
+        find_python_stdlib(project_root)
+    }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        // Skip private modules
+        if name.starts_with('_') {
+            return true;
+        }
+        // Skip __pycache__, dist-info, egg-info
+        if name == "__pycache__" || name.ends_with(".dist-info") || name.ends_with(".egg-info") {
+            return true;
+        }
+        // Skip non-Python files
+        if !is_dir && !name.ends_with(".py") {
+            return true;
+        }
+        false
+    }
 }
 
 #[cfg(test)]

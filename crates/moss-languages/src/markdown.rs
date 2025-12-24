@@ -56,4 +56,10 @@ impl Language for Markdown {
             children: Vec::new(),
         })
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        !is_dir && !has_extension(name, &["md", "markdown"])
+    }
 }

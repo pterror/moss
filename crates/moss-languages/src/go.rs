@@ -503,6 +503,30 @@ impl Language for Go {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["go"]
     }
+
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        find_go_stdlib()
+    }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        // Skip dotfiles
+        if name.starts_with('.') {
+            return true;
+        }
+        // Skip common non-source directories
+        if is_dir && (name == "vendor" || name == "internal" || name == "testdata") {
+            return true;
+        }
+        // Skip non-Go files
+        if !is_dir && !name.ends_with(".go") {
+            return true;
+        }
+        // Skip test files
+        if name.ends_with("_test.go") {
+            return true;
+        }
+        false
+    }
 }
 
 impl Go {

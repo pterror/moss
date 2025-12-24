@@ -71,4 +71,14 @@ impl Language for JavaScript {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["js", "mjs", "cjs"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        // Skip common non-source dirs
+        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests") {
+            return true;
+        }
+        !is_dir && !has_extension(name, &["js", "mjs", "cjs"])
+    }
 }

@@ -473,4 +473,14 @@ impl Language for Java {
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["java"]
     }
+
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{skip_dotfiles, has_extension};
+        if skip_dotfiles(name) { return true; }
+        // Skip META-INF, test dirs
+        if is_dir && (name == "META-INF" || name == "test" || name == "tests") {
+            return true;
+        }
+        !is_dir && !has_extension(name, &["java"])
+    }
 }
