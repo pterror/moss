@@ -9,9 +9,16 @@ impl LanguageSupport for MarkdownSupport {
     fn language(&self) -> Language { Language::Markdown }
     fn grammar_name(&self) -> &'static str { "markdown" }
 
-    fn container_kinds(&self) -> &'static [&'static str] {
-        &["atx_heading", "setext_heading"]
-    }
+    // Markdown is documentation, not code - no functions/types/control flow
+    fn container_kinds(&self) -> &'static [&'static str] { &["atx_heading", "setext_heading"] }
+    fn function_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { &[] }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { &[] }
+    fn complexity_nodes(&self) -> &'static [&'static str] { &[] }
+    fn nesting_nodes(&self) -> &'static [&'static str] { &[] }
 
     fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> {
         None

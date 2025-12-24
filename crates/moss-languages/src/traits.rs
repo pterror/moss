@@ -99,29 +99,19 @@ pub trait LanguageSupport: Send + Sync {
     // === Node Classification ===
 
     /// Container nodes that can hold methods (class, impl, module)
-    fn container_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn container_kinds(&self) -> &'static [&'static str];
 
     /// Function/method definition nodes
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn function_kinds(&self) -> &'static [&'static str];
 
     /// Type definition nodes (struct, enum, interface, type alias)
-    fn type_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn type_kinds(&self) -> &'static [&'static str];
 
     /// Import statement nodes
-    fn import_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn import_kinds(&self) -> &'static [&'static str];
 
     /// Export statement nodes
-    fn export_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn export_kinds(&self) -> &'static [&'static str];
 
     // === Symbol Extraction ===
 
@@ -162,29 +152,21 @@ pub trait LanguageSupport: Send + Sync {
     /// Nodes that create new variable scopes (for scope analysis)
     /// Includes: loops, blocks, comprehensions, lambdas, with statements
     /// Note: Functions and containers (from function_kinds/container_kinds) also create scopes
-    fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn scope_creating_kinds(&self) -> &'static [&'static str];
 
     // === Control Flow ===
 
     /// Nodes that affect control flow (for CFG analysis)
     /// Includes: if, for, while, return, break, continue, try, match
-    fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn control_flow_kinds(&self) -> &'static [&'static str];
 
     // === Complexity ===
 
     /// Nodes that increase cyclomatic complexity
-    fn complexity_nodes(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn complexity_nodes(&self) -> &'static [&'static str];
 
     /// Nodes that indicate nesting depth
-    fn nesting_nodes(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn nesting_nodes(&self) -> &'static [&'static str];
 
     // === Visibility ===
 

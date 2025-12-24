@@ -34,12 +34,24 @@ impl LanguageSupport for JavaScriptSupport {
         &["export_statement"]
     }
 
+    fn scope_creating_kinds(&self) -> &'static [&'static str] {
+        &["for_statement", "for_in_statement", "while_statement", "do_statement", "try_statement", "catch_clause", "switch_statement", "arrow_function"]
+    }
+
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        &["if_statement", "for_statement", "for_in_statement", "while_statement", "do_statement", "switch_statement", "try_statement", "return_statement", "break_statement", "continue_statement", "throw_statement"]
+    }
+
     fn complexity_nodes(&self) -> &'static [&'static str] {
         &[
             "if_statement", "for_statement", "for_in_statement", "while_statement",
             "do_statement", "switch_case", "catch_clause", "ternary_expression",
             "binary_expression", // for && and ||
         ]
+    }
+
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        &["if_statement", "for_statement", "for_in_statement", "while_statement", "do_statement", "switch_statement", "try_statement", "function_declaration", "method_definition", "class_declaration"]
     }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {

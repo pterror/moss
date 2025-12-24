@@ -9,13 +9,15 @@ impl LanguageSupport for RubySupport {
     fn language(&self) -> Language { Language::Ruby }
     fn grammar_name(&self) -> &'static str { "ruby" }
 
-    fn container_kinds(&self) -> &'static [&'static str] {
-        &["class", "module"]
-    }
-
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["method", "singleton_method"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &["class", "module"] }
+    fn function_kinds(&self) -> &'static [&'static str] { &["method", "singleton_method"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &["class", "module"] }
+    fn import_kinds(&self) -> &'static [&'static str] { todo!("ruby: import_kinds") }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Ruby doesn't have explicit exports
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("ruby: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("ruby: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("ruby: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("ruby: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;

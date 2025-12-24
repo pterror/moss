@@ -9,17 +9,15 @@ impl LanguageSupport for ScalaSupport {
     fn language(&self) -> Language { Language::Scala }
     fn grammar_name(&self) -> &'static str { "scala" }
 
-    fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_definition", "object_definition", "trait_definition"]
-    }
-
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition"]
-    }
-
-    fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_definition", "trait_definition"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &["class_definition", "object_definition", "trait_definition"] }
+    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &["class_definition", "trait_definition"] }
+    fn import_kinds(&self) -> &'static [&'static str] { todo!("scala: import_kinds") }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Scala uses visibility modifiers, not export statements
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("scala: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("scala: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("scala: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("scala: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;

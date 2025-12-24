@@ -9,17 +9,15 @@ impl LanguageSupport for CppSupport {
     fn language(&self) -> Language { Language::Cpp }
     fn grammar_name(&self) -> &'static str { "cpp" }
 
-    fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_specifier", "struct_specifier"]
-    }
-
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition"]
-    }
-
-    fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_specifier", "struct_specifier", "enum_specifier", "type_definition"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &["class_specifier", "struct_specifier"] }
+    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &["class_specifier", "struct_specifier", "enum_specifier", "type_definition"] }
+    fn import_kinds(&self) -> &'static [&'static str] { &["preproc_include"] }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] } // C++ uses header files, not export statements
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("cpp: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("cpp: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("cpp: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("cpp: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {
         let declarator = node.child_by_field_name("declarator")?;

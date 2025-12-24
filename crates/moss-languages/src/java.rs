@@ -21,6 +21,25 @@ impl LanguageSupport for JavaSupport {
         &["class_declaration", "interface_declaration", "enum_declaration"]
     }
 
+    fn import_kinds(&self) -> &'static [&'static str] { &["import_declaration"] }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] } // Java uses access modifiers, not export statements
+
+    fn scope_creating_kinds(&self) -> &'static [&'static str] {
+        &["for_statement", "enhanced_for_statement", "while_statement", "do_statement", "try_statement", "catch_clause", "switch_expression", "block"]
+    }
+
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_expression", "try_statement", "return_statement", "break_statement", "continue_statement", "throw_statement"]
+    }
+
+    fn complexity_nodes(&self) -> &'static [&'static str] {
+        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_label", "catch_clause", "ternary_expression", "binary_expression"]
+    }
+
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_expression", "try_statement", "method_declaration", "class_declaration"]
+    }
+
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
         let params = node.child_by_field_name("parameters")

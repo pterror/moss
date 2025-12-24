@@ -1,4 +1,4 @@
-//! Bash language support (parse only, minimal skeleton).
+//! Bash language support.
 
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility};
 use moss_core::{tree_sitter::Node, Language};
@@ -9,9 +9,15 @@ impl LanguageSupport for BashSupport {
     fn language(&self) -> Language { Language::Bash }
     fn grammar_name(&self) -> &'static str { "bash" }
 
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &[] }
+    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("bash: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("bash: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("bash: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("bash: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;

@@ -9,9 +9,15 @@ impl LanguageSupport for VueSupport {
     fn language(&self) -> Language { Language::Vue }
     fn grammar_name(&self) -> &'static str { "vue" }
 
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_declaration", "method_definition"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &["script_element"] }
+    fn function_kinds(&self) -> &'static [&'static str] { &["function_declaration", "method_definition"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] { todo!("vue: import_kinds") }
+    fn export_kinds(&self) -> &'static [&'static str] { todo!("vue: export_kinds") }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("vue: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("vue: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("vue: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("vue: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;

@@ -9,13 +9,15 @@ impl LanguageSupport for CSupport {
     fn language(&self) -> Language { Language::C }
     fn grammar_name(&self) -> &'static str { "c" }
 
-    fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition"]
-    }
-
-    fn type_kinds(&self) -> &'static [&'static str] {
-        &["struct_specifier", "enum_specifier", "type_definition"]
-    }
+    fn container_kinds(&self) -> &'static [&'static str] { &[] } // C doesn't have containers
+    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
+    fn type_kinds(&self) -> &'static [&'static str] { &["struct_specifier", "enum_specifier", "type_definition"] }
+    fn import_kinds(&self) -> &'static [&'static str] { &["preproc_include"] }
+    fn export_kinds(&self) -> &'static [&'static str] { &[] } // C uses header files, not export statements
+    fn scope_creating_kinds(&self) -> &'static [&'static str] { todo!("c: scope_creating_kinds") }
+    fn control_flow_kinds(&self) -> &'static [&'static str] { todo!("c: control_flow_kinds") }
+    fn complexity_nodes(&self) -> &'static [&'static str] { todo!("c: complexity_nodes") }
+    fn nesting_nodes(&self) -> &'static [&'static str] { todo!("c: nesting_nodes") }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let declarator = node.child_by_field_name("declarator")?;
