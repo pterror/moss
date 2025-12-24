@@ -4,6 +4,7 @@
 //! that can be used for structural edits instead of line numbers.
 
 use moss_core::{tree_sitter, Language, Parsers};
+use moss_languages::{get_support, LanguageSupport, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// Type of code anchor
@@ -31,6 +32,19 @@ impl AnchorType {
             AnchorType::Enum => "enum",
             AnchorType::Trait => "trait",
         }
+    }
+}
+
+fn convert_symbol_kind(kind: LangSymbolKind, in_container: bool) -> AnchorType {
+    match kind {
+        LangSymbolKind::Function => if in_container { AnchorType::Method } else { AnchorType::Function },
+        LangSymbolKind::Method => AnchorType::Method,
+        LangSymbolKind::Class => AnchorType::Class,
+        LangSymbolKind::Struct => AnchorType::Struct,
+        LangSymbolKind::Enum => AnchorType::Enum,
+        LangSymbolKind::Interface | LangSymbolKind::Trait => AnchorType::Trait,
+        LangSymbolKind::Variable | LangSymbolKind::Constant => AnchorType::Variable,
+        LangSymbolKind::Module | LangSymbolKind::Type | LangSymbolKind::Heading => AnchorType::Class,
     }
 }
 
@@ -75,11 +89,19 @@ impl AnchorExtractor {
     }
 
     pub fn extract(&self, path: &Path, content: &str) -> AnchorsResult {
-        let lang = Language::from_path(path);
-        let anchors = match lang {
-            Some(Language::Python) => self.extract_python(content),
-            Some(Language::Rust) => self.extract_rust(content),
-            _ => Vec::new(),
+        let lang = match Language::from_path(path) {
+            Some(l) => l,
+            None => return AnchorsResult {
+                anchors: Vec::new(),
+                file_path: path.to_string_lossy().to_string(),
+            },
+        };
+
+        // Try trait-based extraction first
+        let anchors = if let Some(support) = get_support(lang) {
+            self.extract_with_trait(lang, content, support)
+        } else {
+            Vec::new()
         };
 
         AnchorsResult {
@@ -88,6 +110,129 @@ impl AnchorExtractor {
         }
     }
 
+    fn extract_with_trait(&self, lang: Language, content: &str, support: &dyn LanguageSupport) -> Vec<Anchor> {
+        let tree = match self.parsers.parse_lang(lang, content) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let root = tree.root_node();
+        let mut anchors = Vec::new();
+        self.collect_with_trait(&mut root.walk(), content, support, &mut anchors, None);
+        anchors
+    }
+
+    fn collect_with_trait(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        support: &dyn LanguageSupport,
+        anchors: &mut Vec<Anchor>,
+        context: Option<&str>,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            // Check for container (class, impl, etc.)
+            if support.container_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_container(&node, content) {
+                    let sym_name = sym.name.clone();
+                    anchors.push(Anchor {
+                        name: sym.name,
+                        anchor_type: convert_symbol_kind(sym.kind, context.is_some()),
+                        context: context.map(String::from),
+                        start_line: sym.start_line,
+                        end_line: sym.end_line,
+                        signature: Some(sym.signature),
+                    });
+
+                    // Recurse into container to find methods
+                    if cursor.goto_first_child() {
+                        self.collect_with_trait(cursor, content, support, anchors, Some(&sym_name));
+                        cursor.goto_parent();
+                    }
+                    if cursor.goto_next_sibling() {
+                        continue;
+                    }
+                    break;
+                }
+            }
+
+            // Check for function
+            if support.function_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_function(&node, content, context.is_some()) {
+                    anchors.push(Anchor {
+                        name: sym.name,
+                        anchor_type: convert_symbol_kind(sym.kind, context.is_some()),
+                        context: context.map(String::from),
+                        start_line: sym.start_line,
+                        end_line: sym.end_line,
+                        signature: Some(sym.signature),
+                    });
+                }
+            }
+
+            // Check for type (struct, enum, trait - when not a container)
+            if support.type_kinds().contains(&kind) && !support.container_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_type(&node, content) {
+                    anchors.push(Anchor {
+                        name: sym.name,
+                        anchor_type: convert_symbol_kind(sym.kind, context.is_some()),
+                        context: context.map(String::from),
+                        start_line: sym.start_line,
+                        end_line: sym.end_line,
+                        signature: Some(sym.signature),
+                    });
+                }
+            }
+
+            // Check for imports
+            if support.import_kinds().contains(&kind) {
+                for imp in support.extract_imports(&node, content) {
+                    // Add each imported name as an anchor
+                    if imp.names.is_empty() {
+                        // Module-level import
+                        let name = imp.alias.unwrap_or_else(|| {
+                            imp.module.split(&['/', '.', ':']).last().unwrap_or(&imp.module).to_string()
+                        });
+                        anchors.push(Anchor {
+                            name,
+                            anchor_type: AnchorType::Import,
+                            context: None,
+                            start_line: imp.line,
+                            end_line: imp.line,
+                            signature: None,
+                        });
+                    } else {
+                        for name in imp.names {
+                            anchors.push(Anchor {
+                                name,
+                                anchor_type: AnchorType::Import,
+                                context: None,
+                                start_line: imp.line,
+                                end_line: imp.line,
+                                signature: None,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Recurse into children (but not for containers, handled above)
+            if !support.container_kinds().contains(&kind) && cursor.goto_first_child() {
+                self.collect_with_trait(cursor, content, support, anchors, context);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+
+    // Legacy methods - kept for reference, now using trait-based extraction
+    #[allow(dead_code)]
     fn extract_python(&self, content: &str) -> Vec<Anchor> {
         let tree = match self.parsers.parse_lang(Language::Python, content) {
             Some(t) => t,
@@ -102,6 +247,7 @@ impl AnchorExtractor {
         anchors
     }
 
+    #[allow(dead_code)]
     fn collect_python_anchors(
         &self,
         cursor: &mut tree_sitter::TreeCursor,
@@ -234,6 +380,7 @@ impl AnchorExtractor {
         }
     }
 
+    #[allow(dead_code)]
     fn extract_rust(&self, content: &str) -> Vec<Anchor> {
         let tree = match self.parsers.parse_lang(Language::Rust, content) {
             Some(t) => t,
@@ -248,6 +395,7 @@ impl AnchorExtractor {
         anchors
     }
 
+    #[allow(dead_code)]
     fn collect_rust_anchors(
         &self,
         cursor: &mut tree_sitter::TreeCursor,
