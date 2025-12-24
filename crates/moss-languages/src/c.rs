@@ -1,7 +1,7 @@
 //! C language support.
 
 use std::path::{Path, PathBuf};
-use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use crate::c_cpp;
 use moss_core::tree_sitter::Node;
@@ -13,6 +13,8 @@ impl Language for C {
     fn name(&self) -> &'static str { "C" }
     fn extensions(&self) -> &'static [&'static str] { &["c", "h"] }
     fn grammar_name(&self) -> &'static str { "c" }
+
+    fn has_symbols(&self) -> bool { true }
 
     fn container_kinds(&self) -> &'static [&'static str] { &[] } // C doesn't have containers
     fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
@@ -111,6 +113,137 @@ impl Language for C {
             visibility: Visibility::Public,
             children: Vec::new(),
         })
+    }
+
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
+
+    fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
+        if node.kind() != "preproc_include" {
+            return Vec::new();
+        }
+
+        let line = node.start_position().row + 1;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
+                let text = &content[child.byte_range()];
+                let module = text.trim_matches(|c| c == '"' || c == '<' || c == '>').to_string();
+                let is_relative = text.starts_with('"');
+                return vec![Import {
+                    module,
+                    names: Vec::new(),
+                    alias: None,
+                    is_wildcard: false,
+                    is_relative,
+                    line,
+                }];
+            }
+        }
+        Vec::new()
+    }
+
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
+        if node.kind() != "function_definition" {
+            return Vec::new();
+        }
+
+        if let Some(name) = self.node_name(node, content) {
+            vec![Export {
+                name: name.to_string(),
+                kind: SymbolKind::Function,
+                line: node.start_position().row + 1,
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true // C doesn't have visibility modifiers
+    }
+
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
+
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+    }
+
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        // Try "name" field first
+        if let Some(name_node) = node.child_by_field_name("name") {
+            return Some(&content[name_node.byte_range()]);
+        }
+        // For functions, look in the declarator
+        if let Some(declarator) = node.child_by_field_name("declarator") {
+            return self.find_identifier(&declarator, content);
+        }
+        None
+    }
+
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
+        let ext = path.extension()?.to_str()?;
+        if !["c", "h"].contains(&ext) {
+            return None;
+        }
+        Some(path.to_string_lossy().to_string())
+    }
+
+    fn module_name_to_paths(&self, module: &str) -> Vec<String> {
+        vec![module.to_string()]
+    }
+
+    fn is_stdlib_import(&self, include: &str, _project_root: &Path) -> bool {
+        // Standard C headers
+        let stdlib = ["stdio.h", "stdlib.h", "string.h", "math.h", "time.h",
+                      "ctype.h", "errno.h", "float.h", "limits.h", "locale.h",
+                      "setjmp.h", "signal.h", "stdarg.h", "stddef.h", "assert.h"];
+        stdlib.contains(&include)
+    }
+
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None // C uses include paths, not a package cache
+    }
+
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        // Return the first include path as stdlib location
+        c_cpp::find_cpp_include_paths().into_iter().next()
+    }
+
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        use crate::{PackageSource, PackageSourceKind};
+        c_cpp::find_cpp_include_paths()
+            .into_iter()
+            .map(|path| PackageSource {
+                name: "includes",
+                path,
+                kind: PackageSourceKind::Recursive,
+                version_specific: false,
+            })
+            .collect()
+    }
+
+    fn package_module_name(&self, entry_name: &str) -> String {
+        entry_name.to_string()
+    }
+
+    fn discover_packages(&self, source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        self.discover_recursive_packages(&source.path, &source.path)
+    }
+
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 
     // === Import Resolution ===

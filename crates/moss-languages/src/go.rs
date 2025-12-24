@@ -283,6 +283,8 @@ impl Language for Go {
     fn extensions(&self) -> &'static [&'static str] { &["go"] }
     fn grammar_name(&self) -> &'static str { "go" }
 
+    fn has_symbols(&self) -> bool { true }
+
     fn container_kinds(&self) -> &'static [&'static str] {
         &[] // Go types don't have children in the tree-sitter sense
     }
@@ -445,6 +447,45 @@ impl Language for Go {
             .unwrap_or(false)
     }
 
+    fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
+        if self.is_public(node, content) {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        }
+    }
+
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        // Go doc comments could be extracted but need special handling
+        None
+    }
+
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+    }
+
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        let name_node = node.child_by_field_name("name")?;
+        Some(&content[name_node.byte_range()])
+    }
+
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
+        if path.extension()?.to_str()? != "go" {
+            return None;
+        }
+        // Go uses directories as packages, not individual files
+        path.parent()?.to_str().map(|s| s.to_string())
+    }
+
+    fn module_name_to_paths(&self, module: &str) -> Vec<String> {
+        // Go packages are directories, look for .go files within
+        vec![format!("{}/*.go", module)]
+    }
+
     // === Import Resolution ===
 
     fn lang_key(&self) -> &'static str { "go" }
@@ -548,6 +589,34 @@ impl Language for Go {
             return true;
         }
         false
+    }
+
+    fn package_module_name(&self, entry_name: &str) -> String {
+        entry_name.strip_suffix(".go").unwrap_or(entry_name).to_string()
+    }
+
+    fn discover_packages(&self, source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        self.discover_recursive_packages(&source.path, &source.path)
+    }
+
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_file() && path.extension().map(|e| e == "go").unwrap_or(false) {
+            return Some(path.to_path_buf());
+        }
+        // For directories, Go packages don't have a single entry point
+        // Return the directory itself if it contains .go files
+        if path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if name_str.ends_with(".go") && !name_str.ends_with("_test.go") {
+                        return Some(path.to_path_buf());
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

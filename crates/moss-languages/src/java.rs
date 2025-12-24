@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
@@ -291,6 +291,8 @@ impl Language for Java {
     fn extensions(&self) -> &'static [&'static str] { &["java"] }
     fn grammar_name(&self) -> &'static str { "java" }
 
+    fn has_symbols(&self) -> bool { true }
+
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_declaration", "interface_declaration", "enum_declaration"]
     }
@@ -390,6 +392,95 @@ impl Language for Java {
             visibility: self.get_visibility(node, content),
             children: Vec::new(),
         })
+    }
+
+    fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
+        self.extract_container(node, content)
+    }
+
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        // Javadoc comments could be extracted but need special handling
+        None
+    }
+
+    fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
+        if node.kind() != "import_declaration" {
+            return Vec::new();
+        }
+
+        let line = node.start_position().row + 1;
+        let text = &content[node.byte_range()];
+
+        // Extract import path
+        let is_static = text.contains("static ");
+        let is_wildcard = text.contains(".*");
+
+        // Get the scoped_identifier
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "scoped_identifier" || child.kind() == "identifier" {
+                let module = content[child.byte_range()].to_string();
+                return vec![Import {
+                    module,
+                    names: Vec::new(),
+                    alias: if is_static { Some("static".to_string()) } else { None },
+                    is_wildcard,
+                    is_relative: false,
+                    line,
+                }];
+            }
+        }
+
+        Vec::new()
+    }
+
+    fn is_public(&self, node: &Node, content: &str) -> bool {
+        self.get_visibility(node, content) == Visibility::Public
+    }
+
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+    }
+
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        let name_node = node.child_by_field_name("name")?;
+        Some(&content[name_node.byte_range()])
+    }
+
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
+        if path.extension()?.to_str()? != "java" {
+            return None;
+        }
+        // Java: com/foo/Bar.java -> com.foo.Bar
+        let path_str = path.to_str()?;
+        // Remove common source prefixes
+        let rel = path_str
+            .strip_prefix("src/main/java/")
+            .or_else(|| path_str.strip_prefix("src/"))
+            .unwrap_or(path_str);
+        let without_ext = rel.strip_suffix(".java")?;
+        Some(without_ext.replace('/', "."))
+    }
+
+    fn module_name_to_paths(&self, module: &str) -> Vec<String> {
+        let path = module.replace('.', "/");
+        vec![
+            format!("src/main/java/{}.java", path),
+            format!("src/{}.java", path),
+        ]
+    }
+
+    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
+        import_name.starts_with("java.") || import_name.starts_with("javax.")
+    }
+
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        // Java stdlib is in rt.jar/modules, not easily indexable
+        None
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
@@ -512,6 +603,21 @@ impl Language for Java {
             crate::PackageSourceKind::Gradle => discover_gradle_packages(&source.path, &source.path),
             _ => Vec::new(),
         }
+    }
+
+    fn package_module_name(&self, entry_name: &str) -> String {
+        entry_name.strip_suffix(".java").unwrap_or(entry_name).to_string()
+    }
+
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+        // For JAR files, return the JAR itself
+        if path.extension().map(|e| e == "jar").unwrap_or(false) {
+            return Some(path.to_path_buf());
+        }
+        None
     }
 }
 

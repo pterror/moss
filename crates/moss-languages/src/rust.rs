@@ -106,6 +106,8 @@ impl Language for Rust {
     fn extensions(&self) -> &'static [&'static str] { &["rs"] }
     fn grammar_name(&self) -> &'static str { "rust" }
 
+    fn has_symbols(&self) -> bool { true }
+
     fn container_kinds(&self) -> &'static [&'static str] {
         &["impl_item", "trait_item"]
     }
@@ -419,6 +421,56 @@ impl Language for Rust {
         Visibility::Private
     }
 
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+    }
+
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        // Rust doesn't have body docstrings, only outer doc comments
+        false
+    }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        let name_node = node.child_by_field_name("name")?;
+        Some(&content[name_node.byte_range()])
+    }
+
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
+        // Only Rust files
+        if path.extension()?.to_str()? != "rs" {
+            return None;
+        }
+
+        let path_str = path.to_str()?;
+
+        // Strip src/ prefix if present
+        let rel_path = path_str
+            .strip_prefix("src/")
+            .unwrap_or(path_str);
+
+        // Remove .rs extension
+        let module_path = rel_path.strip_suffix(".rs")?;
+
+        // Handle mod.rs and lib.rs - use parent directory as module
+        let module_path = if module_path.ends_with("/mod") || module_path.ends_with("/lib") {
+            module_path.rsplit_once('/')?.0
+        } else {
+            module_path
+        };
+
+        // Convert path separators to ::
+        Some(module_path.replace('/', "::"))
+    }
+
+    fn module_name_to_paths(&self, module: &str) -> Vec<String> {
+        let rel_path = module.replace("::", "/");
+
+        vec![
+            format!("src/{}.rs", rel_path),
+            format!("src/{}/mod.rs", rel_path),
+        ]
+    }
+
     // === Import Resolution ===
 
     fn lang_key(&self) -> &'static str { "rust" }
@@ -503,6 +555,16 @@ impl Language for Rust {
         &["rs"]
     }
 
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        // Rust stdlib is part of the compiler, no separate source to index
+        false
+    }
+
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        // Rust stdlib is part of the compiler, no separate path
+        None
+    }
+
     fn package_sources(&self, project_root: &Path) -> Vec<crate::PackageSource> {
         use crate::{PackageSource, PackageSourceKind};
         let mut sources = Vec::new();
@@ -533,6 +595,28 @@ impl Language for Rust {
             return Vec::new();
         }
         discover_cargo_packages(&source.path)
+    }
+
+    fn package_module_name(&self, entry_name: &str) -> String {
+        // Strip .rs extension
+        entry_name.strip_suffix(".rs").unwrap_or(entry_name).to_string()
+    }
+
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+        // Rust packages use src/lib.rs as entry point
+        let lib_rs = path.join("src").join("lib.rs");
+        if lib_rs.is_file() {
+            return Some(lib_rs);
+        }
+        // Or mod.rs in the directory itself
+        let mod_rs = path.join("mod.rs");
+        if mod_rs.is_file() {
+            return Some(mod_rs);
+        }
+        None
     }
 }
 

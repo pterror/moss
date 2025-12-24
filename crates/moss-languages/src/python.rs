@@ -388,6 +388,8 @@ impl Language for Python {
     fn extensions(&self) -> &'static [&'static str] { &["py", "pyi", "pyw"] }
     fn grammar_name(&self) -> &'static str { "python" }
 
+    fn has_symbols(&self) -> bool { true }
+
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_definition"]
     }
@@ -537,6 +539,11 @@ impl Language for Python {
             visibility: self.get_visibility(node, content),
             children: Vec::new(), // Caller fills this in
         })
+    }
+
+    fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
+        // Python classes are both containers and types
+        self.extract_container(node, content)
     }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
@@ -741,6 +748,15 @@ impl Language for Python {
             .unwrap_or(false)
     }
 
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+    }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        let name_node = node.child_by_field_name("name")?;
+        Some(&content[name_node.byte_range()])
+    }
+
     // === Import Resolution ===
 
     fn lang_key(&self) -> &'static str { "python" }
@@ -877,6 +893,36 @@ impl Language for Python {
             return Some(init_py);
         }
         None
+    }
+
+    fn package_module_name(&self, entry_name: &str) -> String {
+        // Strip .py extension
+        entry_name.strip_suffix(".py").unwrap_or(entry_name).to_string()
+    }
+
+    fn package_sources(&self, project_root: &Path) -> Vec<crate::PackageSource> {
+        let mut sources = Vec::new();
+        if let Some(stdlib) = self.find_stdlib(project_root) {
+            sources.push(crate::PackageSource {
+                name: "stdlib",
+                path: stdlib,
+                kind: crate::PackageSourceKind::Flat,
+                version_specific: true,
+            });
+        }
+        if let Some(cache) = self.find_package_cache(project_root) {
+            sources.push(crate::PackageSource {
+                name: "site-packages",
+                path: cache,
+                kind: crate::PackageSourceKind::Flat,
+                version_specific: false,
+            });
+        }
+        sources
+    }
+
+    fn discover_packages(&self, source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        self.discover_flat_packages(&source.path)
     }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {

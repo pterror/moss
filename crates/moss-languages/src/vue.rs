@@ -1,6 +1,8 @@
 //! Vue language support.
 
-use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use std::path::{Path, PathBuf};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
 /// Vue language support.
@@ -10,6 +12,8 @@ impl Language for Vue {
     fn name(&self) -> &'static str { "Vue" }
     fn extensions(&self) -> &'static [&'static str] { &["vue"] }
     fn grammar_name(&self) -> &'static str { "vue" }
+
+    fn has_symbols(&self) -> bool { true }
 
     fn container_kinds(&self) -> &'static [&'static str] { &["script_element"] }
     fn function_kinds(&self) -> &'static [&'static str] { &["function_declaration", "method_definition"] }
@@ -100,6 +104,42 @@ impl Language for Vue {
 
     fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> {
         None
+    }
+
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> { Vec::new() }
+    fn extract_public_symbols(&self, _node: &Node, _content: &str) -> Vec<Export> { Vec::new() }
+
+    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> { node.child_by_field_name("body") }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        let name_node = node.child_by_field_name("name")?;
+        Some(&content[name_node.byte_range()])
+    }
+
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
+        if path.extension()?.to_str()? != "vue" { return None; }
+        Some(path.to_string_lossy().to_string())
+    }
+    fn module_name_to_paths(&self, module: &str) -> Vec<String> { vec![format!("{}.vue", module)] }
+
+    fn lang_key(&self) -> &'static str { "vue" }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
+    fn get_version(&self, _: &Path) -> Option<String> { None }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
+    fn indexable_extensions(&self) -> &'static [&'static str] { &["vue"] }
+    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> { None }
+    fn package_module_name(&self, name: &str) -> String { name.strip_suffix(".vue").unwrap_or(name).to_string() }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_file() { Some(path.to_path_buf()) } else { None }
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {

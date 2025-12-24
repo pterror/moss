@@ -131,10 +131,7 @@ pub trait Language: Send + Sync {
     fn grammar_name(&self) -> &'static str;
 
     /// Whether this language has code symbols (functions, classes, etc.)
-    /// Default: true if function_kinds or container_kinds is non-empty
-    fn has_symbols(&self) -> bool {
-        !self.function_kinds().is_empty() || !self.container_kinds().is_empty()
-    }
+    fn has_symbols(&self) -> bool;
 
     // === Node Classification ===
 
@@ -168,33 +165,21 @@ pub trait Language: Send + Sync {
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol>;
 
     /// Extract symbol from a type definition node
-    fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
-        // Default: types are often containers too
-        self.extract_container(node, content)
-    }
+    fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol>;
 
     /// Extract docstring/doc comment for a node
-    fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
-        let _ = (node, content);
-        None
-    }
+    fn extract_docstring(&self, node: &Node, content: &str) -> Option<String>;
 
     // === Import/Export ===
 
     /// Extract imports from an import node (may return multiple)
-    fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
-        let _ = (node, content);
-        Vec::new()
-    }
+    fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import>;
 
     /// Extract public symbols from a node.
     /// The node is one of the kinds from public_symbol_kinds().
     /// For JS/TS: extracts exported names from export statements.
     /// For Go/Java/Python: checks visibility and returns public symbols.
-    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export> {
-        let _ = (node, content);
-        Vec::new()
-    }
+    fn extract_public_symbols(&self, node: &Node, content: &str) -> Vec<Export>;
 
     // === Scope Analysis ===
 
@@ -220,61 +205,38 @@ pub trait Language: Send + Sync {
     // === Visibility ===
 
     /// Check if a node is public/exported
-    fn is_public(&self, node: &Node, content: &str) -> bool {
-        let _ = (node, content);
-        true
-    }
+    fn is_public(&self, node: &Node, content: &str) -> bool;
 
     /// Get visibility of a node
-    fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
-        if self.is_public(node, content) {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        }
-    }
+    fn get_visibility(&self, node: &Node, content: &str) -> Visibility;
 
     // === Edit Support ===
 
     /// Find the body node of a container (for prepend/append)
-    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
-        node.child_by_field_name("body")
-    }
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>>;
 
     /// Detect if first child of body is a docstring
-    fn body_has_docstring(&self, body: &Node, content: &str) -> bool {
-        let _ = (body, content);
-        false
-    }
+    fn body_has_docstring(&self, body: &Node, content: &str) -> bool;
 
     // === Helpers ===
 
     /// Get the name of a node (typically via "name" field)
-    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
-        let name_node = node.child_by_field_name("name")?;
-        Some(&content[name_node.byte_range()])
-    }
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str>;
 
     /// Convert a file path to a module name for this language.
     /// Used to find "importers" - files that import a given file.
     /// Returns None for languages without module systems or where not applicable.
-    fn file_path_to_module_name(&self, _path: &Path) -> Option<String> {
-        None
-    }
+    fn file_path_to_module_name(&self, path: &Path) -> Option<String>;
 
     /// Convert a module name to candidate file paths (inverse of file_path_to_module_name).
     /// Returns relative paths that could contain the module.
     /// Used for wildcard import resolution (e.g., `from foo import *`).
-    fn module_name_to_paths(&self, _module: &str) -> Vec<String> {
-        vec![]
-    }
+    fn module_name_to_paths(&self, module: &str) -> Vec<String>;
 
     // === Import Resolution ===
 
     /// Language key for package index cache (e.g., "python", "go", "js").
-    fn lang_key(&self) -> &'static str {
-        ""
-    }
+    fn lang_key(&self) -> &'static str;
 
     /// Resolve a local import within the project.
     ///
@@ -285,10 +247,7 @@ pub trait Language: Send + Sync {
         import_name: &str,
         current_file: &Path,
         project_root: &Path,
-    ) -> Option<PathBuf> {
-        let _ = (import_name, current_file, project_root);
-        None
-    }
+    ) -> Option<PathBuf>;
 
     /// Resolve an external import to its source location.
     ///
@@ -297,41 +256,25 @@ pub trait Language: Send + Sync {
         &self,
         import_name: &str,
         project_root: &Path,
-    ) -> Option<ResolvedPackage> {
-        let _ = (import_name, project_root);
-        None
-    }
+    ) -> Option<ResolvedPackage>;
 
     /// Check if an import is from the standard library.
-    fn is_stdlib_import(&self, import_name: &str, project_root: &Path) -> bool {
-        let _ = (import_name, project_root);
-        false
-    }
+    fn is_stdlib_import(&self, import_name: &str, project_root: &Path) -> bool;
 
     /// Get the language/runtime version (for package index versioning).
-    fn get_version(&self, project_root: &Path) -> Option<String> {
-        let _ = project_root;
-        None
-    }
+    fn get_version(&self, project_root: &Path) -> Option<String>;
 
     /// Find package cache/installation directory.
-    fn find_package_cache(&self, project_root: &Path) -> Option<PathBuf> {
-        let _ = project_root;
-        None
-    }
+    fn find_package_cache(&self, project_root: &Path) -> Option<PathBuf>;
 
     /// File extensions to index when caching a package.
-    fn indexable_extensions(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn indexable_extensions(&self) -> &'static [&'static str];
 
     // === Package Indexing ===
 
     /// Find standard library directory (if applicable).
     /// Returns None for languages without a separate stdlib to index.
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
-        None
-    }
+    fn find_stdlib(&self, project_root: &Path) -> Option<PathBuf>;
 
     /// Should this entry be skipped when indexing packages?
     /// Called for each file/directory in package directories.
@@ -339,58 +282,16 @@ pub trait Language: Send + Sync {
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool;
 
     /// Get the module/package name from a directory entry name.
-    /// Default: strip common extensions.
-    fn package_module_name(&self, entry_name: &str) -> String {
-        // Strip common extensions
-        for ext in self.indexable_extensions() {
-            let with_dot = format!(".{}", ext);
-            if entry_name.ends_with(&with_dot) {
-                return entry_name.trim_end_matches(&with_dot).to_string();
-            }
-        }
-        entry_name.to_string()
-    }
+    fn package_module_name(&self, entry_name: &str) -> String;
 
     /// Return package sources to index for this language.
     /// Each source describes a directory containing packages.
-    /// Default: returns stdlib and package cache if available.
-    fn package_sources(&self, project_root: &Path) -> Vec<PackageSource> {
-        let mut sources = Vec::new();
-        if let Some(stdlib) = self.find_stdlib(project_root) {
-            sources.push(PackageSource {
-                name: "stdlib",
-                path: stdlib,
-                kind: PackageSourceKind::Flat,
-                version_specific: true,
-            });
-        }
-        if let Some(cache) = self.find_package_cache(project_root) {
-            sources.push(PackageSource {
-                name: "packages",
-                path: cache,
-                kind: PackageSourceKind::Flat,
-                version_specific: false,
-            });
-        }
-        sources
-    }
+    fn package_sources(&self, project_root: &Path) -> Vec<PackageSource>;
 
     /// Discover packages in a source directory.
     /// Returns (package_name, path) pairs for all packages found.
-    /// Default implementation handles Flat, Recursive, and NpmScoped kinds.
-    /// Languages with special source kinds (Maven, Gradle, Cargo, Deno) should override.
-    fn discover_packages(&self, source: &PackageSource) -> Vec<(String, PathBuf)> {
-        match source.kind {
-            PackageSourceKind::Flat => self.discover_flat_packages(&source.path),
-            PackageSourceKind::Recursive => self.discover_recursive_packages(&source.path, &source.path),
-            PackageSourceKind::NpmScoped => self.discover_npm_scoped_packages(&source.path),
-            // Languages using these kinds must override discover_packages
-            PackageSourceKind::Maven
-            | PackageSourceKind::Gradle
-            | PackageSourceKind::Cargo
-            | PackageSourceKind::Deno => Vec::new(),
-        }
-    }
+    /// Use provided helpers: discover_flat_packages, discover_recursive_packages, discover_npm_scoped_packages.
+    fn discover_packages(&self, source: &PackageSource) -> Vec<(String, PathBuf)>;
 
     /// Discover packages in a flat directory (each entry is a package).
     fn discover_flat_packages(&self, source_path: &Path) -> Vec<(String, PathBuf)> {
@@ -447,14 +348,7 @@ pub trait Language: Send + Sync {
     /// Find the entry point file for a package path.
     /// If path is a file, returns it directly.
     /// If path is a directory, looks for language-specific entry points.
-    fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() {
-            return Some(path.to_path_buf());
-        }
-        // Default: no entry point for directories
-        // Languages should override to specify their entry points
-        None
-    }
+    fn find_package_entry(&self, path: &Path) -> Option<PathBuf>;
 
     /// Discover packages in npm-scoped directory (handles @scope/package).
     fn discover_npm_scoped_packages(&self, source_path: &Path) -> Vec<(String, PathBuf)> {
