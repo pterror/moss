@@ -3,6 +3,7 @@
 //! Extracts function/class signatures with optional docstrings.
 
 use moss_core::{tree_sitter, Language, Parsers};
+use moss_languages::{get_support, LanguageSupport, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// A code symbol with its signature
@@ -177,6 +178,34 @@ fn split_identifier(name: &str) -> Vec<String> {
     words
 }
 
+/// Convert a moss_languages::Symbol to SkeletonSymbol
+fn convert_symbol(sym: &LangSymbol) -> SkeletonSymbol {
+    let kind = match sym.kind {
+        LangSymbolKind::Function => "function",
+        LangSymbolKind::Method => "method",
+        LangSymbolKind::Class => "class",
+        LangSymbolKind::Struct => "struct",
+        LangSymbolKind::Enum => "enum",
+        LangSymbolKind::Trait => "trait",
+        LangSymbolKind::Interface => "interface",
+        LangSymbolKind::Module => "module",
+        LangSymbolKind::Type => "type",
+        LangSymbolKind::Constant => "constant",
+        LangSymbolKind::Variable => "variable",
+        LangSymbolKind::Heading => "heading",
+    };
+
+    SkeletonSymbol {
+        name: sym.name.clone(),
+        kind,
+        signature: sym.signature.clone(),
+        docstring: sym.docstring.clone(),
+        start_line: sym.start_line,
+        end_line: sym.end_line,
+        children: sym.children.iter().map(convert_symbol).collect(),
+    }
+}
+
 pub struct SkeletonExtractor {
     parsers: Parsers,
     show_all: bool,
@@ -200,7 +229,21 @@ impl SkeletonExtractor {
 
     pub fn extract(&mut self, path: &Path, content: &str) -> SkeletonResult {
         let lang = Language::from_path(path);
-        let symbols = match lang {
+
+        // Use legacy extractors for now - they handle complex cases like
+        // Rust impl blocks, Go types, etc. better than the trait-based approach.
+        // The trait infrastructure is in place for gradual migration.
+        let symbols = self.extract_legacy(lang, content);
+
+        SkeletonResult {
+            symbols,
+            file_path: path.to_string_lossy().to_string(),
+        }
+    }
+
+    /// Legacy extraction - will be replaced by trait-based extraction incrementally
+    fn extract_legacy(&mut self, lang: Option<Language>, content: &str) -> Vec<SkeletonSymbol> {
+        match lang {
             Some(Language::Python) => self.extract_python(content),
             Some(Language::Rust) => self.extract_rust(content),
             Some(Language::Markdown) => self.extract_markdown(content),
@@ -217,11 +260,109 @@ impl SkeletonExtractor {
             Some(Language::Scala) => self.extract_scala(content),
             Some(Language::Vue) => self.extract_vue(content),
             _ => Vec::new(),
-        };
+        }
+    }
 
-        SkeletonResult {
+    /// Trait-based extraction (for future use when implementations are complete)
+    #[allow(dead_code)]
+    pub fn extract_with_support(&self, path: &Path, content: &str) -> Option<SkeletonResult> {
+        let lang = Language::from_path(path)?;
+        let support = get_support(lang)?;
+        let symbols = self.extract_with_trait(lang, content, support);
+        Some(SkeletonResult {
             symbols,
             file_path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Extract using the LanguageSupport trait (new unified approach)
+    fn extract_with_trait(
+        &self,
+        lang: Language,
+        content: &str,
+        support: &dyn LanguageSupport,
+    ) -> Vec<SkeletonSymbol> {
+        let tree = match self.parsers.parse_lang(lang, content) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut symbols = Vec::new();
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        self.collect_with_trait(&mut cursor, content, support, &mut symbols, false);
+        symbols
+    }
+
+    fn collect_with_trait(
+        &self,
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        support: &dyn LanguageSupport,
+        symbols: &mut Vec<SkeletonSymbol>,
+        in_container: bool,
+    ) {
+        loop {
+            let node = cursor.node();
+            let kind = node.kind();
+
+            // Check if this is a function
+            if support.function_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_function(&node, content, in_container) {
+                    // Filter by visibility unless show_all
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                        symbols.push(convert_symbol(&sym));
+                    }
+                }
+            }
+            // Check if this is a container (class, impl, module)
+            else if support.container_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_container(&node, content) {
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                        let mut skeleton_sym = convert_symbol(&sym);
+
+                        // Recurse into container body
+                        if let Some(body) = support.container_body(&node) {
+                            let mut body_cursor = body.walk();
+                            if body_cursor.goto_first_child() {
+                                self.collect_with_trait(
+                                    &mut body_cursor,
+                                    content,
+                                    support,
+                                    &mut skeleton_sym.children,
+                                    true,
+                                );
+                            }
+                        }
+
+                        symbols.push(skeleton_sym);
+                    }
+                }
+                // Don't descend further after processing container
+                if cursor.goto_next_sibling() {
+                    continue;
+                }
+                break;
+            }
+            // Check if this is a standalone type (struct, enum, etc.)
+            else if support.type_kinds().contains(&kind) && !support.container_kinds().contains(&kind) {
+                if let Some(sym) = support.extract_type(&node, content) {
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                        symbols.push(convert_symbol(&sym));
+                    }
+                }
+            }
+
+            // Descend into children for other nodes
+            if cursor.goto_first_child() {
+                self.collect_with_trait(cursor, content, support, symbols, in_container);
+                cursor.goto_parent();
+            }
+
+            if !cursor.goto_next_sibling() {
+                break;
+            }
         }
     }
 

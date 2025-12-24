@@ -1265,6 +1265,7 @@ dependencies = [
  "grep-searcher",
  "ignore",
  "moss-core",
+ "moss-languages",
  "notify",
  "nucleo-matcher",
  "rayon",
