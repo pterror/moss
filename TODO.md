@@ -4,20 +4,16 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-(Empty - pick from backlog or add new tasks)
+- Add Scala support (tree-sitter-scala 0.24.0 exists)
+- Add Vue support (tree-sitter-vue 0.0.3 exists)
+- Session analysis: detect correction patterns ("You're right", "Good point")
+- Complete daemon integration (FileIndex API methods currently unused)
 
 Test Status: 2184 passing, 0 failing, 42 skipped (all optional deps)
 
 ## Backlog
 
-**Language Support:**
-- Call graph: Scala, Vue (no tree-sitter grammars yet)
-
-**Analysis Features:**
-- Session analysis: detect correction patterns ("You're right", "Good point")
-
 **Integration:**
-- Complete daemon integration (FileIndex API methods currently unused)
 - LSP refactor actions (rename symbol across files)
 - Cross-language reference tracking (Python ↔ Rust)
 
