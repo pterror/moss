@@ -65,6 +65,20 @@ Phase 4 - Expand:
 - [ ] Rust: share callers/callees implementation
 - [ ] Python: output helpers for JSON/markdown/compact
 
+**CLI Surface Cleanup** (align with three-primitive philosophy):
+- Rust CLI has 29 commands but design says 3 primitives (view, edit, analyze) + infra
+- `complexity` standalone vs `analyze --complexity` have different output formats - unify
+- `cfg`, `scopes` - inscrutable output, consider removing or improving then folding into analyze
+- `symbols`, `anchors`, `expand`, `context` - should be view modes, not separate commands
+- `callers`/`callees` commands duplicate `view --called-by`/`view --calls` - remove
+- Key distinction: view = tree operations, analyze = summaries
+
+**Bugs:**
+- `view --calls` semantics confused: shows callers but label says "caller", should show callees
+- `view --called-by` error says "No callees found" (wrong term, should say callers)
+- Call graph returns definition as caller: `suggest_tool` at line 1239 (docstring) listed as caller of itself
+- Output has unnecessary trailing "(caller)" on every line
+
 **Performance:**
 - Investigate slow `moss analyze --health` (+500ms over baseline, not uv startup)
 
@@ -84,6 +98,14 @@ Phase 4 - Expand:
 - Diffusion-like parallel refactors
 - Claude Code over-reliance on Explore agents: spawns agents for direct tool tasks. Symptom of deeper issue?
 - LLM code consistency: see `docs/llm-code-consistency.md` for research notes
+
+**Session Tooling:**
+- End-of-session summary workflow (.moss/workflows/session-summary.toml, no LLM):
+  - Test status: passing/failing count
+  - `git diff --shortstat` (files changed, insertions, deletions)
+  - Commits ahead of remote
+  - Uncommitted changes summary
+  - TODO.md delta (items added/completed)
 
 ## Deferred
 
