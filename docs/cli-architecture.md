@@ -1,189 +1,72 @@
 # CLI Architecture
 
-This document describes the internals of the Moss CLI for maintainers.
+This document describes the Moss CLI architecture.
 
-## Module Structure
+## Two CLIs
 
-**Location**: `src/moss/cli.py`
+Moss has two CLI implementations:
+
+1. **Rust CLI** (`crates/moss-cli/`) - Primary implementation
+   - Fast, parallel operations
+   - All core commands: view, edit, analyze, tree, callers, callees, deps, etc.
+   - 29 command modules in `commands/` directory
+
+2. **Python CLI** (`packages/moss-cli/`) - Thin wrapper
+   - Passes through to Rust for most commands
+   - Handles LLM-related commands (agent, workflow)
+   - Orchestration and TUI
+
+## Command Routing
 
 ```
-cli.py
-├── Output helpers
-│   ├── get_version()
-│   └── output_result()
-├── Project commands
-│   ├── cmd_init()
-│   ├── cmd_run()
-│   ├── cmd_status()
-│   ├── cmd_config()
-│   └── cmd_distros()
-├── Introspection commands
-│   ├── cmd_skeleton()
-│   ├── cmd_anchors()
-│   ├── cmd_query()
-│   ├── cmd_cfg()
-│   ├── cmd_deps()
-│   ├── cmd_context()
-│   └── cmd_mcp_server()
-├── Helpers
-│   └── _symbol_to_dict()
-└── Entry points
-    ├── create_parser()
-    └── main()
+User runs `moss <command>`
+    ↓
+Python CLI entry point
+    ↓
+Is it a passthrough command? (view, edit, analyze, tree, etc.)
+    ├── YES → rust_shim.passthrough() → Rust binary
+    └── NO → Python implementation (agent, workflow, tui)
 ```
 
-## Command Pattern
+Passthrough commands bypass Python argparse entirely for speed.
 
-All commands follow this pattern:
+## Rust CLI Structure
 
-```python
-def cmd_<name>(args: Namespace) -> int:
-    """Docstring describing the command."""
-    # 1. Parse arguments from args
-    path = Path(args.path).resolve()
+**Location**: `crates/moss-cli/src/`
 
-    # 2. Validate inputs
-    if not path.exists():
-        print(f"Error: ...", file=sys.stderr)
-        return 1
-
-    # 3. Do work (import dependencies lazily)
-    from moss.<module> import <function>
-    result = <function>(...)
-
-    # 4. Output (JSON or human-readable)
-    if getattr(args, "json", False):
-        output_result(result, args)
-    else:
-        print(formatted_result)
-
-    return 0
+```
+main.rs           # ~800 lines, argument parsing
+commands/         # 29 modules, one per command
+  ├── view_cmd.rs
+  ├── edit.rs
+  ├── analyze_cmd.rs
+  ├── callers.rs
+  └── ...
 ```
 
 **Key conventions**:
+- All commands support `--json` for machine consumption
 - Return 0 for success, non-zero for errors
-- Errors go to stderr, output to stdout
-- Lazy imports to keep CLI startup fast
-- All commands support `--json` flag for machine-readable output
+- Output to stdout, errors to stderr
 
-## Parser Structure
+## Adding Commands
 
-`create_parser()` builds the argument parser:
+**Rust commands** (preferred for performance-critical):
+1. Add module in `crates/moss-cli/src/commands/`
+2. Wire into main.rs argument parsing
+3. Add `--json` output support
 
-```python
-parser = argparse.ArgumentParser(prog="moss")
-parser.add_argument("--json", "-j", ...)  # Global flag
-subparsers = parser.add_subparsers(dest="command")
+**Python commands** (for LLM/orchestration):
+1. Add to `packages/moss-cli/src/moss_cli/_main.py`
+2. Use rust_shim for Rust operations
 
-# Each command
-xyz_parser = subparsers.add_parser("xyz", help="...")
-xyz_parser.add_argument(...)
-xyz_parser.set_defaults(func=cmd_xyz)
-```
+## Output Format
 
-**Adding a new command**:
-1. Write `cmd_<name>(args: Namespace) -> int` function
-2. Add parser in `create_parser()` with `subparsers.add_parser()`
-3. Set `func=cmd_<name>` as default
+All commands support two output modes:
+- **Human-readable**: Default, formatted for terminals
+- **JSON** (`--json`): Structured data for scripts/tools
 
-## Introspection Commands
+## MCP Server
 
-### Data Flow
-
-```
-User Input
-    │
-    ▼
-┌─────────────┐
-│ Path Check  │ → Error if not exists
-└─────────────┘
-    │
-    ▼
-┌─────────────┐
-│ File/Dir?   │
-└─────────────┘
-   │        │
-   ▼        ▼
-Single    Glob Pattern
- File     (default: **/*.py)
-   │        │
-   ▼        ▼
-┌──────────────────┐
-│ Process Each File│
-│ (try/except for  │
-│  syntax errors)  │
-└──────────────────┘
-    │
-    ▼
-┌─────────────┐
-│ JSON or     │
-│ Human Output│
-└─────────────┘
-```
-
-### Symbol Conversion
-
-`_symbol_to_dict()` converts internal `Symbol` objects to JSON-serializable dicts:
-
-```python
-{
-    "name": "MyClass",
-    "kind": "class",
-    "line": 42,
-    "signature": "class MyClass(Base):",  # optional
-    "docstring": "...",                    # optional
-    "children": [...]                      # optional, recursive
-}
-```
-
-### Output Format
-
-**Human-readable**: Context-appropriate formatting
-- skeleton: Indented tree structure
-- anchors: `file:line type name (in context)`
-- query: Full details with signatures
-- deps: Grouped imports/exports
-- context: Summary + sections
-
-**JSON** (`--json`): Structured data
-- Single file: Object
-- Directory: Array of objects
-- Consistent schema per command
-
-## Dependencies
-
-Each command lazily imports only what it needs:
-
-| Command | Imports |
-|---------|---------|
-| skeleton | `moss.skeleton` |
-| anchors | `moss.skeleton`, `re` |
-| query | `moss.skeleton`, `re` |
-| cfg | `moss.cfg` |
-| deps | `moss.dependencies` |
-| context | `moss.skeleton`, `moss.dependencies` |
-| mcp-server | `moss.mcp_server` |
-
-## Error Handling
-
-- **Path errors**: Check existence early, return 1
-- **Syntax errors**: Catch per-file, continue processing others
-- **Import errors** (MCP): Catch and provide install instructions
-- **Keyboard interrupt**: Catch in mcp-server, return 0
-
-## Testing
-
-Tests in `tests/test_cli.py` cover:
-- Each command with valid inputs
-- JSON output format
-- Error cases (missing files, syntax errors)
-- Filter combinations
-
-## MCP Server Integration
-
-`cmd_mcp_server()` delegates to `moss.mcp_server.main()` which:
-1. Creates MCP server with tool definitions
-2. Registers handlers for each tool
-3. Runs stdio transport loop
-
-The MCP tools mirror CLI commands but return structured data directly.
+`moss mcp-server` exposes CLI commands as MCP tools.
+Uses the same Rust CLI underneath.

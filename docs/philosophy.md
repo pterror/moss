@@ -5,7 +5,17 @@ For behavioral rules and conventions, see `CLAUDE.md`.
 
 ## Project Overview
 
-Moss is tooling orchestration with structural awareness. It implements a "Compiled Context" approach that prioritizes architectural awareness (AST-based understanding) over raw text processing, with verification loops ensuring correctness before output.
+Moss is **structural code intelligence as a platform**. It provides tools for understanding, navigating, and modifying code at a structural level (AST, control flow, dependencies) rather than treating code as text.
+
+| User | Interface | Use Case |
+|------|-----------|----------|
+| Developer | CLI, TUI | Understand unfamiliar code, explore structure |
+| AI Agent | MCP, Library | Get structured context, make safe modifications |
+| IDE | LSP | Code intelligence, navigation, refactoring |
+| CI/CD | CLI | Quality gates, validation, analysis |
+| Tool Builder | Library | Build custom tools on structural primitives |
+
+Moss is useful alone and powerful with AI. A human can `moss view` to understand a file; an agent can use the same capability to build context for code generation.
 
 ## Architecture
 
@@ -222,3 +232,18 @@ Maximize useful work per token. Minimize friction in the creative flow:
 - **Minimize error rate**: Avoid wasted retry cycles. Get it right the first time
 - **Usefulness per token**: Avoid busywork. Every action should move toward the goal
 - **Future goal**: Diff-based editing to avoid sending unchanged code
+
+### UX Principles
+
+- **No modals** - Everything inline, no popups blocking context
+- **No nested menus** - Flat, searchable action lists
+- **Actions visible** - Show what's possible, don't hide capabilities
+- **Direct manipulation** - Click/select to act, not navigate menus
+- **Mouse support** - Full mouse interaction everywhere (especially TUI)
+- **Progressive disclosure** - Start simple, reveal depth on demand
+
+Same mental model across all interfaces:
+1. **Start anywhere** - File, function, class, symbol, or natural language query
+2. **Traverse by relationship** - calls → called-by → imports → similar-to
+3. **Zoom fluently** - Full source ↔ skeleton ↔ signature ↔ one-liner
+4. **Context preserved** - Breadcrumbs, back/forward, history

@@ -2,55 +2,45 @@
 
 This document records key architectural decisions and their rationale.
 
-## Language Choice: Python
+## Language Choice: Rust + Python Hybrid
 
-**Decision**: Moss is implemented in Python.
+**Decision**: Moss uses Rust for plumbing, Python for interface.
 
-**Considered alternatives**: TypeScript/Bun, Rust, Go
+See `docs/rust-python-boundary.md` for the full decision framework.
 
-### Why Python?
+### Division of Labor
 
-**AST ecosystem superiority:**
-- tree-sitter has excellent Python bindings
-- libcst for concrete syntax trees (preserves formatting)
-- rope for refactoring operations
-- parso for error-tolerant parsing
-- ast-grep, semgrep, ruff all have Python APIs or easy subprocess integration
+**Rust (moss-cli, moss-core, moss-languages):**
+- Tree-sitter parsing for 17+ languages
+- SQLite-backed symbol/call graph index
+- Fast queries (callers, callees, deps, complexity)
+- Structural operations (view, edit, analyze core)
+- Daemon for background indexing
 
-**ML/AI library support:**
-- sentence-transformers, transformers for local embeddings/summarization
-- Z3 solver bindings (z3-solver) for synthesis
-- All major LLM SDKs (anthropic, openai, etc.) are Python-first
+**Python (packages/moss-*):**
+- LLM integration (edit synthesis, agents)
+- Orchestration (workflows, state machines)
+- User interfaces (CLI wrapper, TUI, MCP, LSP)
+- Rich analysis (patterns, clones, test coverage)
+- Plugins (generators, validators, view providers)
 
-**Tool integration:**
-- MCP SDK is Python-native
-- Most code analysis tools (bandit, pyright, mypy) are Python
-- Easy subprocess orchestration for external tools
+### Why This Split?
 
-### Parallelism Considerations
+**Rust for deterministic, performance-critical, syntax-aware operations.** Python's GIL and interpreter overhead made indexing 100k+ file repos slow. Rust with rayon gives true parallelism.
 
-**GIL limitations**: Python's Global Interpreter Lock prevents true CPU-bound parallelism within a single process.
+**Python for LLM orchestration and rapid iteration.** The AI ecosystem is Python-first. Prototyping new agent behaviors is faster in Python.
 
-**Why this is acceptable for Moss**:
-1. **I/O bound workloads**: Most operations are file reads, subprocess calls, or LLM API calls
-2. **Subprocess delegation**: Heavy lifting done by external tools (ast-grep, ruff, git)
-3. **asyncio works fine**: Concurrent I/O parallelizes well
-4. **Process-based parallelism**: `concurrent.futures.ProcessPoolExecutor` for CPU-bound work
+### The Shim Pattern
 
-**If we hit GIL limits**:
-- Profile first to identify actual bottlenecks
-- Move hot paths to Rust via PyO3 (what ruff does)
-- Consider multiprocessing for CPU-intensive analysis
+Python calls Rust via subprocess:
+```
+Python CLI → rust_shim.passthrough() → Rust binary → JSON output
+```
 
-### Type Safety
-
-**Current approach**: basedpyright in strict mode
-
-**Comparison to TypeScript**:
-- TS has better inference and stricter defaults
-- Python typing is "good enough" for a project this size
-- Runtime type checking available via beartype/typeguard if needed
-- Tradeoff accepted for ecosystem benefits
+Rules:
+- Rust commands always support `--json` for machine consumption
+- Passthrough commands bypass Python entirely for speed
+- Python gracefully degrades if Rust binary unavailable
 
 ## Local Neural Network Memory Budget
 

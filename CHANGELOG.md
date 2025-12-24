@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (Dec 24 2025)
+## v0.1.0 (Dec 2025)
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
@@ -827,7 +827,6 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - Add `Export.export_type` property as alias for `kind`
 - Add `@dataclass` decorator to `RAGAPI` to fix constructor signature
 
-## v0.6.10
 
 ### Performance Improvements
 
@@ -851,7 +850,6 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - ~95ms down from ~500ms (5x faster)
 - File counting and complexity analysis run concurrently
 
-## v0.6.9
 
 ### Index Reliability
 
@@ -908,7 +906,6 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - CI integration with regression detection thresholds
 - Automated performance tracking across commits
 
-## v0.6.8
 
 ### Tree Commands & Performance
 
@@ -931,7 +928,6 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - File lookups: 914ms → 222ms
 - Symbol lookups still require parsing (~800ms)
 
-## v0.6.7
 
 ### Single-Tool MCP Server
 
@@ -941,9 +937,8 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - CLI: `moss mcp-server` (single-tool, default) or `moss mcp-server --full` (multi-tool)
 - Entry points: `moss-mcp` (single) and `moss-mcp-full` (full)
 
-## v0.6.6
 
-### Phase 36: query/search CLI Migration, Agent Learning
+### query/search CLI Migration, Agent Learning
 
 **SearchAPI**
 - `search_query` - Query symbols with pattern matching and regex filters
@@ -963,9 +958,8 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - `cmd_query` now uses `MossAPI.search.query()`
 - `cmd_search` now uses `MossAPI.rag` for semantic search
 
-## v0.6.5
 
-### Phase 35: find_related_files, summarize_module, CLI Migration
+### find_related_files, summarize_module, CLI Migration
 
 **SearchAPI** (Dec 2025)
 - `search_find_related_files` - Find files that import/are imported by a given file
@@ -985,7 +979,7 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - Pattern: Replace direct imports with `MossAPI.for_project()`
 - Reduces duplication, enables generated CLI
 
-### Phase 34: Module DWIM, CLI Migration, explain_symbol
+### Module DWIM, CLI Migration, explain_symbol
 
 **HealthAPI Filtering**
 - `health_check(focus=..., severity=...)` - Filter weak spots in API
@@ -1004,9 +998,8 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - Updated CLAUDE.md with stronger moss-first guidance
 - Added Agent Lessons section to TODO.md
 
-## v0.6.4
 
-### Phase 33: Search, Async Docs, Self-Improvement, Guessability
+### Search, Async Docs, Self-Improvement, Guessability
 
 **SearchAPI** (Dec 2025)
 - `search_find_symbols` - find symbols by name across codebase
@@ -1033,9 +1026,8 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - `guessability_recommendations` - actionable improvements
 - Metrics: name-content alignment, pattern consistency
 
-## v0.6.3
 
-### Phase 32: WebAPI, Skeleton Expand, Loops Infrastructure
+### WebAPI, Skeleton Expand, Loops Infrastructure
 
 **WebAPI to MCP** (Dec 2025)
 - `web_fetch`, `web_search`, `web_extract_content`, `web_clear_cache` tools
@@ -1063,9 +1055,8 @@ Replaced ~17 individual tree-sitter-* grammar crates with single arborium depend
 - Multi-LLM rotation in LLMConfig
 - Philosophy doc (`docs/philosophy.md`) with design tenets
 
-## v0.6.2
 
-### Phase 31: Preference Extraction from Agent Logs
+### Preference Extraction from Agent Logs
 
 Extract user preferences from AI coding assistant session logs and output to agent instruction formats.
 
@@ -1115,9 +1106,8 @@ Extract user preferences from AI coding assistant session logs and output to age
 **Tests**
 - 28 tests covering models, parsing, extractors, and adapters
 
-## v0.6.1
 
-### Phase 30: Codebase Analysis Tools
+### Codebase Analysis Tools
 
 New analysis commands for comprehensive codebase insight:
 
@@ -1152,9 +1142,8 @@ New analysis commands for comprehensive codebase insight:
 - Skeleton summary showing top packages by size
 - Updated both compact and markdown output formats
 
-## v0.6.0
 
-### Phase 29: Library-First Architecture
+### Library-First Architecture
 Hyper-modular refactor with auto-generated interfaces:
 
 **29a: Core Library Refactor**
@@ -1198,9 +1187,8 @@ Hyper-modular refactor with auto-generated interfaces:
 - Auto-detect: TUI at terminal, plain when piped
 - Smart categorization of complete/in-progress/future phases
 
-## v0.5.0
 
-### Phase 28: Comprehensive Health Analysis
+### Comprehensive Health Analysis
 Expanded `moss health` into a comprehensive project analysis tool:
 - **Dependency Analysis**: Circular dependency detection, god modules (high fan-in), orphan modules, coupling metrics
 - **Structural Hotspots**: Functions with too many parameters, classes with too many methods, deep nesting, long functions, complex conditionals
@@ -1208,9 +1196,8 @@ Expanded `moss health` into a comprehensive project analysis tool:
 - **API Surface Analysis**: Public exports inventory, undocumented APIs, naming convention checking, breaking change risk
 - **Health Command Refactor**: Concise single-screen output, `--severity` and `--focus` flags, `moss report` for verbose output, `--ci` flag with exit codes (0=healthy, 1=warnings, 2=critical)
 
-## v0.4.0
 
-### Phase 27: Advanced Library Learning
+### Advanced Library Learning
 Frequency-based abstraction learning inspired by DreamCoder:
 - `LearnedLibrary` plugin with pattern-based learning
 - `PatternExtractor` for code pattern detection (functions, expressions, idioms)
@@ -1219,7 +1206,7 @@ Frequency-based abstraction learning inspired by DreamCoder:
 - Pattern frequency tracking across synthesis runs
 - 31 tests for library learning
 
-### Phase 26: LLM Integration
+### LLM Integration
 LLM-based code generation with mock support for testing:
 - `LLMGenerator` plugin using LiteLLM for unified provider access
 - `MockLLMProvider` for testing without API calls
@@ -1229,31 +1216,31 @@ LLM-based code generation with mock support for testing:
 - Factory functions: `create_llm_generator()`, `create_mock_generator()`
 - 48 tests for LLM generation
 
-### Phase 22c: CLI & Edit Integration
+### CLI & Edit Integration
 - `moss edit` command with intelligent complexity routing
 - TaskComplexity analysis (simple/medium/complex/novel)
 - Structural edit handler (rename, typo fix, refactoring)
 - Synthesis fallback for complex/novel tasks
 - Configuration presets: default, research, production, minimal
 
-### Phase 22d: Optimization & Learning
+### Optimization & Learning
 - StrategyLearner with feature extraction
 - Feature-based strategy scoring (EMA updates)
 - Similar problem lookup from history
 - Router integration: 4-signal ranking (TF-IDF, estimate, history, learned)
 
-### Phase D: Strategy Auto-Discovery
+### Strategy Auto-Discovery
 - StrategyPlugin protocol for pluggable strategies
 - StrategyRegistry with enable/disable support
 - Entry point discovery (moss.synthesis.strategies)
 
-### Phase F: Configuration System
+### Configuration System
 - SynthesisConfigWrapper for TOML-based config
 - SynthesisConfigLoader fluent builder
 - Subsystem configs: generators, validators, strategies, learning
 - load_synthesis_config() for moss.toml
 
-### Phase 25: Synthesis Plugin Architecture
+### Synthesis Plugin Architecture
 Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCoder, λ²):
 - `CodeGenerator` protocol with PlaceholderGenerator, TemplateGenerator
 - `SynthesisValidator` protocol with TestValidator (pytest/jest), TypeValidator (mypy/pyright)
@@ -1264,16 +1251,15 @@ Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCo
 - User-configurable templates (CRUD, validation, transform patterns)
 - 31 tests for plugin architecture
 
-## v0.3.0
 
-### Phase 24: Refactoring Tools
+### Refactoring Tools
 - Inline refactoring (function and variable inlining)
 - Codemod DSL with pattern matching ($var placeholders)
 - CodemodRunner for workspace-wide transformations
 - Built-in codemod factories (deprecation, API migration)
 - Preview/dry-run mode for all refactorings
 
-### Phase 23: Context & Memory
+### Context & Memory
 - ContentHash merkle hashing for documents
 - DocumentSummary with recursive child aggregation
 - DocumentSummaryStore with caching and persistence
@@ -1282,7 +1268,7 @@ Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCo
 - SimpleSummarizer (extractive summarization)
 - Session search with tag filtering
 
-### Phase 22: Synthesis Framework (Scaffolding)
+### Synthesis Framework (Scaffolding)
 - Core synthesis framework (`src/moss/synthesis/`)
 - Abstract interfaces: Specification, Context, Subproblem, SynthesisResult
 - DecompositionStrategy ABC with metadata
@@ -1295,9 +1281,8 @@ Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCo
 - Scale testing (depth 20+ problems)
 - **Note**: Code generation not implemented (returns placeholders)
 
-## v0.2.0
 
-### Phase 21: Developer Experience & CI/CD
+### Developer Experience & CI/CD
 - Watch mode for tests (auto-run on file changes)
 - Metrics dashboard (HTML report of codebase health)
 - Custom analysis rules (user-defined patterns)
@@ -1308,13 +1293,13 @@ Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCo
 - GitHub Actions integration
 - VS Code extension (`editors/vscode/`)
 
-### Phase 20: Integration & Polish
+### Integration & Polish
 - CLI improvements: global flags, consistent output module
 - Interactive shell (`moss shell`)
 - Performance: caching layer, parallel file analysis
 - Configuration: `moss.toml`, per-directory overrides
 
-### Phase 19: Advanced Features
+### Advanced Features
 - Configurable output verbosity
 - Multi-file refactoring
 - Progress indicators
@@ -1325,51 +1310,50 @@ Plugin system for synthesis components (inspired by Synquid, miniKanren, DreamCo
 - Embedding-based search
 - Non-code content plugins
 
-### Phase 18: Plugin Architecture
+### Plugin Architecture
 - ViewPlugin protocol and PluginRegistry
 - Entry points discovery for pip-installed plugins
 - Tree-sitter skeleton plugin (multi-language)
 
-### Phase 17: Introspection Improvements
+### Introspection Improvements
 - Enhanced skeleton views
 - Dependency graph improvements
 
-### Phase 16: DWIM Semantic Routing
+### DWIM Semantic Routing
 - TF-IDF based command routing
 - Fuzzy intent matching
 
-### Phase 15: LLM Introspection Tooling
+### LLM Introspection Tooling
 - Agent orchestration primitives
 - Shadow git integration
 - Validation loops
 
-## v0.1.0 (Initial Release)
 
-### Phase 10: Developer Experience
+### Developer Experience
 - CLI interface (`moss init`, `moss run`, `moss status`)
 - README with architecture overview
 - Usage examples and tutorials in `examples/`
 - API documentation via docstrings
 
-### Phase 11: Enhanced Capabilities
+### Enhanced Capabilities
 - Vector store integration (Chroma, in-memory)
 - Tree-sitter integration for multi-language AST (Python, TypeScript, JavaScript, Go, Rust)
 - Control Flow Graph (CFG) view provider
 - Elided Literals view provider for token reduction
 
-### Phase 12: Hardening & Quality
+### Hardening & Quality
 - Integration tests for component interactions
 - E2E tests for full workflows
 - Fuzzing tests for edge cases and malformed inputs
 - CI/CD with GitHub Actions (lint, test, coverage, typecheck)
 
-### Phase 13: Production Readiness
+### Production Readiness
 - FastAPI example server (`examples/server/`)
 - Structured logging module (`moss.logging`)
 - Observability module with metrics and tracing (`moss.observability`)
 - Profiling utilities (`moss.profiling`)
 
-### Phase 14: Dogfooding
+### Dogfooding
 - Self-analysis test suite (Moss analyzing its own codebase)
 - Performance benchmarks on real code
 - 621 tests passing with 86% coverage

@@ -5,6 +5,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 - Complete daemon integration
+- Streaming --jq support for sessions command (currently loads all files into memory)
 
 Test Status: 64 passing, 0 failing
 
