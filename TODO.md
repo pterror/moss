@@ -4,15 +4,15 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Split main.rs (5000 lines, 59 functions) into command modules:
-  - commands/view.rs: cmd_view*, cmd_skeleton, cmd_tree, cmd_context, cmd_expand
-  - commands/analyze.rs: cmd_health, cmd_overview, cmd_complexity, cmd_cfg, cmd_anchors, cmd_scopes
-  - commands/search.rs: cmd_grep, cmd_find_symbols, cmd_search_tree, cmd_path
-  - commands/deps.rs: cmd_symbols, cmd_callees, cmd_callers, cmd_deps, cmd_imports
-  - commands/index.rs: cmd_index_packages, cmd_index_stats, cmd_list_files, cmd_reindex
-  - commands/update.rs: cmd_update + self-update helpers
-  - commands/daemon.rs: cmd_daemon
-  - commands/edit.rs: cmd_edit
+- Continue splitting main.rs (~3960 lines remaining) into command modules:
+  - [x] commands/update.rs: cmd_update + self-update helpers
+  - [x] commands/index.rs: cmd_index_packages, cmd_index_stats, cmd_list_files, cmd_reindex
+  - [x] commands/daemon.rs: cmd_daemon + DaemonAction enum
+  - [ ] commands/view.rs: cmd_view*, cmd_skeleton, cmd_tree, cmd_context, cmd_expand
+  - [ ] commands/analyze.rs: cmd_health, cmd_overview, cmd_complexity, cmd_cfg, cmd_anchors, cmd_scopes
+  - [ ] commands/search.rs: cmd_grep, cmd_find_symbols, cmd_search_tree, cmd_path
+  - [ ] commands/deps.rs: cmd_symbols, cmd_callees, cmd_callers, cmd_deps, cmd_imports
+  - [ ] commands/edit.rs: cmd_edit
 - Add moss-languages feature flags to moss-cli Cargo.toml
 - Session analysis: detect correction patterns
 - Complete daemon integration
@@ -90,8 +90,9 @@ Phase 4 - Expand:
 ## Implementation Notes
 
 **Self-update (`moss update`):**
-- GITHUB_REPO constant in main.rs:4004 → "pterror/moss"
-- Custom SHA256 implementation (main.rs:4220-4310)
+- Now in commands/update.rs
+- GITHUB_REPO constant → "pterror/moss"
+- Custom SHA256 implementation (Sha256 struct)
 - Expects GitHub release with SHA256SUMS.txt
 
 ## When Ready
