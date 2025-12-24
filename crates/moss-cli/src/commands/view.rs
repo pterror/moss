@@ -31,17 +31,16 @@ fn search_symbols(query: &str, root: &Path) -> Vec<index::SymbolMatch> {
     }
 }
 
-/// View a symbol directly by file, name, and line
+/// View a symbol directly by file and name
 fn cmd_view_symbol_direct(
     file_path: &str,
     symbol_name: &str,
-    _line: usize,
     root: &Path,
     depth: i32,
     full: bool,
     json: bool,
 ) -> i32 {
-    cmd_view_symbol(file_path, &[symbol_name.to_string()], root, depth, false, full, json)
+    cmd_view_symbol(file_path, &[symbol_name.to_string()], root, depth, full, json)
 }
 
 /// Try various separators to parse file:symbol format
@@ -87,9 +86,9 @@ pub fn cmd_view(
         .unwrap_or_else(|| std::env::current_dir().unwrap());
 
     // If kind filter is specified without target (or with "."), list matching symbols
-    if kind_filter.is_some() {
+    if let Some(kind) = kind_filter {
         let scope = target.unwrap_or(".");
-        return cmd_view_filtered(&root, scope, kind_filter.unwrap(), json);
+        return cmd_view_filtered(&root, scope, kind, json);
     }
 
     // Handle --calls or --called-by with a target symbol
@@ -134,7 +133,7 @@ pub fn cmd_view(
         (0, 1) => {
             // Single symbol match - construct path to it
             let sym = &symbol_matches[0];
-            return cmd_view_symbol_direct(&sym.file, &sym.name, sym.start_line, &root, depth, full, json);
+            return cmd_view_symbol_direct(&sym.file, &sym.name, &root, depth, full, json);
         }
         _ => {
             // Multiple matches - list files and symbols
@@ -207,7 +206,6 @@ pub fn cmd_view(
             &unified.symbol_path,
             &root,
             depth,
-            line_numbers,
             full,
             json,
         )
@@ -528,7 +526,7 @@ fn cmd_view_file(
     // depth 1: skeleton (signatures)
     // depth 2+: skeleton with more detail
 
-    if depth < 0 || depth > 2 {
+    if !(0..=2).contains(&depth) {
         // Full content view
         if json {
             println!(
@@ -801,17 +799,25 @@ fn cmd_view_file(
     0
 }
 
-/// Find a symbol's signature in a skeleton
-fn find_symbol_signature(symbols: &[skeleton::SkeletonSymbol], name: &str) -> Option<String> {
+/// Find a symbol by name in a skeleton (recursive)
+fn find_symbol<'a>(
+    symbols: &'a [skeleton::SkeletonSymbol],
+    name: &str,
+) -> Option<&'a skeleton::SkeletonSymbol> {
     for sym in symbols {
         if sym.name == name {
-            return Some(sym.signature.clone());
+            return Some(sym);
         }
-        if let Some(sig) = find_symbol_signature(&sym.children, name) {
-            return Some(sig);
+        if let Some(found) = find_symbol(&sym.children, name) {
+            return Some(found);
         }
     }
     None
+}
+
+/// Find a symbol's signature in a skeleton
+fn find_symbol_signature(symbols: &[skeleton::SkeletonSymbol], name: &str) -> Option<String> {
+    find_symbol(symbols, name).map(|sym| sym.signature.clone())
 }
 
 fn cmd_view_symbol(
@@ -819,7 +825,6 @@ fn cmd_view_symbol(
     symbol_path: &[String],
     root: &Path,
     depth: i32,
-    _line_numbers: bool,
     full: bool,
     json: bool,
 ) -> i32 {
@@ -862,30 +867,14 @@ fn cmd_view_symbol(
         let mut extractor = skeleton::SkeletonExtractor::new();
         let skeleton_result = extractor.extract(&full_path, &content);
 
-        // Search for symbol in skeleton
-        fn find_symbol<'a>(
-            symbols: &'a [skeleton::SkeletonSymbol],
-            name: &str,
-        ) -> Option<&'a skeleton::SkeletonSymbol> {
-            for sym in symbols {
-                if sym.name == name {
-                    return Some(sym);
-                }
-                if let Some(found) = find_symbol(&sym.children, name) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
         if let Some(sym) = find_symbol(&skeleton_result.symbols, symbol_name) {
             let full_symbol_path = format!("{}/{}", file_path, symbol_path.join("/"));
 
             // When --full is requested, extract source using line numbers
             if full && sym.start_line > 0 && sym.end_line > 0 {
                 let lines: Vec<&str> = content.lines().collect();
-                let start = (sym.start_line - 1) as usize;
-                let end = std::cmp::min(sym.end_line as usize, lines.len());
+                let start = sym.start_line - 1;
+                let end = std::cmp::min(sym.end_line, lines.len());
                 let source: String = lines[start..end].join("\n");
 
                 if json {
