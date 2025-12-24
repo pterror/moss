@@ -4,7 +4,8 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Global package index database: unified `~/.cache/moss/packages.db` with version ranges (min/max per package)
+- Wire PackageIndex into external resolution (lazy index on cache miss)
+- CLI command to pre-index stdlib/site-packages
 
 Test Status: 2184 passing, 0 failing, 42 skipped (all optional deps)
 

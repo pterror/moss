@@ -33,7 +33,8 @@ First release. See `docs/` for design docs and `README.md` for usage.
 - Go stdlib resolution: finds packages in `$GOROOT/src/`
 - Go mod cache resolution: finds dependencies in `$GOMODCACHE` or `~/go/pkg/mod/`
 - `view --focus` now falls back to external packages when local resolution fails
-- Global cache structure at `~/.cache/moss/` (prepared for future index caching)
+- Global package index database: `~/.cache/moss/packages.db` with version ranges (major, minor)
+- PackageIndex API: insert/find packages and symbols with version filtering
 
 **Additional Analysis Modules** (Dec 24 2025)
 - Binary detection in call graph: detects binary files by null byte check (8KB sample)
