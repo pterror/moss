@@ -57,11 +57,11 @@ enum Commands {
         #[arg(short = 't', long = "type")]
         kind: Option<String>,
 
-        /// Show symbols that call the target (callers)
+        /// Show what functions the target calls (callees)
         #[arg(long)]
         calls: bool,
 
-        /// Show symbols that the target calls (callees)
+        /// Show what functions call the target (callers)
         #[arg(long)]
         called_by: bool,
 
