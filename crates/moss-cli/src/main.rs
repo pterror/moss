@@ -12,6 +12,7 @@ mod deps;
 mod edit;
 mod external_packages;
 mod go_mod;
+mod resolution;
 mod grep;
 mod health;
 mod index;
