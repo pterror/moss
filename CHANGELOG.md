@@ -4,6 +4,15 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Arborium Migration
+
+Replaced ~17 individual tree-sitter-* grammar crates with single arborium dependency:
+- Unified grammar management via GrammarStore
+- Added Scala and Vue language support
+- Access to 70+ languages (vs 17 before)
+- Simplified Parsers API: `parse_lang()` replaces `get().parse()`
+- Net code reduction: -108 lines
+
 ### Test Suite Cleanup
 
 - Removed obsolete tests for deleted MossAPI/health module (8 tests)
