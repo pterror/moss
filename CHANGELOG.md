@@ -4,6 +4,18 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Remove Language-Specific CLI Code
+
+Removed Python subprocess calls and hardcoded language counters from moss-cli:
+- Deleted `run_python_test_coverage`, `run_python_scopes`, `run_python_test_health` functions
+- Removed `--test-coverage`, `--scopes`, `--test-health` CLI flags (shelled out to Python)
+- Replaced `python_files`/`rust_files`/`other_files` with dynamic `files_by_language: HashMap<String, usize>`
+- `HealthReport` and `OverviewReport` now use `moss_languages::support_for_extension()` for file classification
+- Removed ~270 lines of dead code from complexity.rs (legacy `analyze_python`, `analyze_rust` methods)
+- Removed ~145 lines of dead code from edit.rs (legacy `find_symbol_in_node`, `check_node_is_container` methods)
+- Fixed unnecessary `&mut self` in Editor methods
+- Added `find_package_entry()` to Language trait for Python's `__init__.py` handling
+
 ### Package Indexing Trait Methods
 
 Added package indexing methods to `Language` trait:
