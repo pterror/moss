@@ -6,6 +6,11 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 - Complete daemon integration
 - Streaming --jq support for sessions command (currently loads all files into memory)
+- Tree view improvements:
+  - Collapse single-child folders (src/moss_orchestration/ → one level)
+  - Package-aware resolution (moss view moss-orchestration → finds code dir)
+  - Smart depth (skip boilerplate when counting depth)
+  - Config: on by default, `--raw` to disable all, per-option flags, per-directory config
 
 Test Status: 64 passing, 0 failing
 
