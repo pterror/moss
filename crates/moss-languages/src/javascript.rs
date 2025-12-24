@@ -1,7 +1,7 @@
 //! JavaScript language support.
 
 use std::path::{Path, PathBuf};
-use crate::{Export, Import, LanguageSupport, Symbol, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, VisibilityMechanism};
 use crate::ecmascript;
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
@@ -9,7 +9,7 @@ use moss_core::tree_sitter::Node;
 /// JavaScript language support.
 pub struct JavaScript;
 
-impl LanguageSupport for JavaScript {
+impl Language for JavaScript {
     fn name(&self) -> &'static str { "JavaScript" }
     fn extensions(&self) -> &'static [&'static str] { &["js", "mjs", "cjs", "jsx"] }
     fn grammar_name(&self) -> &'static str { "javascript" }

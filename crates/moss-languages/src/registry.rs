@@ -1,12 +1,12 @@
 //! Language support registry with extension-based lookup.
 
-use crate::LanguageSupport;
+use crate::Language;
 use std::path::Path;
 
 /// Get language support for a file extension.
 ///
 /// Returns `None` if the extension is not recognized or the feature is not enabled.
-pub fn support_for_extension(ext: &str) -> Option<&'static dyn LanguageSupport> {
+pub fn support_for_extension(ext: &str) -> Option<&'static dyn Language> {
     match ext.to_lowercase().as_str() {
         #[cfg(feature = "lang-python")]
         "py" | "pyi" | "pyw" => Some(&crate::python::Python),
@@ -73,15 +73,15 @@ pub fn support_for_extension(ext: &str) -> Option<&'static dyn LanguageSupport> 
 ///
 /// Returns `None` if the file has no extension, the extension is not recognized,
 /// or the feature is not enabled.
-pub fn support_for_path(path: &Path) -> Option<&'static dyn LanguageSupport> {
+pub fn support_for_path(path: &Path) -> Option<&'static dyn Language> {
     path.extension()
         .and_then(|e| e.to_str())
         .and_then(support_for_extension)
 }
 
 /// Get all supported languages (based on enabled features).
-pub fn supported_languages() -> Vec<&'static dyn LanguageSupport> {
-    let mut langs: Vec<&'static dyn LanguageSupport> = Vec::new();
+pub fn supported_languages() -> Vec<&'static dyn Language> {
+    let mut langs: Vec<&'static dyn Language> = Vec::new();
 
     #[cfg(feature = "lang-python")]
     langs.push(&crate::python::Python);

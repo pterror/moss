@@ -1,12 +1,12 @@
 //! TOML language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::tree_sitter::Node;
 
 /// TOML language support.
 pub struct Toml;
 
-impl LanguageSupport for Toml {
+impl Language for Toml {
     fn name(&self) -> &'static str { "TOML" }
     fn extensions(&self) -> &'static [&'static str] { &["toml"] }
     fn grammar_name(&self) -> &'static str { "toml" }

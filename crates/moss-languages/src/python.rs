@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
@@ -383,7 +383,7 @@ fn resolve_python_import(import_name: &str, site_packages: &Path) -> Option<Reso
 /// Python language support.
 pub struct Python;
 
-impl LanguageSupport for Python {
+impl Language for Python {
     fn name(&self) -> &'static str { "Python" }
     fn extensions(&self) -> &'static [&'static str] { &["py", "pyi", "pyw"] }
     fn grammar_name(&self) -> &'static str { "python" }

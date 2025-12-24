@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
@@ -286,7 +286,7 @@ fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 /// Java language support.
 pub struct Java;
 
-impl LanguageSupport for Java {
+impl Language for Java {
     fn name(&self) -> &'static str { "Java" }
     fn extensions(&self) -> &'static [&'static str] { &["java"] }
     fn grammar_name(&self) -> &'static str { "java" }

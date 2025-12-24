@@ -1,5 +1,5 @@
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_languages::{support_for_path, Language, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -77,7 +77,7 @@ impl SymbolParser {
         self.parse_with_trait(content, support)
     }
 
-    fn parse_with_trait(&self, content: &str, support: &dyn LanguageSupport) -> Vec<Symbol> {
+    fn parse_with_trait(&self, content: &str, support: &dyn Language) -> Vec<Symbol> {
         let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
@@ -93,7 +93,7 @@ impl SymbolParser {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         symbols: &mut Vec<Symbol>,
         parent: Option<&str>,
     ) {
@@ -192,7 +192,7 @@ impl SymbolParser {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         imports: &mut Vec<Import>,
     ) {
         loop {

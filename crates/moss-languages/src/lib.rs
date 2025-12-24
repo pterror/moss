@@ -1,6 +1,6 @@
 //! Language support for moss.
 //!
-//! This crate provides the `LanguageSupport` trait and implementations for
+//! This crate provides the `Language` trait and implementations for
 //! various programming languages. Each language struct IS its support implementation.
 //!
 //! # Features
@@ -12,7 +12,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use moss_languages::{Python, LanguageSupport, support_for_path};
+//! use moss_languages::{Python, Language, support_for_path};
 //! use std::path::Path;
 //!
 //! // Static usage (compile-time known language):
@@ -91,7 +91,7 @@ pub use registry::{support_for_extension, support_for_path, supported_languages}
 
 // Re-exports from traits
 pub use traits::{
-    Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism,
+    Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism,
 };
 
 // Re-export language structs

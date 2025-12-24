@@ -4,7 +4,7 @@
 //! that can be used for structural edits instead of line numbers.
 
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_languages::{support_for_path, Language, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// Type of code anchor
@@ -105,7 +105,7 @@ impl AnchorExtractor {
         }
     }
 
-    fn extract_with_trait(&self, content: &str, support: &dyn LanguageSupport) -> Vec<Anchor> {
+    fn extract_with_trait(&self, content: &str, support: &dyn Language) -> Vec<Anchor> {
         let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
             None => return Vec::new(),
@@ -121,7 +121,7 @@ impl AnchorExtractor {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         anchors: &mut Vec<Anchor>,
         context: Option<&str>,
     ) {

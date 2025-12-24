@@ -4,7 +4,7 @@
 //! Complexity = number of decision points + 1
 
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport};
+use moss_languages::{support_for_path, Language};
 use std::path::Path;
 
 /// Complexity data for a function
@@ -112,11 +112,11 @@ impl ComplexityAnalyzer {
         }
     }
 
-    /// Analyze using the LanguageSupport trait
+    /// Analyze using the Language trait
     fn analyze_with_trait(
         &self,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
     ) -> Vec<FunctionComplexity> {
         let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
@@ -135,7 +135,7 @@ impl ComplexityAnalyzer {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         functions: &mut Vec<FunctionComplexity>,
         parent: Option<&str>,
     ) {
@@ -189,7 +189,7 @@ impl ComplexityAnalyzer {
     fn count_complexity_with_trait(
         &self,
         node: &tree_sitter::Node,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         complexity: &mut usize,
     ) {
         let complexity_nodes = support.complexity_nodes();

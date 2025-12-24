@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
@@ -278,7 +278,7 @@ fn resolve_go_mod_cache_import(import_path: &str, mod_cache: &Path) -> Option<Re
 /// Go language support.
 pub struct Go;
 
-impl LanguageSupport for Go {
+impl Language for Go {
     fn name(&self) -> &'static str { "Go" }
     fn extensions(&self) -> &'static [&'static str] { &["go"] }
     fn grammar_name(&self) -> &'static str { "go" }

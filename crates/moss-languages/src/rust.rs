@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
 
@@ -101,7 +101,7 @@ fn resolve_rust_crate(crate_name: &str, registry: &Path) -> Option<ResolvedPacka
 /// Rust language support.
 pub struct Rust;
 
-impl LanguageSupport for Rust {
+impl Language for Rust {
     fn name(&self) -> &'static str { "Rust" }
     fn extensions(&self) -> &'static [&'static str] { &["rs"] }
     fn grammar_name(&self) -> &'static str { "rust" }

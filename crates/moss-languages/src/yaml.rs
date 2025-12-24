@@ -1,12 +1,12 @@
 //! YAML language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::tree_sitter::Node;
 
 /// YAML language support.
 pub struct Yaml;
 
-impl LanguageSupport for Yaml {
+impl Language for Yaml {
     fn name(&self) -> &'static str { "YAML" }
     fn extensions(&self) -> &'static [&'static str] { &["yaml", "yml"] }
     fn grammar_name(&self) -> &'static str { "yaml" }

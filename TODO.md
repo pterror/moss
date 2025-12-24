@@ -6,7 +6,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 - Session analysis: detect correction patterns ("You're right", "Good point", "isn't working")
 - Complete daemon integration (FileIndex API methods currently unused)
-- Consider: rename `LanguageSupport` → `Language` (each struct IS the language)
+- ~~Consider: rename `LanguageSupport` → `Language`~~ ✅ Done
 - Validate node kinds against grammars (test that kinds like "if_statement" exist in grammar)
 - Refactor main.rs (6k+ lines): move indexing code to LanguageSupport trait (index_cpp_directory, index_rust_packages, find_gradle_jar, is_cpp_header → methods on language structs)
 

@@ -1,7 +1,7 @@
 //! C language support.
 
 use std::path::{Path, PathBuf};
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use crate::c_cpp;
 use moss_core::tree_sitter::Node;
@@ -9,7 +9,7 @@ use moss_core::tree_sitter::Node;
 /// C language support.
 pub struct C;
 
-impl LanguageSupport for C {
+impl Language for C {
     fn name(&self) -> &'static str { "C" }
     fn extensions(&self) -> &'static [&'static str] { &["c", "h"] }
     fn grammar_name(&self) -> &'static str { "c" }

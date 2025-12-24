@@ -3,7 +3,7 @@
 //! Extracts function/class signatures with optional docstrings.
 
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
+use moss_languages::{support_for_path, Language, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
 use std::path::Path;
 
 /// A code symbol with its signature
@@ -258,11 +258,11 @@ impl SkeletonExtractor {
         })
     }
 
-    /// Extract using the LanguageSupport trait (new unified approach)
+    /// Extract using the Language trait (new unified approach)
     fn extract_with_trait(
         &self,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
     ) -> Vec<SkeletonSymbol> {
         let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
@@ -334,7 +334,7 @@ impl SkeletonExtractor {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         symbols: &mut Vec<SkeletonSymbol>,
         in_container: bool,
     ) {

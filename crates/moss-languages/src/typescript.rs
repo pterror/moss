@@ -1,7 +1,7 @@
 //! TypeScript language support.
 
 use std::path::{Path, PathBuf};
-use crate::{Export, Import, LanguageSupport, Symbol, VisibilityMechanism};
+use crate::{Export, Import, Language, Symbol, VisibilityMechanism};
 use crate::ecmascript;
 use crate::external_packages::ResolvedPackage;
 use moss_core::tree_sitter::Node;
@@ -12,7 +12,7 @@ pub struct TypeScript;
 /// TSX language support (TypeScript + JSX).
 pub struct Tsx;
 
-impl LanguageSupport for TypeScript {
+impl Language for TypeScript {
     fn name(&self) -> &'static str { "TypeScript" }
     fn extensions(&self) -> &'static [&'static str] { &["ts", "mts", "cts"] }
     fn grammar_name(&self) -> &'static str { "typescript" }
@@ -82,7 +82,7 @@ impl LanguageSupport for TypeScript {
 }
 
 // TSX shares the same implementation as TypeScript, just with a different grammar
-impl LanguageSupport for Tsx {
+impl Language for Tsx {
     fn name(&self) -> &'static str { "TSX" }
     fn extensions(&self) -> &'static [&'static str] { &["tsx"] }
     fn grammar_name(&self) -> &'static str { "tsx" }

@@ -1,5 +1,5 @@
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport};
+use moss_languages::{support_for_path, Language};
 use std::path::Path;
 
 /// Result of finding a symbol in a file
@@ -55,7 +55,7 @@ impl Editor {
         content: &str,
         name: &str,
         grammar: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
     ) -> Option<SymbolLocation> {
         let kind = node.kind();
 
@@ -371,7 +371,7 @@ impl Editor {
         content: &str,
         name: &str,
         grammar: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
     ) -> Option<ContainerBody> {
         let kind = node.kind();
 

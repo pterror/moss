@@ -1,12 +1,12 @@
 //! Bash language support.
 
-use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::{Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use moss_core::tree_sitter::Node;
 
 /// Bash language support.
 pub struct Bash;
 
-impl LanguageSupport for Bash {
+impl Language for Bash {
     fn name(&self) -> &'static str { "Bash" }
     fn extensions(&self) -> &'static [&'static str] { &["sh", "bash", "zsh"] }
     fn grammar_name(&self) -> &'static str { "bash" }

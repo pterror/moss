@@ -3,7 +3,7 @@
 //! Extracts imports and exports from source files.
 
 use moss_core::{tree_sitter, Parsers};
-use moss_languages::{support_for_path, LanguageSupport, SymbolKind as LangSymbolKind};
+use moss_languages::{support_for_path, Language, SymbolKind as LangSymbolKind};
 use moss_languages::Import as LangImport;
 use moss_languages::Export as LangExport;
 use std::path::Path;
@@ -172,11 +172,11 @@ impl DepsExtractor {
         }
     }
 
-    /// Extract using the LanguageSupport trait
+    /// Extract using the Language trait
     fn extract_with_trait(
         &self,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
     ) -> (Vec<Import>, Vec<Export>) {
         let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
             Some(t) => t,
@@ -196,7 +196,7 @@ impl DepsExtractor {
         &self,
         cursor: &mut tree_sitter::TreeCursor,
         content: &str,
-        support: &dyn LanguageSupport,
+        support: &dyn Language,
         imports: &mut Vec<Import>,
         exports: &mut Vec<Export>,
     ) {

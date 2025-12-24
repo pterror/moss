@@ -108,7 +108,7 @@ pub struct Export {
 /// - Complexity analysis nodes
 /// - Visibility detection
 /// - Edit support (container bodies, docstrings)
-pub trait LanguageSupport: Send + Sync {
+pub trait Language: Send + Sync {
     /// Display name for this language (e.g., "Python", "C++")
     fn name(&self) -> &'static str;
 
