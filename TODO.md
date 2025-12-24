@@ -25,8 +25,10 @@ Phase 2 - Port existing languages: ✅
 - [x] Port Go, Java, C, C++, Ruby, Scala, Vue
 - [x] Port config formats: JSON, YAML, TOML, Markdown
 
-Phase 3 - Integrate:
-- [ ] Refactor `skeleton.rs` to use trait
+Phase 3 - Integrate (in progress):
+- [x] Add trait infrastructure to `skeleton.rs` (extract_with_trait, convert_symbol)
+- [ ] Improve trait impls to match legacy behavior (Rust impl blocks, Go types, Java interfaces)
+- [ ] Gradually migrate languages from legacy to trait-based extraction
 - [ ] Refactor `deps.rs` to use trait
 - [ ] Refactor `complexity.rs`, `scopes.rs`, `symbols.rs`
 - [ ] Refactor `anchors.rs`, `edit.rs`, `cfg.rs`
