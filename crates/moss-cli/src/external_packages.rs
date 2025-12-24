@@ -1,8 +1,96 @@
 //! External package resolution for Python and Go.
 //!
-//! Finds installed packages and resolves import paths to their source files.
+//! Finds installed packages, stdlib, and resolves import paths to their source files.
+//! Uses a global cache at ~/.cache/moss/ for indexed packages.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+// =============================================================================
+// Global Cache
+// =============================================================================
+
+/// Get the global moss cache directory (~/.cache/moss/).
+pub fn get_global_cache_dir() -> Option<PathBuf> {
+    // XDG_CACHE_HOME or ~/.cache
+    let cache_base = if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+        PathBuf::from(xdg)
+    } else if let Ok(home) = std::env::var("HOME") {
+        PathBuf::from(home).join(".cache")
+    } else if let Ok(home) = std::env::var("USERPROFILE") {
+        // Windows
+        PathBuf::from(home).join(".cache")
+    } else {
+        return None;
+    };
+
+    let moss_cache = cache_base.join("moss");
+
+    // Create if doesn't exist
+    if !moss_cache.exists() {
+        std::fs::create_dir_all(&moss_cache).ok()?;
+    }
+
+    Some(moss_cache)
+}
+
+/// Get the path to the global index database for a Python version.
+/// e.g., ~/.cache/moss/python-3.11.db
+pub fn get_python_global_db(version: &str) -> Option<PathBuf> {
+    let cache = get_global_cache_dir()?;
+    Some(cache.join(format!("python-{}.db", version)))
+}
+
+/// Get the path to the global index database for a Go version.
+/// e.g., ~/.cache/moss/go-1.21.db
+pub fn get_go_global_db(version: &str) -> Option<PathBuf> {
+    let cache = get_global_cache_dir()?;
+    Some(cache.join(format!("go-{}.db", version)))
+}
+
+/// Get Python version from the project's interpreter.
+pub fn get_python_version(project_root: &Path) -> Option<String> {
+    let python = if project_root.join(".venv/bin/python").exists() {
+        project_root.join(".venv/bin/python")
+    } else if project_root.join("venv/bin/python").exists() {
+        project_root.join("venv/bin/python")
+    } else {
+        PathBuf::from("python3")
+    };
+
+    let output = Command::new(&python)
+        .args(["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Get Go version.
+pub fn get_go_version() -> Option<String> {
+    let output = Command::new("go").args(["version"]).output().ok()?;
+
+    if output.status.success() {
+        let version_str = String::from_utf8_lossy(&output.stdout);
+        // "go version go1.21.0 linux/amd64" -> "1.21"
+        for part in version_str.split_whitespace() {
+            if part.starts_with("go") && part.len() > 2 {
+                let ver = part.trim_start_matches("go");
+                // Take major.minor only
+                let parts: Vec<&str> = ver.split('.').collect();
+                if parts.len() >= 2 {
+                    return Some(format!("{}.{}", parts[0], parts[1]));
+                }
+            }
+        }
+    }
+
+    None
+}
 
 /// Result of resolving an external package
 #[derive(Debug, Clone)]
@@ -18,6 +106,134 @@ pub struct ResolvedPackage {
 // =============================================================================
 // Python
 // =============================================================================
+
+/// Find Python stdlib directory.
+///
+/// Uses `python -c "import sys; print(sys.prefix)"` to find the prefix,
+/// then looks for lib/pythonX.Y/ underneath.
+pub fn find_python_stdlib(project_root: &Path) -> Option<PathBuf> {
+    // Try to use the project's Python first (from venv)
+    let python = if project_root.join(".venv/bin/python").exists() {
+        project_root.join(".venv/bin/python")
+    } else if project_root.join("venv/bin/python").exists() {
+        project_root.join("venv/bin/python")
+    } else {
+        PathBuf::from("python3")
+    };
+
+    // Get sys.prefix and sys.version_info
+    let output = Command::new(&python)
+        .args(["-c", "import sys; print(sys.prefix); print(f'{sys.version_info.major}.{sys.version_info.minor}')"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let prefix = lines.next()?.trim();
+    let version = lines.next()?.trim();
+
+    // Unix: lib/pythonX.Y
+    let stdlib = PathBuf::from(prefix).join("lib").join(format!("python{}", version));
+    if stdlib.is_dir() {
+        return Some(stdlib);
+    }
+
+    // Windows: Lib
+    let stdlib = PathBuf::from(prefix).join("Lib");
+    if stdlib.is_dir() {
+        return Some(stdlib);
+    }
+
+    None
+}
+
+/// Check if a module name is a Python stdlib module.
+pub fn is_python_stdlib_module(module_name: &str, stdlib_path: &Path) -> bool {
+    let top_level = module_name.split('.').next().unwrap_or(module_name);
+
+    // Check for package
+    let pkg_dir = stdlib_path.join(top_level);
+    if pkg_dir.is_dir() {
+        return true;
+    }
+
+    // Check for module
+    let py_file = stdlib_path.join(format!("{}.py", top_level));
+    if py_file.is_file() {
+        return true;
+    }
+
+    false
+}
+
+/// Resolve a Python stdlib import to its source location.
+pub fn resolve_python_stdlib_import(import_name: &str, stdlib_path: &Path) -> Option<ResolvedPackage> {
+    let parts: Vec<&str> = import_name.split('.').collect();
+    let top_level = parts[0];
+
+    // Check for package (directory)
+    let pkg_dir = stdlib_path.join(top_level);
+    if pkg_dir.is_dir() {
+        if parts.len() == 1 {
+            let init = pkg_dir.join("__init__.py");
+            if init.is_file() {
+                return Some(ResolvedPackage {
+                    path: pkg_dir,
+                    name: import_name.to_string(),
+                    is_namespace: false,
+                });
+            }
+            // Some stdlib packages don't have __init__.py in newer Python
+            return Some(ResolvedPackage {
+                path: pkg_dir,
+                name: import_name.to_string(),
+                is_namespace: true,
+            });
+        } else {
+            // Submodule
+            let mut path = pkg_dir.clone();
+            for part in &parts[1..] {
+                path = path.join(part);
+            }
+
+            if path.is_dir() {
+                let init = path.join("__init__.py");
+                return Some(ResolvedPackage {
+                    path: path.clone(),
+                    name: import_name.to_string(),
+                    is_namespace: !init.is_file(),
+                });
+            }
+
+            let py_file = path.with_extension("py");
+            if py_file.is_file() {
+                return Some(ResolvedPackage {
+                    path: py_file,
+                    name: import_name.to_string(),
+                    is_namespace: false,
+                });
+            }
+
+            return None;
+        }
+    }
+
+    // Check for single-file module
+    let py_file = stdlib_path.join(format!("{}.py", top_level));
+    if py_file.is_file() {
+        return Some(ResolvedPackage {
+            path: py_file,
+            name: import_name.to_string(),
+            is_namespace: false,
+        });
+    }
+
+    None
+}
 
 /// Find Python site-packages directory for a project.
 ///
@@ -162,6 +378,62 @@ pub fn resolve_python_import(import_name: &str, site_packages: &Path) -> Option<
 // =============================================================================
 // Go
 // =============================================================================
+
+/// Find Go stdlib directory (GOROOT/src).
+pub fn find_go_stdlib() -> Option<PathBuf> {
+    // Try GOROOT env var
+    if let Ok(goroot) = std::env::var("GOROOT") {
+        let src = PathBuf::from(goroot).join("src");
+        if src.is_dir() {
+            return Some(src);
+        }
+    }
+
+    // Try `go env GOROOT`
+    if let Ok(output) = Command::new("go").args(["env", "GOROOT"]).output() {
+        if output.status.success() {
+            let goroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let src = PathBuf::from(goroot).join("src");
+            if src.is_dir() {
+                return Some(src);
+            }
+        }
+    }
+
+    // Common locations
+    for path in &["/usr/local/go/src", "/usr/lib/go/src", "/opt/go/src"] {
+        let src = PathBuf::from(path);
+        if src.is_dir() {
+            return Some(src);
+        }
+    }
+
+    None
+}
+
+/// Check if a Go import is a stdlib import (no dots in first path segment).
+pub fn is_go_stdlib_import(import_path: &str) -> bool {
+    let first_segment = import_path.split('/').next().unwrap_or(import_path);
+    !first_segment.contains('.')
+}
+
+/// Resolve a Go stdlib import to its source location.
+pub fn resolve_go_stdlib_import(import_path: &str, stdlib_path: &Path) -> Option<ResolvedPackage> {
+    if !is_go_stdlib_import(import_path) {
+        return None;
+    }
+
+    let pkg_dir = stdlib_path.join(import_path);
+    if pkg_dir.is_dir() {
+        return Some(ResolvedPackage {
+            path: pkg_dir,
+            name: import_path.to_string(),
+            is_namespace: false,
+        });
+    }
+
+    None
+}
 
 /// Find Go module cache directory.
 ///
