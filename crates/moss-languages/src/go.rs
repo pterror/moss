@@ -3,8 +3,98 @@
 use std::path::{Path, PathBuf};
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::{self, ResolvedPackage};
-use crate::go_mod;
 use moss_core::tree_sitter::Node;
+
+// ============================================================================
+// Go module parsing (inlined from go_mod.rs)
+// ============================================================================
+
+/// Information from a go.mod file
+#[derive(Debug, Clone)]
+struct GoModule {
+    /// Module path (e.g., "github.com/user/project")
+    path: String,
+    /// Go version (e.g., "1.21")
+    #[allow(dead_code)]
+    go_version: Option<String>,
+}
+
+/// Parse a go.mod file to extract module information.
+fn parse_go_mod(path: &Path) -> Option<GoModule> {
+    let content = std::fs::read_to_string(path).ok()?;
+    parse_go_mod_content(&content)
+}
+
+/// Parse go.mod content string.
+fn parse_go_mod_content(content: &str) -> Option<GoModule> {
+    let mut module_path = None;
+    let mut go_version = None;
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // module github.com/user/project
+        if line.starts_with("module ") {
+            module_path = Some(line.trim_start_matches("module ").trim().to_string());
+        }
+
+        // go 1.21
+        if line.starts_with("go ") {
+            go_version = Some(line.trim_start_matches("go ").trim().to_string());
+        }
+    }
+
+    module_path.map(|path| GoModule { path, go_version })
+}
+
+/// Find go.mod by walking up from a directory.
+fn find_go_mod(start: &Path) -> Option<PathBuf> {
+    let mut current = if start.is_file() {
+        start.parent()?.to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+
+    loop {
+        let go_mod = current.join("go.mod");
+        if go_mod.exists() {
+            return Some(go_mod);
+        }
+
+        if !current.pop() {
+            break;
+        }
+    }
+
+    None
+}
+
+/// Resolve a Go import path to a local directory path.
+///
+/// Returns the computed path if the import is within the module, None for external imports.
+/// Does not check if the path exists - caller should verify.
+fn resolve_go_import(import_path: &str, module: &GoModule, project_root: &Path) -> Option<PathBuf> {
+    // Check if import is within our module
+    if !import_path.starts_with(&module.path) {
+        return None; // External import
+    }
+
+    // Get the relative path after the module prefix
+    let rel_path = import_path.strip_prefix(&module.path)?;
+    let rel_path = rel_path.trim_start_matches('/');
+
+    let target = if rel_path.is_empty() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(rel_path)
+    };
+
+    Some(target)
+}
+
+// ============================================================================
+// Go language support
+// ============================================================================
 
 /// Go language support.
 pub struct Go;
@@ -187,11 +277,11 @@ impl LanguageSupport for Go {
         _project_root: &Path,
     ) -> Option<PathBuf> {
         // Find go.mod to understand module boundaries
-        if let Some(go_mod_path) = go_mod::find_go_mod(current_file) {
-            if let Some(module) = go_mod::parse_go_mod(&go_mod_path) {
+        if let Some(go_mod_path) = find_go_mod(current_file) {
+            if let Some(module) = parse_go_mod(&go_mod_path) {
                 // Try local resolution within the module
                 let module_root = go_mod_path.parent()?;
-                if let Some(local_path) = go_mod::resolve_go_import(import_path, &module, module_root) {
+                if let Some(local_path) = resolve_go_import(import_path, &module, module_root) {
                     if local_path.exists() && local_path.is_dir() {
                         return Some(local_path);
                     }
@@ -268,5 +358,47 @@ impl Go {
             is_relative: false, // Go doesn't have relative imports in the traditional sense
             line,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_go_mod() {
+        let content = r#"
+module github.com/user/project
+
+go 1.21
+
+require (
+    github.com/pkg/errors v0.9.1
+    golang.org/x/sync v0.3.0
+)
+"#;
+        let module = parse_go_mod_content(content).unwrap();
+        assert_eq!(module.path, "github.com/user/project");
+        assert_eq!(module.go_version, Some("1.21".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_internal_import() {
+        let module = GoModule {
+            path: "github.com/user/project".to_string(),
+            go_version: Some("1.21".to_string()),
+        };
+
+        // Internal import
+        let result = resolve_go_import(
+            "github.com/user/project/pkg/utils",
+            &module,
+            Path::new("/fake/root"),
+        );
+        assert_eq!(result, Some(PathBuf::from("/fake/root/pkg/utils")));
+
+        // External import
+        let result = resolve_go_import("github.com/other/lib", &module, Path::new("/fake/root"));
+        assert!(result.is_none());
     }
 }

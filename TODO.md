@@ -61,6 +61,11 @@ Phase 4 - Expand:
 - LSP refactor actions (rename symbol across files)
 - Cross-language reference tracking (Python ↔ Rust)
 
+**View Filtering:**
+- Filter out tests from views (--no-tests or --exclude=tests)
+- Filter by category: tests, config files, build files, etc.
+- Inverse: show only specific categories (--only=tests)
+
 **Agent Research:**
 - Conversational loop pattern (vs hierarchical)
 - YOLO mode evaluation
