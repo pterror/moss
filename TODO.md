@@ -4,22 +4,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Trait-based language architecture:
-  - Remove `Language` enum from moss-core
-  - Rename `PythonSupport` → `Python`, etc. (language IS the support struct)
-  - Feature-gate language structs: `#[cfg(feature = "lang-python")] pub struct Python;`
-  - Add `support_for_path(path) -> Option<&'static dyn LanguageSupport>` for dynamic lookup
-  - Replace `get_support(Language::X)` calls with `&X` or `support_for_path()`
-  - External crates can now add languages by implementing `LanguageSupport` on their own structs
 - Session analysis: detect correction patterns ("You're right", "Good point")
 - Complete daemon integration (FileIndex API methods currently unused)
 
-Completed trait cleanup:
-- [x] Remove default impls from `LanguageSupport` trait methods
-- [x] Use `todo!()` for unimplemented trait methods
-- [x] Rename `export_kinds()` → `public_symbol_kinds()` + add `visibility_mechanism()` enum
-
-Test Status: 72 passing, 0 failing
+Test Status: 76 passing, 0 failing
 
 ## Backlog
 

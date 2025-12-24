@@ -4,6 +4,19 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Trait-based Language Architecture
+
+Major refactor: each language struct IS its support implementation.
+- Deleted `Language` enum from moss-core - no longer needed
+- Renamed `PythonSupport` → `Python`, `RustSupport` → `Rust`, etc.
+- Added `support_for_path()` and `support_for_extension()` for dynamic lookup
+- Replaced `parse_lang(Language::X, ...)` with `parse_with_grammar("x", ...)`
+- External crates can now implement `LanguageSupport` for new languages
+- Improved trait API: `export_kinds()` → `public_symbol_kinds()` + `visibility_mechanism()` enum
+- All 76 tests pass
+
+This makes the language system extensible - add new languages by implementing a single trait.
+
 ### Arborium Migration
 
 Replaced ~17 individual tree-sitter-* grammar crates with single arborium dependency:
