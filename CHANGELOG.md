@@ -17,6 +17,8 @@ Removed Python subprocess calls and hardcoded language counters from moss-cli:
 - Added `find_package_entry()` to Language trait for Python's `__init__.py` handling
 - Added `file_path_to_module_name()` to Language trait for module name resolution
 - Added `has_language_support()` helper, replaced hardcoded `.py`/`.rs` extension filters
+- Refactored registry to use mutable `RwLock<Vec>` with `register()` function
+- Extension map built dynamically from each language's `extensions()` method
 
 ### Package Indexing Trait Methods
 
