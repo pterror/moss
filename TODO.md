@@ -7,7 +7,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - Session analysis: detect correction patterns ("You're right", "Good point")
 - Complete daemon integration (FileIndex API methods currently unused)
 
-Test Status: 71 passing, 0 failing
+Test Status: 79 passing, 0 failing
 
 ## Backlog
 
@@ -27,8 +27,11 @@ Phase 2 - Port existing languages: ✅
 
 Phase 3 - Integrate (in progress):
 - [x] Add trait infrastructure to `skeleton.rs` (extract_with_trait, convert_symbol)
-- [ ] Improve trait impls to match legacy behavior (Rust impl blocks, Go types, Java interfaces)
-- [ ] Gradually migrate languages from legacy to trait-based extraction
+- [x] Improve trait impls to match legacy behavior (Rust impl blocks, Go types, Java visibility)
+- [x] Migrate languages to trait-based extraction:
+  - Python, JavaScript, TypeScript, Rust, Go, Java, Ruby, C, C++
+  - Scala, Markdown, JSON, YAML, TOML
+  - Vue remains on legacy (needs script element parsing)
 - [ ] Refactor `deps.rs` to use trait
 - [ ] Refactor `complexity.rs`, `scopes.rs`, `symbols.rs`
 - [ ] Refactor `anchors.rs`, `edit.rs`, `cfg.rs`
