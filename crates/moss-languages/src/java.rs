@@ -1,6 +1,8 @@
 //! Java language support.
 
+use std::path::{Path, PathBuf};
 use crate::{Export, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
 use moss_core::tree_sitter::Node;
 
 /// Java language support.
@@ -125,5 +127,72 @@ impl LanguageSupport for Java {
         }
         // No modifier = package-private, but still visible for skeleton purposes
         Visibility::Public
+    }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "java" }
+
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Convert import to path: com.foo.Bar -> com/foo/Bar.java
+        let path_part = import.replace('.', "/");
+
+        // Common Java source directories
+        let source_dirs = [
+            "src/main/java",
+            "src/java",
+            "src",
+            "app/src/main/java", // Android
+        ];
+
+        for src_dir in &source_dirs {
+            let source_path = project_root.join(src_dir).join(format!("{}.java", path_part));
+            if source_path.is_file() {
+                return Some(source_path);
+            }
+        }
+
+        // Also try relative to current file's package structure
+        // Find the source root by walking up from current file
+        let mut current = current_file.parent()?;
+        while current != project_root {
+            // Check if this might be a source root
+            let potential = current.join(format!("{}.java", path_part));
+            if potential.is_file() {
+                return Some(potential);
+            }
+            current = current.parent()?;
+        }
+
+        None
+    }
+
+    fn resolve_external_import(&self, import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+        let maven_repo = external_packages::find_maven_repository();
+        let gradle_cache = external_packages::find_gradle_cache();
+
+        external_packages::resolve_java_import(
+            import_name,
+            maven_repo.as_deref(),
+            gradle_cache.as_deref(),
+        )
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        external_packages::get_java_version()
+    }
+
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        external_packages::find_maven_repository()
+            .or_else(external_packages::find_gradle_cache)
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["java"]
     }
 }

@@ -1,6 +1,8 @@
 //! JavaScript language support.
 
+use std::path::{Path, PathBuf};
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
 use moss_core::tree_sitter::Node;
 
 /// JavaScript language support.
@@ -181,6 +183,83 @@ impl LanguageSupport for JavaScript {
         }
 
         exports
+    }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "js" }
+
+    fn resolve_local_import(
+        &self,
+        module: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Only handle relative imports
+        if !module.starts_with('.') {
+            return None;
+        }
+
+        let current_dir = current_file.parent()?;
+
+        // Normalize the path
+        let target = if module.starts_with("./") {
+            current_dir.join(&module[2..])
+        } else if module.starts_with("../") {
+            current_dir.join(module)
+        } else {
+            return None;
+        };
+
+        // Try various extensions in order of preference
+        let extensions = ["js", "jsx", "mjs", "cjs"];
+
+        // First try exact path (might already have extension)
+        if target.exists() && target.is_file() {
+            return Some(target);
+        }
+
+        // Try adding extensions
+        for ext in &extensions {
+            let with_ext = target.with_extension(ext);
+            if with_ext.exists() && with_ext.is_file() {
+                return Some(with_ext);
+            }
+        }
+
+        // Try index files in directory
+        if target.is_dir() {
+            for ext in &extensions {
+                let index = target.join(format!("index.{}", ext));
+                if index.exists() && index.is_file() {
+                    return Some(index);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+        // Skip relative imports
+        if import_name.starts_with('.') || import_name.starts_with('/') {
+            return None;
+        }
+
+        let node_modules = external_packages::find_node_modules(project_root)?;
+        external_packages::resolve_node_import(import_name, &node_modules)
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        external_packages::get_node_version()
+    }
+
+    fn find_package_cache(&self, project_root: &Path) -> Option<PathBuf> {
+        external_packages::find_node_modules(project_root)
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["js", "mjs", "cjs"]
     }
 }
 

@@ -1,6 +1,8 @@
 //! C language support.
 
+use std::path::{Path, PathBuf};
 use crate::{LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
 use moss_core::tree_sitter::Node;
 
 /// C language support.
@@ -108,6 +110,57 @@ impl LanguageSupport for C {
             visibility: Visibility::Public,
             children: Vec::new(),
         })
+    }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "c" }
+
+    fn resolve_local_import(
+        &self,
+        include: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Strip quotes if present
+        let header = include
+            .trim_start_matches('"')
+            .trim_end_matches('"')
+            .trim_start_matches('<')
+            .trim_end_matches('>');
+
+        let current_dir = current_file.parent()?;
+
+        // Try relative to current file's directory
+        let relative = current_dir.join(header);
+        if relative.is_file() {
+            return Some(relative);
+        }
+
+        // Try with common extensions if none specified
+        if !header.contains('.') {
+            for ext in &[".h", ".c"] {
+                let with_ext = current_dir.join(format!("{}{}", header, ext));
+                if with_ext.is_file() {
+                    return Some(with_ext);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn resolve_external_import(&self, include: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+        let include_paths = external_packages::find_cpp_include_paths();
+        external_packages::resolve_cpp_include(include, &include_paths)
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        external_packages::get_gcc_version()
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["c", "h"]
     }
 }
 

@@ -106,6 +106,8 @@ Agentic by default - continue through tasks unless:
 - Decision has significant irreversible consequences
 - User explicitly asked to be consulted
 
+When you say "do X first" or "then we can Y" - add it to TODO.md immediately. Don't just say it, track it.
+
 Bail out early if stuck in a loop rather than burning tokens.
 
 Marathon mode: Work continuously through TODO.md until empty or blocked.

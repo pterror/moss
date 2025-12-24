@@ -1,6 +1,9 @@
 //! Go language support.
 
+use std::path::{Path, PathBuf};
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
+use crate::go_mod;
 use moss_core::tree_sitter::Node;
 
 /// Go language support.
@@ -171,6 +174,65 @@ impl LanguageSupport for Go {
             .and_then(|n| n.chars().next())
             .map(|c| c.is_uppercase())
             .unwrap_or(false)
+    }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "go" }
+
+    fn resolve_local_import(
+        &self,
+        import_path: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Find go.mod to understand module boundaries
+        if let Some(go_mod_path) = go_mod::find_go_mod(current_file) {
+            if let Some(module) = go_mod::parse_go_mod(&go_mod_path) {
+                // Try local resolution within the module
+                let module_root = go_mod_path.parent()?;
+                if let Some(local_path) = go_mod::resolve_go_import(import_path, &module, module_root) {
+                    if local_path.exists() && local_path.is_dir() {
+                        return Some(local_path);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn resolve_external_import(&self, import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+        // Check stdlib first
+        if external_packages::is_go_stdlib_import(import_name) {
+            if let Some(stdlib) = external_packages::find_go_stdlib() {
+                if let Some(pkg) = external_packages::resolve_go_stdlib_import(import_name, &stdlib) {
+                    return Some(pkg);
+                }
+            }
+        }
+
+        // Then mod cache
+        if let Some(mod_cache) = external_packages::find_go_mod_cache() {
+            return external_packages::resolve_go_import(import_name, &mod_cache);
+        }
+
+        None
+    }
+
+    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
+        external_packages::is_go_stdlib_import(import_name)
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        external_packages::get_go_version()
+    }
+
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        external_packages::find_go_mod_cache()
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["go"]
     }
 }
 

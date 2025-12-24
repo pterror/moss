@@ -1,6 +1,8 @@
 //! Core trait for language support.
 
+use std::path::{Path, PathBuf};
 use moss_core::tree_sitter::Node;
+use crate::external_packages::ResolvedPackage;
 
 /// Symbol kind classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,5 +241,61 @@ pub trait LanguageSupport: Send + Sync {
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         let name_node = node.child_by_field_name("name")?;
         Some(&content[name_node.byte_range()])
+    }
+
+    // === Import Resolution ===
+
+    /// Language key for package index cache (e.g., "python", "go", "js").
+    fn lang_key(&self) -> &'static str {
+        ""
+    }
+
+    /// Resolve a local import within the project.
+    ///
+    /// Handles project-relative imports (e.g., `from . import foo`, `crate::`,
+    /// `./module`, relative includes).
+    fn resolve_local_import(
+        &self,
+        import_name: &str,
+        current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
+        let _ = (import_name, current_file, project_root);
+        None
+    }
+
+    /// Resolve an external import to its source location.
+    ///
+    /// Returns the path to stdlib or installed packages.
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        project_root: &Path,
+    ) -> Option<ResolvedPackage> {
+        let _ = (import_name, project_root);
+        None
+    }
+
+    /// Check if an import is from the standard library.
+    fn is_stdlib_import(&self, import_name: &str, project_root: &Path) -> bool {
+        let _ = (import_name, project_root);
+        false
+    }
+
+    /// Get the language/runtime version (for package index versioning).
+    fn get_version(&self, project_root: &Path) -> Option<String> {
+        let _ = project_root;
+        None
+    }
+
+    /// Find package cache/installation directory.
+    fn find_package_cache(&self, project_root: &Path) -> Option<PathBuf> {
+        let _ = project_root;
+        None
+    }
+
+    /// File extensions to index when caching a package.
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &[]
     }
 }

@@ -26,6 +26,8 @@
 
 mod registry;
 mod traits;
+pub mod external_packages;
+pub mod go_mod;
 
 // Language implementations
 #[cfg(feature = "lang-python")]

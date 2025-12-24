@@ -4,9 +4,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Complete non-Tier 1 languages: C, Ruby, Scala, Vue, Bash (all have `todo!()` methods)
-- Session analysis: detect correction patterns ("You're right", "Good point")
+- Session analysis: detect correction patterns ("You're right", "Good point", "isn't working")
 - Complete daemon integration (FileIndex API methods currently unused)
+- Consider: rename `LanguageSupport` → `Language` (each struct IS the language)
+- Validate node kinds against grammars (test that kinds like "if_statement" exist in grammar)
 
 Test Status: 79 passing, 0 failing
 

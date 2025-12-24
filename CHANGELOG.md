@@ -4,6 +4,15 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Import Resolution Consolidation
+
+Moved all import resolution logic to `LanguageSupport` trait:
+- Added `resolve_local_import()` and `resolve_external_import()` methods to trait
+- Moved `external_packages.rs` and `go_mod.rs` from moss-cli to moss-languages
+- Each language implements resolution: Python, Go, Rust, JavaScript, TypeScript, C, C++, Java
+- Single 12-line `resolve_import()` function in main.rs replaces 550+ lines of per-language code
+- Deleted obsolete `resolution.rs` module (ImportResolver trait merged into LanguageSupport)
+
 ### Trait-based Language Architecture
 
 Major refactor: each language struct IS its support implementation.

@@ -1294,6 +1294,8 @@ version = "0.1.0"
 dependencies = [
  "arborium",
  "moss-core",
+ "rusqlite",
+ "serde_json",
 ]
 
 [[package]]

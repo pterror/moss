@@ -1,6 +1,8 @@
 //! Python language support.
 
+use std::path::{Path, PathBuf};
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
 use moss_core::tree_sitter::Node;
 
 /// Python language support.
@@ -362,6 +364,112 @@ impl LanguageSupport for Python {
                         && c.child(0).map(|n| n.kind() == "string").unwrap_or(false))
             })
             .unwrap_or(false)
+    }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "python" }
+
+    fn resolve_local_import(
+        &self,
+        import_name: &str,
+        current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Handle relative imports (starting with .)
+        if import_name.starts_with('.') {
+            let current_dir = current_file.parent()?;
+            let dots = import_name.chars().take_while(|c| *c == '.').count();
+            let module_part = &import_name[dots..];
+
+            // Go up (dots-1) directories from current file's directory
+            let mut base = current_dir.to_path_buf();
+            for _ in 1..dots {
+                base = base.parent()?.to_path_buf();
+            }
+
+            // Convert module.path to module/path.py
+            let module_path = if module_part.is_empty() {
+                base.join("__init__.py")
+            } else {
+                let path_part = module_part.replace('.', "/");
+                // Try module/submodule.py first, then module/submodule/__init__.py
+                let direct = base.join(format!("{}.py", path_part));
+                if direct.exists() {
+                    return Some(direct);
+                }
+                base.join(path_part).join("__init__.py")
+            };
+
+            if module_path.exists() {
+                return Some(module_path);
+            }
+        }
+
+        // Handle absolute imports - try to find in src/ or as top-level package
+        let module_path = import_name.replace('.', "/");
+
+        // Try src/<module>.py
+        let src_path = project_root.join("src").join(format!("{}.py", module_path));
+        if src_path.exists() {
+            return Some(src_path);
+        }
+
+        // Try src/<module>/__init__.py
+        let src_pkg_path = project_root.join("src").join(&module_path).join("__init__.py");
+        if src_pkg_path.exists() {
+            return Some(src_pkg_path);
+        }
+
+        // Try <module>.py directly
+        let direct_path = project_root.join(format!("{}.py", module_path));
+        if direct_path.exists() {
+            return Some(direct_path);
+        }
+
+        // Try <module>/__init__.py
+        let pkg_path = project_root.join(&module_path).join("__init__.py");
+        if pkg_path.exists() {
+            return Some(pkg_path);
+        }
+
+        None
+    }
+
+    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+        // Check stdlib first
+        if let Some(stdlib) = external_packages::find_python_stdlib(project_root) {
+            if let Some(pkg) = external_packages::resolve_python_stdlib_import(import_name, &stdlib) {
+                return Some(pkg);
+            }
+        }
+
+        // Then site-packages
+        if let Some(site_packages) = external_packages::find_python_site_packages(project_root) {
+            return external_packages::resolve_python_import(import_name, &site_packages);
+        }
+
+        None
+    }
+
+    fn is_stdlib_import(&self, import_name: &str, project_root: &Path) -> bool {
+        if let Some(stdlib) = external_packages::find_python_stdlib(project_root) {
+            external_packages::is_python_stdlib_module(import_name, &stdlib)
+        } else {
+            false
+        }
+    }
+
+    fn get_version(&self, project_root: &Path) -> Option<String> {
+        external_packages::get_python_version(project_root)
+    }
+
+    fn find_package_cache(&self, project_root: &Path) -> Option<PathBuf> {
+        external_packages::find_python_site_packages(project_root)
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["py"]
     }
 }
 

@@ -7,6 +7,8 @@ description = "Language support traits and implementations for moss"
 [dependencies]
 moss-core = { path = "../moss-core" }
 arborium = { workspace = true }
+rusqlite = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = ["all-languages"]

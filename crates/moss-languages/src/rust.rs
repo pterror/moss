@@ -1,6 +1,8 @@
 //! Rust language support.
 
+use std::path::{Path, PathBuf};
 use crate::{Export, Import, LanguageSupport, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use crate::external_packages::{self, ResolvedPackage};
 use moss_core::tree_sitter::Node;
 
 /// Rust language support.
@@ -323,6 +325,102 @@ impl LanguageSupport for Rust {
         }
         Visibility::Private
     }
+
+    // === Import Resolution ===
+
+    fn lang_key(&self) -> &'static str { "rust" }
+
+    fn resolve_local_import(
+        &self,
+        module: &str,
+        current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
+        // Find the crate root (directory containing Cargo.toml)
+        let crate_root = find_crate_root(current_file, project_root)?;
+
+        if module.starts_with("crate::") {
+            // crate::foo::bar -> src/foo/bar.rs or src/foo/bar/mod.rs
+            let path_part = module.strip_prefix("crate::")?.replace("::", "/");
+            let src_dir = crate_root.join("src");
+
+            // Try foo/bar.rs
+            let direct = src_dir.join(format!("{}.rs", path_part));
+            if direct.exists() {
+                return Some(direct);
+            }
+
+            // Try foo/bar/mod.rs
+            let mod_file = src_dir.join(&path_part).join("mod.rs");
+            if mod_file.exists() {
+                return Some(mod_file);
+            }
+        } else if module.starts_with("super::") {
+            // super::foo -> parent directory's foo
+            let current_dir = current_file.parent()?;
+            let parent_dir = current_dir.parent()?;
+            let path_part = module.strip_prefix("super::")?.replace("::", "/");
+
+            // Try parent/foo.rs
+            let direct = parent_dir.join(format!("{}.rs", path_part));
+            if direct.exists() {
+                return Some(direct);
+            }
+
+            // Try parent/foo/mod.rs
+            let mod_file = parent_dir.join(&path_part).join("mod.rs");
+            if mod_file.exists() {
+                return Some(mod_file);
+            }
+        } else if module.starts_with("self::") {
+            // self::foo -> same directory's foo
+            let current_dir = current_file.parent()?;
+            let path_part = module.strip_prefix("self::")?.replace("::", "/");
+
+            // Try dir/foo.rs
+            let direct = current_dir.join(format!("{}.rs", path_part));
+            if direct.exists() {
+                return Some(direct);
+            }
+
+            // Try dir/foo/mod.rs
+            let mod_file = current_dir.join(&path_part).join("mod.rs");
+            if mod_file.exists() {
+                return Some(mod_file);
+            }
+        }
+
+        None
+    }
+
+    fn resolve_external_import(&self, crate_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+        let registry = external_packages::find_cargo_registry()?;
+        external_packages::resolve_rust_crate(crate_name, &registry)
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        external_packages::get_rust_version()
+    }
+
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        external_packages::find_cargo_registry()
+    }
+
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["rs"]
+    }
+}
+
+/// Find the crate root (directory containing Cargo.toml).
+fn find_crate_root(start: &Path, root: &Path) -> Option<PathBuf> {
+    let mut current = start.parent()?;
+    while current.starts_with(root) {
+        if current.join("Cargo.toml").exists() {
+            return Some(current.to_path_buf());
+        }
+        current = current.parent()?;
+    }
+    None
 }
 
 impl Rust {
