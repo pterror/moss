@@ -26,7 +26,6 @@ pub struct TreeOptions {
     /// Collapse single-child directory chains (src/foo/bar/ → one line)
     pub collapse_single: bool,
     /// Directories that don't count against depth limit (smart depth)
-    #[allow(dead_code)] // TODO: apply to depth calculation
     pub boilerplate_dirs: HashSet<String>,
 }
 
@@ -60,19 +59,43 @@ struct TreeNode {
 }
 
 impl TreeNode {
-    fn add_path(&mut self, parts: &[&str], is_dir: bool) {
+    fn add_path(
+        &mut self,
+        parts: &[&str],
+        is_dir: bool,
+        max_depth: Option<usize>,
+        boilerplate_dirs: &HashSet<String>,
+        effective_depth: usize,
+    ) {
         if parts.is_empty() {
             return;
         }
 
         let name = parts[0];
+
+        // Check if we've exceeded max depth (using effective depth that excludes boilerplate)
+        // Boilerplate dirs themselves are always shown, but they don't increase depth
+        if let Some(max) = max_depth {
+            let is_boilerplate = boilerplate_dirs.contains(name);
+            // Block if we're at max depth, unless this is a boilerplate dir (which gets a pass)
+            if effective_depth >= max && !is_boilerplate {
+                return;
+            }
+        }
+
         let child = self.children.entry(name.to_string()).or_default();
 
         if parts.len() == 1 {
             child.is_dir = is_dir;
         } else {
             child.is_dir = true; // intermediate nodes are directories
-            child.add_path(&parts[1..], is_dir);
+            // Boilerplate dirs don't count against depth
+            let next_depth = if boilerplate_dirs.contains(name) {
+                effective_depth
+            } else {
+                effective_depth + 1
+            };
+            child.add_path(&parts[1..], is_dir, max_depth, boilerplate_dirs, next_depth);
         }
     }
 }
@@ -84,12 +107,12 @@ pub fn generate_tree(root: &Path, options: &TreeOptions) -> TreeResult {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| ".".to_string());
 
+    // Don't use WalkBuilder's max_depth - we handle it with smart depth (boilerplate awareness)
     let walker = WalkBuilder::new(root)
         .hidden(false)
         .git_ignore(true)
         .git_global(true)
         .git_exclude(true)
-        .max_depth(options.max_depth)
         .build();
 
     let mut tree = TreeNode::default();
@@ -113,7 +136,13 @@ pub fn generate_tree(root: &Path, options: &TreeOptions) -> TreeResult {
             let is_dir = path.is_dir();
             let parts: Vec<&str> = rel_str.split('/').filter(|s| !s.is_empty()).collect();
             if !parts.is_empty() {
-                tree.add_path(&parts, is_dir);
+                tree.add_path(
+                    &parts,
+                    is_dir,
+                    options.max_depth,
+                    &options.boilerplate_dirs,
+                    0,
+                );
 
                 if is_dir {
                     dir_count += 1;
@@ -222,19 +251,30 @@ mod tests {
     #[test]
     fn test_max_depth() {
         let dir = tempdir().unwrap();
-        fs::create_dir_all(dir.path().join("a/b/c/d")).unwrap();
-        fs::write(dir.path().join("a/b/c/d/file.txt"), "").unwrap();
+        fs::create_dir_all(dir.path().join("alpha/beta/gamma/delta")).unwrap();
+        fs::write(dir.path().join("alpha/beta/gamma/delta/file.txt"), "").unwrap();
 
         let result = generate_tree(
             dir.path(),
             &TreeOptions {
                 max_depth: Some(2),
-                ..Default::default()
+                collapse_single: false, // disable collapse to see raw depth
+                boilerplate_dirs: HashSet::new(), // no boilerplate
             },
         );
 
-        // Should stop at depth 2 (a, a/b)
-        assert!(result.dir_count <= 2);
+        let tree_text = result.lines.join("\n");
+        // Should stop at depth 2 (alpha, alpha/beta) - not show gamma or delta
+        assert!(
+            tree_text.contains("alpha") && tree_text.contains("beta"),
+            "Should show alpha and beta: {}",
+            tree_text
+        );
+        assert!(
+            !tree_text.contains("gamma") && !tree_text.contains("delta"),
+            "Should not show gamma or delta at depth 2: {}",
+            tree_text
+        );
     }
 
     #[test]
@@ -291,6 +331,67 @@ mod tests {
         assert!(
             !tree_text.contains("a/b/c"),
             "Should not collapse past fork: {}",
+            tree_text
+        );
+    }
+
+    #[test]
+    fn test_boilerplate_dirs_dont_count_against_depth() {
+        let dir = tempdir().unwrap();
+        // Create src/commands/view.rs - 'src' is boilerplate
+        fs::create_dir_all(dir.path().join("src/commands")).unwrap();
+        fs::write(dir.path().join("src/commands/view.rs"), "").unwrap();
+        fs::write(dir.path().join("README.md"), "").unwrap();
+
+        // With max_depth=1, without boilerplate awareness we'd only see src/
+        // With boilerplate awareness, src/ doesn't count, so we see src/commands/
+        let mut boilerplate = HashSet::new();
+        boilerplate.insert("src".to_string());
+
+        let result = generate_tree(
+            dir.path(),
+            &TreeOptions {
+                max_depth: Some(1),
+                collapse_single: false, // disable collapse to see raw structure
+                boilerplate_dirs: boilerplate,
+            },
+        );
+        let tree_text = result.lines.join("\n");
+
+        // Should show src/commands because src doesn't count against depth
+        assert!(
+            tree_text.contains("commands"),
+            "Should show commands inside boilerplate src: {}",
+            tree_text
+        );
+    }
+
+    #[test]
+    fn test_depth_with_no_boilerplate() {
+        let dir = tempdir().unwrap();
+        // Create alpha/beta/gamma structure
+        fs::create_dir_all(dir.path().join("alpha/beta/gamma")).unwrap();
+        fs::write(dir.path().join("alpha/beta/gamma/file.txt"), "").unwrap();
+
+        // With max_depth=1 and no boilerplate, only 'alpha' should be shown
+        let result = generate_tree(
+            dir.path(),
+            &TreeOptions {
+                max_depth: Some(1),
+                collapse_single: false,
+                boilerplate_dirs: HashSet::new(), // no boilerplate
+            },
+        );
+        let tree_text = result.lines.join("\n");
+
+        assert!(
+            tree_text.contains("alpha"),
+            "Should show 'alpha': {}",
+            tree_text
+        );
+        assert!(
+            !tree_text.contains("beta"),
+            "Should not show 'beta' at depth 1: {}",
             tree_text
         );
     }
