@@ -663,19 +663,15 @@ enum Commands {
 
     /// Index external packages (stdlib, site-packages) into global cache
     IndexPackages {
-        /// Index Python packages (stdlib + site-packages)
-        #[arg(long)]
-        python: bool,
-
-        /// Index Go packages (stdlib + mod cache)
-        #[arg(long)]
-        go: bool,
+        /// Ecosystems to index (python, go, js, rust). Defaults to all available.
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
 
         /// Clear existing index before re-indexing
         #[arg(long)]
         clear: bool,
 
-        /// Root directory for finding venv (defaults to current directory)
+        /// Root directory for finding venv/node_modules (defaults to current directory)
         #[arg(short, long)]
         root: Option<PathBuf>,
     },
@@ -904,8 +900,8 @@ fn main() {
         Commands::ListFiles { prefix, root, limit } => {
             cmd_list_files(prefix.as_deref(), root.as_deref(), limit, cli.json)
         }
-        Commands::IndexPackages { python, go, clear, root } => {
-            cmd_index_packages(python, go, clear, root.as_deref(), cli.json)
+        Commands::IndexPackages { only, clear, root } => {
+            cmd_index_packages(&only, clear, root.as_deref(), cli.json)
         }
     };
 
@@ -1718,7 +1714,12 @@ fn resolve_import(module: &str, current_file: &Path, root: &Path) -> Option<Path
         "go" => resolve_go_import_local(module, current_file, root),
         "rs" => resolve_rust_import(module, current_file, root),
         "ts" | "tsx" | "js" | "jsx" | "mts" | "mjs" => {
-            resolve_typescript_import(module, current_file, root)
+            // Try local resolution first
+            if let Some(path) = resolve_typescript_import(module, current_file, root) {
+                return Some(path);
+            }
+            // Fall back to node_modules for bare imports
+            resolve_js_external(module, current_file)
         }
         _ => None,
     }
@@ -1919,6 +1920,70 @@ fn index_go_package(name: &str, path: &Path, version: Option<external_packages::
                     }
                 }
             }
+        }
+    }
+}
+
+/// Resolve a JavaScript import to node_modules.
+/// Uses the global package index for caching.
+fn resolve_js_external(module: &str, current_file: &Path) -> Option<PathBuf> {
+    // Skip relative imports (handled by resolve_typescript_import)
+    if module.starts_with('.') {
+        return None;
+    }
+
+    // Get Node version for index queries
+    let version = external_packages::get_node_version()
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    // Check the global index first
+    if let Ok(index) = external_packages::PackageIndex::open() {
+        if let Ok(Some(pkg)) = index.find_package("js", module, version) {
+            let path = PathBuf::from(&pkg.path);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    // Find node_modules
+    let node_modules = external_packages::find_node_modules(current_file)?;
+
+    // Resolve the import
+    let pkg = external_packages::resolve_node_import(module, &node_modules)?;
+
+    // Index on cache miss
+    index_js_package(module, &pkg.path, version);
+
+    Some(pkg.path)
+}
+
+/// Index a JavaScript package into the global cache.
+fn index_js_package(name: &str, path: &Path, version: Option<external_packages::Version>) {
+    let Ok(index) = external_packages::PackageIndex::open() else { return };
+
+    // Check if already indexed
+    if let Ok(true) = index.is_indexed("js", name) {
+        return;
+    }
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 0, minor: 0 });
+
+    let Ok(pkg_id) = index.insert_package(
+        "js",
+        name,
+        &path.to_string_lossy(),
+        min_version,
+        None, // packages work across node versions
+    ) else { return };
+
+    // Extract symbols from the entry file
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    if path.is_file() {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let result = extractor.extract(path, &content);
+            insert_skeleton_symbols(&index, pkg_id, &result.symbols);
         }
     }
 }
@@ -5409,7 +5474,7 @@ fn cmd_list_files(prefix: Option<&str>, root: Option<&Path>, limit: usize, json:
 }
 
 /// Index external packages into the global cache.
-fn cmd_index_packages(python: bool, go: bool, clear: bool, root: Option<&Path>, json: bool) -> i32 {
+fn cmd_index_packages(only: &[String], clear: bool, root: Option<&Path>, json: bool) -> i32 {
     let root = root.map(|p| p.to_path_buf()).unwrap_or_else(|| {
         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
     });
@@ -5433,21 +5498,35 @@ fn cmd_index_packages(python: bool, go: bool, clear: bool, root: Option<&Path>, 
         }
     }
 
-    // Default to both if neither specified
-    let (do_python, do_go) = if !python && !go {
-        (true, true)
+    // Determine which ecosystems to index
+    let all_ecosystems = ["python", "go", "js", "rust"];
+    let do_all = only.is_empty();
+    let ecosystems: Vec<&str> = if do_all {
+        all_ecosystems.to_vec()
     } else {
-        (python, go)
+        only.iter()
+            .map(|s| s.as_str())
+            .filter(|s| all_ecosystems.contains(s))
+            .collect()
     };
+
+    // Log error for unknown ecosystems (but continue with valid ones)
+    for eco in only {
+        if !all_ecosystems.contains(&eco.as_str()) {
+            eprintln!("Error: unknown ecosystem '{}', valid options: {}", eco, all_ecosystems.join(", "));
+        }
+    }
 
     let mut stats = IndexPackagesStats::default();
 
-    if do_python {
-        index_python_packages(&index, &root, &mut stats, json);
-    }
-
-    if do_go {
-        index_go_packages(&index, &mut stats, json);
+    for eco in &ecosystems {
+        match *eco {
+            "python" => index_python_packages(&index, &root, &mut stats, json),
+            "go" => index_go_packages(&index, &mut stats, json),
+            "js" => index_js_packages(&index, &root, &mut stats, json),
+            "rust" => index_rust_packages(&index, &mut stats, json),
+            _ => {}
+        }
     }
 
     if json {
@@ -5456,14 +5535,24 @@ fn cmd_index_packages(python: bool, go: bool, clear: bool, root: Option<&Path>, 
             "python_symbols": stats.python_symbols,
             "go_packages": stats.go_packages,
             "go_symbols": stats.go_symbols,
+            "js_packages": stats.js_packages,
+            "js_symbols": stats.js_symbols,
+            "rust_packages": stats.rust_packages,
+            "rust_symbols": stats.rust_symbols,
         }));
     } else {
         println!("\nIndexing complete:");
-        if do_python {
+        if ecosystems.contains(&"python") {
             println!("  Python: {} packages, {} symbols", stats.python_packages, stats.python_symbols);
         }
-        if do_go {
+        if ecosystems.contains(&"go") {
             println!("  Go: {} packages, {} symbols", stats.go_packages, stats.go_symbols);
+        }
+        if ecosystems.contains(&"js") {
+            println!("  JavaScript: {} packages, {} symbols", stats.js_packages, stats.js_symbols);
+        }
+        if ecosystems.contains(&"rust") {
+            println!("  Rust: {} packages, {} symbols", stats.rust_packages, stats.rust_symbols);
         }
     }
 
@@ -5476,6 +5565,10 @@ struct IndexPackagesStats {
     python_symbols: usize,
     go_packages: usize,
     go_symbols: usize,
+    js_packages: usize,
+    js_symbols: usize,
+    rust_packages: usize,
+    rust_symbols: usize,
 }
 
 /// Index Python stdlib and site-packages.
@@ -5721,6 +5814,235 @@ fn index_go_stdlib_recursive(
                             let result = extractor.extract(&path, &content);
                             stats.go_symbols += count_and_insert_symbols(index, pkg_id, &result.symbols);
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Index JavaScript packages from node_modules.
+fn index_js_packages(
+    index: &external_packages::PackageIndex,
+    root: &Path,
+    stats: &mut IndexPackagesStats,
+    json: bool,
+) {
+    let version = external_packages::get_node_version()
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    if !json {
+        println!("Indexing JavaScript packages (version {:?})...", version);
+    }
+
+    let node_modules = match external_packages::find_node_modules(root) {
+        Some(nm) => nm,
+        None => {
+            if !json {
+                println!("  No node_modules found");
+            }
+            return;
+        }
+    };
+
+    if !json {
+        println!("  node_modules: {}", node_modules.display());
+    }
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 0, minor: 0 });
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    if let Ok(entries) = std::fs::read_dir(&node_modules) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden and .bin
+            if name.starts_with('.') || name == ".bin" {
+                continue;
+            }
+
+            // Handle scoped packages (@scope/name)
+            if name.starts_with('@') && path.is_dir() {
+                if let Ok(scoped) = std::fs::read_dir(&path) {
+                    for scoped_entry in scoped.flatten() {
+                        let scoped_path = scoped_entry.path();
+                        let scoped_name = format!("{}/{}", name, scoped_entry.file_name().to_string_lossy());
+
+                        if let Some(entry_point) = get_js_entry_point(&scoped_path) {
+                            index_single_js_package(
+                                index, &mut extractor, &scoped_name, &entry_point, min_version, stats
+                            );
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Regular package
+            if path.is_dir() {
+                if let Some(entry_point) = get_js_entry_point(&path) {
+                    index_single_js_package(
+                        index, &mut extractor, &name, &entry_point, min_version, stats
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Get the entry point for a JavaScript package.
+fn get_js_entry_point(pkg_dir: &Path) -> Option<PathBuf> {
+    let pkg_json = pkg_dir.join("package.json");
+    if pkg_json.is_file() {
+        let content = std::fs::read_to_string(&pkg_json).ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+
+        // Try module, main, or index.js
+        if let Some(module) = json.get("module").and_then(|v| v.as_str()) {
+            let path = pkg_dir.join(module.trim_start_matches("./"));
+            if path.is_file() {
+                return Some(path);
+            }
+        }
+        if let Some(main) = json.get("main").and_then(|v| v.as_str()) {
+            let path = pkg_dir.join(main.trim_start_matches("./"));
+            if path.is_file() {
+                return Some(path);
+            }
+            // Try with .js extension
+            let path = pkg_dir.join(main.trim_start_matches("./")).with_extension("js");
+            if path.is_file() {
+                return Some(path);
+            }
+        }
+    }
+
+    // Fallback to index.js
+    for ext in &["js", "mjs", "cjs"] {
+        let index = pkg_dir.join(format!("index.{}", ext));
+        if index.is_file() {
+            return Some(index);
+        }
+    }
+
+    None
+}
+
+/// Index a single JavaScript package.
+fn index_single_js_package(
+    index: &external_packages::PackageIndex,
+    extractor: &mut skeleton::SkeletonExtractor,
+    name: &str,
+    entry_point: &Path,
+    min_version: external_packages::Version,
+    stats: &mut IndexPackagesStats,
+) {
+    // Skip if already indexed
+    if let Ok(true) = index.is_indexed("js", name) {
+        return;
+    }
+
+    let pkg_id = match index.insert_package(
+        "js",
+        name,
+        &entry_point.to_string_lossy(),
+        min_version,
+        None,
+    ) {
+        Ok(id) => id,
+        Err(_) => return,
+    };
+
+    stats.js_packages += 1;
+
+    if let Ok(content) = std::fs::read_to_string(entry_point) {
+        let result = extractor.extract(entry_point, &content);
+        stats.js_symbols += count_and_insert_symbols(index, pkg_id, &result.symbols);
+    }
+}
+
+/// Index Rust crates from cargo registry.
+fn index_rust_packages(
+    index: &external_packages::PackageIndex,
+    stats: &mut IndexPackagesStats,
+    json: bool,
+) {
+    let version = external_packages::get_rust_version()
+        .and_then(|v| external_packages::Version::parse(&v));
+
+    if !json {
+        println!("Indexing Rust crates (version {:?})...", version);
+    }
+
+    let registry = match external_packages::find_cargo_registry() {
+        Some(r) => r,
+        None => {
+            if !json {
+                println!("  No cargo registry found");
+            }
+            return;
+        }
+    };
+
+    if !json {
+        println!("  Cargo registry: {}", registry.display());
+    }
+
+    let min_version = version.unwrap_or(external_packages::Version { major: 1, minor: 0 });
+    let mut extractor = skeleton::SkeletonExtractor::new();
+
+    // Registry structure: ~/.cargo/registry/src/index.crates.io-*/crate-version/
+    if let Ok(indices) = std::fs::read_dir(&registry) {
+        for index_entry in indices.flatten() {
+            let index_path = index_entry.path();
+            if !index_path.is_dir() {
+                continue;
+            }
+
+            if let Ok(crates) = std::fs::read_dir(&index_path) {
+                for crate_entry in crates.flatten() {
+                    let crate_path = crate_entry.path();
+                    let crate_name = crate_entry.file_name().to_string_lossy().to_string();
+
+                    // Skip if not a directory
+                    if !crate_path.is_dir() {
+                        continue;
+                    }
+
+                    // Extract crate name (remove version suffix)
+                    // e.g., "serde-1.0.193" -> "serde"
+                    let name = crate_name.rsplit_once('-')
+                        .map(|(n, _)| n)
+                        .unwrap_or(&crate_name);
+
+                    // Skip if already indexed
+                    if let Ok(true) = index.is_indexed("rust", name) {
+                        continue;
+                    }
+
+                    // Find src/lib.rs
+                    let lib_rs = crate_path.join("src").join("lib.rs");
+                    if !lib_rs.is_file() {
+                        continue;
+                    }
+
+                    let pkg_id = match index.insert_package(
+                        "rust",
+                        name,
+                        &lib_rs.to_string_lossy(),
+                        min_version,
+                        None,
+                    ) {
+                        Ok(id) => id,
+                        Err(_) => continue,
+                    };
+
+                    stats.rust_packages += 1;
+
+                    if let Ok(content) = std::fs::read_to_string(&lib_rs) {
+                        let result = extractor.extract(&lib_rs, &content);
+                        stats.rust_symbols += count_and_insert_symbols(index, pkg_id, &result.symbols);
                     }
                 }
             }

@@ -532,6 +532,313 @@ pub fn resolve_go_import(import_path: &str, mod_cache: &Path) -> Option<Resolved
 }
 
 // =============================================================================
+// TypeScript / JavaScript
+// =============================================================================
+
+/// Find node_modules directory by walking up from a file.
+pub fn find_node_modules(start: &Path) -> Option<PathBuf> {
+    let mut current = if start.is_file() {
+        start.parent()?.to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+
+    loop {
+        let node_modules = current.join("node_modules");
+        if node_modules.is_dir() {
+            return Some(node_modules);
+        }
+
+        if !current.pop() {
+            break;
+        }
+    }
+
+    None
+}
+
+/// Get Node.js version (for index versioning).
+pub fn get_node_version() -> Option<String> {
+    let output = Command::new("node").args(["--version"]).output().ok()?;
+
+    if output.status.success() {
+        let version_str = String::from_utf8_lossy(&output.stdout);
+        // "v20.10.0" -> "20.10"
+        let ver = version_str.trim().trim_start_matches('v');
+        let parts: Vec<&str> = ver.split('.').collect();
+        if parts.len() >= 2 {
+            return Some(format!("{}.{}", parts[0], parts[1]));
+        }
+    }
+
+    None
+}
+
+/// Resolve a bare import (non-relative) to node_modules.
+///
+/// Handles:
+/// - `lodash` -> `node_modules/lodash`
+/// - `@scope/pkg` -> `node_modules/@scope/pkg`
+/// - `lodash/fp` -> `node_modules/lodash/fp`
+pub fn resolve_node_import(import_path: &str, node_modules: &Path) -> Option<ResolvedPackage> {
+    // Parse package name (handle scoped packages)
+    let (pkg_name, subpath) = parse_node_package_name(import_path);
+
+    let pkg_dir = node_modules.join(&pkg_name);
+    if !pkg_dir.is_dir() {
+        return None;
+    }
+
+    // If there's a subpath, resolve it directly
+    if let Some(subpath) = subpath {
+        let target = pkg_dir.join(subpath);
+        if let Some(resolved) = resolve_node_file_or_dir(&target) {
+            return Some(ResolvedPackage {
+                path: resolved,
+                name: import_path.to_string(),
+                is_namespace: false,
+            });
+        }
+        return None;
+    }
+
+    // No subpath - use package.json to find entry point
+    let pkg_json = pkg_dir.join("package.json");
+    if pkg_json.is_file() {
+        if let Some(entry) = get_package_entry_point(&pkg_dir, &pkg_json) {
+            return Some(ResolvedPackage {
+                path: entry,
+                name: import_path.to_string(),
+                is_namespace: false,
+            });
+        }
+    }
+
+    // Fall back to index.js
+    if let Some(resolved) = resolve_node_file_or_dir(&pkg_dir) {
+        return Some(ResolvedPackage {
+            path: resolved,
+            name: import_path.to_string(),
+            is_namespace: false,
+        });
+    }
+
+    None
+}
+
+/// Parse a package name, returning (package_name, optional_subpath).
+/// `lodash` -> ("lodash", None)
+/// `lodash/fp` -> ("lodash", Some("fp"))
+/// `@scope/pkg` -> ("@scope/pkg", None)
+/// `@scope/pkg/sub` -> ("@scope/pkg", Some("sub"))
+fn parse_node_package_name(import_path: &str) -> (String, Option<&str>) {
+    if import_path.starts_with('@') {
+        // Scoped package: @scope/name or @scope/name/subpath
+        let parts: Vec<&str> = import_path.splitn(3, '/').collect();
+        if parts.len() >= 2 {
+            let pkg_name = format!("{}/{}", parts[0], parts[1]);
+            let subpath = if parts.len() > 2 { Some(parts[2]) } else { None };
+            return (pkg_name, subpath);
+        }
+        (import_path.to_string(), None)
+    } else {
+        // Regular package: name or name/subpath
+        if let Some(idx) = import_path.find('/') {
+            let pkg_name = &import_path[..idx];
+            let subpath = &import_path[idx + 1..];
+            (pkg_name.to_string(), Some(subpath))
+        } else {
+            (import_path.to_string(), None)
+        }
+    }
+}
+
+/// Get the entry point from package.json.
+/// Checks: "exports" (modern), "module" (ESM), "main" (CJS), falls back to index.js
+fn get_package_entry_point(pkg_dir: &Path, pkg_json: &Path) -> Option<PathBuf> {
+    let content = std::fs::read_to_string(pkg_json).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+
+    // Try "exports" field (simplified - just handle string or { ".": ... })
+    if let Some(exports) = json.get("exports") {
+        if let Some(entry) = exports.as_str() {
+            let path = pkg_dir.join(entry.trim_start_matches("./"));
+            if path.is_file() {
+                return Some(path);
+            }
+        } else if let Some(obj) = exports.as_object() {
+            // Try "." entry
+            if let Some(dot) = obj.get(".") {
+                if let Some(entry) = extract_export_entry(dot) {
+                    let path = pkg_dir.join(entry.trim_start_matches("./"));
+                    if path.is_file() {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // Try "module" field (ESM entry point)
+    if let Some(module) = json.get("module").and_then(|v| v.as_str()) {
+        let path = pkg_dir.join(module.trim_start_matches("./"));
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+
+    // Try "main" field
+    if let Some(main) = json.get("main").and_then(|v| v.as_str()) {
+        let path = pkg_dir.join(main.trim_start_matches("./"));
+        if let Some(resolved) = resolve_node_file_or_dir(&path) {
+            return Some(resolved);
+        }
+    }
+
+    None
+}
+
+/// Extract entry point from an exports value (handles string, { import, require, default }).
+fn extract_export_entry(value: &serde_json::Value) -> Option<&str> {
+    if let Some(s) = value.as_str() {
+        return Some(s);
+    }
+    if let Some(obj) = value.as_object() {
+        // Prefer: import > require > default
+        for key in &["import", "require", "default"] {
+            if let Some(entry) = obj.get(*key) {
+                if let Some(s) = entry.as_str() {
+                    return Some(s);
+                }
+                // Recursive for nested conditions
+                if let Some(s) = extract_export_entry(entry) {
+                    return Some(s);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Resolve a path to a file, trying extensions and index files.
+fn resolve_node_file_or_dir(target: &Path) -> Option<PathBuf> {
+    let extensions = ["js", "mjs", "cjs", "ts", "tsx", "jsx"];
+
+    // Exact file
+    if target.is_file() {
+        return Some(target.to_path_buf());
+    }
+
+    // Try with extensions
+    for ext in &extensions {
+        let with_ext = target.with_extension(ext);
+        if with_ext.is_file() {
+            return Some(with_ext);
+        }
+    }
+
+    // Try as directory with index
+    if target.is_dir() {
+        for ext in &extensions {
+            let index = target.join(format!("index.{}", ext));
+            if index.is_file() {
+                return Some(index);
+            }
+        }
+    }
+
+    None
+}
+
+// =============================================================================
+// Rust
+// =============================================================================
+
+/// Get Rust version.
+pub fn get_rust_version() -> Option<String> {
+    let output = Command::new("rustc").args(["--version"]).output().ok()?;
+
+    if output.status.success() {
+        let version_str = String::from_utf8_lossy(&output.stdout);
+        // "rustc 1.75.0 (82e1608df 2023-12-21)" -> "1.75"
+        for part in version_str.split_whitespace() {
+            if part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                let parts: Vec<&str> = part.split('.').collect();
+                if parts.len() >= 2 {
+                    return Some(format!("{}.{}", parts[0], parts[1]));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Find cargo registry source directory.
+/// Structure: ~/.cargo/registry/src/
+pub fn find_cargo_registry() -> Option<PathBuf> {
+    // Check CARGO_HOME env var
+    if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+        let registry = PathBuf::from(cargo_home).join("registry").join("src");
+        if registry.is_dir() {
+            return Some(registry);
+        }
+    }
+
+    // Fall back to ~/.cargo/registry/src
+    if let Ok(home) = std::env::var("HOME") {
+        let registry = PathBuf::from(home).join(".cargo").join("registry").join("src");
+        if registry.is_dir() {
+            return Some(registry);
+        }
+    }
+
+    // Windows fallback
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        let registry = PathBuf::from(home).join(".cargo").join("registry").join("src");
+        if registry.is_dir() {
+            return Some(registry);
+        }
+    }
+
+    None
+}
+
+/// Resolve a Rust crate import to its source location.
+pub fn resolve_rust_crate(crate_name: &str, registry: &Path) -> Option<ResolvedPackage> {
+    // Registry structure: registry/src/index.crates.io-*/crate-version/
+    if let Ok(indices) = std::fs::read_dir(registry) {
+        for index_entry in indices.flatten() {
+            let index_path = index_entry.path();
+            if !index_path.is_dir() {
+                continue;
+            }
+
+            if let Ok(crates) = std::fs::read_dir(&index_path) {
+                for crate_entry in crates.flatten() {
+                    let crate_dir = crate_entry.path();
+                    let dir_name = crate_entry.file_name().to_string_lossy().to_string();
+
+                    // Check if this is our crate (name-version pattern)
+                    if dir_name.starts_with(&format!("{}-", crate_name)) {
+                        let lib_rs = crate_dir.join("src").join("lib.rs");
+                        if lib_rs.is_file() {
+                            return Some(ResolvedPackage {
+                                path: lib_rs,
+                                name: crate_name.to_string(),
+                                is_namespace: false,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+// =============================================================================
 // Global Package Index Database
 // =============================================================================
 
