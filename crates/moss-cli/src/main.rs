@@ -565,8 +565,8 @@ fn main() {
                 rt.block_on(serve::http::run_http_server(&root, port))
             }
             ServeProtocol::Lsp => {
-                eprintln!("LSP server not yet implemented");
-                1
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(serve::lsp::run_lsp_server(root.as_deref()))
             }
         },
     };

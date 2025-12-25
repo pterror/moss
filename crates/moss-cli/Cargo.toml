@@ -74,6 +74,7 @@ toml = "0.8"
 rig-core = { version = "0.27", optional = true }
 rmcp = { version = "0.12", features = ["server", "macros", "schemars", "transport-io"], optional = true }
 schemars = { version = "1", optional = true }
+tower-lsp = "0.20"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
