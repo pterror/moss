@@ -171,8 +171,10 @@ Current scaffold is TOML state machines. Needs design work:
 - [ ] Watch mode: run relevant linters on file changes
 
 **VS Code Extension (editors/vscode/):**
-- [ ] Update extension to be accurate (currently Python-only, needs broader language support)
-- [ ] Consider switching to @typescript/native-preview for faster TypeScript support
+- [x] Update extension to use Rust CLI instead of Python
+- [x] Support multiple languages (Python, TypeScript, JavaScript, Rust, Go)
+- [x] Switch to @typescript/native-preview + oxlint for development
+- [ ] Test and publish to VS Code marketplace
 
 **View Filtering:**
 - Filter out tests from views (--no-tests or --exclude=tests)

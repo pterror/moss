@@ -1,63 +1,70 @@
 import * as vscode from 'vscode';
-import { RulesResult, Violation } from './runner';
+import { LintResult, Diagnostic } from './runner';
 
 export class MossDiagnostics {
-    updateDiagnostics(
+    updateDiagnosticsFromLint(
         collection: vscode.DiagnosticCollection,
-        result: RulesResult
+        results: LintResult[]
     ): void {
         // Clear existing diagnostics
         collection.clear();
 
-        // Group violations by file
-        const byFile = new Map<string, Violation[]>();
-        for (const violation of result.violations) {
-            const existing = byFile.get(violation.file) ?? [];
-            existing.push(violation);
-            byFile.set(violation.file, existing);
+        // Flatten all diagnostics from all tools
+        const allDiagnostics: Diagnostic[] = [];
+        for (const result of results) {
+            if (result.success) {
+                allDiagnostics.push(...result.diagnostics);
+            }
         }
 
-        // Create diagnostics for each file
-        for (const [filePath, violations] of byFile) {
+        // Group by file
+        const byFile = new Map<string, Diagnostic[]>();
+        for (const diag of allDiagnostics) {
+            const file = diag.location.file;
+            const existing = byFile.get(file) ?? [];
+            existing.push(diag);
+            byFile.set(file, existing);
+        }
+
+        // Create VS Code diagnostics for each file
+        for (const [filePath, diagnostics] of byFile) {
             const uri = vscode.Uri.file(filePath);
-            const diagnostics = violations.map((v) => this.toDiagnostic(v));
-            collection.set(uri, diagnostics);
+            const vscodeDiagnostics = diagnostics.map((d) => this.toDiagnostic(d));
+            collection.set(uri, vscodeDiagnostics);
         }
     }
 
-    private toDiagnostic(violation: Violation): vscode.Diagnostic {
-        const line = Math.max(0, violation.line - 1); // Convert to 0-based
-        const column = Math.max(0, violation.column - 1);
+    private toDiagnostic(diag: Diagnostic): vscode.Diagnostic {
+        const startLine = Math.max(0, diag.location.line - 1);
+        const startColumn = Math.max(0, diag.location.column - 1);
+        const endLine = diag.location.end_line ? Math.max(0, diag.location.end_line - 1) : startLine;
+        const endColumn = diag.location.end_column ? Math.max(0, diag.location.end_column - 1) : startColumn + 100;
 
         const range = new vscode.Range(
-            new vscode.Position(line, column),
-            new vscode.Position(line, column + 100) // Highlight to end of line
+            new vscode.Position(startLine, startColumn),
+            new vscode.Position(endLine, endColumn)
         );
 
-        const severity = this.toSeverity(violation.severity);
+        const severity = diag.severity === 'error'
+            ? vscode.DiagnosticSeverity.Error
+            : vscode.DiagnosticSeverity.Warning;
 
         const diagnostic = new vscode.Diagnostic(
             range,
-            violation.message,
+            diag.message,
             severity
         );
 
-        diagnostic.source = 'moss';
-        diagnostic.code = violation.rule_id;
+        diagnostic.source = diag.tool;
+        diagnostic.code = diag.rule_id;
+
+        if (diag.help_url) {
+            diagnostic.code = {
+                value: diag.rule_id,
+                target: vscode.Uri.parse(diag.help_url)
+            };
+        }
 
         return diagnostic;
-    }
-
-    private toSeverity(severity: string): vscode.DiagnosticSeverity {
-        switch (severity) {
-            case 'error':
-                return vscode.DiagnosticSeverity.Error;
-            case 'warning':
-                return vscode.DiagnosticSeverity.Warning;
-            case 'info':
-                return vscode.DiagnosticSeverity.Information;
-            default:
-                return vscode.DiagnosticSeverity.Warning;
-        }
     }
 }

@@ -2,40 +2,82 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
-export interface RulesResult {
-    violations: Violation[];
-    total_violations: number;
-    files_analyzed: number;
+export interface LintResult {
+    tool: string;
+    diagnostics: Diagnostic[];
+    success: boolean;
+    error?: string;
 }
 
-export interface Violation {
+export interface Diagnostic {
+    tool: string;
     rule_id: string;
     message: string;
-    file: string;
-    line: number;
-    column: number;
-    severity: 'error' | 'warning' | 'info';
+    severity: 'error' | 'warning';
+    location: {
+        file: string;
+        line: number;
+        column: number;
+        end_line?: number;
+        end_column?: number;
+    };
+    fix?: {
+        description: string;
+        replacement: string;
+    };
+    help_url?: string;
+}
+
+export interface SarifResult {
+    version: string;
+    runs: SarifRun[];
+}
+
+export interface SarifRun {
+    tool: {
+        driver: {
+            name: string;
+        };
+    };
+    results: SarifDiagnostic[];
+}
+
+export interface SarifDiagnostic {
+    ruleId: string;
+    message: { text: string };
+    level: 'error' | 'warning' | 'note';
+    locations: {
+        physicalLocation: {
+            artifactLocation: { uri: string };
+            region: {
+                startLine: number;
+                startColumn: number;
+                endLine?: number;
+                endColumn?: number;
+            };
+        };
+    }[];
 }
 
 export class MossRunner {
-    private pythonPath: string;
+    private binaryPath: string;
 
     constructor() {
-        this.pythonPath = this.getPythonPath();
+        this.binaryPath = this.getBinaryPath();
     }
 
-    private getPythonPath(): string {
+    private getBinaryPath(): string {
         const config = vscode.workspace.getConfiguration('moss');
-        return config.get<string>('pythonPath') ?? 'python';
+        return config.get<string>('binaryPath') ?? 'moss';
     }
 
-    updatePythonPath(): void {
-        this.pythonPath = this.getPythonPath();
+    updateBinaryPath(): void {
+        this.binaryPath = this.getBinaryPath();
     }
 
     private async runMoss(args: string[], cwd?: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            const process = spawn(this.pythonPath, ['-m', 'moss', ...args], {
+            const process = spawn(this.binaryPath, args, {
                 cwd: cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
             });
 
@@ -64,40 +106,66 @@ export class MossRunner {
         });
     }
 
-    async runRules(targetPath: string): Promise<RulesResult> {
+    async runLint(targetPath: string, fix: boolean = false): Promise<LintResult[]> {
         const config = vscode.workspace.getConfiguration('moss');
-        const args = ['rules', targetPath, '--json'];
+        const categories = config.get<string[]>('lintCategories') ?? ['linter'];
 
-        if (config.get<boolean>('builtinRules')) {
-            args.push('--builtin');
+        const args = ['lint', targetPath, '--sarif'];
+
+        if (fix) {
+            args.push('--fix');
         }
 
-        const output = await this.runMoss(args, path.dirname(targetPath));
+        for (const category of categories) {
+            args.push('--category', category);
+        }
 
         try {
-            return JSON.parse(output) as RulesResult;
-        } catch {
-            // If JSON parsing fails, return empty result
-            return {
-                violations: [],
-                total_violations: 0,
-                files_analyzed: 0
-            };
-        }
-    }
+            const output = await this.runMoss(args, path.dirname(targetPath));
+            const sarif = JSON.parse(output) as SarifResult;
 
-    async runMetrics(targetPath: string): Promise<string> {
-        const args = ['metrics', targetPath, '--html'];
-        return await this.runMoss(args, targetPath);
+            return sarif.runs.map((run) => ({
+                tool: run.tool.driver.name,
+                diagnostics: run.results.map((result) => {
+                    const loc = result.locations[0]?.physicalLocation;
+                    return {
+                        tool: run.tool.driver.name,
+                        rule_id: result.ruleId,
+                        message: result.message.text,
+                        severity: result.level === 'error' ? 'error' : 'warning',
+                        location: {
+                            file: loc?.artifactLocation.uri ?? '',
+                            line: loc?.region.startLine ?? 1,
+                            column: loc?.region.startColumn ?? 1,
+                            end_line: loc?.region.endLine,
+                            end_column: loc?.region.endColumn,
+                        },
+                    } as Diagnostic;
+                }),
+                success: true,
+            }));
+        } catch (error) {
+            return [{
+                tool: 'moss',
+                diagnostics: [],
+                success: false,
+                error: String(error),
+            }];
+        }
     }
 
     async runSkeleton(filePath: string): Promise<string> {
-        const args = ['skeleton', filePath];
+        const args = ['view', filePath];
         return await this.runMoss(args, path.dirname(filePath));
     }
 
-    async runDiffAnalysis(workspacePath: string, ref: string): Promise<string> {
-        const args = ['diff', ref, '--format', 'markdown'];
-        return await this.runMoss(args, workspacePath);
+    async runViewTree(dirPath: string, depth: number = 2): Promise<string> {
+        const args = ['view', dirPath, '--depth', String(depth)];
+        return await this.runMoss(args, dirPath);
+    }
+
+    async runAnalyzeHealth(targetPath: string): Promise<string> {
+        const args = ['analyze', '--health', targetPath, '--json'];
+        return await this.runMoss(args, targetPath);
     }
 }

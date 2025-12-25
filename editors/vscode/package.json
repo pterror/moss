@@ -6,7 +6,7 @@
   "publisher": "moss",
   "repository": {
     "type": "git",
-    "url": "https://github.com/moss/moss"
+    "url": "https://github.com/pterror/moss"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -18,55 +18,72 @@
   ],
   "keywords": [
     "python",
+    "typescript",
+    "rust",
+    "go",
     "analysis",
     "linter",
     "code quality"
   ],
   "activationEvents": [
-    "onLanguage:python"
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:rust",
+    "onLanguage:go"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "moss.runRules",
-        "title": "Moss: Run Rules Check"
+        "command": "moss.lint",
+        "title": "Moss: Run Lint"
       },
       {
-        "command": "moss.showMetrics",
-        "title": "Moss: Show Metrics Dashboard"
+        "command": "moss.lintFix",
+        "title": "Moss: Run Lint with Auto-fix"
       },
       {
         "command": "moss.showSkeleton",
         "title": "Moss: Show Code Skeleton"
       },
       {
-        "command": "moss.analyzeDiff",
-        "title": "Moss: Analyze Git Diff"
+        "command": "moss.analyzeHealth",
+        "title": "Moss: Analyze Health"
+      },
+      {
+        "command": "moss.viewTree",
+        "title": "Moss: View Directory Tree"
       }
     ],
     "configuration": {
       "title": "Moss",
       "properties": {
-        "moss.pythonPath": {
+        "moss.binaryPath": {
           "type": "string",
-          "default": "python",
-          "description": "Path to Python interpreter with moss installed"
+          "default": "moss",
+          "description": "Path to the moss binary"
         },
         "moss.enableDiagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Show moss rule violations as diagnostics"
+          "description": "Show moss lint violations as diagnostics"
         },
         "moss.runOnSave": {
           "type": "boolean",
           "default": false,
-          "description": "Run moss rules check on file save"
+          "description": "Run moss lint on file save"
         },
-        "moss.builtinRules": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable built-in rules"
+        "moss.lintCategories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["linter", "formatter", "type-checker"]
+          },
+          "default": ["linter"],
+          "description": "Categories of tools to run"
         }
       }
     },
@@ -74,13 +91,21 @@
       "editor/context": [
         {
           "command": "moss.showSkeleton",
-          "when": "editorLangId == python",
+          "group": "moss"
+        },
+        {
+          "command": "moss.lint",
           "group": "moss"
         }
       ],
       "explorer/context": [
         {
-          "command": "moss.runRules",
+          "command": "moss.lint",
+          "when": "explorerResourceIsFolder",
+          "group": "moss"
+        },
+        {
+          "command": "moss.viewTree",
           "when": "explorerResourceIsFolder",
           "group": "moss"
         }
@@ -91,15 +116,16 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts",
+    "lint": "oxlint src",
+    "format": "oxfmt --write src",
+    "typecheck": "tsgo --noEmit",
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.13.0",
-    "@typescript-eslint/parser": "^6.13.0",
-    "eslint": "^8.54.0",
-    "typescript": "^5.3.0"
+    "@typescript/native-preview": "^7.0.0-dev.20251225.1",
+    "oxfmt": "^0.20.0",
+    "oxlint": "^0.16.0"
   }
 }
