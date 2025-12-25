@@ -167,3 +167,67 @@ pub fn supported_languages() -> Vec<&'static dyn Language> {
     init_builtin();
     LANGUAGES.read().unwrap().clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moss_core::arborium::GrammarStore;
+
+    /// Validate that all node kinds returned by Language trait methods
+    /// actually exist in the tree-sitter grammar.
+    #[test]
+    fn validate_node_kinds() {
+        let store = GrammarStore::new();
+        let mut errors: Vec<String> = Vec::new();
+
+        for lang in supported_languages() {
+            let grammar_name = lang.grammar_name();
+            let grammar = match store.get(grammar_name) {
+                Some(g) => g,
+                None => {
+                    // Grammar not available (feature not enabled)
+                    continue;
+                }
+            };
+            let ts_lang = grammar.language();
+
+            // Collect all node kinds from trait methods
+            let all_kinds: Vec<(&str, &[&str])> = vec![
+                ("container_kinds", lang.container_kinds()),
+                ("function_kinds", lang.function_kinds()),
+                ("type_kinds", lang.type_kinds()),
+                ("import_kinds", lang.import_kinds()),
+                ("public_symbol_kinds", lang.public_symbol_kinds()),
+                ("scope_creating_kinds", lang.scope_creating_kinds()),
+                ("control_flow_kinds", lang.control_flow_kinds()),
+                ("complexity_nodes", lang.complexity_nodes()),
+                ("nesting_nodes", lang.nesting_nodes()),
+            ];
+
+            for (method, kinds) in all_kinds {
+                for kind in kinds {
+                    // id_for_node_kind returns 0 if the kind doesn't exist
+                    let id = ts_lang.id_for_node_kind(kind, true);
+                    if id == 0 {
+                        // Also check unnamed nodes (like operators)
+                        let unnamed_id = ts_lang.id_for_node_kind(kind, false);
+                        if unnamed_id == 0 {
+                            errors.push(format!(
+                                "{}: {}() contains invalid node kind '{}'",
+                                lang.name(), method, kind
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            panic!(
+                "Found {} invalid node kinds:\n{}",
+                errors.len(),
+                errors.join("\n")
+            );
+        }
+    }
+}
