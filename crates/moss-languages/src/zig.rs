@@ -113,8 +113,16 @@ impl Language for Zig {
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        // ContainerDecl covers struct, enum, union - default to struct
-        let (kind, keyword) = (SymbolKind::Struct, "struct");
+
+        // Detect struct/enum/union from ContainerDeclType child or text
+        let text = &content[node.byte_range()];
+        let (kind, keyword) = if text.contains("enum ") || text.contains("enum{") {
+            (SymbolKind::Enum, "enum")
+        } else if text.contains("union ") || text.contains("union{") || text.contains("union(") {
+            (SymbolKind::Struct, "union")
+        } else {
+            (SymbolKind::Struct, "struct")
+        };
 
         let is_pub = self.is_public(node, content);
         let prefix = if is_pub { format!("pub {}", keyword) } else { keyword.to_string() };
