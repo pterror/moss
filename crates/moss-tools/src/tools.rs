@@ -98,6 +98,8 @@ pub enum ToolError {
     ExecutionFailed(String),
     #[error("failed to parse tool output: {0}")]
     ParseError(String),
+    #[error("fix not supported by this tool")]
+    FixNotSupported,
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
