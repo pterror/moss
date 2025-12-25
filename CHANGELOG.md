@@ -4,6 +4,14 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Documentation Reference Checking
+
+`moss analyze --check-refs` scans markdown files for code references in backticks and validates against indexed symbols. Reports broken references with file:line and context.
+
+### Config System
+
+Added config loading from `.moss/config.toml` (per-project) and `~/.config/moss/config.toml` (global). Supports daemon and index configuration.
+
 ### Lint Performance
 
 Reduced `moss lint list` from ~12s to ~0.5s:

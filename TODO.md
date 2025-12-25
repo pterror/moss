@@ -14,7 +14,7 @@ Test Status: 110 passing, 0 failing (moss-languages)
 - [ ] Port LLM calling logic (streaming, tool use) as workflow component
 
 **Consider Porting:**
-- [ ] `cmd_check_refs` - bidirectional code/doc reference checking (could be `moss analyze --check-refs`)
+- [x] `cmd_check_refs` - bidirectional code/doc reference checking → `moss analyze --check-refs`
 
 **Rust Redesign Candidates:**
 - Rules engine: consider semgrep/ruff integration instead of custom
@@ -57,7 +57,7 @@ Current scaffold is TOML state machines. Needs design work:
 - Multi-file batch edit: less latency than N sequential edits. Not for identical replacements (use sed) or semantic renames (use LSP). For structured batch edits where each file needs similar-but-contextual changes (e.g., adding a trait method to 35 language files).
 
 **Linting:**
-- `lint list` still ~0.5s due to version checks; could cache or parallelize
+- `lint list` now ~0.22s (parallelized detection and version checks with rayon)
 
 **View Filtering:**
 - Filter out tests from views (--no-tests or --exclude=tests)
