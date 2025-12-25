@@ -62,6 +62,7 @@ regex = "1"
 jaq-core = "2"
 jaq-std = "2"
 jaq-json = { version = "1", features = ["serde_json"] }
+toml = "0.8"
 
 [dev-dependencies]
 tempfile = "3"

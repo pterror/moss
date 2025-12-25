@@ -18,6 +18,7 @@ mod sessions;
 mod skeleton;
 mod symbols;
 mod tree;
+mod workflow;
 
 #[derive(Parser)]
 #[command(name = "moss")]

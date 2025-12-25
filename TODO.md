@@ -71,6 +71,13 @@ See `docs/language-support.md` for design. Run `scripts/missing-grammars.sh` to 
 - [ ] Command/subcommand/flag names should be self-documenting
 - [ ] OutputFormatter trait for consistent JSON/text output
 
+**Workflow Engine Design:**
+Current scaffold is TOML state machines. Needs design work:
+- Interactive/agentic sessions (user-driven, not TOML-defined)
+- Relationship between `moss workflow` and interactive sessions
+- Where LLM decision-making hooks in (workflow plugin? separate mode?)
+- Unify or separate: scripted workflows vs interactive agent loops
+
 **Code Quality:**
 - Audit Rust codebase for tuple returns - replace with structs unconditionally
   - Already fixed: `find_symbols` → `SymbolMatch`, `call_graph_stats` → `CallGraphStats`, `get_changed_files` → `ChangedFiles`
