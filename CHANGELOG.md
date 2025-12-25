@@ -4,6 +4,15 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### View Command Improvements
+
+Unified ViewNode abstraction for consistent output:
+- All `moss view` paths (directory, file, symbol) now use ViewNode
+- Text output shows tree structure with line ranges (L{start}-{end}, N lines)
+- FormatOptions: docstrings, line_numbers, skip_root, max_depth
+- Useless docstring filtering (skips docstrings that just repeat the name)
+- JSON and text output are now structurally consistent
+
 ### Server Protocols
 
 All three server protocols now implemented:

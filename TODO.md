@@ -4,10 +4,10 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. OutputFormatter trait for consistent JSON/text output
-2. Daemon integration: complete FileIndex API methods
-3. LSP refactor actions (rename symbol across files)
-4. Cross-language reference tracking (Python ↔ Rust)
+1. Daemon integration: complete FileIndex API methods
+2. LSP refactor actions (rename symbol across files)
+3. Cross-language reference tracking (Python ↔ Rust)
+4. Consolidate skeleton.rs and symbols.rs
 
 Test Status: 107 passing, 0 failing (moss-languages)
 
@@ -152,6 +152,7 @@ Current scaffold is TOML state machines. Needs design work:
 - Directory context: attach LLM-relevant context to directories (like CLAUDE.md but hierarchical)
 - Deduplicate SQL queries in moss-cli: many ad-hoc queries could use shared prepared statements or query builders
 - Cache line counts in index: `analyze --health` still reads all files for line counting, could store in files table
+- Consolidate skeleton.rs and symbols.rs: both use Language::extract_symbols() but process differently (skeleton: nested + signatures, symbols: flat + complexity). Could share extraction layer.
 
 **Integration:**
 - Complete daemon integration (FileIndex API methods currently unused)
