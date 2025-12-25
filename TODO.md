@@ -157,6 +157,10 @@ Current scaffold is TOML state machines. Needs design work:
 - [x] LSP refactor actions (rename symbol across files with prepare_rename/rename)
 - [x] Cross-language reference tracking (PyO3, wasm-bindgen, napi-rs, ctypes/cffi detection)
 
+**HTTP Server:**
+- OpenAPI spec for `moss serve http` endpoints (enables client codegen, docs)
+- Codegen from OpenAPI: generate TypeScript/Python/Rust clients
+
 **Tooling:**
 - Structured TODO.md editing: first-class `moss todo` command to add/complete/move items without losing content (Opus 4.5 drops TODO items when editing markdown)
 - Multi-file batch edit: less latency than N sequential edits. Not for identical replacements (use sed) or semantic renames (use LSP). For structured batch edits where each file needs similar-but-contextual changes (e.g., adding a trait method to 35 language files).
@@ -200,6 +204,9 @@ Current scaffold is TOML state machines. Needs design work:
   - Uncommitted changes summary
   - TODO.md delta (items added/completed)
 - Introspect ~/.claude/plans/ - list/view saved plan files from Claude Code sessions
+
+**Distribution:**
+- Wrapper packages for ecosystems: npm, PyPI, Homebrew, etc. (single binary, wrapper scripts)
 
 ## Deferred
 
