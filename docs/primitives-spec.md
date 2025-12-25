@@ -13,11 +13,11 @@ moss view <target> [options]
 ### Target Resolution
 
 Fuzzy, forgiving:
-- `src/moss/dwim.py` - exact path
-- `dwim.py` - filename
-- `dwim` - stem
-- `ToolRouter` - symbol name
-- `dwim:ToolRouter` or `dwim.py/ToolRouter` - scoped
+- `crates/moss-cli/src/skeleton.rs` - exact path
+- `skeleton.rs` - filename
+- `skeleton` - stem
+- `SkeletonExtractor` - symbol name
+- `skeleton.rs/SkeletonExtractor` - scoped
 
 ### Output Modes
 

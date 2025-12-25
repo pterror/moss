@@ -20,7 +20,7 @@ Data-driven workflow definitions. TOML is the default plugin; Python workflows r
     repair-engine.txt    # Override built-in prompt
 ```
 
-Built-in workflows ship in `src/moss/workflows/` and are loaded as defaults.
+Built-in workflows ship in `.moss/workflows/` and are loaded as defaults.
 
 ## TOML Schema
 

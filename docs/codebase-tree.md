@@ -6,17 +6,18 @@ The codebase is a single unified tree: filesystem + AST merged.
 
 ```
 project/
-  src/
-    moss/
-      dwim.py
-        CORE_PRIMITIVES (set)
-        CORE_ALIASES (dict)
-        resolve_core_primitive (function)
-        ToolInfo (class)
-        ToolRouter (class)
-          analyze_intent (method)
-      cli.py
-        ...
+  crates/
+    moss-cli/
+      src/
+        skeleton.rs
+          SkeletonSymbol (struct)
+            to_view_node (method)
+          SkeletonResult (struct)
+            filter_types (method)
+          SkeletonExtractor (struct)
+            extract (method)
+        main.rs
+          ...
   tests/
     ...
 ```
@@ -26,9 +27,9 @@ Every node is addressable. Navigation is spatial, not verb-based.
 ## Operations
 
 1. **Point** - specify a location (fuzzy matching OK)
-   - `src/moss/dwim` → file
-   - `dwim.py:ToolRouter` → class
-   - `resolve_tool` → function (search if ambiguous)
+   - `crates/moss-cli/src/skeleton` → file
+   - `skeleton.rs/SkeletonExtractor` → struct
+   - `extract` → function (search if ambiguous)
 
 2. **View** - see that node + immediate children
    - Default: names + 1-line descriptions
@@ -53,12 +54,12 @@ Every node is addressable. Navigation is spatial, not verb-based.
 ### Addressing nodes
 
 Fuzzy, forgiving. All of these could work:
-- `src/moss/dwim.py` - exact path
-- `dwim.py` - filename (resolve if unique)
-- `dwim` - stem
-- `ToolRouter` - symbol name
-- `dwim:ToolRouter` - scoped symbol
-- `ToolRouter.analyze_intent` - dotted path
+- `crates/moss-cli/src/skeleton.rs` - exact path
+- `skeleton.rs` - filename (resolve if unique)
+- `skeleton` - stem
+- `SkeletonExtractor` - symbol name
+- `skeleton.rs/SkeletonExtractor` - scoped symbol
+- `SkeletonExtractor/extract` - method path
 
 ### What you see
 
