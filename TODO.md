@@ -148,7 +148,7 @@ Current scaffold is TOML state machines. Needs design work:
   - `execute_moss_command` → `CommandResult`, `extract_word_with_range` → `WordAtPosition`
 - Validate node kinds against grammars: `validate_unused_kinds_audit()` in each language file ensures documented unused kinds stay in sync with grammar
 - Directory context: attach LLM-relevant context to directories (like CLAUDE.md but hierarchical)
-- Deduplicate SQL queries in moss-cli: many ad-hoc queries could use shared prepared statements or query builders
+- Deduplicate SQL queries in moss-cli: many ad-hoc queries could use shared prepared statements or query builders (needs design: queries use different execution contexts - Connection vs Transaction)
 - [x] Cache line counts in index: files table has `lines` column, used by `analyze --health`
 - [x] Consolidate skeleton.rs and symbols.rs: shared extract.rs with Extractor class
 
