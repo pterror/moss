@@ -159,6 +159,14 @@ Current scaffold is TOML state machines. Needs design work:
 - Structured TODO.md editing: first-class `moss todo` command to add/complete/move items without losing content (Opus 4.5 drops TODO items when editing markdown)
 - Multi-file batch edit: less latency than N sequential edits. Not for identical replacements (use sed) or semantic renames (use LSP). For structured batch edits where each file needs similar-but-contextual changes (e.g., adding a trait method to 35 language files).
 
+**Unified Linting Infrastructure (moss-tools):**
+- [x] Core: Tool trait, ToolRegistry, SARIF 2.1.0 output
+- [x] Adapters: ruff, oxlint, biome, prettier, tsc, clippy, rustfmt, gofmt, go-vet
+- [x] CLI: `moss lint` with auto-detection, --fix, --sarif, --category filter
+- [ ] More adapters: mypy, pyright, eslint, deno check, clangd, pylint
+- [ ] Integration: wire into `moss analyze` as unified check runner
+- [ ] Watch mode: run relevant linters on file changes
+
 **View Filtering:**
 - Filter out tests from views (--no-tests or --exclude=tests)
 - Filter by category: tests, config files, build files, etc.
