@@ -5,6 +5,7 @@ pub mod daemon;
 pub mod edit;
 pub mod grep;
 pub mod index;
+pub mod lint;
 pub mod package;
 pub mod sessions;
 pub mod update;

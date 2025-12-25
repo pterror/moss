@@ -54,6 +54,7 @@ arborium.workspace = true
 dirs = "5"
 moss-languages = { path = "../moss-languages", default-features = false }
 moss-packages = { path = "../moss-packages" }
+moss-tools = { path = "../moss-tools" }
 grep-matcher.workspace = true
 grep-regex.workspace = true
 grep-searcher.workspace = true

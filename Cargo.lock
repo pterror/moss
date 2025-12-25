@@ -2763,6 +2763,7 @@ dependencies = [
  "jaq-std",
  "moss-languages",
  "moss-packages",
+ "moss-tools",
  "notify",
  "nucleo-matcher",
  "rayon",

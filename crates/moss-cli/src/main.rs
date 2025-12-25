@@ -312,6 +312,36 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
+    /// Run linters, formatters, and type checkers
+    Lint {
+        /// Target path to check (defaults to current directory)
+        target: Option<String>,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+
+        /// Fix issues automatically where possible
+        #[arg(short, long)]
+        fix: bool,
+
+        /// Specific tools to run (comma-separated, e.g., "ruff,oxlint")
+        #[arg(short, long)]
+        tools: Option<String>,
+
+        /// Filter by category: lint, fmt, type
+        #[arg(short, long)]
+        category: Option<String>,
+
+        /// List available tools
+        #[arg(short, long)]
+        list: bool,
+
+        /// Output in SARIF format
+        #[arg(long)]
+        sarif: bool,
+    },
+
     /// Start a moss server (MCP, HTTP, LSP)
     Serve {
         #[command(subcommand)]
@@ -491,6 +521,24 @@ fn main() {
         Commands::Workflow { action, root } => {
             commands::workflow::cmd_workflow(action, root.as_deref(), cli.json)
         }
+        Commands::Lint {
+            target,
+            root,
+            fix,
+            tools,
+            category,
+            list,
+            sarif,
+        } => commands::lint::cmd_lint(
+            target.as_deref(),
+            root.as_deref(),
+            fix,
+            tools.as_deref(),
+            category.as_deref(),
+            list,
+            sarif,
+            cli.json,
+        ),
         Commands::Serve { protocol, root } => match protocol {
             ServeProtocol::Mcp => serve::mcp::cmd_serve_mcp(root.as_deref(), cli.json),
             ServeProtocol::Http { port } => {

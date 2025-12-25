@@ -5,23 +5,42 @@
 //! - Project relevance detection
 //! - Output parsing to diagnostics
 
+mod biome;
+mod clippy;
+mod gofmt;
+mod oxlint;
+mod prettier;
 mod ruff;
+mod rustfmt;
+mod tsc;
 
+pub use biome::{BiomeFormat, BiomeLint};
+pub use clippy::Clippy;
+pub use gofmt::{Gofmt, Govet};
+pub use oxlint::Oxlint;
+pub use prettier::Prettier;
 pub use ruff::Ruff;
+pub use rustfmt::Rustfmt;
+pub use tsc::Tsc;
 
 use crate::Tool;
 
 /// Create a registry with all built-in adapters.
 pub fn all_adapters() -> Vec<Box<dyn Tool>> {
     vec![
+        // Python
         Box::new(Ruff::new()),
-        // Add more adapters here as they're implemented:
-        // Box::new(Oxlint::new()),
-        // Box::new(Biome::new()),
-        // Box::new(Prettier::new()),
-        // Box::new(Tsc::new()),
-        // Box::new(Mypy::new()),
-        // Box::new(Clippy::new()),
-        // etc.
+        // JavaScript/TypeScript
+        Box::new(Oxlint::new()),
+        Box::new(BiomeLint::new()),
+        Box::new(BiomeFormat::new()),
+        Box::new(Prettier::new()),
+        Box::new(Tsc::new()),
+        // Rust
+        Box::new(Clippy::new()),
+        Box::new(Rustfmt::new()),
+        // Go
+        Box::new(Gofmt::new()),
+        Box::new(Govet::new()),
     ]
 }
