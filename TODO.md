@@ -156,6 +156,7 @@ Current scaffold is TOML state machines. Needs design work:
 - [x] Complete daemon integration (FileIndex API methods exposed via daemon)
 - [x] LSP refactor actions (rename symbol across files with prepare_rename/rename)
 - [x] Cross-language reference tracking (PyO3, wasm-bindgen, napi-rs, ctypes/cffi detection)
+- Native file watching via `notify` crate (cross-platform: inotify/FSEvents/ReadDirectoryChangesW) - eliminates polling
 
 **HTTP Server:**
 - OpenAPI spec for `moss serve http` endpoints (enables client codegen, docs)
