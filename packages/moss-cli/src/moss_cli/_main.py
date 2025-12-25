@@ -743,49 +743,6 @@ def cmd_gen(args: Namespace) -> int:
         return 1
 
 
-def cmd_tui(args: Namespace) -> int:
-    """Start the interactive terminal UI (API explorer)."""
-    output = setup_output(args)
-    try:
-        from moss_orchestration.gen.tui import run_tui
-
-        directory = Path(getattr(args, "directory", ".")).resolve()
-        run_tui(directory)
-        return 0
-    except ImportError as e:
-        output.error("TUI dependencies not installed. Install with: pip install 'moss[tui]'")
-        output.debug(f"Details: {e}")
-        return 1
-    except KeyboardInterrupt:
-        return 0
-
-
-def cmd_explore(args: Namespace) -> int:
-    """Start the explore TUI (tree + view/edit/analyze primitives)."""
-    output = setup_output(args)
-    try:
-        from moss_tui import get_app
-
-        directory = Path(getattr(args, "directory", ".")).resolve()
-        app = get_app(project_root=directory)
-        app.run()
-        return 0
-    except ImportError as e:
-        output.error("TUI dependencies not installed. Install with: pip install 'moss[tui]'")
-        output.debug(f"Details: {e}")
-        return 1
-    except KeyboardInterrupt:
-        return 0
-
-
-def cmd_shell(args: Namespace) -> int:
-    """Start interactive shell."""
-    from moss_orchestration.shell import start_shell
-
-    directory = Path(getattr(args, "directory", ".")).resolve()
-    return start_shell(directory)
-
-
 def cmd_watch(args: Namespace) -> int:
     """Watch for file changes and re-run tests."""
     import asyncio
@@ -2339,38 +2296,6 @@ def create_parser() -> argparse.ArgumentParser:
         help="List generated items instead of full output",
     )
     gen_parser.set_defaults(func=cmd_gen)
-
-    # tui command (API explorer - technical)
-    tui_parser = subparsers.add_parser("tui", help="Interactive terminal UI for exploring MossAPI")
-    tui_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Project root directory (default: current)",
-    )
-    tui_parser.set_defaults(func=cmd_tui)
-
-    # shell command
-    shell_parser = subparsers.add_parser("shell", help="Interactive shell for code exploration")
-    shell_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Workspace directory (default: current)",
-    )
-    shell_parser.set_defaults(func=cmd_shell)
-
-    # explore command - tree + primitives TUI
-    explore_parser = subparsers.add_parser(
-        "explore", help="Explore codebase with tree navigation + view/edit/analyze"
-    )
-    explore_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Project root directory (default: current)",
-    )
-    explore_parser.set_defaults(func=cmd_explore)
 
     # watch command
     watch_parser = subparsers.add_parser("watch", help="Watch files and re-run tests on changes")

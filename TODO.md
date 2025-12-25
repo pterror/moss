@@ -37,7 +37,7 @@ Servers (port to Rust):
 - [ ] `moss serve lsp` - LSP server
 
 TUI (evaluate):
-- [ ] `cmd_tui` / `cmd_explore` - Textual → ratatui? Or delete?
+- [x] `cmd_tui` / `cmd_explore` / `cmd_shell` - deleted (Textual too expensive to port, HTTP API + web UI preferred)
 
 Delete (redundant with Rust CLI or external tools):
 - [x] `cmd_toml` - jaq handles TOML natively (deleted from Python CLI)
