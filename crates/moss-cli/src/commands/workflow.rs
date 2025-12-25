@@ -26,6 +26,20 @@ pub enum WorkflowAction {
         /// Workflow name or path to .toml file
         workflow: String,
     },
+
+    /// Create a new workflow from template
+    New {
+        /// Workflow name (e.g., validate-fix)
+        name: String,
+
+        /// Template to use
+        #[arg(short, long, default_value = "agentic")]
+        template: String,
+
+        /// Overwrite existing workflow
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 /// Dispatch workflow subcommands
@@ -36,6 +50,11 @@ pub fn cmd_workflow(action: WorkflowAction, root: Option<&Path>, json: bool) -> 
             cmd_workflow_run(&workflow, task.as_deref(), root, json)
         }
         WorkflowAction::Show { workflow } => cmd_workflow_show(&workflow, root, json),
+        WorkflowAction::New {
+            name,
+            template,
+            force,
+        } => cmd_workflow_new(&name, &template, force, root, json),
     }
 }
 
@@ -234,4 +253,206 @@ pub fn cmd_workflow_show(workflow: &str, root: Option<&Path>, json: bool) -> i32
             1
         }
     }
+}
+
+/// Workflow templates.
+mod templates {
+    pub const AGENTIC: &str = r#"# {name} workflow - agentic loop with LLM decision-making
+[workflow]
+name = "{name}"
+description = "Agentic workflow for {name}"
+version = "1.0"
+
+[workflow.limits]
+max_turns = 20
+timeout_seconds = 300
+
+[workflow.context]
+strategy = "flat"
+
+[workflow.cache]
+strategy = "in_memory"
+preview_length = 500
+
+[workflow.retry]
+strategy = "exponential"
+max_attempts = 3
+base_delay = 1.0
+max_delay = 60.0
+
+[workflow.llm]
+strategy = "simple"
+model = "claude-sonnet-4-20250514"
+system_prompt = """Commands:
+- view [path] - show directory tree, file skeleton, or symbol
+- edit <file> "task" - apply an edit to a file
+- analyze [--health|--complexity] - analyze codebase
+- done - signal completion
+
+Think between commands. One command per line.
+"""
+"#;
+
+    pub const STEP_BASED: &str = r#"# {name} workflow - sequential steps
+[workflow]
+name = "{name}"
+description = "Step-based workflow for {name}"
+version = "1.0"
+
+[[steps]]
+name = "analyze"
+action = "analyze --health"
+
+[[steps]]
+name = "view"
+action = "view ."
+"#;
+
+    pub const STATE_MACHINE: &str = r#"# {name} workflow - state machine
+[workflow]
+name = "{name}"
+description = "State machine workflow for {name}"
+version = "1.0"
+initial_state = "start"
+
+[workflow.limits]
+max_turns = 10
+
+[[states]]
+name = "start"
+action = "analyze --health"
+
+[[states.transitions]]
+condition = "has_errors"
+next = "fix"
+
+[[states.transitions]]
+next = "done"
+
+[[states]]
+name = "fix"
+action = "edit . 'Fix the errors'"
+
+[[states.transitions]]
+next = "verify"
+
+[[states]]
+name = "verify"
+action = "analyze --health"
+
+[[states.transitions]]
+condition = "has_errors"
+next = "fix"
+
+[[states.transitions]]
+next = "done"
+
+[[states]]
+name = "done"
+terminal = true
+"#;
+
+    pub fn get(name: &str) -> Option<&'static str> {
+        match name {
+            "agentic" => Some(AGENTIC),
+            "step" | "step-based" | "steps" => Some(STEP_BASED),
+            "state" | "state-machine" | "fsm" => Some(STATE_MACHINE),
+            _ => None,
+        }
+    }
+
+    pub fn list() -> &'static [&'static str] {
+        &["agentic", "step-based", "state-machine"]
+    }
+}
+
+/// Create a new workflow from template.
+pub fn cmd_workflow_new(
+    name: &str,
+    template: &str,
+    force: bool,
+    root: Option<&Path>,
+    json: bool,
+) -> i32 {
+    let root = root.unwrap_or_else(|| Path::new("."));
+    let workflows_dir = root.join(".moss").join("workflows");
+    let workflow_path = workflows_dir.join(format!("{}.toml", name));
+
+    // Check if already exists
+    if workflow_path.exists() && !force {
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "error": format!("Workflow '{}' already exists", name),
+                    "path": workflow_path.display().to_string()
+                })
+            );
+        } else {
+            eprintln!("Workflow '{}' already exists at {}", name, workflow_path.display());
+            eprintln!("Use --force to overwrite");
+        }
+        return 1;
+    }
+
+    // Get template
+    let template_content = match templates::get(template) {
+        Some(t) => t,
+        None => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "error": format!("Unknown template: {}", template),
+                        "available": templates::list()
+                    })
+                );
+            } else {
+                eprintln!("Unknown template: {}", template);
+                eprintln!("Available: {}", templates::list().join(", "));
+            }
+            return 1;
+        }
+    };
+
+    // Create directory if needed
+    if let Err(e) = std::fs::create_dir_all(&workflows_dir) {
+        if json {
+            println!("{}", serde_json::json!({"error": e.to_string()}));
+        } else {
+            eprintln!("Failed to create workflows directory: {}", e);
+        }
+        return 1;
+    }
+
+    // Write workflow file
+    let content = template_content.replace("{name}", name);
+    if let Err(e) = std::fs::write(&workflow_path, content) {
+        if json {
+            println!("{}", serde_json::json!({"error": e.to_string()}));
+        } else {
+            eprintln!("Failed to write workflow file: {}", e);
+        }
+        return 1;
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "success": true,
+                "path": workflow_path.display().to_string(),
+                "name": name,
+                "template": template
+            })
+        );
+    } else {
+        println!("Created workflow '{}' at {}", name, workflow_path.display());
+        println!();
+        println!("Next steps:");
+        println!("  1. Edit {}", workflow_path.display());
+        println!("  2. Run with: moss workflow run {}", name);
+    }
+
+    0
 }
