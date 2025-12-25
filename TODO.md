@@ -28,7 +28,7 @@ Run `scripts/missing-grammars.sh` for all 64 remaining arborium grammars.
 - Audit Rust codebase for tuple returns - replace with structs unconditionally
   - Already fixed: `find_symbols` → `SymbolMatch`, `call_graph_stats` → `CallGraphStats`, `get_changed_files` → `ChangedFiles`
   - Also fixed: `IndexedCounts`, `CollapsedChain`, `ParsedPackage`, `ExtractedDeps`
-- Validate node kinds against grammars (test that kinds like "if_statement" exist in grammar)
+- Validate node kinds against grammars: test exists (`validate_node_kinds` in registry.rs) but ignored - 187 invalid kinds to fix. Use `dump_node_kinds` to inspect valid kinds per grammar.
 - Directory context: attach LLM-relevant context to directories (like CLAUDE.md but hierarchical)
 
 **Bugs:**
