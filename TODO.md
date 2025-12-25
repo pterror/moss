@@ -14,9 +14,9 @@ Test Status: 107 passing, 0 failing (moss-languages)
 
 Goal: Delete `packages/` entirely. Single Rust binary, no Python dependency.
 
-**Phase 1: Workflow Engine**
-- [x] Port TOML workflow state machine to Rust (no LLM dependency)
-- [x] Add `rig` crate for LLM support (optional workflow plugin, `--features llm`)
+**Phase 1: Workflow Engine** ✓
+- [x] Port TOML workflow state machine to Rust (`moss workflow {list,run,show}`)
+- [x] Add `rig` crate for LLM support (optional, `--features llm`)
 - [ ] Port LLM calling logic (streaming, tool use) as workflow component
 
 **Phase 2: Audit Python Commands**
@@ -40,13 +40,13 @@ TUI (evaluate):
 - [ ] `cmd_tui` / `cmd_explore` - Textual → ratatui? Or delete?
 
 Delete (redundant with Rust CLI or external tools):
-- [ ] `cmd_toml` - jaq handles TOML natively
-- [ ] `cmd_complexity` - `moss analyze --complexity`
-- [ ] `cmd_deps` - `moss view --deps`
+- [ ] `cmd_toml` - jaq handles TOML natively (expose `moss jq` or document jaq usage)
+- [x] `cmd_complexity` - `moss analyze --complexity`
+- [x] `cmd_deps` - `moss view --deps`
 - [ ] `cmd_cfg` - control flow graph (who uses this?)
-- [ ] `cmd_query` - `moss view` with filters
+- [x] `cmd_query` - `moss view` with filters
 - [ ] `cmd_rag` - duplicates `cmd_search`?
-- [ ] `cmd_metrics` / `cmd_report` / `cmd_overview` - consolidate to one
+- [ ] `cmd_metrics` / `cmd_report` / `cmd_overview` - consolidate to `moss analyze --overview`
 
 Delete (questionable value):
 - [ ] `cmd_mutate` - mutation testing (is it even implemented?)
