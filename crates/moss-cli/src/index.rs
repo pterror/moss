@@ -271,16 +271,8 @@ impl FileIndex {
             return true;
         }
 
-        // Force full walk if stale (>60s) to catch changes in unchecked directories
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        if now - last_indexed > 60 {
-            return true;
-        }
-
         // Check mtimes of common source directories for fast detection
+        // For changes elsewhere, user can run `moss index refresh` or use daemon
         for dir in &["src", "lib", "crates", "packages", "apps", "test", "tests"] {
             let path = self.root.join(dir);
             if path.exists() {
