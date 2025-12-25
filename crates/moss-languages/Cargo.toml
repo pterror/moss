@@ -16,7 +16,8 @@ default = ["all-languages"]
 # Meta-features
 all-languages = [
     "lang-python", "lang-rust", "lang-javascript", "lang-typescript",
-    "lang-go", "lang-java", "lang-kotlin", "lang-c", "lang-cpp", "lang-ruby",
+    "lang-go", "lang-java", "lang-kotlin", "lang-csharp", "lang-swift",
+    "lang-php", "lang-dockerfile", "lang-c", "lang-cpp", "lang-ruby",
     "lang-scala", "lang-vue", "lang-markdown", "lang-json", "lang-yaml",
     "lang-toml", "lang-html", "lang-css", "lang-bash",
 ]
@@ -48,19 +49,19 @@ lang-css = ["arborium/lang-css"]
 lang-bash = ["arborium/lang-bash"]
 
 lang-kotlin = ["arborium/lang-kotlin"]
+lang-csharp = ["arborium/lang-c-sharp"]
+lang-swift = ["arborium/lang-swift"]
+lang-php = ["arborium/lang-php"]
+lang-dockerfile = ["arborium/lang-dockerfile"]
 
-# Future high-priority languages (commented until implemented)
-# lang-swift = ["arborium/lang-swift"]
+# Future languages (commented until implemented)
 # lang-dart = ["arborium/lang-dart"]
-# lang-csharp = ["arborium/lang-c-sharp"]
 # lang-fsharp = ["arborium/lang-fsharp"]
-# lang-php = ["arborium/lang-php"]
 # lang-elixir = ["arborium/lang-elixir"]
 # lang-zig = ["arborium/lang-zig"]
 # lang-lua = ["arborium/lang-lua"]
 # lang-sql = ["arborium/lang-sql"]
 # lang-graphql = ["arborium/lang-graphql"]
-# lang-dockerfile = ["arborium/lang-dockerfile"]
 # lang-hcl = ["arborium/lang-hcl"]
 # lang-svelte = ["arborium/lang-svelte"]
 # lang-scss = ["arborium/lang-scss"]

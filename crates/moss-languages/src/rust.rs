@@ -18,7 +18,7 @@ pub fn get_rust_version() -> Option<String> {
         let version_str = String::from_utf8_lossy(&output.stdout);
         // "rustc 1.75.0 (82e1608df 2023-12-21)" -> "1.75"
         for part in version_str.split_whitespace() {
-            if part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            if part.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 let parts: Vec<&str> = part.split('.').collect();
                 if parts.len() >= 2 {
                     return Some(format!("{}.{}", parts[0], parts[1]));

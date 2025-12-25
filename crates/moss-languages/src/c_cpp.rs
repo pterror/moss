@@ -14,7 +14,7 @@ pub fn get_gcc_version() -> Option<String> {
         for line in version_str.lines() {
             // Look for version number pattern
             for part in line.split_whitespace() {
-                if part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                if part.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                     let ver_parts: Vec<&str> = part.split('.').collect();
                     if ver_parts.len() >= 2 {
                         return Some(format!("{}.{}", ver_parts[0], ver_parts[1]));
@@ -31,7 +31,7 @@ pub fn get_gcc_version() -> Option<String> {
         for line in version_str.lines() {
             if line.contains("clang version") {
                 for part in line.split_whitespace() {
-                    if part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                    if part.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                         let ver_parts: Vec<&str> = part.split('.').collect();
                         if ver_parts.len() >= 2 {
                             return Some(format!("{}.{}", ver_parts[0], ver_parts[1]));

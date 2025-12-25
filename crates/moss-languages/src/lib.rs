@@ -53,6 +53,18 @@ pub mod java;
 #[cfg(feature = "lang-kotlin")]
 pub mod kotlin;
 
+#[cfg(feature = "lang-csharp")]
+pub mod csharp;
+
+#[cfg(feature = "lang-swift")]
+pub mod swift;
+
+#[cfg(feature = "lang-php")]
+pub mod php;
+
+#[cfg(feature = "lang-dockerfile")]
+pub mod dockerfile;
+
 #[cfg(feature = "lang-c")]
 pub mod c;
 
@@ -119,6 +131,18 @@ pub use java::Java;
 
 #[cfg(feature = "lang-kotlin")]
 pub use kotlin::Kotlin;
+
+#[cfg(feature = "lang-csharp")]
+pub use csharp::CSharp;
+
+#[cfg(feature = "lang-swift")]
+pub use swift::Swift;
+
+#[cfg(feature = "lang-php")]
+pub use php::Php;
+
+#[cfg(feature = "lang-dockerfile")]
+pub use dockerfile::Dockerfile;
 
 #[cfg(feature = "lang-c")]
 pub use c::C;

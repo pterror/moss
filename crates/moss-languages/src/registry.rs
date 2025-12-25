@@ -45,6 +45,18 @@ fn init_builtin() {
         #[cfg(feature = "lang-kotlin")]
         register(&crate::kotlin::Kotlin);
 
+        #[cfg(feature = "lang-csharp")]
+        register(&crate::csharp::CSharp);
+
+        #[cfg(feature = "lang-swift")]
+        register(&crate::swift::Swift);
+
+        #[cfg(feature = "lang-php")]
+        register(&crate::php::Php);
+
+        #[cfg(feature = "lang-dockerfile")]
+        register(&crate::dockerfile::Dockerfile);
+
         #[cfg(feature = "lang-c")]
         register(&crate::c::C);
 

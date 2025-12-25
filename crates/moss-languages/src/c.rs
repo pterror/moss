@@ -82,7 +82,7 @@ impl Language for C {
         Some(Symbol {
             name: name.to_string(),
             kind: SymbolKind::Function,
-            signature: format!("{}", name),
+            signature: name.to_string(),
             docstring: None,
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,

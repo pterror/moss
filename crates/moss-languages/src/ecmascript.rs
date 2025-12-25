@@ -647,12 +647,10 @@ fn resolve_deno_npm_import(npm_spec: &str, cache: &Path) -> Option<ResolvedPacka
             (name_ver, None)
         };
         (format!("{}/{}", scope, name), ver)
+    } else if let Some(idx) = npm_spec.rfind('@') {
+        (npm_spec[..idx].to_string(), Some(&npm_spec[idx + 1..]))
     } else {
-        if let Some(idx) = npm_spec.rfind('@') {
-            (npm_spec[..idx].to_string(), Some(&npm_spec[idx + 1..]))
-        } else {
-            (npm_spec.to_string(), None)
-        }
+        (npm_spec.to_string(), None)
     };
 
     let pkg_path = if pkg_name.starts_with('@') {

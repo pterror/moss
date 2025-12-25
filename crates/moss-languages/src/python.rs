@@ -83,9 +83,9 @@ impl PythonPathCache {
                         if name.starts_with("python") && entry.path().is_dir() {
                             let ver = name.trim_start_matches("python");
                             // Check it looks like a version (X.Y)
-                            if ver.contains('.') && ver.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                            if ver.contains('.') && ver.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                                 // Prefer higher versions
-                                if best_version.as_ref().map_or(true, |(v, _)| ver > v.as_str()) {
+                                if best_version.as_ref().is_none_or(|(v, _)| ver > v.as_str()) {
                                     best_version = Some((ver.to_string(), entry.path()));
                                 }
                             }
