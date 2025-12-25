@@ -523,76 +523,6 @@ def cmd_context(args: Namespace) -> int:
     return 0
 
 
-def cmd_search(args: Namespace) -> int:
-    """Semantic search across codebase."""
-    from moss import MossAPI
-
-    out = get_output()
-    directory = Path(args.directory).resolve()
-    if not directory.exists():
-        out.error(f"Directory {directory} does not exist")
-        return 1
-
-    api = MossAPI.for_project(directory)
-
-    async def run_search():
-        # Index if requested
-        if args.index:
-            patterns = args.patterns.split(",") if args.patterns else None
-            count = await api.rag.index(patterns=patterns, force=False)
-            if not args.query:
-                out.success(f"Indexed {count} chunks from {directory}")
-                return None
-
-        if not args.query:
-            out.error("No query provided. Use --query or --index")
-            return None
-
-        # Search
-        return await api.rag.search(
-            args.query,
-            limit=args.limit,
-            mode=args.mode,
-        )
-
-    results = asyncio.run(run_search())
-
-    if results is None:
-        return 0 if args.index else 1
-
-    if not results:
-        out.warning("No results found.")
-        return 0
-
-    if getattr(args, "json", False):
-        json_results = [r.to_dict() for r in results]
-        output_result(json_results, args)
-    else:
-        out.success(f"Found {len(results)} results:")
-        out.blank()
-        for i, r in enumerate(results, 1):
-            location = f"{r.file_path}:{r.line_start}"
-            name = r.symbol_name or r.file_path
-            kind = r.symbol_kind or "file"
-            score = f"{r.score:.2f}"
-
-            out.info(f"{i}. [{kind}] {name}")
-            out.print(f"   Location: {location}")
-            out.print(f"   Score: {score} ({r.match_type})")
-
-            # Show snippet
-            if r.snippet:
-                snippet = r.snippet[:200]
-                if len(r.snippet) > 200:
-                    snippet += "..."
-                snippet_lines = snippet.split("\n")[:3]
-                for line in snippet_lines:
-                    out.print(f"   | {line}")
-            out.blank()
-
-    return 0
-
-
 def cmd_gen(args: Namespace) -> int:
     """Generate interface code from MossAPI introspection."""
     import json as json_mod
@@ -885,11 +815,9 @@ def cmd_rules(args: Namespace) -> int:
     # SARIF output
     sarif_path = getattr(args, "sarif", None)
     if sarif_path:
-        from moss import __version__
-
         config = SARIFConfig(
             tool_name="moss",
-            tool_version=__version__,
+            tool_version="0.1.0",
             base_path=directory,
         )
         sarif = generate_sarif(result, config)
@@ -1169,101 +1097,6 @@ def cmd_diff(args: Namespace) -> int:
     return 0
 
 
-def cmd_check_refs(args: Namespace) -> int:
-    """Check bidirectional references between code and docs."""
-    from moss import MossAPI
-
-    output = setup_output(args)
-    root = Path(getattr(args, "directory", ".")).resolve()
-
-    if not root.exists():
-        output.error(f"Directory not found: {root}")
-        return 1
-
-    staleness_days = getattr(args, "staleness_days", 30)
-    api = MossAPI.for_project(root)
-
-    output.info(f"Checking references in {root.name}...")
-
-    try:
-        result = api.ref_check.check(staleness_days=staleness_days)
-    except Exception as e:
-        output.error(f"Failed to check references: {e}")
-        return 1
-
-    # Output format
-    compact = getattr(args, "compact", False)
-    if compact and not wants_json(args):
-        output.print(result.to_compact())
-    elif wants_json(args):
-        output.data(result.to_dict())
-    else:
-        output.print(result.to_markdown())
-
-    # Exit codes
-    if result.has_errors:
-        return 1
-    if getattr(args, "strict", False) and result.has_warnings:
-        return 1
-
-    return 0
-
-
-def cmd_external_deps(args: Namespace) -> int:
-    """Analyze external dependencies from pyproject.toml/requirements.txt."""
-    from moss import MossAPI
-
-    output = setup_output(args)
-    root = Path(getattr(args, "directory", ".")).resolve()
-
-    if not root.exists():
-        output.error(f"Directory not found: {root}")
-        return 1
-
-    api = MossAPI.for_project(root)
-    resolve = getattr(args, "resolve", False)
-    warn_weight = getattr(args, "warn_weight", 0)
-    check_vulns = getattr(args, "check_vulns", False)
-    check_licenses = getattr(args, "check_licenses", False)
-
-    output.info(f"Analyzing dependencies in {root.name}...")
-
-    try:
-        result = api.external_deps.analyze(
-            resolve=resolve, check_vulns=check_vulns, check_licenses=check_licenses
-        )
-    except Exception as e:
-        output.error(f"Failed to analyze dependencies: {e}")
-        return 1
-
-    if not result.sources:
-        output.warning("No dependency files found (pyproject.toml, requirements.txt)")
-        return 0
-
-    # Output format
-    compact = getattr(args, "compact", False)
-    if compact and not wants_json(args):
-        output.print(result.to_compact())
-    elif wants_json(args):
-        output.data(result.to_dict(weight_threshold=warn_weight))
-    else:
-        output.print(result.to_markdown(weight_threshold=warn_weight))
-
-    # Exit with error if heavy deps found and threshold set
-    if warn_weight > 0 and result.get_heavy_dependencies(warn_weight):
-        return 1
-
-    # Exit with error if vulnerabilities found
-    if check_vulns and result.has_vulnerabilities:
-        return 1
-
-    # Exit with error if license issues found
-    if check_licenses and result.has_license_issues:
-        return 1
-
-    return 0
-
-
 def cmd_roadmap(args: Namespace) -> int:
     """Show project roadmap and progress from TODO.md."""
     from moss_cli.roadmap import display_roadmap, find_todo_md
@@ -1308,43 +1141,6 @@ def cmd_roadmap(args: Namespace) -> int:
         width=width,
         max_items=max_items,
     )
-
-
-def cmd_git_hotspots(args: Namespace) -> int:
-    """Find frequently changed files in git history."""
-    from moss import MossAPI
-
-    output = setup_output(args)
-    root = Path(getattr(args, "directory", ".")).resolve()
-    days = getattr(args, "days", 90)
-
-    if not root.exists():
-        output.error(f"Directory not found: {root}")
-        return 1
-
-    output.info(f"Analyzing git history for {root.name} (last {days} days)...")
-
-    api = MossAPI.for_project(root)
-    try:
-        analysis = api.git_hotspots.analyze(days=days)
-    except Exception as e:
-        output.error(f"Failed to analyze git history: {e}")
-        return 1
-
-    if analysis.error:
-        output.error(analysis.error)
-        return 1
-
-    # Output format
-    compact = getattr(args, "compact", False)
-    if compact and not wants_json(args):
-        output.print(analysis.to_compact())
-    elif wants_json(args):
-        output.data(analysis.to_dict())
-    else:
-        output.print(analysis.to_markdown())
-
-    return 0
 
 
 def cmd_coverage(args: Namespace) -> int:
@@ -1538,154 +1334,6 @@ def cmd_lint(args: Namespace) -> int:
     return 1 if errors > 0 else 0
 
 
-def cmd_checkpoint(args: Namespace) -> int:
-    """Manage checkpoints (shadow branches) for safe code modifications.
-
-    Subcommands:
-    - create: Create a checkpoint with current changes
-    - list: List active checkpoints
-    - diff: Show changes in a checkpoint
-    - merge: Merge checkpoint changes into base branch
-    - abort: Abandon a checkpoint
-    - restore: Revert working directory to checkpoint state
-    """
-    import asyncio
-
-    from moss import MossAPI
-
-    output = setup_output(args)
-    root = Path(".").resolve()
-    action = getattr(args, "action", "list")
-    name = getattr(args, "name", None)
-    message = getattr(args, "message", None)
-
-    # Verify we're in a git repo
-    if not (root / ".git").exists():
-        output.error("Not a git repository")
-        return 1
-
-    api = MossAPI.for_project(root)
-
-    async def run_action() -> int:
-        if action == "create":
-            try:
-                result = await api.git.create_checkpoint(name=name, message=message)
-                output.success(f"Created checkpoint: {result['branch']}")
-                output.info(f"Commit: {result['commit'][:8]}")
-            except Exception as e:
-                output.error(f"Failed to create checkpoint: {e}")
-                return 1
-
-        elif action == "list":
-            try:
-                checkpoints = await api.git.list_checkpoints()
-                if not checkpoints:
-                    output.info("No active checkpoints")
-                else:
-                    output.header("Active Checkpoints")
-                    for cp in checkpoints:
-                        output.print(f"    {cp['name']} ({cp['type']})")
-            except Exception as e:
-                output.error(f"Failed to list checkpoints: {e}")
-                return 1
-
-        elif action == "diff":
-            if not name:
-                output.error("Checkpoint name required for diff")
-                return 1
-            try:
-                result = await api.git.diff_checkpoint(name)
-                if result["diff"]:
-                    output.print(result["diff"])
-                else:
-                    output.info("No differences")
-            except Exception as e:
-                output.error(f"Failed to get diff: {e}")
-                return 1
-
-        elif action == "merge":
-            if not name:
-                output.error("Checkpoint name required for merge")
-                return 1
-            try:
-                result = await api.git.merge_checkpoint(name, message=message)
-                output.success(f"Merged checkpoint {name}")
-                output.info(f"Commit: {result['commit'][:8]}")
-            except Exception as e:
-                output.error(f"Failed to merge: {e}")
-                return 1
-
-        elif action == "abort":
-            if not name:
-                output.error("Checkpoint name required for abort")
-                return 1
-            try:
-                await api.git.abort_checkpoint(name)
-                output.success(f"Aborted checkpoint: {name}")
-            except Exception as e:
-                output.error(f"Failed to abort: {e}")
-                return 1
-
-        elif action == "restore":
-            if not name:
-                output.error("Checkpoint name required for restore")
-                return 1
-            try:
-                result = await api.git.restore_checkpoint(name)
-                output.success(f"Restored checkpoint: {name}")
-                output.info(f"Now at commit: {result['commit'][:8]}")
-            except Exception as e:
-                output.error(f"Failed to restore: {e}")
-                return 1
-
-        else:
-            output.error(f"Unknown action: {action}")
-            return 1
-
-        return 0
-
-    return asyncio.run(run_action())
-
-
-def cmd_security(args: Namespace) -> int:
-    """Run security analysis with multiple tools."""
-    from moss import MossAPI
-
-    from moss_intelligence.security import format_security_analysis
-
-    output = setup_output(args)
-    root = Path(getattr(args, "directory", ".")).resolve()
-    tools = getattr(args, "tools", None)
-    min_severity = getattr(args, "severity", "low")
-
-    if tools:
-        tools = [t.strip() for t in tools.split(",")]
-
-    if not root.exists():
-        output.error(f"Directory not found: {root}")
-        return 1
-
-    output.info(f"Running security analysis on {root.name}...")
-
-    api = MossAPI.for_project(root)
-    try:
-        analysis = api.security.analyze(tools=tools, min_severity=min_severity)
-    except Exception as e:
-        output.error(f"Security analysis failed: {e}")
-        return 1
-
-    if wants_json(args):
-        output.data(analysis.to_dict())
-    else:
-        output.print(format_security_analysis(analysis))
-
-    # Return non-zero if critical/high findings
-    if analysis.critical_count > 0 or analysis.high_count > 0:
-        return 1
-
-    return 0
-
-
 def cmd_help(args: Namespace) -> int:
     """Show detailed help for commands."""
     from moss_cli.help import (
@@ -1840,31 +1488,6 @@ def create_parser() -> argparse.ArgumentParser:
     )
     context_parser.add_argument("path", help="Python file to analyze")
     context_parser.set_defaults(func=cmd_context)
-
-    # search command
-    search_parser = subparsers.add_parser("search", help="Semantic search across codebase")
-    search_parser.add_argument("--query", "-q", help="Search query (natural language or code)")
-    search_parser.add_argument(
-        "--directory", "-C", default=".", help="Directory to search (default: .)"
-    )
-    search_parser.add_argument(
-        "--index", "-i", action="store_true", help="Index files before searching"
-    )
-    search_parser.add_argument(
-        "--persist", "-p", action="store_true", help="Persist index to disk (uses ChromaDB)"
-    )
-    search_parser.add_argument("--patterns", help="Glob patterns to include (comma-separated)")
-    search_parser.add_argument("--exclude", help="Glob patterns to exclude (comma-separated)")
-    search_parser.add_argument(
-        "--limit", "-n", type=int, default=10, help="Max results (default: 10)"
-    )
-    search_parser.add_argument(
-        "--mode",
-        choices=["hybrid", "tfidf", "embedding"],
-        default="hybrid",
-        help="Search mode (default: hybrid)",
-    )
-    search_parser.set_defaults(func=cmd_search)
 
     # gen command
     gen_parser = subparsers.add_parser(
@@ -2115,81 +1738,6 @@ def create_parser() -> argparse.ArgumentParser:
     )
     edit_parser.set_defaults(func=cmd_edit)
 
-    # check-refs command
-    check_refs_parser = subparsers.add_parser(
-        "check-refs", help="Check bidirectional references between code and docs"
-    )
-    check_refs_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Directory to check (default: current)",
-    )
-    check_refs_parser.add_argument(
-        "--staleness-days",
-        type=int,
-        default=30,
-        metavar="N",
-        help="Warn if code changed more than N days after docs (default: 30)",
-    )
-    check_refs_parser.add_argument(
-        "--strict",
-        "-s",
-        action="store_true",
-        help="Exit with error on warnings (stale refs)",
-    )
-    check_refs_parser.add_argument(
-        "--json",
-        "-j",
-        action="store_true",
-        help="Output as JSON",
-    )
-    check_refs_parser.set_defaults(func=cmd_check_refs)
-
-    # external-deps command
-    external_deps_parser = subparsers.add_parser(
-        "external-deps", help="Analyze external dependencies (PyPI packages)"
-    )
-    external_deps_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Directory to analyze (default: current)",
-    )
-    external_deps_parser.add_argument(
-        "--resolve",
-        "-r",
-        action="store_true",
-        help="Resolve transitive dependencies (requires pip)",
-    )
-    external_deps_parser.add_argument(
-        "--json",
-        "-j",
-        action="store_true",
-        help="Output as JSON",
-    )
-    external_deps_parser.add_argument(
-        "--warn-weight",
-        "-w",
-        type=int,
-        default=0,
-        metavar="N",
-        help="Warn and exit 1 if any dependency has weight >= N (requires --resolve)",
-    )
-    external_deps_parser.add_argument(
-        "--check-vulns",
-        "-v",
-        action="store_true",
-        help="Check for known vulnerabilities via OSV API (exit 1 if found)",
-    )
-    external_deps_parser.add_argument(
-        "--check-licenses",
-        "-l",
-        action="store_true",
-        help="Check license compatibility (exit 1 if issues found)",
-    )
-    external_deps_parser.set_defaults(func=cmd_external_deps)
-
     # roadmap command
     roadmap_parser = subparsers.add_parser(
         "roadmap", help="Show project roadmap and progress from TODO.md"
@@ -2244,25 +1792,6 @@ def create_parser() -> argparse.ArgumentParser:
     )
     roadmap_parser.set_defaults(func=cmd_roadmap)
 
-    # git-hotspots command
-    hotspots_parser = subparsers.add_parser(
-        "git-hotspots", help="Find frequently changed files in git history"
-    )
-    hotspots_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Directory to analyze (default: current)",
-    )
-    hotspots_parser.add_argument(
-        "--days",
-        "-d",
-        type=int,
-        default=90,
-        help="Number of days to analyze (default: 90)",
-    )
-    hotspots_parser.set_defaults(func=cmd_git_hotspots)
-
     # coverage command
     coverage_parser = subparsers.add_parser("coverage", help="Show test coverage statistics")
     coverage_parser.add_argument(
@@ -2306,53 +1835,6 @@ def create_parser() -> argparse.ArgumentParser:
     )
     lint_parser.set_defaults(func=cmd_lint)
 
-    # checkpoint command
-    checkpoint_parser = subparsers.add_parser(
-        "checkpoint", help="Manage checkpoints (shadow branches) for safe code modifications"
-    )
-    checkpoint_parser.add_argument(
-        "action",
-        nargs="?",
-        default="list",
-        choices=["create", "list", "diff", "merge", "abort", "restore"],
-        help="Action to perform (default: list)",
-    )
-    checkpoint_parser.add_argument(
-        "name",
-        nargs="?",
-        help="Checkpoint name (required for diff, merge, abort)",
-    )
-    checkpoint_parser.add_argument(
-        "--message",
-        "-m",
-        help="Message for create/merge operations",
-    )
-    checkpoint_parser.set_defaults(func=cmd_checkpoint)
-
-    # security command
-    security_parser = subparsers.add_parser(
-        "security", help="Run security analysis with multiple tools"
-    )
-    security_parser.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Directory to analyze (default: current)",
-    )
-    security_parser.add_argument(
-        "--tools",
-        "-t",
-        help="Comma-separated list of tools to use (default: all available)",
-    )
-    security_parser.add_argument(
-        "--severity",
-        "-s",
-        choices=["low", "medium", "high", "critical"],
-        default="low",
-        help="Minimum severity to report (default: low)",
-    )
-    security_parser.set_defaults(func=cmd_security)
-
     # help command (with examples and categories)
     help_parser = subparsers.add_parser(
         "help", help="Show detailed help for commands with examples"
@@ -2367,124 +1849,6 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_analyze_python(argv: list[str]) -> int:
-    """Handle Python-only analyze flags (--summary, --check-docs, --check-todos)."""
-    import argparse
-    import json
-
-    from moss import MossAPI
-
-    parser = argparse.ArgumentParser(prog="moss analyze")
-    parser.add_argument("target", nargs="?", default=".", help="Target path")
-    parser.add_argument("--summary", action="store_true", help="Generate summary")
-    parser.add_argument("--check-docs", action="store_true", help="Check documentation")
-    parser.add_argument("--check-todos", action="store_true", help="Check TODOs")
-    parser.add_argument("--json", action="store_true", help="JSON output")
-    parser.add_argument("--compact", action="store_true", help="Compact output")
-    parser.add_argument("--strict", action="store_true", help="Strict mode (exit 1 on warnings)")
-    parser.add_argument("--check-links", action="store_true", help="Check doc links")
-    parser.add_argument("--limit", type=int, default=10, help="Max items per section (default: 10)")
-    parser.add_argument("--all", action="store_true", help="Show all items (override --limit)")
-    parser.add_argument("--changed", action="store_true", help="Only check git-modified files")
-    args = parser.parse_args(argv)
-
-    root = Path(args.target).resolve()
-    if not root.exists():
-        print(f"Error: Path not found: {root}", file=sys.stderr)
-        return 1
-
-    api = MossAPI.for_project(root)
-
-    if args.summary:
-        from moss_intelligence.summarize import Summarizer
-
-        summarizer = Summarizer()
-        if root.is_file():
-            result = summarizer.summarize_file(root)
-        else:
-            result = summarizer.summarize_project(root)
-
-        if result is None:
-            print(f"Error: Failed to summarize {root}", file=sys.stderr)
-            return 1
-
-        if args.json:
-            print(json.dumps(result.to_dict(), indent=2))
-        elif args.compact:
-            print(result.to_compact())
-        else:
-            print(result.to_markdown())
-        return 0
-
-    # Determine limit: None if --all, otherwise use --limit value
-    limit = None if getattr(args, "all", False) else args.limit
-
-    # Get git-changed files if --changed flag is set
-    changed_files: set[str] | None = None
-    if args.changed:
-        import subprocess
-
-        try:
-            # Get modified files (staged + unstaged + untracked)
-            result_git = subprocess.run(
-                ["git", "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                cwd=root,
-            )
-            if result_git.returncode == 0:
-                changed_files = set()
-                for line in result_git.stdout.splitlines():
-                    if len(line) > 3:
-                        # Extract path from git status output (format: "XY filename")
-                        path = line[3:].strip()
-                        # Handle renamed files
-                        if " -> " in path:
-                            path = path.split(" -> ")[1]
-                        changed_files.add(str(root / path))
-        except (subprocess.SubprocessError, OSError):
-            pass
-
-    if args.check_docs:
-        result = api.health.check_docs(check_links=args.check_links)
-        # Filter to changed files if requested
-        if changed_files is not None:
-            result.issues = [i for i in result.issues if i.file and str(i.file) in changed_files]
-        if args.json:
-            print(json.dumps(result.to_dict(), indent=2))
-        elif args.compact:
-            print(result.to_compact())
-        else:
-            print(result.to_markdown(limit=limit))
-        if result.has_errors:
-            return 1
-        if args.strict and result.has_warnings:
-            return 1
-        return 0
-
-    if args.check_todos:
-        result = api.health.check_todos()
-        # Filter to changed files if requested
-        if changed_files is not None:
-            result.code_todos = [
-                t for t in result.code_todos if str(root / t.source) in changed_files
-            ]
-        if args.json:
-            print(json.dumps(result.to_dict(), indent=2))
-        elif args.compact:
-            print(result.to_compact())
-        else:
-            print(result.to_markdown(limit=limit))
-        if args.strict and result.orphan_count > 0:
-            return 1
-        return 0
-
-    # Fallback to Rust for other flags
-    from moss_intelligence.rust_shim import passthrough
-
-    return passthrough("analyze", argv)
-
-
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     if argv is None:
@@ -2493,15 +1857,8 @@ def main(argv: list[str] | None = None) -> int:
     # Commands that delegate entirely to Rust CLI
     RUST_PASSTHROUGH = {"view", "analyze", "package", "grep", "sessions", "index", "daemon", "update"}
 
-    # Python-only analyze flags (intercept before Rust passthrough)
-    PYTHON_ANALYZE_FLAGS = {"--summary", "--check-docs", "--check-todos"}
-
     # Check for passthrough before argparse to avoid double-parsing
     if argv and argv[0] in RUST_PASSTHROUGH:
-        # Intercept analyze with Python-only flags
-        if argv[0] == "analyze" and any(f in argv for f in PYTHON_ANALYZE_FLAGS):
-            return _cmd_analyze_python(argv[1:])
-
         from moss_intelligence.rust_shim import passthrough
 
         return passthrough(argv[0], argv[1:])
