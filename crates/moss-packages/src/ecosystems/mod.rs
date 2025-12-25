@@ -1,24 +1,53 @@
 //! Ecosystem implementations.
 
 mod cargo;
+mod conan;
+mod composer;
+mod gem;
+mod go;
+mod hex;
+mod maven;
+mod nix;
 mod npm;
+mod nuget;
 mod python;
 
 use crate::Ecosystem;
 use std::path::Path;
 
 pub use cargo::Cargo;
+pub use conan::Conan;
+pub use composer::Composer;
+pub use gem::Gem;
+pub use go::Go;
+pub use hex::Hex;
+pub use maven::Maven;
+pub use nix::Nix;
 pub use npm::Npm;
+pub use nuget::Nuget;
 pub use python::Python;
 
 /// All registered ecosystems.
-static ECOSYSTEMS: &[&dyn Ecosystem] = &[&Cargo, &Npm, &Python];
+static ECOSYSTEMS: &[&dyn Ecosystem] = &[
+    &Cargo, &Npm, &Python, &Go, &Hex, &Gem, &Composer, &Maven, &Nuget, &Nix, &Conan,
+];
 
 /// Detect ecosystem from project files.
 pub fn detect(project_root: &Path) -> Option<&'static dyn Ecosystem> {
     for ecosystem in ECOSYSTEMS {
         for manifest in ecosystem.manifest_files() {
-            if project_root.join(manifest).exists() {
+            if manifest.contains('*') {
+                // Glob pattern - check if any matching file exists
+                if let Some(pattern) = manifest.strip_prefix('*') {
+                    if let Ok(entries) = std::fs::read_dir(project_root) {
+                        for entry in entries.flatten() {
+                            if entry.file_name().to_string_lossy().ends_with(pattern) {
+                                return Some(*ecosystem);
+                            }
+                        }
+                    }
+                }
+            } else if project_root.join(manifest).exists() {
                 return Some(*ecosystem);
             }
         }

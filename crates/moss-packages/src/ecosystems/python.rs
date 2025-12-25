@@ -36,8 +36,7 @@ impl Ecosystem for Python {
     }
 
     fn tools(&self) -> &'static [&'static str] {
-        // PyPI API doesn't need any tool, but we list them for detection
-        &["uv", "pip", "poetry", "pipenv", "pdm"]
+        &["curl"] // Uses PyPI API
     }
 
     fn fetch_info(&self, package: &str, _tool: &str) -> Result<PackageInfo, PackageError> {

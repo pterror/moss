@@ -1,0 +1,137 @@
+//! Composer (PHP) ecosystem.
+
+use crate::{Dependency, Ecosystem, LockfileManager, PackageError, PackageInfo};
+use std::process::Command;
+
+pub struct Composer;
+
+impl Ecosystem for Composer {
+    fn name(&self) -> &'static str {
+        "composer"
+    }
+
+    fn manifest_files(&self) -> &'static [&'static str] {
+        &["composer.json"]
+    }
+
+    fn lockfiles(&self) -> &'static [LockfileManager] {
+        &[LockfileManager {
+            filename: "composer.lock",
+            manager: "composer",
+        }]
+    }
+
+    fn tools(&self) -> &'static [&'static str] {
+        &["curl"] // Uses packagist.org API
+    }
+
+    fn fetch_info(&self, package: &str, _tool: &str) -> Result<PackageInfo, PackageError> {
+        fetch_packagist_info(package)
+    }
+}
+
+fn fetch_packagist_info(package: &str) -> Result<PackageInfo, PackageError> {
+    let url = format!("https://packagist.org/packages/{}.json", package);
+
+    let output = Command::new("curl")
+        .args(["-sS", "-f", &url])
+        .output()
+        .map_err(|e| PackageError::ToolFailed(format!("curl failed: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(PackageError::NotFound(package.to_string()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let v: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| PackageError::ParseError(format!("invalid JSON: {}", e)))?;
+
+    let pkg = v
+        .get("package")
+        .ok_or_else(|| PackageError::ParseError("missing package field".to_string()))?;
+
+    let name = pkg
+        .get("name")
+        .and_then(|n| n.as_str())
+        .unwrap_or(package)
+        .to_string();
+
+    let description = pkg
+        .get("description")
+        .and_then(|d| d.as_str())
+        .map(String::from);
+
+    let repository = pkg
+        .get("repository")
+        .and_then(|r| r.as_str())
+        .map(String::from);
+
+    // Get latest version from versions object
+    let versions = pkg.get("versions").and_then(|v| v.as_object());
+
+    let (version, license, dependencies) = if let Some(vers) = versions {
+        // Find latest non-dev version
+        let latest = vers
+            .iter()
+            .filter(|(k, _)| !k.contains("dev") && !k.starts_with("v"))
+            .max_by(|(a, _), (b, _)| {
+                // Simple version comparison
+                a.cmp(b)
+            })
+            .or_else(|| vers.iter().next());
+
+        if let Some((ver, data)) = latest {
+            let lic = data
+                .get("license")
+                .and_then(|l| l.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|l| l.as_str())
+                .map(String::from);
+
+            let mut deps = Vec::new();
+            if let Some(require) = data.get("require").and_then(|r| r.as_object()) {
+                for (dep_name, ver_req) in require {
+                    // Skip PHP version requirements
+                    if dep_name == "php" || dep_name.starts_with("ext-") {
+                        continue;
+                    }
+                    deps.push(Dependency {
+                        name: dep_name.clone(),
+                        version_req: ver_req.as_str().map(String::from),
+                        optional: false,
+                    });
+                }
+            }
+            if let Some(require_dev) = data.get("require-dev").and_then(|r| r.as_object()) {
+                for (dep_name, ver_req) in require_dev {
+                    deps.push(Dependency {
+                        name: dep_name.clone(),
+                        version_req: ver_req.as_str().map(String::from),
+                        optional: true,
+                    });
+                }
+            }
+
+            (ver.clone(), lic, deps)
+        } else {
+            (String::new(), None, Vec::new())
+        }
+    } else {
+        (String::new(), None, Vec::new())
+    };
+
+    if version.is_empty() {
+        return Err(PackageError::ParseError("no versions found".to_string()));
+    }
+
+    Ok(PackageInfo {
+        name,
+        version,
+        description,
+        license,
+        homepage: repository.clone(), // Packagist doesn't have separate homepage
+        repository,
+        features: Vec::new(),
+        dependencies,
+    })
+}

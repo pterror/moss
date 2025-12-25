@@ -7,9 +7,11 @@ First release. See `docs/` for design docs and `README.md` for usage.
 ### Package Registry Queries
 
 New `moss package` command queries package registries without web search:
-- **moss-packages crate**: Ecosystem trait with implementations for cargo, npm, python
-- Auto-detection from manifest files (Cargo.toml → cargo, package.json → npm, pyproject.toml → python)
-- Tool detection from lockfiles with fallback to fastest available (e.g., bun → pnpm → yarn → npm)
+- **moss-packages crate**: Ecosystem trait with implementations for 11 ecosystems
+- **Ecosystems**: cargo, npm, python, go, hex, gem, composer, maven, nuget, nix, conan
+- Auto-detection from manifest files (Cargo.toml → cargo, package.json → npm, etc.)
+- Tool detection from lockfiles with fallback to fastest available
+- Most ecosystems use HTTP APIs directly (no local tool required)
 - Unified output: name, version, description, license, features, dependencies
 - `--json` for structured output
 
