@@ -4,10 +4,15 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-1. Daemon integration: complete FileIndex API methods
-2. LSP refactor actions (rename symbol across files)
-3. Cross-language reference tracking (Python ↔ Rust)
-4. Consolidate skeleton.rs and symbols.rs
+1. Consolidate skeleton.rs and symbols.rs
+   - Both use `Language::extract_symbols()` from moss-languages
+   - skeleton.rs: nested children, signatures, docstrings → for `moss view`
+   - symbols.rs: flat parent refs, complexity → for indexing/analysis
+   - Could share extraction, split at processing stage
+   - See Code Quality backlog item for details
+2. Daemon integration: complete FileIndex API methods
+3. LSP refactor actions (rename symbol across files)
+4. Cross-language reference tracking (Python ↔ Rust)
 
 Test Status: 107 passing, 0 failing (moss-languages)
 
