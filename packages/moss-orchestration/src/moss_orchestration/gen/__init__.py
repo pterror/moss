@@ -7,7 +7,6 @@ This module provides automatic interface generation from the MossAPI:
 - HTTP: Generate FastAPI routes from API methods
 - LSP: Generate workspace commands for Language Server Protocol
 - MCP: Generate Model Context Protocol tools from API methods
-- TUI: Generate Textual terminal UI from API methods
 - OpenAPI: Generate OpenAPI specification from API
 """
 
@@ -27,7 +26,6 @@ from moss_orchestration.gen.introspect import (
 )
 from moss_orchestration.gen.lsp import LSPGenerator, generate_lsp_commands, get_command_list
 from moss_orchestration.gen.mcp import MCPGenerator, generate_mcp, generate_mcp_definitions
-from moss_orchestration.gen.tui import TUIGenerator, generate_tui_groups, run_tui
 
 __all__ = [
     "APIMethod",
@@ -39,7 +37,6 @@ __all__ = [
     "LazyAPIExecutor",
     "MCPGenerator",
     "SubAPI",
-    "TUIGenerator",
     "generate_cli",
     "generate_compact_by_category",
     "generate_compact_tools",
@@ -50,8 +47,6 @@ __all__ = [
     "generate_openapi",
     "generate_proto",
     "generate_servicer_code",
-    "generate_tui_groups",
     "get_command_list",
     "introspect_api",
-    "run_tui",
 ]
