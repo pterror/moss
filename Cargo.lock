@@ -2348,6 +2348,7 @@ dependencies = [
  "jaq-std",
  "moss-core",
  "moss-languages",
+ "moss-packages",
  "notify",
  "nucleo-matcher",
  "rayon",
@@ -2378,6 +2379,14 @@ dependencies = [
  "arborium",
  "moss-core",
  "rusqlite",
+ "serde_json",
+]
+
+[[package]]
+name = "moss-packages"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "serde_json",
 ]
 

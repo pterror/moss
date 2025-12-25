@@ -280,6 +280,20 @@ enum Commands {
         #[arg(short, long, default_value = "20")]
         limit: usize,
     },
+
+    /// Query package registry for package information
+    Package {
+        /// Package name to query
+        package: String,
+
+        /// Force specific ecosystem (cargo, npm, python)
+        #[arg(short, long)]
+        ecosystem: Option<String>,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long)]
+        root: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -418,6 +432,16 @@ fn main() {
                 commands::sessions::cmd_sessions_list(project.as_deref(), limit, cli.json)
             }
         }
+        Commands::Package {
+            package,
+            ecosystem,
+            root,
+        } => commands::package::cmd_package(
+            &package,
+            ecosystem.as_deref(),
+            root.as_deref(),
+            cli.json,
+        ),
     };
 
     std::process::exit(exit_code);

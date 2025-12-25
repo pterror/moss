@@ -1,0 +1,9 @@
+[package]
+name = "moss-packages"
+version = "0.1.0"
+edition = "2021"
+description = "Package registry queries for multiple ecosystems"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

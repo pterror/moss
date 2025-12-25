@@ -46,6 +46,7 @@ nucleo-matcher.workspace = true
 rusqlite.workspace = true
 moss-core.workspace = true
 moss-languages = { path = "../moss-languages", default-features = false }
+moss-packages = { path = "../moss-packages" }
 grep-matcher.workspace = true
 grep-regex.workspace = true
 grep-searcher.workspace = true
