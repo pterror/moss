@@ -14,6 +14,7 @@ mod overview;
 mod parsers;
 mod path_resolve;
 mod paths;
+mod serve;
 mod sessions;
 mod skeleton;
 mod symbols;
@@ -311,6 +312,32 @@ enum Commands {
         #[arg(short, long, global = true)]
         root: Option<PathBuf>,
     },
+
+    /// Start a moss server (MCP, HTTP, LSP)
+    Serve {
+        #[command(subcommand)]
+        protocol: ServeProtocol,
+
+        /// Root directory (defaults to current directory)
+        #[arg(short, long, global = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServeProtocol {
+    /// Start MCP server for LLM integration (stdio transport)
+    Mcp,
+
+    /// Start HTTP server (REST API)
+    Http {
+        /// Port to listen on
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+    },
+
+    /// Start LSP server for IDE integration
+    Lsp,
 }
 
 fn main() {
@@ -464,6 +491,17 @@ fn main() {
         Commands::Workflow { action, root } => {
             commands::workflow::cmd_workflow(action, root.as_deref(), cli.json)
         }
+        Commands::Serve { protocol, root } => match protocol {
+            ServeProtocol::Mcp => serve::mcp::cmd_serve_mcp(root.as_deref(), cli.json),
+            ServeProtocol::Http { port } => {
+                eprintln!("HTTP server not yet implemented (port {})", port);
+                1
+            }
+            ServeProtocol::Lsp => {
+                eprintln!("LSP server not yet implemented");
+                1
+            }
+        },
     };
 
     std::process::exit(exit_code);

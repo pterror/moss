@@ -15,8 +15,8 @@ Test Status: 107 passing, 0 failing (moss-languages)
 Goal: Delete `packages/` entirely. Single Rust binary, no Python dependency.
 
 **Phase 1: Workflow Engine**
-- [ ] Port TOML workflow state machine to Rust (no LLM dependency)
-- [ ] Add `rig` crate for LLM support (optional workflow plugin)
+- [x] Port TOML workflow state machine to Rust (no LLM dependency)
+- [x] Add `rig` crate for LLM support (optional workflow plugin, `--features llm`)
 - [ ] Port LLM calling logic (streaming, tool use) as workflow component
 
 **Phase 2: Audit Python Commands**
@@ -31,9 +31,10 @@ Core (port to Rust):
 - `cmd_agent` = `moss workflow run dwim`, not a separate command
 
 Servers (port to Rust):
-- [ ] `cmd_mcp_server` - MCP protocol (mcp-rust-sdk exists)
-- [ ] `cmd_acp_server` - ACP protocol
-- [ ] `cmd_lsp` - LSP server
+- [x] `moss serve {mcp,http,lsp}` - command structure added
+- [ ] `moss serve mcp` - rmcp 0.12 API needs investigation (scaffold exists, `--features mcp`)
+- [ ] `moss serve http` - REST API (consider exposing commands as library first)
+- [ ] `moss serve lsp` - LSP server
 
 TUI (evaluate):
 - [ ] `cmd_tui` / `cmd_explore` - Textual → ratatui? Or delete?
@@ -54,7 +55,7 @@ Delete (questionable value):
 
 Consolidate to subcommands:
 - [ ] `cmd_analyze_session` / `cmd_telemetry` / `cmd_extract_preferences` → `moss session {analyze,telemetry,prefs}`
-- [ ] `cmd_mcp_server` / `cmd_acp_server` / `cmd_lsp` → `moss serve {mcp,acp,lsp}`
+- [x] `cmd_mcp_server` / `cmd_acp_server` / `cmd_lsp` → `moss serve {mcp,http,lsp}`
 
 **Phase 3: Delete Python**
 - [ ] Remove `packages/` directory
