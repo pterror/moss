@@ -245,54 +245,6 @@ impl FileIndex {
         &self.conn
     }
 
-    /// Fast heuristic check: are there likely any changes?
-    /// Checks index emptiness, staleness, and key directory mtimes.
-    fn likely_has_changes(&self) -> bool {
-        // Check if index is empty
-        let file_count: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))
-            .unwrap_or(0);
-        if file_count == 0 {
-            return true;
-        }
-
-        let last_indexed: i64 = self
-            .conn
-            .query_row(
-                "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'last_indexed'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
-        // If never indexed, need refresh
-        if last_indexed == 0 {
-            return true;
-        }
-
-        // Check mtimes of common source directories for fast detection
-        // For changes elsewhere, user can run `moss index refresh` or use daemon
-        for dir in &["src", "lib", "crates", "packages", "apps", "test", "tests"] {
-            let path = self.root.join(dir);
-            if path.exists() {
-                if let Ok(meta) = path.metadata() {
-                    if let Ok(mtime) = meta.modified() {
-                        let mtime_secs = mtime
-                            .duration_since(UNIX_EPOCH)
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0);
-                        if mtime_secs > last_indexed {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
     /// Get files that have changed since last index
     pub fn get_changed_files(&self) -> rusqlite::Result<ChangedFiles> {
         let mut result = ChangedFiles::default();
@@ -361,12 +313,89 @@ impl FileIndex {
         Ok(result)
     }
 
+    /// Check if refresh is needed using fast heuristics.
+    /// Returns true if changes are likely.
+    fn needs_refresh(&self) -> bool {
+        let last_indexed: i64 = self
+            .conn
+            .query_row(
+                "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'last_indexed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        // Never indexed
+        if last_indexed == 0 {
+            return true;
+        }
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        // Allow 60s staleness - don't check on every call
+        if now - last_indexed < 60 {
+            return false;
+        }
+
+        // Check mtimes of top-level entries (catches new/deleted files)
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with('.') {
+                    continue;
+                }
+                if let Ok(meta) = entry.metadata() {
+                    if let Ok(mtime) = meta.modified() {
+                        let mtime_secs = mtime
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        if mtime_secs > last_indexed {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sample some indexed files to catch modifications
+        // Check ~100 files spread across the index
+        if let Ok(mut stmt) = self
+            .conn
+            .prepare("SELECT path, mtime FROM files WHERE is_dir = 0 ORDER BY RANDOM() LIMIT 100")
+        {
+            if let Ok(rows) = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }) {
+                for row in rows.flatten() {
+                    let (path, indexed_mtime) = row;
+                    let full_path = self.root.join(&path);
+                    if let Ok(meta) = full_path.metadata() {
+                        if let Ok(mtime) = meta.modified() {
+                            let current_mtime = mtime
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0);
+                            if current_mtime > indexed_mtime {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     /// Refresh only files that have changed (faster than full refresh)
     /// Returns number of files updated
     pub fn incremental_refresh(&mut self) -> rusqlite::Result<usize> {
-        // Fast path: check if any common source directories have changed
-        // This avoids expensive full filesystem walk when nothing changed
-        if !self.likely_has_changes() {
+        if !self.needs_refresh() {
             return Ok(0);
         }
 
