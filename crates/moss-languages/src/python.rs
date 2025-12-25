@@ -395,7 +395,7 @@ impl Language for Python {
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "async_function_definition"]
+        &["function_definition"]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
@@ -407,7 +407,7 @@ impl Language for Python {
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "async_function_definition", "class_definition"]
+        &["function_definition", "class_definition"]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -443,7 +443,6 @@ impl Language for Python {
             "with_statement",
             "match_statement",
             "function_definition",
-            "async_function_definition",
             "class_definition",
         ]
     }
@@ -483,7 +482,10 @@ impl Language for Python {
         // Skip private methods unless they're dunder methods
         // (visibility filtering can be done by caller)
 
-        let is_async = node.kind() == "async_function_definition";
+        // Check for async keyword as first child token
+        let is_async = node.child(0)
+            .map(|c| &content[c.byte_range()] == "async")
+            .unwrap_or(false);
         let prefix = if is_async { "async def" } else { "def" };
 
         let params = node
@@ -684,7 +686,7 @@ impl Language for Python {
         let line = node.start_position().row + 1;
 
         match node.kind() {
-            "function_definition" | "async_function_definition" => {
+            "function_definition" => {
                 if let Some(name) = self.node_name(node, content) {
                     if !name.starts_with('_') {
                         return vec![Export {
@@ -975,7 +977,7 @@ mod tests {
     fn test_python_function_kinds() {
         let support = Python;
         assert!(support.function_kinds().contains(&"function_definition"));
-        assert!(support.function_kinds().contains(&"async_function_definition"));
+        // async functions are function_definition with "async" keyword as first child
     }
 
     #[test]

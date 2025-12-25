@@ -589,3 +589,33 @@ fn collect_symbols(
 6. Add tests
 
 Total: ~60 lines of code vs ~200+ lines scattered across 8 files.
+
+### Fixing Invalid Node Kinds
+
+The `validate_node_kinds` test in `registry.rs` checks that all node kind strings returned by Language trait methods actually exist in the tree-sitter grammar. Currently 187 invalid kinds (test is `#[ignore]`).
+
+**Workflow to fix a language:**
+
+```bash
+# 1. See which kinds are invalid for a language
+cargo test -p moss-languages validate_node_kinds -- --ignored 2>&1 | grep "Python:"
+
+# 2. Dump valid node kinds for that grammar
+DUMP_GRAMMAR=python cargo test -p moss-languages dump_node_kinds -- --nocapture --ignored
+
+# 3. Find the correct node kind name
+# e.g., "async_function_definition" doesn't exist, but "function_definition" does
+# Check if the grammar uses a different name or if the concept doesn't exist
+
+# 4. Update the language file (e.g., python.rs)
+# Replace invalid kind with correct one, or remove if not applicable
+
+# 5. Re-run validation to confirm fix
+cargo test -p moss-languages validate_node_kinds -- --ignored 2>&1 | grep "Python:"
+```
+
+**Common patterns:**
+- `async_function_definition` → often just `function_definition` (async is an attribute)
+- `switch_statement` → might be `expression_switch_statement` or `type_switch_statement`
+- `*_declaration` vs `*_definition` - grammars vary
+- Some concepts don't exist in all grammars (e.g., no `actor` in most languages)

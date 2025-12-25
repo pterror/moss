@@ -180,9 +180,9 @@ mod tests {
     fn dump_node_kinds() {
         let store = GrammarStore::new();
         // Change this to the grammar you want to inspect
-        let grammar_name = "python";
+        let grammar_name = std::env::var("DUMP_GRAMMAR").unwrap_or_else(|_| "python".to_string());
 
-        let grammar = store.get(grammar_name).expect("grammar not found");
+        let grammar = store.get(&grammar_name).expect("grammar not found");
         let ts_lang = grammar.language();
 
         println!("\n=== Valid node kinds for '{}' ===\n", grammar_name);
