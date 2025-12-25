@@ -208,7 +208,9 @@ pub trait Ecosystem: Send + Sync {
             query.version = self.installed_version(&query.name, project_root);
         }
 
-        let tool = self.detect_tool(project_root).ok_or(PackageError::NoToolFound)?;
+        let tool = self
+            .detect_tool(project_root)
+            .ok_or(PackageError::NoToolFound)?;
         let cache_key = query.cache_key();
         let cache_ttl = Duration::from_secs(24 * 60 * 60); // 24 hours
 

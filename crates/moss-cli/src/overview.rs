@@ -65,14 +65,20 @@ impl OverviewReport {
 
         // Files section
         lines.push("## Files".to_string());
-        let lang_breakdown: Vec<_> = self.files_by_language.iter()
+        let lang_breakdown: Vec<_> = self
+            .files_by_language
+            .iter()
             .filter(|(_, count)| **count > 0)
             .map(|(lang, count)| format!("{} {}", count, lang))
             .collect();
         if lang_breakdown.is_empty() {
             lines.push(format!("  {} files", self.total_files));
         } else {
-            lines.push(format!("  {} files ({})", self.total_files, lang_breakdown.join(", ")));
+            lines.push(format!(
+                "  {} files ({})",
+                self.total_files,
+                lang_breakdown.join(", ")
+            ));
         }
         lines.push(format!("  {} lines of code", self.total_lines));
         lines.push(String::new());
@@ -144,11 +150,7 @@ impl OverviewReport {
         )
     }
 
-    fn calculate_health_score(
-        avg_complexity: f64,
-        high_risk_ratio: f64,
-        doc_coverage: f64,
-    ) -> f64 {
+    fn calculate_health_score(avg_complexity: f64, high_risk_ratio: f64, doc_coverage: f64) -> f64 {
         // Complexity score (40% weight)
         let complexity_score = if avg_complexity <= 3.0 {
             1.0

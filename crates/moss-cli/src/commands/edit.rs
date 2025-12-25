@@ -132,7 +132,11 @@ pub fn cmd_edit(
         } else {
             println!(
                 "{}: {}",
-                if prepend.is_some() { "Prepended to" } else { "Appended to" },
+                if prepend.is_some() {
+                    "Prepended to"
+                } else {
+                    "Appended to"
+                },
                 unified.file_path
             );
         }
@@ -167,7 +171,10 @@ pub fn cmd_edit(
                 return 1;
             }
         };
-        ("prepend", editor.prepend_to_container(&content, &body, code))
+        (
+            "prepend",
+            editor.prepend_to_container(&content, &body, code),
+        )
     } else if let Some(code) = append {
         // Append inside a container (class/impl)
         let body = match editor.find_container_body(&file_path, &content, symbol_name) {
@@ -199,7 +206,10 @@ pub fn cmd_edit(
                 return 1;
             }
         };
-        ("move_before", editor.insert_before(&without_source, &dest_loc_adjusted, source_content))
+        (
+            "move_before",
+            editor.insert_before(&without_source, &dest_loc_adjusted, source_content),
+        )
     } else if let Some(dest) = move_after {
         // First verify destination exists
         let _dest_loc = match editor.find_symbol(&file_path, &content, dest) {
@@ -219,7 +229,10 @@ pub fn cmd_edit(
                 return 1;
             }
         };
-        ("move_after", editor.insert_after(&without_source, &dest_loc_adjusted, source_content))
+        (
+            "move_after",
+            editor.insert_after(&without_source, &dest_loc_adjusted, source_content),
+        )
     } else if let Some(dest) = copy_before {
         // Copy operation: insert copy before destination (keep original)
         let dest_loc = match editor.find_symbol(&file_path, &content, dest) {
@@ -230,7 +243,10 @@ pub fn cmd_edit(
             }
         };
         let source_content = &content[loc.start_byte..loc.end_byte];
-        ("copy_before", editor.insert_before(&content, &dest_loc, source_content))
+        (
+            "copy_before",
+            editor.insert_before(&content, &dest_loc, source_content),
+        )
     } else if let Some(dest) = copy_after {
         // Copy operation: insert copy after destination (keep original)
         let dest_loc = match editor.find_symbol(&file_path, &content, dest) {
@@ -241,7 +257,10 @@ pub fn cmd_edit(
             }
         };
         let source_content = &content[loc.start_byte..loc.end_byte];
-        ("copy_after", editor.insert_after(&content, &dest_loc, source_content))
+        (
+            "copy_after",
+            editor.insert_after(&content, &dest_loc, source_content),
+        )
     } else if let Some(container) = move_prepend {
         // Move to beginning of container
         // First verify container exists
@@ -262,7 +281,10 @@ pub fn cmd_edit(
                 return 1;
             }
         };
-        ("move_prepend", editor.prepend_to_container(&without_source, &body, &source_content))
+        (
+            "move_prepend",
+            editor.prepend_to_container(&without_source, &body, &source_content),
+        )
     } else if let Some(container) = move_append {
         // Move to end of container
         // First verify container exists
@@ -283,7 +305,10 @@ pub fn cmd_edit(
                 return 1;
             }
         };
-        ("move_append", editor.append_to_container(&without_source, &body, &source_content))
+        (
+            "move_append",
+            editor.append_to_container(&without_source, &body, &source_content),
+        )
     } else if let Some(container) = copy_prepend {
         // Copy to beginning of container
         let body = match editor.find_container_body(&file_path, &content, container) {
@@ -294,7 +319,10 @@ pub fn cmd_edit(
             }
         };
         let source_content = &content[loc.start_byte..loc.end_byte];
-        ("copy_prepend", editor.prepend_to_container(&content, &body, source_content))
+        (
+            "copy_prepend",
+            editor.prepend_to_container(&content, &body, source_content),
+        )
     } else if let Some(container) = copy_append {
         // Copy to end of container
         let body = match editor.find_container_body(&file_path, &content, container) {
@@ -305,7 +333,10 @@ pub fn cmd_edit(
             }
         };
         let source_content = &content[loc.start_byte..loc.end_byte];
-        ("copy_append", editor.append_to_container(&content, &body, source_content))
+        (
+            "copy_append",
+            editor.append_to_container(&content, &body, source_content),
+        )
     } else if let Some(other) = swap {
         let other_loc = match editor.find_symbol(&file_path, &content, other) {
             Some(l) => l,

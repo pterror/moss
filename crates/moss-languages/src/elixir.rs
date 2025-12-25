@@ -1,19 +1,27 @@
 //! Elixir language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Elixir language support.
 pub struct Elixir;
 
 impl Language for Elixir {
-    fn name(&self) -> &'static str { "Elixir" }
-    fn extensions(&self) -> &'static [&'static str] { &["ex", "exs"] }
-    fn grammar_name(&self) -> &'static str { "elixir" }
+    fn name(&self) -> &'static str {
+        "Elixir"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ex", "exs"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "elixir"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["call"] // defmodule, defprotocol, defimpl
@@ -125,7 +133,11 @@ impl Language for Elixir {
             docstring: self.extract_docstring(node, content),
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,
-            visibility: if is_private { Visibility::Private } else { Visibility::Public },
+            visibility: if is_private {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            },
             children: Vec::new(),
         })
     }
@@ -154,7 +166,9 @@ impl Language for Elixir {
         })
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // Look for @doc or @moduledoc before the node
@@ -193,7 +207,8 @@ impl Language for Elixir {
         for keyword in &["import ", "alias ", "require ", "use "] {
             if text.starts_with(keyword) {
                 let rest = text[keyword.len()..].trim();
-                let module = rest.split(|c: char| c.is_whitespace() || c == ',')
+                let module = rest
+                    .split(|c: char| c.is_whitespace() || c == ',')
                     .next()
                     .unwrap_or(rest)
                     .to_string();
@@ -219,9 +234,9 @@ impl Language for Elixir {
             return false;
         }
         let text = &content[node.byte_range()];
-        (text.starts_with("def ") && !text.starts_with("defp")) ||
-        (text.starts_with("defmacro ") && !text.starts_with("defmacrop")) ||
-        text.starts_with("defmodule ")
+        (text.starts_with("def ") && !text.starts_with("defp"))
+            || (text.starts_with("defmacro ") && !text.starts_with("defmacrop"))
+            || text.starts_with("defmodule ")
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
@@ -232,7 +247,9 @@ impl Language for Elixir {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         // Look for do_block child
@@ -245,29 +262,38 @@ impl Language for Elixir {
         None
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "ex" && ext != "exs" { return None; }
+        if ext != "ex" && ext != "exs" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         // Convert snake_case to PascalCase
-        Some(stem.split('_')
-            .map(|s| {
-                let mut c = s.chars();
-                match c.next() {
-                    None => String::new(),
-                    Some(f) => f.to_uppercase().chain(c).collect(),
-                }
-            })
-            .collect::<String>())
+        Some(
+            stem.split('_')
+                .map(|s| {
+                    let mut c = s.chars();
+                    match c.next() {
+                        None => String::new(),
+                        Some(f) => f.to_uppercase().chain(c).collect(),
+                    }
+                })
+                .collect::<String>(),
+        )
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         // Convert PascalCase to snake_case
-        let snake = module.chars()
+        let snake = module
+            .chars()
             .enumerate()
             .map(|(i, c)| {
                 if c.is_uppercase() && i > 0 {
@@ -278,42 +304,78 @@ impl Language for Elixir {
             })
             .collect::<String>();
 
-        vec![
-            format!("lib/{}.ex", snake),
-            format!("{}.ex", snake),
-        ]
+        vec![format!("lib/{}.ex", snake), format!("{}.ex", snake)]
     }
 
-    fn lang_key(&self) -> &'static str { "elixir" }
+    fn lang_key(&self) -> &'static str {
+        "elixir"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         // Elixir stdlib modules
-        matches!(import_name,
-            "Kernel" | "Enum" | "List" | "Map" | "String" | "IO" | "File" |
-            "Path" | "System" | "Process" | "Agent" | "GenServer" | "Supervisor" |
-            "Task" | "Stream" | "Regex" | "DateTime" | "Date" | "Time" |
-            "Integer" | "Float" | "Tuple" | "Keyword" | "Access" | "Protocol" |
-            "Macro" | "Code" | "Module" | "Application" | "Logger" | "Mix"
+        matches!(
+            import_name,
+            "Kernel"
+                | "Enum"
+                | "List"
+                | "Map"
+                | "String"
+                | "IO"
+                | "File"
+                | "Path"
+                | "System"
+                | "Process"
+                | "Agent"
+                | "GenServer"
+                | "Supervisor"
+                | "Task"
+                | "Stream"
+                | "Regex"
+                | "DateTime"
+                | "Date"
+                | "Time"
+                | "Integer"
+                | "Float"
+                | "Tuple"
+                | "Keyword"
+                | "Access"
+                | "Protocol"
+                | "Macro"
+                | "Code"
+                | "Module"
+                | "Application"
+                | "Logger"
+                | "Mix"
         )
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         // Convert module name to path
         let parts: Vec<&str> = import.split('.').collect();
-        let snake_parts: Vec<String> = parts.iter().map(|p| {
-            p.chars()
-                .enumerate()
-                .map(|(i, c)| {
-                    if c.is_uppercase() && i > 0 {
-                        format!("_{}", c.to_lowercase())
-                    } else {
-                        c.to_lowercase().to_string()
-                    }
-                })
-                .collect::<String>()
-        }).collect();
+        let snake_parts: Vec<String> = parts
+            .iter()
+            .map(|p| {
+                p.chars()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        if c.is_uppercase() && i > 0 {
+                            format!("_{}", c.to_lowercase())
+                        } else {
+                            c.to_lowercase().to_string()
+                        }
+                    })
+                    .collect::<String>()
+            })
+            .collect();
 
         let path = snake_parts.join("/");
         let full = project_root.join("lib").join(format!("{}.ex", path));
@@ -324,7 +386,11 @@ impl Language for Elixir {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Hex package resolution would go here
         None
     }
@@ -357,22 +423,31 @@ impl Language for Elixir {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["ex"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["ex"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "_build" || name == "deps" || name == ".elixir_ls") {
             return true;
         }
         !is_dir && !has_extension(name, &["ex", "exs"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".ex")
+        entry_name
+            .strip_suffix(".ex")
             .or_else(|| entry_name.strip_suffix(".exs"))
             .unwrap_or(entry_name)
             .to_string()
@@ -382,7 +457,9 @@ impl Language for Elixir {
         if path.is_file() {
             return Some(path.to_path_buf());
         }
-        let lib = path.join("lib").join(format!("{}.ex", path.file_name()?.to_str()?));
+        let lib = path
+            .join("lib")
+            .join(format!("{}.ex", path.file_name()?.to_str()?));
         if lib.is_file() {
             return Some(lib);
         }
@@ -399,7 +476,12 @@ impl Elixir {
                 let text = &content[child.byte_range()];
                 // Extract just the name (before parentheses)
                 let name = text.split('(').next().unwrap_or(text).trim();
-                if !name.is_empty() && name != "def" && name != "defp" && name != "defmacro" && name != "defmacrop" {
+                if !name.is_empty()
+                    && name != "def"
+                    && name != "defp"
+                    && name != "defmacro"
+                    && name != "defmacrop"
+                {
                     return Some(name.to_string());
                 }
             }

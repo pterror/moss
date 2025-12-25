@@ -1,7 +1,7 @@
 //! Package registry queries.
 
 use clap::Subcommand;
-use moss_packages::{detect_all_ecosystems, all_ecosystems, PackageInfo, PackageError};
+use moss_packages::{all_ecosystems, detect_all_ecosystems, PackageError, PackageInfo};
 use std::path::Path;
 
 #[derive(Subcommand)]
@@ -90,38 +90,46 @@ fn run_all_ecosystems_json(
 
     for eco in ecosystems {
         match action {
-            PackageAction::List => {
-                match eco.list_dependencies(project_root) {
-                    Ok(deps) => {
-                        results.insert(eco.name().to_string(), serde_json::json!({
+            PackageAction::List => match eco.list_dependencies(project_root) {
+                Ok(deps) => {
+                    results.insert(
+                        eco.name().to_string(),
+                        serde_json::json!({
                             "dependencies": deps.iter().map(|d| serde_json::json!({
                                 "name": d.name,
                                 "version_req": d.version_req,
                                 "optional": d.optional,
                             })).collect::<Vec<_>>()
-                        }));
-                    }
-                    Err(e) => {
-                        results.insert(eco.name().to_string(), serde_json::json!({
-                            "error": e.to_string()
-                        }));
-                    }
+                        }),
+                    );
                 }
-            }
-            PackageAction::Tree => {
-                match eco.dependency_tree(project_root) {
-                    Ok(tree) => {
-                        results.insert(eco.name().to_string(), serde_json::json!({
+                Err(e) => {
+                    results.insert(
+                        eco.name().to_string(),
+                        serde_json::json!({
+                            "error": e.to_string()
+                        }),
+                    );
+                }
+            },
+            PackageAction::Tree => match eco.dependency_tree(project_root) {
+                Ok(tree) => {
+                    results.insert(
+                        eco.name().to_string(),
+                        serde_json::json!({
                             "tree": tree
-                        }));
-                    }
-                    Err(e) => {
-                        results.insert(eco.name().to_string(), serde_json::json!({
-                            "error": e.to_string()
-                        }));
-                    }
+                        }),
+                    );
                 }
-            }
+                Err(e) => {
+                    results.insert(
+                        eco.name().to_string(),
+                        serde_json::json!({
+                            "error": e.to_string()
+                        }),
+                    );
+                }
+            },
             _ => {}
         }
     }
@@ -144,7 +152,12 @@ fn run_for_ecosystem(
     }
 }
 
-fn cmd_info(eco: &dyn moss_packages::Ecosystem, package: &str, project_root: &Path, json: bool) -> i32 {
+fn cmd_info(
+    eco: &dyn moss_packages::Ecosystem,
+    package: &str,
+    project_root: &Path,
+    json: bool,
+) -> i32 {
     match eco.query(package, project_root) {
         Ok(info) => {
             if json {
@@ -157,7 +170,11 @@ fn cmd_info(eco: &dyn moss_packages::Ecosystem, package: &str, project_root: &Pa
         Err(e) => {
             match e {
                 PackageError::NotFound(name) => {
-                    eprintln!("error: package '{}' not found in {} registry", name, eco.name());
+                    eprintln!(
+                        "error: package '{}' not found in {} registry",
+                        name,
+                        eco.name()
+                    );
                 }
                 PackageError::NoToolFound => {
                     eprintln!("error: no {} tools found in PATH", eco.name());
@@ -176,14 +193,17 @@ fn cmd_list(eco: &dyn moss_packages::Ecosystem, project_root: &Path, json: bool)
     match eco.list_dependencies(project_root) {
         Ok(deps) => {
             if json {
-                println!("{}", serde_json::json!({
-                    "ecosystem": eco.name(),
-                    "dependencies": deps.iter().map(|d| serde_json::json!({
-                        "name": d.name,
-                        "version_req": d.version_req,
-                        "optional": d.optional,
-                    })).collect::<Vec<_>>()
-                }));
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ecosystem": eco.name(),
+                        "dependencies": deps.iter().map(|d| serde_json::json!({
+                            "name": d.name,
+                            "version_req": d.version_req,
+                            "optional": d.optional,
+                        })).collect::<Vec<_>>()
+                    })
+                );
             } else {
                 println!("{} dependencies ({})", deps.len(), eco.name());
                 println!();
@@ -206,10 +226,13 @@ fn cmd_tree(eco: &dyn moss_packages::Ecosystem, project_root: &Path, json: bool)
     match eco.dependency_tree(project_root) {
         Ok(tree) => {
             if json {
-                println!("{}", serde_json::json!({
-                    "ecosystem": eco.name(),
-                    "tree": tree,
-                }));
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "ecosystem": eco.name(),
+                        "tree": tree,
+                    })
+                );
             } else {
                 print_tree(&tree);
             }
@@ -290,10 +313,13 @@ fn cmd_outdated(eco: &dyn moss_packages::Ecosystem, project_root: &Path, json: b
     }
 
     if json {
-        println!("{}", serde_json::json!({
-            "outdated": outdated,
-            "errors": errors.iter().map(|(n, e)| serde_json::json!({"name": n, "error": e})).collect::<Vec<_>>()
-        }));
+        println!(
+            "{}",
+            serde_json::json!({
+                "outdated": outdated,
+                "errors": errors.iter().map(|(n, e)| serde_json::json!({"name": n, "error": e})).collect::<Vec<_>>()
+            })
+        );
     } else {
         if outdated.is_empty() && errors.is_empty() {
             println!("All packages are up to date");
@@ -320,10 +346,7 @@ fn cmd_outdated(eco: &dyn moss_packages::Ecosystem, project_root: &Path, json: b
 }
 
 fn find_ecosystem_by_name(name: &str) -> Option<&'static dyn moss_packages::Ecosystem> {
-    all_ecosystems()
-        .iter()
-        .find(|e| e.name() == name)
-        .copied()
+    all_ecosystems().iter().find(|e| e.name() == name).copied()
 }
 
 fn available_ecosystems() -> Vec<&'static str> {

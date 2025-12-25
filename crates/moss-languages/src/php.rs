@@ -1,38 +1,67 @@
 //! PHP language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// PHP language support.
 pub struct Php;
 
 impl Language for Php {
-    fn name(&self) -> &'static str { "PHP" }
-    fn extensions(&self) -> &'static [&'static str] { &["php", "phtml"] }
-    fn grammar_name(&self) -> &'static str { "php" }
+    fn name(&self) -> &'static str {
+        "PHP"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["php", "phtml"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "php"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "trait_declaration",
-          "enum_declaration", "namespace_definition"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "trait_declaration",
+            "enum_declaration",
+            "namespace_definition",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "method_declaration", "arrow_function"]
+        &[
+            "function_definition",
+            "method_declaration",
+            "arrow_function",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "trait_declaration", "enum_declaration"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "trait_declaration",
+            "enum_declaration",
+        ]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["namespace_use_declaration"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["namespace_use_declaration"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "trait_declaration",
-          "function_definition", "method_declaration"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "trait_declaration",
+            "function_definition",
+            "method_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -67,35 +96,72 @@ impl Language for Php {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "foreach_statement", "while_statement", "do_statement",
-          "try_statement", "catch_clause", "switch_statement"]
+        &[
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "try_statement",
+            "catch_clause",
+            "switch_statement",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "switch_statement", "try_statement", "return_statement",
-          "break_statement", "continue_statement", "throw_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "switch_statement",
+            "try_statement",
+            "return_statement",
+            "break_statement",
+            "continue_statement",
+            "throw_expression",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "case_statement", "catch_clause", "conditional_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "case_statement",
+            "catch_clause",
+            "conditional_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "switch_statement", "try_statement", "function_definition",
-          "method_declaration", "class_declaration", "arrow_function"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "switch_statement",
+            "try_statement",
+            "function_definition",
+            "method_declaration",
+            "class_declaration",
+            "arrow_function",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
-        let return_type = node.child_by_field_name("return_type")
+        let return_type = node
+            .child_by_field_name("return_type")
             .map(|t| format!(": {}", content[t.byte_range()].trim()));
 
         let kind = if node.kind() == "method_declaration" {
@@ -104,7 +170,12 @@ impl Language for Php {
             SymbolKind::Function
         };
 
-        let signature = format!("function {}{}{}", name, params, return_type.unwrap_or_default());
+        let signature = format!(
+            "function {}{}{}",
+            name,
+            params,
+            return_type.unwrap_or_default()
+        );
 
         Some(Symbol {
             name: name.to_string(),
@@ -152,9 +223,12 @@ impl Language for Php {
             if sibling.kind() == "comment" {
                 if text.starts_with("/**") {
                     let inner = text
-                        .strip_prefix("/**").unwrap_or(text)
-                        .strip_suffix("*/").unwrap_or(text);
-                    let lines: Vec<&str> = inner.lines()
+                        .strip_prefix("/**")
+                        .unwrap_or(text)
+                        .strip_suffix("*/")
+                        .unwrap_or(text);
+                    let lines: Vec<&str> = inner
+                        .lines()
                         .map(|l| l.trim().strip_prefix("*").unwrap_or(l).trim())
                         .filter(|l| !l.is_empty() && !l.starts_with('@'))
                         .collect();
@@ -201,7 +275,9 @@ impl Language for Php {
         self.get_visibility(node, content) == Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -248,16 +324,24 @@ impl Language for Php {
         for child in node.children(&mut cursor) {
             if child.kind() == "visibility_modifier" {
                 let mod_text = &content[child.byte_range()];
-                if mod_text == "private" { return Visibility::Private; }
-                if mod_text == "protected" { return Visibility::Protected; }
-                if mod_text == "public" { return Visibility::Public; }
+                if mod_text == "private" {
+                    return Visibility::Private;
+                }
+                if mod_text == "protected" {
+                    return Visibility::Protected;
+                }
+                if mod_text == "public" {
+                    return Visibility::Public;
+                }
             }
         }
         // PHP default visibility for methods/properties in classes is public
         Visibility::Public
     }
 
-    fn lang_key(&self) -> &'static str { "php" }
+    fn lang_key(&self) -> &'static str {
+        "php"
+    }
 
     fn resolve_local_import(
         &self,
@@ -285,7 +369,11 @@ impl Language for Php {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Composer package resolution would go here
         None
     }
@@ -299,9 +387,9 @@ impl Language for Php {
                 if let Some(idx) = content.find("\"php\"") {
                     let rest = &content[idx..];
                     if let Some(start) = rest.find(':') {
-                        let after_colon = rest[start+1..].trim();
+                        let after_colon = rest[start + 1..].trim();
                         if let Some(ver_start) = after_colon.find('"') {
-                            let ver_rest = &after_colon[ver_start+1..];
+                            let ver_rest = &after_colon[ver_start + 1..];
                             if let Some(ver_end) = ver_rest.find('"') {
                                 return Some(ver_rest[..ver_end].to_string());
                             }
@@ -331,8 +419,10 @@ impl Language for Php {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "vendor" || name == "cache" || name == "tests") {
             return true;
         }
@@ -344,7 +434,10 @@ impl Language for Php {
     }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".php").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".php")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {

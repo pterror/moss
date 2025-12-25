@@ -1,6 +1,9 @@
 //! npm/yarn/pnpm (Node.js) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -88,7 +91,9 @@ impl Ecosystem for Npm {
             // Followed by: version "18.2.0"
             let mut in_package = false;
             for line in content.lines() {
-                if line.starts_with(&format!("\"{}@", package)) || line.starts_with(&format!("{}@", package)) {
+                if line.starts_with(&format!("\"{}@", package))
+                    || line.starts_with(&format!("{}@", package))
+                {
                     in_package = true;
                 } else if in_package && line.trim().starts_with("version ") {
                     let version = line.trim().strip_prefix("version ")?;
@@ -102,10 +107,14 @@ impl Ecosystem for Npm {
         None
     }
 
-    fn list_dependencies(&self, project_root: &Path) -> Result<Vec<Dependency>, crate::PackageError> {
+    fn list_dependencies(
+        &self,
+        project_root: &Path,
+    ) -> Result<Vec<Dependency>, crate::PackageError> {
         let manifest = project_root.join("package.json");
-        let content = std::fs::read_to_string(&manifest)
-            .map_err(|e| crate::PackageError::ParseError(format!("failed to read package.json: {}", e)))?;
+        let content = std::fs::read_to_string(&manifest).map_err(|e| {
+            crate::PackageError::ParseError(format!("failed to read package.json: {}", e))
+        })?;
         let parsed: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| crate::PackageError::ParseError(format!("invalid JSON: {}", e)))?;
 
@@ -131,7 +140,10 @@ impl Ecosystem for Npm {
             }
         }
 
-        if let Some(d) = parsed.get("optionalDependencies").and_then(|d| d.as_object()) {
+        if let Some(d) = parsed
+            .get("optionalDependencies")
+            .and_then(|d| d.as_object())
+        {
             for (name, version) in d {
                 deps.push(Dependency {
                     name: name.clone(),
@@ -147,8 +159,9 @@ impl Ecosystem for Npm {
     fn dependency_tree(&self, project_root: &Path) -> Result<DependencyTree, crate::PackageError> {
         // Find package-lock.json, searching up for monorepo root
         let lockfile = find_npm_lockfile(project_root)?;
-        let content = std::fs::read_to_string(&lockfile)
-            .map_err(|e| crate::PackageError::ParseError(format!("failed to read lockfile: {}", e)))?;
+        let content = std::fs::read_to_string(&lockfile).map_err(|e| {
+            crate::PackageError::ParseError(format!("failed to read lockfile: {}", e))
+        })?;
         let parsed: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| crate::PackageError::ParseError(format!("invalid JSON: {}", e)))?;
         build_npm_tree(&parsed)
@@ -180,15 +193,22 @@ fn find_npm_lockfile(project_root: &Path) -> Result<std::path::PathBuf, crate::P
 }
 
 fn build_npm_tree(parsed: &serde_json::Value) -> Result<DependencyTree, crate::PackageError> {
-    let name = parsed.get("name").and_then(|n| n.as_str()).unwrap_or("root");
-    let version = parsed.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+    let name = parsed
+        .get("name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("root");
+    let version = parsed
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.0.0");
 
     // v2/v3 format: packages["node_modules/..."]
     let packages = parsed.get("packages").and_then(|p| p.as_object());
 
     if let Some(packages) = packages {
         // Build adjacency map from node_modules structure
-        let mut deps_map: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
+        let mut deps_map: std::collections::HashMap<String, Vec<(String, String)>> =
+            std::collections::HashMap::new();
 
         for (path, info) in packages {
             if path.is_empty() {
@@ -331,21 +351,22 @@ fn parse_npm_json(json_str: &str, package: &str) -> Result<PackageInfo, PackageE
         .ok_or_else(|| PackageError::ParseError("missing version".to_string()))?
         .to_string();
 
-    let description = v.get("description").and_then(|v| v.as_str()).map(String::from);
+    let description = v
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
     let license = v.get("license").and_then(|v| v.as_str()).map(String::from);
 
     let homepage = v.get("homepage").and_then(|v| v.as_str()).map(String::from);
 
-    let repository = v
-        .get("repository")
-        .and_then(|r| {
-            if let Some(url) = r.as_str() {
-                Some(url.to_string())
-            } else {
-                r.get("url").and_then(|u| u.as_str()).map(String::from)
-            }
-        });
+    let repository = v.get("repository").and_then(|r| {
+        if let Some(url) = r.as_str() {
+            Some(url.to_string())
+        } else {
+            r.get("url").and_then(|u| u.as_str()).map(String::from)
+        }
+    });
 
     // Dependencies
     let mut dependencies = Vec::new();

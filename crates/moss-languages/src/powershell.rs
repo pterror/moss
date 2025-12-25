@@ -1,19 +1,27 @@
 //! PowerShell language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// PowerShell language support.
 pub struct PowerShell;
 
 impl Language for PowerShell {
-    fn name(&self) -> &'static str { "PowerShell" }
-    fn extensions(&self) -> &'static [&'static str] { &["ps1", "psm1", "psd1"] }
-    fn grammar_name(&self) -> &'static str { "powershell" }
+    fn name(&self) -> &'static str {
+        "PowerShell"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ps1", "psm1", "psd1"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "powershell"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_statement"]
@@ -63,18 +71,37 @@ impl Language for PowerShell {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "while_statement", "for_statement", "foreach_statement",
-          "switch_statement", "try_statement"]
+        &[
+            "if_statement",
+            "while_statement",
+            "for_statement",
+            "foreach_statement",
+            "switch_statement",
+            "try_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "elseif_clause", "while_statement", "for_statement",
-          "foreach_statement", "switch_statement", "catch_clause"]
+        &[
+            "if_statement",
+            "elseif_clause",
+            "while_statement",
+            "for_statement",
+            "foreach_statement",
+            "switch_statement",
+            "catch_clause",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["function_statement", "class_statement", "if_statement", "while_statement",
-          "for_statement", "try_statement"]
+        &[
+            "function_statement",
+            "class_statement",
+            "if_statement",
+            "while_statement",
+            "for_statement",
+            "try_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -142,9 +169,7 @@ impl Language for PowerShell {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" {
                 if text.starts_with("<#") {
-                    let inner = text.trim_start_matches("<#")
-                        .trim_end_matches("#>")
-                        .trim();
+                    let inner = text.trim_start_matches("<#").trim_end_matches("#>").trim();
                     if !inner.is_empty() {
                         return Some(inner.lines().next().unwrap_or(inner).to_string());
                     }
@@ -168,8 +193,7 @@ impl Language for PowerShell {
 
         // Import-Module ModuleName
         if let Some(rest) = text.strip_prefix("Import-Module ") {
-            let module = rest.split_whitespace().next()
-                .map(|s| s.to_string());
+            let module = rest.split_whitespace().next().map(|s| s.to_string());
             if let Some(module) = module {
                 return vec![Import {
                     module,
@@ -185,16 +209,24 @@ impl Language for PowerShell {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -203,31 +235,45 @@ impl Language for PowerShell {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["ps1", "psm1", "psd1"].contains(&ext) { return None; }
+        if !["ps1", "psm1", "psd1"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.psm1", module),
-            format!("{}.ps1", module),
-        ]
+        vec![format!("{}.psm1", module), format!("{}.ps1", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "powershell" }
+    fn lang_key(&self) -> &'static str {
+        "powershell"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        matches!(import_name, "Microsoft.PowerShell.Core" | "Microsoft.PowerShell.Utility" |
-            "Microsoft.PowerShell.Management" | "Microsoft.PowerShell.Security")
+        matches!(
+            import_name,
+            "Microsoft.PowerShell.Core"
+                | "Microsoft.PowerShell.Utility"
+                | "Microsoft.PowerShell.Management"
+                | "Microsoft.PowerShell.Security"
+        )
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
     fn resolve_local_import(&self, import: &str, _: &Path, project_root: &Path) -> Option<PathBuf> {
         let full = project_root.join(format!("{}.psm1", import));
-        if full.is_file() { Some(full) } else { None }
+        if full.is_file() {
+            Some(full)
+        } else {
+            None
+        }
     }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
 
     fn get_version(&self, project_root: &Path) -> Option<String> {
         // Check for module manifest
@@ -251,19 +297,28 @@ impl Language for PowerShell {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["ps1", "psm1"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["ps1", "psm1"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["ps1", "psm1", "psd1"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".psm1")
+        entry_name
+            .strip_suffix(".psm1")
             .or_else(|| entry_name.strip_suffix(".ps1"))
             .or_else(|| entry_name.strip_suffix(".psd1"))
             .unwrap_or(entry_name)

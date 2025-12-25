@@ -1,8 +1,8 @@
 //! Shared C/C++ external package resolution.
 
+use crate::external_packages::ResolvedPackage;
 use std::path::PathBuf;
 use std::process::Command;
-use crate::external_packages::ResolvedPackage;
 
 /// Get GCC version.
 pub fn get_gcc_version() -> Option<String> {
@@ -66,7 +66,10 @@ pub fn find_cpp_include_paths() -> Vec<PathBuf> {
     }
 
     // Try to get GCC include paths
-    if let Ok(output) = Command::new("gcc").args(["-E", "-Wp,-v", "-xc", "/dev/null"]).output() {
+    if let Ok(output) = Command::new("gcc")
+        .args(["-E", "-Wp,-v", "-xc", "/dev/null"])
+        .output()
+    {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let mut in_search_list = false;
 
@@ -88,7 +91,10 @@ pub fn find_cpp_include_paths() -> Vec<PathBuf> {
     }
 
     // Try clang as well
-    if let Ok(output) = Command::new("clang").args(["-E", "-Wp,-v", "-xc", "/dev/null"]).output() {
+    if let Ok(output) = Command::new("clang")
+        .args(["-E", "-Wp,-v", "-xc", "/dev/null"])
+        .output()
+    {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let mut in_search_list = false;
 
@@ -126,10 +132,7 @@ pub fn find_cpp_include_paths() -> Vec<PathBuf> {
         }
 
         // Homebrew
-        let homebrew_paths = [
-            "/opt/homebrew/include",
-            "/usr/local/include",
-        ];
+        let homebrew_paths = ["/opt/homebrew/include", "/usr/local/include"];
         for path in homebrew_paths {
             let p = PathBuf::from(path);
             if p.is_dir() && !paths.contains(&p) {

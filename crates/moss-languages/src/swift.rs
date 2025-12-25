@@ -1,37 +1,60 @@
 //! Swift language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Swift language support.
 pub struct Swift;
 
 impl Language for Swift {
-    fn name(&self) -> &'static str { "Swift" }
-    fn extensions(&self) -> &'static [&'static str] { &["swift"] }
-    fn grammar_name(&self) -> &'static str { "swift" }
+    fn name(&self) -> &'static str {
+        "Swift"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["swift"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "swift"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_declaration", "protocol_declaration"]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_declaration", "init_declaration", "subscript_declaration",
-          "computed_property", "lambda_literal"]
+        &[
+            "function_declaration",
+            "init_declaration",
+            "subscript_declaration",
+            "computed_property",
+            "lambda_literal",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "protocol_declaration", "typealias_declaration"]
+        &[
+            "class_declaration",
+            "protocol_declaration",
+            "typealias_declaration",
+        ]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["import_declaration"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["import_declaration"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "protocol_declaration", "function_declaration"]
+        &[
+            "class_declaration",
+            "protocol_declaration",
+            "function_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -66,34 +89,67 @@ impl Language for Swift {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "while_statement", "repeat_while_statement",
-          "do_statement", "catch_block", "switch_statement", "guard_statement"]
+        &[
+            "for_statement",
+            "while_statement",
+            "repeat_while_statement",
+            "do_statement",
+            "catch_block",
+            "switch_statement",
+            "guard_statement",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "repeat_while_statement",
-          "switch_statement", "guard_statement", "do_statement", "control_transfer_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "repeat_while_statement",
+            "switch_statement",
+            "guard_statement",
+            "do_statement",
+            "control_transfer_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "repeat_while_statement",
-          "switch_statement", "catch_block", "ternary_expression", "nil_coalescing_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "repeat_while_statement",
+            "switch_statement",
+            "catch_block",
+            "ternary_expression",
+            "nil_coalescing_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "repeat_while_statement",
-          "switch_statement", "do_statement", "function_declaration", "class_declaration",
-          "lambda_literal"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "repeat_while_statement",
+            "switch_statement",
+            "do_statement",
+            "function_declaration",
+            "class_declaration",
+            "lambda_literal",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
-        let return_type = node.child_by_field_name("return_type")
+        let return_type = node
+            .child_by_field_name("return_type")
             .map(|t| format!(" -> {}", content[t.byte_range()].trim()));
 
         let signature = format!("func {}{}{}", name, params, return_type.unwrap_or_default());
@@ -136,7 +192,8 @@ impl Language for Swift {
     fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
         if node.kind() == "typealias_declaration" {
             let name = self.node_name(node, content)?;
-            let target = node.child_by_field_name("value")
+            let target = node
+                .child_by_field_name("value")
                 .map(|t| content[t.byte_range()].to_string())
                 .unwrap_or_default();
             return Some(Symbol {
@@ -168,8 +225,10 @@ impl Language for Swift {
                     }
                 } else if text.starts_with("/**") {
                     let inner = text
-                        .strip_prefix("/**").unwrap_or(text)
-                        .strip_suffix("*/").unwrap_or(text);
+                        .strip_prefix("/**")
+                        .unwrap_or(text)
+                        .strip_suffix("*/")
+                        .unwrap_or(text);
                     for line in inner.lines() {
                         let clean = line.trim().strip_prefix("*").unwrap_or(line).trim();
                         if !clean.is_empty() {
@@ -253,9 +312,21 @@ impl Language for Swift {
     }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        matches!(import_name, "Foundation" | "UIKit" | "AppKit" | "SwiftUI" |
-                 "Combine" | "CoreData" | "CoreGraphics" | "CoreFoundation" |
-                 "Darwin" | "Dispatch" | "ObjectiveC" | "Swift")
+        matches!(
+            import_name,
+            "Foundation"
+                | "UIKit"
+                | "AppKit"
+                | "SwiftUI"
+                | "Combine"
+                | "CoreData"
+                | "CoreGraphics"
+                | "CoreFoundation"
+                | "Darwin"
+                | "Dispatch"
+                | "ObjectiveC"
+                | "Swift"
+        )
     }
 
     fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
@@ -282,9 +353,13 @@ impl Language for Swift {
         Visibility::Protected
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn lang_key(&self) -> &'static str { "swift" }
+    fn lang_key(&self) -> &'static str {
+        "swift"
+    }
 
     fn resolve_local_import(
         &self,
@@ -309,7 +384,11 @@ impl Language for Swift {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Swift Package Manager resolution would go here
         None
     }
@@ -350,8 +429,10 @@ impl Language for Swift {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "build" || name == ".build" || name == "Pods") {
             return true;
         }
@@ -363,7 +444,10 @@ impl Language for Swift {
     }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".swift").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".swift")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {

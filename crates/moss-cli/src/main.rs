@@ -31,7 +31,6 @@ struct Cli {
     /// Output as JSON
     #[arg(long, global = true)]
     json: bool,
-
 }
 
 #[derive(Subcommand)]
@@ -412,8 +411,12 @@ fn main() {
             dry_run,
             cli.json,
         ),
-        Commands::Index { action, root } => commands::index::cmd_index(action, root.as_deref(), cli.json),
-        Commands::Daemon { action, root } => commands::daemon::cmd_daemon(action, root.as_deref(), cli.json),
+        Commands::Index { action, root } => {
+            commands::index::cmd_index(action, root.as_deref(), cli.json)
+        }
+        Commands::Daemon { action, root } => {
+            commands::daemon::cmd_daemon(action, root.as_deref(), cli.json)
+        }
         Commands::Update { check } => commands::update::cmd_update(check, cli.json),
         Commands::Analyze {
             target,
@@ -482,12 +485,9 @@ fn main() {
             action,
             ecosystem,
             root,
-        } => commands::package::cmd_package(
-            action,
-            ecosystem.as_deref(),
-            root.as_deref(),
-            cli.json,
-        ),
+        } => {
+            commands::package::cmd_package(action, ecosystem.as_deref(), root.as_deref(), cli.json)
+        }
         Commands::Workflow { action, root } => {
             commands::workflow::cmd_workflow(action, root.as_deref(), cli.json)
         }

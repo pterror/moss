@@ -24,12 +24,12 @@
 //! }
 //! ```
 
-mod registry;
-mod traits;
-pub mod ecmascript;
 #[cfg(any(feature = "lang-c", feature = "lang-cpp"))]
 pub mod c_cpp;
+pub mod ecmascript;
 pub mod external_packages;
+mod registry;
+mod traits;
 
 // Language implementations
 #[cfg(feature = "lang-python")]
@@ -324,12 +324,15 @@ pub mod x86asm;
 pub mod yuri;
 
 // Re-exports from registry
-pub use registry::{register, support_for_extension, support_for_grammar, support_for_path, supported_languages, validate_unused_kinds_audit};
+pub use registry::{
+    register, support_for_extension, support_for_grammar, support_for_path, supported_languages,
+    validate_unused_kinds_audit,
+};
 
 // Re-exports from traits
 pub use traits::{
-    EmbeddedBlock, Export, Import, Language, PackageSource, PackageSourceKind, Symbol, SymbolKind,
-    Visibility, VisibilityMechanism, skip_dotfiles, has_extension,
+    has_extension, skip_dotfiles, EmbeddedBlock, Export, Import, Language, PackageSource,
+    PackageSourceKind, Symbol, SymbolKind, Visibility, VisibilityMechanism,
 };
 
 // Re-export language structs
@@ -343,7 +346,7 @@ pub use rust::Rust;
 pub use javascript::JavaScript;
 
 #[cfg(feature = "lang-typescript")]
-pub use typescript::{TypeScript, Tsx};
+pub use typescript::{Tsx, TypeScript};
 
 #[cfg(feature = "lang-go")]
 pub use go::Go;

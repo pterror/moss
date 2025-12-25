@@ -98,10 +98,7 @@ impl LlmStrategy for RigLlm {
 }
 
 /// Build an LLM strategy from workflow config.
-pub fn build_llm_strategy(
-    _provider: Option<&str>,
-    _model: Option<&str>,
-) -> Box<dyn LlmStrategy> {
+pub fn build_llm_strategy(_provider: Option<&str>, _model: Option<&str>) -> Box<dyn LlmStrategy> {
     #[cfg(feature = "llm")]
     {
         if let Some(provider) = _provider {

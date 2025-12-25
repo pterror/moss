@@ -1,19 +1,27 @@
 //! SQL language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// SQL language support.
 pub struct Sql;
 
 impl Language for Sql {
-    fn name(&self) -> &'static str { "SQL" }
-    fn extensions(&self) -> &'static [&'static str] { &["sql"] }
-    fn grammar_name(&self) -> &'static str { "sql" }
+    fn name(&self) -> &'static str {
+        "SQL"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["sql"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "sql"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["create_table", "create_view", "create_schema"]
@@ -27,7 +35,9 @@ impl Language for Sql {
         &["create_type"]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["create_table", "create_view", "create_function"]
@@ -153,20 +163,36 @@ impl Language for Sql {
         Some(doc_lines.join(" "))
     }
 
-    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> { Vec::new() }
+    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> {
+        Vec::new()
+    }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "sql" { return None; }
+        if ext != "sql" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -175,31 +201,69 @@ impl Language for Sql {
         vec![format!("{}.sql", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "sql" }
+    fn lang_key(&self) -> &'static str {
+        "sql"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _import: &str, _current_file: &Path, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _project_root: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["sql"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(
+        &self,
+        _import: &str,
+        _current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["sql"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["sql"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".sql").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".sql")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 
@@ -215,7 +279,8 @@ impl Sql {
                     found_create = true;
                 }
             }
-            if found_create && (child.kind() == "identifier" || child.kind() == "object_reference") {
+            if found_create && (child.kind() == "identifier" || child.kind() == "object_reference")
+            {
                 return Some(content[child.byte_range()].to_string());
             }
         }

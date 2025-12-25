@@ -1,19 +1,27 @@
 //! Common Lisp language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Common Lisp language support.
 pub struct CommonLisp;
 
 impl Language for CommonLisp {
-    fn name(&self) -> &'static str { "Common Lisp" }
-    fn extensions(&self) -> &'static [&'static str] { &["lisp", "lsp", "cl", "asd"] }
-    fn grammar_name(&self) -> &'static str { "commonlisp" }
+    fn name(&self) -> &'static str {
+        "Common Lisp"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["lisp", "lsp", "cl", "asd"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "commonlisp"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["list_lit"] // (defpackage ...), (defclass ...), etc.
@@ -208,18 +216,32 @@ impl Language for CommonLisp {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["lisp", "lsp", "cl"].contains(&ext) { return None; }
+        if !["lisp", "lsp", "cl"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -232,16 +254,27 @@ impl Language for CommonLisp {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "commonlisp" }
-
-    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        matches!(import_name.to_lowercase().as_str(),
-            "cl" | "common-lisp" | "asdf" | "uiop" | "alexandria" | "cl-ppcre")
+    fn lang_key(&self) -> &'static str {
+        "commonlisp"
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
+        matches!(
+            import_name.to_lowercase().as_str(),
+            "cl" | "common-lisp" | "asdf" | "uiop" | "alexandria" | "cl-ppcre"
+        )
+    }
 
-    fn resolve_local_import(&self, import: &str, current_file: &Path, _project_root: &Path) -> Option<PathBuf> {
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
         let dir = current_file.parent()?;
         for ext in &["lisp", "lsp", "cl"] {
             let full = dir.join(format!("{}.{}", import, ext));
@@ -252,7 +285,9 @@ impl Language for CommonLisp {
         None
     }
 
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
 
     fn get_version(&self, project_root: &Path) -> Option<String> {
         for entry in std::fs::read_dir(project_root).ok()? {
@@ -274,19 +309,28 @@ impl Language for CommonLisp {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["lisp", "lsp", "cl"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["lisp", "lsp", "cl"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["lisp", "lsp", "cl", "asd"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".lisp")
+        entry_name
+            .strip_suffix(".lisp")
             .or_else(|| entry_name.strip_suffix(".lsp"))
             .or_else(|| entry_name.strip_suffix(".cl"))
             .unwrap_or(entry_name)
@@ -294,7 +338,11 @@ impl Language for CommonLisp {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

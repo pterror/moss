@@ -1,6 +1,9 @@
 //! Conan (C++) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -132,7 +135,11 @@ impl Ecosystem for Conan {
 
         let mut deps = Vec::new();
 
-        if let Some(nodes) = parsed.get("graph_lock").and_then(|g| g.get("nodes")).and_then(|n| n.as_object()) {
+        if let Some(nodes) = parsed
+            .get("graph_lock")
+            .and_then(|g| g.get("nodes"))
+            .and_then(|n| n.as_object())
+        {
             for (_, node) in nodes {
                 if let Some(ref_str) = node.get("ref").and_then(|r| r.as_str()) {
                     // Format: "pkg/version" or "pkg/version@user/channel"
@@ -187,7 +194,9 @@ fn fetch_conancenter_api(package: &str) -> Result<PackageInfo, PackageError> {
             t.chars().next().is_some_and(|c| c.is_ascii_digit())
         })
         .and_then(|line| {
-            let trimmed = line.trim().trim_matches(|c| c == '"' || c == ':' || c == ' ');
+            let trimmed = line
+                .trim()
+                .trim_matches(|c| c == '"' || c == ':' || c == ' ');
             if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 Some(trimmed.to_string())
             } else {

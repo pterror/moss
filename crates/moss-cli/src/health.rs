@@ -57,15 +57,29 @@ impl HealthReport {
         lines.push(format!("  High risk (>10): {}", self.high_risk_functions));
 
         // Categorize files by severity
-        let massive: Vec<_> = self.large_files.iter().filter(|f| f.lines >= MASSIVE_THRESHOLD).collect();
-        let very_large: Vec<_> = self.large_files.iter()
-            .filter(|f| f.lines >= VERY_LARGE_THRESHOLD && f.lines < MASSIVE_THRESHOLD).collect();
-        let large: Vec<_> = self.large_files.iter()
-            .filter(|f| f.lines >= LARGE_THRESHOLD && f.lines < VERY_LARGE_THRESHOLD).collect();
+        let massive: Vec<_> = self
+            .large_files
+            .iter()
+            .filter(|f| f.lines >= MASSIVE_THRESHOLD)
+            .collect();
+        let very_large: Vec<_> = self
+            .large_files
+            .iter()
+            .filter(|f| f.lines >= VERY_LARGE_THRESHOLD && f.lines < MASSIVE_THRESHOLD)
+            .collect();
+        let large: Vec<_> = self
+            .large_files
+            .iter()
+            .filter(|f| f.lines >= LARGE_THRESHOLD && f.lines < VERY_LARGE_THRESHOLD)
+            .collect();
 
         if !massive.is_empty() {
             lines.push(String::new());
-            lines.push(format!("## CRITICAL: Massive Files (>{} lines) - {}", MASSIVE_THRESHOLD, massive.len()));
+            lines.push(format!(
+                "## CRITICAL: Massive Files (>{} lines) - {}",
+                MASSIVE_THRESHOLD,
+                massive.len()
+            ));
             for lf in massive.iter().take(10) {
                 lines.push(format!("  {} ({} lines)", lf.path, lf.lines));
             }
@@ -76,7 +90,11 @@ impl HealthReport {
 
         if !very_large.is_empty() {
             lines.push(String::new());
-            lines.push(format!("## WARNING: Very Large Files (>{} lines) - {}", VERY_LARGE_THRESHOLD, very_large.len()));
+            lines.push(format!(
+                "## WARNING: Very Large Files (>{} lines) - {}",
+                VERY_LARGE_THRESHOLD,
+                very_large.len()
+            ));
             for lf in very_large.iter().take(5) {
                 lines.push(format!("  {} ({} lines)", lf.path, lf.lines));
             }
@@ -87,7 +105,11 @@ impl HealthReport {
 
         if !large.is_empty() {
             lines.push(String::new());
-            lines.push(format!("## Large Files (>{} lines) - {}", LARGE_THRESHOLD, large.len()));
+            lines.push(format!(
+                "## Large Files (>{} lines) - {}",
+                LARGE_THRESHOLD,
+                large.len()
+            ));
             for lf in large.iter().take(5) {
                 lines.push(format!("  {} ({} lines)", lf.path, lf.lines));
             }
@@ -149,9 +171,16 @@ impl HealthReport {
         };
 
         // Large file penalty: massive files are a serious problem
-        let massive_count = self.large_files.iter().filter(|f| f.lines >= MASSIVE_THRESHOLD).count();
-        let very_large_count = self.large_files.iter()
-            .filter(|f| f.lines >= VERY_LARGE_THRESHOLD && f.lines < MASSIVE_THRESHOLD).count();
+        let massive_count = self
+            .large_files
+            .iter()
+            .filter(|f| f.lines >= MASSIVE_THRESHOLD)
+            .count();
+        let very_large_count = self
+            .large_files
+            .iter()
+            .filter(|f| f.lines >= VERY_LARGE_THRESHOLD && f.lines < MASSIVE_THRESHOLD)
+            .count();
 
         let file_size_score = if massive_count > 0 {
             // Any massive file is a critical issue
@@ -184,7 +213,6 @@ impl HealthReport {
         }
     }
 }
-
 
 /// Check if a path is a lockfile (generated, not a code smell)
 fn is_lockfile(path: &str) -> bool {
@@ -248,15 +276,15 @@ pub fn analyze_health(root: &Path) -> HealthReport {
     let mut files_by_language: HashMap<String, usize> = HashMap::new();
     let mut total_files = 0;
 
-    if let Ok(mut stmt) = conn.prepare(
-        "SELECT path FROM files WHERE is_dir = 0"
-    ) {
+    if let Ok(mut stmt) = conn.prepare("SELECT path FROM files WHERE is_dir = 0") {
         if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
             for path_result in rows.flatten() {
                 total_files += 1;
                 let path = std::path::Path::new(&path_result);
                 if let Some(lang) = moss_languages::support_for_path(path) {
-                    *files_by_language.entry(lang.name().to_string()).or_insert(0) += 1;
+                    *files_by_language
+                        .entry(lang.name().to_string())
+                        .or_insert(0) += 1;
                 }
             }
         }
@@ -268,9 +296,9 @@ pub fn analyze_health(root: &Path) -> HealthReport {
     let mut max_complexity = 0usize;
     let mut high_risk_functions = 0usize;
 
-    if let Ok(mut stmt) = conn.prepare(
-        "SELECT complexity FROM symbols WHERE complexity IS NOT NULL"
-    ) {
+    if let Ok(mut stmt) =
+        conn.prepare("SELECT complexity FROM symbols WHERE complexity IS NOT NULL")
+    {
         if let Ok(rows) = stmt.query_map([], |row| row.get::<_, i64>(0)) {
             for complexity_result in rows.flatten() {
                 let complexity = complexity_result as usize;

@@ -1,31 +1,43 @@
 //! RON (Rusty Object Notation) support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// RON language support.
 pub struct Ron;
 
 impl Language for Ron {
-    fn name(&self) -> &'static str { "RON" }
-    fn extensions(&self) -> &'static [&'static str] { &["ron"] }
-    fn grammar_name(&self) -> &'static str { "ron" }
+    fn name(&self) -> &'static str {
+        "RON"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ron"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "ron"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["struct", "map"]
     }
 
-    fn function_kinds(&self) -> &'static [&'static str] { &[] }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn type_kinds(&self) -> &'static [&'static str] {
         &["struct"]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["struct", "struct_entry"]
@@ -56,11 +68,24 @@ impl Language for Ron {
         &["struct", "map"]
     }
 
-    fn control_flow_kinds(&self) -> &'static [&'static str] { &[] }
-    fn complexity_nodes(&self) -> &'static [&'static str] { &[] }
-    fn nesting_nodes(&self) -> &'static [&'static str] { &["struct", "map"] }
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn complexity_nodes(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        &["struct", "map"]
+    }
 
-    fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> { None }
+    fn extract_function(
+        &self,
+        _node: &Node,
+        _content: &str,
+        _in_container: bool,
+    ) -> Option<Symbol> {
+        None
+    }
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
         if node.kind() != "struct" && node.kind() != "map" {
@@ -90,20 +115,32 @@ impl Language for Ron {
         self.extract_container(node, content)
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
-    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> { Vec::new() }
+    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> {
+        Vec::new()
+    }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -112,7 +149,9 @@ impl Language for Ron {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "ron" { return None; }
+        if ext != "ron" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -121,31 +160,60 @@ impl Language for Ron {
         vec![format!("{}.ron", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "ron" }
+    fn lang_key(&self) -> &'static str {
+        "ron"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["ron"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["ron"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["ron"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".ron").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".ron")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

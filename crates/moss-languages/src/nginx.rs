@@ -1,26 +1,38 @@
 //! Nginx configuration file support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Nginx language support.
 pub struct Nginx;
 
 impl Language for Nginx {
-    fn name(&self) -> &'static str { "Nginx" }
-    fn extensions(&self) -> &'static [&'static str] { &["nginx", "conf"] }
-    fn grammar_name(&self) -> &'static str { "nginx" }
+    fn name(&self) -> &'static str {
+        "Nginx"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["nginx", "conf"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "nginx"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["block"]
     }
 
-    fn function_kinds(&self) -> &'static [&'static str] { &[] }
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["directive"] // include directive
@@ -55,7 +67,7 @@ impl Language for Nginx {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["block_directive"]  // if blocks are block_directives
+        &["block_directive"] // if blocks are block_directives
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
@@ -66,7 +78,14 @@ impl Language for Nginx {
         &["block", "block_directive"]
     }
 
-    fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> { None }
+    fn extract_function(
+        &self,
+        _node: &Node,
+        _content: &str,
+        _in_container: bool,
+    ) -> Option<Symbol> {
+        None
+    }
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
         if node.kind() != "block" {
@@ -89,8 +108,12 @@ impl Language for Nginx {
         })
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "directive" {
@@ -112,16 +135,24 @@ impl Language for Nginx {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         // For nginx blocks, the name is the directive name (server, location, etc.)
@@ -137,46 +168,72 @@ impl Language for Nginx {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["nginx", "conf"].contains(&ext) { return None; }
+        if !["nginx", "conf"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.conf", module),
-            format!("{}.nginx", module),
-        ]
+        vec![format!("{}.conf", module), format!("{}.nginx", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "nginx" }
+    fn lang_key(&self) -> &'static str {
+        "nginx"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["nginx", "conf"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["nginx", "conf"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["nginx", "conf"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".conf")
+        entry_name
+            .strip_suffix(".conf")
             .or_else(|| entry_name.strip_suffix(".nginx"))
             .unwrap_or(entry_name)
             .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

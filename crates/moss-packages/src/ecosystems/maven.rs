@@ -1,6 +1,9 @@
 //! Maven (Java) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -163,7 +166,11 @@ fn parse_pom_dependencies(content: &str) -> Result<Vec<Dependency>, PackageError
                     } else {
                         format!("{}:{}", group_id, artifact_id)
                     },
-                    version_req: if version.is_empty() { None } else { Some(version.clone()) },
+                    version_req: if version.is_empty() {
+                        None
+                    } else {
+                        Some(version.clone())
+                    },
                     optional,
                 });
             }
@@ -205,7 +212,13 @@ fn parse_gradle_dependencies(content: &str) -> Result<Vec<Dependency>, PackageEr
         let line = line.trim();
 
         // Check for dependency declarations
-        for prefix in ["implementation", "api", "compileOnly", "runtimeOnly", "testImplementation"] {
+        for prefix in [
+            "implementation",
+            "api",
+            "compileOnly",
+            "runtimeOnly",
+            "testImplementation",
+        ] {
             if line.starts_with(prefix) {
                 // Extract the dependency string from quotes
                 let after = &line[prefix.len()..];

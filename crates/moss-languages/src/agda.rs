@@ -1,19 +1,27 @@
 //! Agda language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Agda language support.
 pub struct Agda;
 
 impl Language for Agda {
-    fn name(&self) -> &'static str { "Agda" }
-    fn extensions(&self) -> &'static [&'static str] { &["agda"] }
-    fn grammar_name(&self) -> &'static str { "agda" }
+    fn name(&self) -> &'static str {
+        "Agda"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["agda"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "agda"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["module", "record"]
@@ -153,7 +161,9 @@ impl Language for Agda {
         }
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         match node.kind() {
@@ -172,16 +182,24 @@ impl Language for Agda {
         }
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("declarations")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -198,7 +216,9 @@ impl Language for Agda {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "agda" { return None; }
+        if ext != "agda" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -207,34 +227,61 @@ impl Language for Agda {
         vec![format!("{}.agda", module.replace('.', "/"))]
     }
 
-    fn lang_key(&self) -> &'static str { "agda" }
+    fn lang_key(&self) -> &'static str {
+        "agda"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         import_name.starts_with("Agda.")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["agda"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["agda"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["agda"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".agda").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".agda")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

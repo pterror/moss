@@ -1,6 +1,9 @@
 //! Nix ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -131,11 +134,7 @@ fn fetch_nix_info(package: &str) -> Result<PackageInfo, PackageError> {
                     .or_else(|| obj.iter().next())
                     .ok_or_else(|| PackageError::NotFound(package.to_string()))?;
 
-                let name = attr
-                    .split('.')
-                    .last()
-                    .unwrap_or(package)
-                    .to_string();
+                let name = attr.split('.').last().unwrap_or(package).to_string();
 
                 let version = info
                     .get("version")
@@ -153,7 +152,10 @@ fn fetch_nix_info(package: &str) -> Result<PackageInfo, PackageError> {
                     version,
                     description,
                     license: None,
-                    homepage: Some(format!("https://search.nixos.org/packages?query={}", package)),
+                    homepage: Some(format!(
+                        "https://search.nixos.org/packages?query={}",
+                        package
+                    )),
                     repository: None,
                     features: Vec::new(),
                     dependencies: Vec::new(),
@@ -177,7 +179,11 @@ fn fetch_nix_info(package: &str) -> Result<PackageInfo, PackageError> {
                 let full_name = parts[1];
                 let (name, version) = if let Some(idx) = full_name.rfind('-') {
                     let potential_version = &full_name[idx + 1..];
-                    if potential_version.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                    if potential_version
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_digit())
+                    {
                         (full_name[..idx].to_string(), potential_version.to_string())
                     } else {
                         (full_name.to_string(), "unknown".to_string())
@@ -191,7 +197,10 @@ fn fetch_nix_info(package: &str) -> Result<PackageInfo, PackageError> {
                     version,
                     description: None,
                     license: None,
-                    homepage: Some(format!("https://search.nixos.org/packages?query={}", package)),
+                    homepage: Some(format!(
+                        "https://search.nixos.org/packages?query={}",
+                        package
+                    )),
                     repository: None,
                     features: Vec::new(),
                     dependencies: Vec::new(),

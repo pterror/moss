@@ -1,8 +1,8 @@
 //! Daemon management commands for moss CLI.
 
 use crate::daemon;
-use clap::Subcommand;
 use crate::paths::get_moss_dir;
+use clap::Subcommand;
 use std::path::Path;
 
 #[derive(Subcommand)]

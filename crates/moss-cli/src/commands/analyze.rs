@@ -94,7 +94,10 @@ fn cmd_call_graph(
     let idx = match index::FileIndex::open(root) {
         Ok(i) => i,
         Err(e) => {
-            eprintln!("Failed to open index: {}. Run: moss reindex --call-graph", e);
+            eprintln!(
+                "Failed to open index: {}. Run: moss reindex --call-graph",
+                e
+            );
             return 1;
         }
     };
@@ -267,23 +270,15 @@ fn cmd_storage(root: Option<&Path>, json: bool) -> i32 {
 
     // Project index: .moss/index.sqlite
     let index_path = root.join(".moss").join("index.sqlite");
-    let index_size = std::fs::metadata(&index_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let index_size = std::fs::metadata(&index_path).map(|m| m.len()).unwrap_or(0);
 
     // Package cache: ~/.cache/moss/packages/
     let cache_dir = get_cache_dir().map(|d| d.join("packages"));
-    let cache_size = cache_dir
-        .as_ref()
-        .map(|d| dir_size(d))
-        .unwrap_or(0);
+    let cache_size = cache_dir.as_ref().map(|d| dir_size(d)).unwrap_or(0);
 
     // Global cache: ~/.cache/moss/ (total)
     let global_cache_dir = get_cache_dir();
-    let global_size = global_cache_dir
-        .as_ref()
-        .map(|d| dir_size(d))
-        .unwrap_or(0);
+    let global_size = global_cache_dir.as_ref().map(|d| dir_size(d)).unwrap_or(0);
 
     if json {
         println!(
@@ -311,15 +306,30 @@ fn cmd_storage(root: Option<&Path>, json: bool) -> i32 {
     } else {
         println!("Storage Usage");
         println!();
-        println!("Project index:   {:>10}  {}", format_size(index_size), index_path.display());
+        println!(
+            "Project index:   {:>10}  {}",
+            format_size(index_size),
+            index_path.display()
+        );
         if let Some(ref cache) = cache_dir {
-            println!("Package cache:   {:>10}  {}", format_size(cache_size), cache.display());
+            println!(
+                "Package cache:   {:>10}  {}",
+                format_size(cache_size),
+                cache.display()
+            );
         }
         if let Some(ref global) = global_cache_dir {
-            println!("Global cache:    {:>10}  {}", format_size(global_size), global.display());
+            println!(
+                "Global cache:    {:>10}  {}",
+                format_size(global_size),
+                global.display()
+            );
         }
         println!();
-        println!("Total:           {:>10}", format_size(index_size + global_size));
+        println!(
+            "Total:           {:>10}",
+            format_size(index_size + global_size)
+        );
     }
 
     0

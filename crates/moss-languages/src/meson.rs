@@ -1,32 +1,42 @@
 //! Meson build system support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Meson language support.
 pub struct Meson;
 
 impl Language for Meson {
-    fn name(&self) -> &'static str { "Meson" }
-    fn extensions(&self) -> &'static [&'static str] { &["meson.build", "meson_options.txt"] }
-    fn grammar_name(&self) -> &'static str { "meson" }
+    fn name(&self) -> &'static str {
+        "Meson"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["meson.build", "meson_options.txt"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "meson"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &[]  // Meson doesn't have traditional containers
+        &[] // Meson doesn't have traditional containers
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["normal_command"]  // function calls
+        &["normal_command"] // function calls
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
-        &["normal_command"]  // subproject(), dependency() are function calls
+        &["normal_command"] // subproject(), dependency() are function calls
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
@@ -66,16 +76,25 @@ impl Language for Meson {
         &["if_command", "foreach_command"]
     }
 
-    fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> {
-        None  // Meson uses function calls, not definitions
+    fn extract_function(
+        &self,
+        _node: &Node,
+        _content: &str,
+        _in_container: bool,
+    ) -> Option<Symbol> {
+        None // Meson uses function calls, not definitions
     }
 
     fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> {
-        None  // Meson doesn't have containers
+        None // Meson doesn't have containers
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "normal_command" {
@@ -97,16 +116,24 @@ impl Language for Meson {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -137,31 +164,57 @@ impl Language for Meson {
         vec!["meson.build".to_string()]
     }
 
-    fn lang_key(&self) -> &'static str { "meson" }
+    fn lang_key(&self) -> &'static str {
+        "meson"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &[] } // Special filenames only
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &[]
+    } // Special filenames only
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
         use crate::traits::skip_dotfiles;
-        if skip_dotfiles(name) { return true; }
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && name != "meson.build" && name != "meson_options.txt"
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
         entry_name.to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

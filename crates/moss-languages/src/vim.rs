@@ -1,19 +1,27 @@
 //! Vim script language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Vim script language support.
 pub struct Vim;
 
 impl Language for Vim {
-    fn name(&self) -> &'static str { "Vim" }
-    fn extensions(&self) -> &'static [&'static str] { &["vim", "vimrc"] }
-    fn grammar_name(&self) -> &'static str { "vim" }
+    fn name(&self) -> &'static str {
+        "Vim"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["vim", "vimrc"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "vim"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["function_definition", "augroup"]
@@ -23,7 +31,9 @@ impl Language for Vim {
         &["function_definition"]
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["source_statement", "runtime_statement"]
@@ -97,7 +107,9 @@ impl Language for Vim {
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
         if node.kind() == "augroup" {
             let text = &content[node.byte_range()];
-            let name = text.split_whitespace().nth(1)
+            let name = text
+                .split_whitespace()
+                .nth(1)
                 .unwrap_or("unnamed")
                 .to_string();
             return Some(Symbol {
@@ -114,7 +126,9 @@ impl Language for Vim {
         self.extract_function(node, content, false)
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // Vim uses " for comments
@@ -168,17 +182,28 @@ impl Language for Vim {
     }
 
     fn is_public(&self, node: &Node, content: &str) -> bool {
-        self.node_name(node, content).map_or(true, |n| !n.starts_with("s:"))
+        self.node_name(node, content)
+            .map_or(true, |n| !n.starts_with("s:"))
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
-        if self.is_public(node, content) { Visibility::Public } else { Visibility::Private }
+        if self.is_public(node, content) {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -202,40 +227,78 @@ impl Language for Vim {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "vim" }
-
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-
-    fn resolve_local_import(&self, import: &str, current_file: &Path, _project_root: &Path) -> Option<PathBuf> {
-        let dir = current_file.parent()?;
-        let full = dir.join(import);
-        if full.is_file() { Some(full) } else { None }
+    fn lang_key(&self) -> &'static str {
+        "vim"
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
         None
     }
 
-    fn get_version(&self, _project_root: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["vim"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        let dir = current_file.parent()?;
+        let full = dir.join(import);
+        if full.is_file() {
+            Some(full)
+        } else {
+            None
+        }
+    }
+
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
+        None
+    }
+
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["vim"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["vim"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".vim").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".vim")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

@@ -1,19 +1,27 @@
 //! MATLAB language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// MATLAB language support.
 pub struct Matlab;
 
 impl Language for Matlab {
-    fn name(&self) -> &'static str { "MATLAB" }
-    fn extensions(&self) -> &'static [&'static str] { &["m"] }
-    fn grammar_name(&self) -> &'static str { "matlab" }
+    fn name(&self) -> &'static str {
+        "MATLAB"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["m"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "matlab"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_definition"]
@@ -65,19 +73,42 @@ impl Language for Matlab {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "class_definition", "methods", "properties"]
+        &[
+            "function_definition",
+            "class_definition",
+            "methods",
+            "properties",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "try_statement"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "try_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "catch_clause"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "catch_clause",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "function_definition"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "function_definition",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -143,7 +174,9 @@ impl Language for Matlab {
         })
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "command" {
@@ -165,16 +198,24 @@ impl Language for Matlab {
         }]
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -191,7 +232,9 @@ impl Language for Matlab {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "m" { return None; }
+        if ext != "m" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -200,31 +243,60 @@ impl Language for Matlab {
         vec![format!("{}.m", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "matlab" }
+    fn lang_key(&self) -> &'static str {
+        "matlab"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["m"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["m"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["m"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".m").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".m")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

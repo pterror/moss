@@ -1,30 +1,50 @@
 //! Julia language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Julia language support.
 pub struct Julia;
 
 impl Language for Julia {
-    fn name(&self) -> &'static str { "Julia" }
-    fn extensions(&self) -> &'static [&'static str] { &["jl"] }
-    fn grammar_name(&self) -> &'static str { "julia" }
+    fn name(&self) -> &'static str {
+        "Julia"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["jl"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "julia"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["module_definition", "struct_definition", "abstract_definition"]
+        &[
+            "module_definition",
+            "struct_definition",
+            "abstract_definition",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "arrow_function_expression", "macro_definition"]
+        &[
+            "function_definition",
+            "arrow_function_expression",
+            "macro_definition",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["struct_definition", "abstract_definition", "primitive_definition"]
+        &[
+            "struct_definition",
+            "abstract_definition",
+            "primitive_definition",
+        ]
     }
 
     fn import_kinds(&self) -> &'static [&'static str] {
@@ -32,7 +52,11 @@ impl Language for Julia {
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "struct_definition", "const_statement"]
+        &[
+            "function_definition",
+            "struct_definition",
+            "const_statement",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -62,21 +86,41 @@ impl Language for Julia {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["function_definition", "let_statement", "do_clause", "module_definition"]
+        &[
+            "function_definition",
+            "let_statement",
+            "do_clause",
+            "module_definition",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "try_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "try_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "elseif_clause",
-          "ternary_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "elseif_clause",
+            "ternary_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["function_definition", "module_definition", "struct_definition",
-          "if_statement", "for_statement"]
+        &[
+            "function_definition",
+            "module_definition",
+            "struct_definition",
+            "if_statement",
+            "for_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -128,7 +172,8 @@ impl Language for Julia {
         while let Some(sibling) = prev {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "string_literal" && text.starts_with("\"\"\"") {
-                let inner = text.trim_start_matches("\"\"\"")
+                let inner = text
+                    .trim_start_matches("\"\"\"")
                     .trim_end_matches("\"\"\"")
                     .trim();
                 if !inner.is_empty() {
@@ -157,7 +202,8 @@ impl Language for Julia {
         };
 
         let rest = text.strip_prefix(keyword).unwrap_or("");
-        let module = rest.split(|c| c == ':' || c == ',')
+        let module = rest
+            .split(|c| c == ':' || c == ',')
             .next()
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
@@ -176,16 +222,24 @@ impl Language for Julia {
         }]
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -194,28 +248,47 @@ impl Language for Julia {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "jl" { return None; }
+        if ext != "jl" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.jl", module),
-            format!("src/{}.jl", module),
-        ]
+        vec![format!("{}.jl", module), format!("src/{}.jl", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "julia" }
+    fn lang_key(&self) -> &'static str {
+        "julia"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        matches!(import_name, "Base" | "Core" | "Main" | "LinearAlgebra" |
-            "Statistics" | "Random" | "Dates" | "Printf" | "Test" | "Pkg")
+        matches!(
+            import_name,
+            "Base"
+                | "Core"
+                | "Main"
+                | "LinearAlgebra"
+                | "Statistics"
+                | "Random"
+                | "Dates"
+                | "Printf"
+                | "Test"
+                | "Pkg"
+        )
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         let candidates = [
             project_root.join("src").join(format!("{}.jl", import)),
             project_root.join(format!("{}.jl", import)),
@@ -228,7 +301,11 @@ impl Language for Julia {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
@@ -249,29 +326,42 @@ impl Language for Julia {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["jl"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["jl"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "test" || name == "docs" || name == "benchmark") {
             return true;
         }
         !is_dir && !has_extension(name, &["jl"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".jl").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".jl")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
         if path.is_file() {
             return Some(path.to_path_buf());
         }
-        let src = path.join("src").join(format!("{}.jl", path.file_name()?.to_str()?));
+        let src = path
+            .join("src")
+            .join(format!("{}.jl", path.file_name()?.to_str()?));
         if src.is_file() {
             return Some(src);
         }

@@ -1,6 +1,9 @@
 //! Hex (Elixir/Erlang) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -185,7 +188,11 @@ fn fetch_hex_info(package: &str) -> Result<PackageInfo, PackageError> {
 
     // Parse requirements from latest release
     let mut dependencies = Vec::new();
-    if let Some(latest) = v.get("releases").and_then(|r| r.as_array()).and_then(|a| a.first()) {
+    if let Some(latest) = v
+        .get("releases")
+        .and_then(|r| r.as_array())
+        .and_then(|a| a.first())
+    {
         if let Some(reqs) = latest.get("requirements").and_then(|r| r.as_object()) {
             for (dep_name, req) in reqs {
                 let version_req = req

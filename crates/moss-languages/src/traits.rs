@@ -1,8 +1,8 @@
 //! Core trait for language support.
 
-use std::path::{Path, PathBuf};
-use arborium::tree_sitter::Node;
 use crate::external_packages::ResolvedPackage;
+use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Symbol kind classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,7 +119,9 @@ pub fn skip_dotfiles(name: &str) -> bool {
 
 /// Check if name has one of the given extensions
 pub fn has_extension(name: &str, extensions: &[&str]) -> bool {
-    extensions.iter().any(|ext| name.ends_with(&format!(".{}", ext)))
+    extensions
+        .iter()
+        .any(|ext| name.ends_with(&format!(".{}", ext)))
 }
 
 /// Unified language support trait.
@@ -333,7 +335,11 @@ pub trait Language: Send + Sync {
     }
 
     /// Discover packages recursively (each file with matching extension is a package).
-    fn discover_recursive_packages(&self, base_path: &Path, current_path: &Path) -> Vec<(String, PathBuf)> {
+    fn discover_recursive_packages(
+        &self,
+        base_path: &Path,
+        current_path: &Path,
+    ) -> Vec<(String, PathBuf)> {
         let entries = match std::fs::read_dir(current_path) {
             Ok(e) => e,
             Err(_) => return Vec::new(),
@@ -353,7 +359,8 @@ pub trait Language: Send + Sync {
                 packages.extend(self.discover_recursive_packages(base_path, &path));
             } else {
                 // Get relative path from base as module name
-                let rel_path = path.strip_prefix(base_path)
+                let rel_path = path
+                    .strip_prefix(base_path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| name);
                 packages.push((rel_path, path));

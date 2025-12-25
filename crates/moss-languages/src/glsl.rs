@@ -1,19 +1,27 @@
 //! GLSL (OpenGL Shading Language) support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// GLSL language support.
 pub struct Glsl;
 
 impl Language for Glsl {
-    fn name(&self) -> &'static str { "GLSL" }
-    fn extensions(&self) -> &'static [&'static str] { &["glsl", "vert", "frag", "geom", "comp", "tesc", "tese"] }
-    fn grammar_name(&self) -> &'static str { "glsl" }
+    fn name(&self) -> &'static str {
+        "GLSL"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["glsl", "vert", "frag", "geom", "comp", "tesc", "tese"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "glsl"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["struct_specifier"]
@@ -27,7 +35,9 @@ impl Language for Glsl {
         &["struct_specifier"]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["function_definition", "struct_specifier"]
@@ -61,16 +71,32 @@ impl Language for Glsl {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "switch_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "switch_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "switch_statement",
-          "case_statement", "conditional_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "switch_statement",
+            "case_statement",
+            "conditional_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["function_definition", "if_statement", "for_statement", "while_statement"]
+        &[
+            "function_definition",
+            "if_statement",
+            "for_statement",
+            "while_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -122,9 +148,7 @@ impl Language for Glsl {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" {
                 if text.starts_with("/*") {
-                    let inner = text.trim_start_matches("/*")
-                        .trim_end_matches("*/")
-                        .trim();
+                    let inner = text.trim_start_matches("/*").trim_end_matches("*/").trim();
                     if !inner.is_empty() {
                         return Some(inner.lines().next().unwrap_or(inner).to_string());
                     }
@@ -138,18 +162,28 @@ impl Language for Glsl {
         None
     }
 
-    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> { Vec::new() }
+    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> {
+        Vec::new()
+    }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("declarator")
@@ -178,29 +212,55 @@ impl Language for Glsl {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "glsl" }
+    fn lang_key(&self) -> &'static str {
+        "glsl"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
     fn indexable_extensions(&self) -> &'static [&'static str] {
         &["glsl", "vert", "frag", "geom", "comp", "tesc", "tese"]
     }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
-
-    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        !is_dir && !has_extension(name, &["glsl", "vert", "frag", "geom", "comp", "tesc", "tese"])
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        !is_dir
+            && !has_extension(
+                name,
+                &["glsl", "vert", "frag", "geom", "comp", "tesc", "tese"],
+            )
+    }
+
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        for ext in &[".glsl", ".vert", ".frag", ".geom", ".comp", ".tesc", ".tese"] {
+        for ext in &[
+            ".glsl", ".vert", ".frag", ".geom", ".comp", ".tesc", ".tese",
+        ] {
             if let Some(name) = entry_name.strip_suffix(ext) {
                 return name.to_string();
             }
@@ -209,7 +269,11 @@ impl Language for Glsl {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

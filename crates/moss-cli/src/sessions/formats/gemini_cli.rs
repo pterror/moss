@@ -59,7 +59,10 @@ impl LogFormat for GeminiCliFormat {
         // Count message types
         for msg in &messages {
             if let Some(msg_type) = msg.get("type").and_then(|v| v.as_str()) {
-                *analysis.message_counts.entry(msg_type.to_string()).or_insert(0) += 1;
+                *analysis
+                    .message_counts
+                    .entry(msg_type.to_string())
+                    .or_insert(0) += 1;
             }
         }
 
@@ -95,10 +98,7 @@ fn analyze_tools(messages: &[Value]) -> HashMap<String, ToolStats> {
         };
 
         for tc in tool_calls {
-            let tool_name = tc
-                .get("name")
-                .and_then(|n| n.as_str())
-                .unwrap_or("unknown");
+            let tool_name = tc.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
 
             let stat = stats
                 .entry(tool_name.to_string())

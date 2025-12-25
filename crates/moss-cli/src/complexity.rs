@@ -3,8 +3,8 @@
 //! Calculates McCabe cyclomatic complexity for functions.
 //! Complexity = number of decision points + 1
 
-use arborium::tree_sitter;
 use crate::parsers::Parsers;
+use arborium::tree_sitter;
 use moss_languages::{support_for_path, Language};
 use std::path::Path;
 
@@ -16,7 +16,7 @@ pub struct FunctionComplexity {
     pub start_line: usize,
     #[allow(dead_code)] // Part of public API, may be used by consumers
     pub end_line: usize,
-    pub parent: Option<String>, // class/struct name for methods
+    pub parent: Option<String>,    // class/struct name for methods
     pub file_path: Option<String>, // file path for codebase-wide reports
 }
 
@@ -115,12 +115,11 @@ impl ComplexityAnalyzer {
     }
 
     /// Analyze using the Language trait
-    fn analyze_with_trait(
-        &self,
-        content: &str,
-        support: &dyn Language,
-    ) -> Vec<FunctionComplexity> {
-        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
+    fn analyze_with_trait(&self, content: &str, support: &dyn Language) -> Vec<FunctionComplexity> {
+        let tree = match self
+            .parsers
+            .parse_with_grammar(support.grammar_name(), content)
+        {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -166,7 +165,13 @@ impl ComplexityAnalyzer {
                 if let Some(name) = support.node_name(&node, content) {
                     // Recurse into container with the container name as parent
                     if cursor.goto_first_child() {
-                        self.collect_functions_with_trait(cursor, content, support, functions, Some(name));
+                        self.collect_functions_with_trait(
+                            cursor,
+                            content,
+                            support,
+                            functions,
+                            Some(name),
+                        );
                         cursor.goto_parent();
                     }
                     if cursor.goto_next_sibling() {

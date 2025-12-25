@@ -1,6 +1,9 @@
 //! RubyGems ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -121,9 +124,7 @@ impl Ecosystem for Gem {
                     // Parse "gem_name (version)" format
                     if let Some(paren_start) = trimmed.find('(') {
                         let name = trimmed[..paren_start].trim();
-                        let version = trimmed[paren_start + 1..]
-                            .trim_end_matches(')')
-                            .to_string();
+                        let version = trimmed[paren_start + 1..].trim_end_matches(')').to_string();
                         deps.push(TreeNode {
                             name: name.to_string(),
                             version,

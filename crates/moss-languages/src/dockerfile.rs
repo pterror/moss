@@ -1,19 +1,27 @@
 //! Dockerfile language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Dockerfile language support.
 pub struct Dockerfile;
 
 impl Language for Dockerfile {
-    fn name(&self) -> &'static str { "Dockerfile" }
-    fn extensions(&self) -> &'static [&'static str] { &["dockerfile"] }
-    fn grammar_name(&self) -> &'static str { "dockerfile" }
+    fn name(&self) -> &'static str {
+        "Dockerfile"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["dockerfile"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "dockerfile"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     // Dockerfiles have stages (FROM ... AS name) that act as containers
     fn container_kinds(&self) -> &'static [&'static str] {
@@ -21,11 +29,17 @@ impl Language for Dockerfile {
     }
 
     // No functions in Dockerfile
-    fn function_kinds(&self) -> &'static [&'static str] { &[] }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["from_instruction"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["from_instruction"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["from_instruction"]
@@ -52,12 +66,25 @@ impl Language for Dockerfile {
         Vec::new()
     }
 
-    fn scope_creating_kinds(&self) -> &'static [&'static str] { &[] }
-    fn control_flow_kinds(&self) -> &'static [&'static str] { &[] }
-    fn complexity_nodes(&self) -> &'static [&'static str] { &[] }
-    fn nesting_nodes(&self) -> &'static [&'static str] { &[] }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn complexity_nodes(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        &[]
+    }
 
-    fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> {
+    fn extract_function(
+        &self,
+        _node: &Node,
+        _content: &str,
+        _in_container: bool,
+    ) -> Option<Symbol> {
         None
     }
 
@@ -89,8 +116,12 @@ impl Language for Dockerfile {
         })
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "from_instruction" {
@@ -111,14 +142,26 @@ impl Language for Dockerfile {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let name = path.file_name()?.to_str()?;
@@ -133,24 +176,47 @@ impl Language for Dockerfile {
         vec!["Dockerfile".to_string()]
     }
 
-    fn lang_key(&self) -> &'static str { "dockerfile" }
+    fn lang_key(&self) -> &'static str {
+        "dockerfile"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-
-    fn resolve_local_import(&self, _import: &str, _current_file: &Path, _project_root: &Path) -> Option<PathBuf> {
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_local_import(
+        &self,
+        _import: &str,
+        _current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
+        None
+    }
+
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Could resolve Docker Hub images here
         None
     }
 
-    fn get_version(&self, _project_root: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &[] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, _is_dir: bool) -> bool {
         use crate::traits::skip_dotfiles;
@@ -165,7 +231,9 @@ impl Language for Dockerfile {
         entry_name.to_string()
     }
 
-    fn find_package_entry(&self, _path: &Path) -> Option<PathBuf> { None }
+    fn find_package_entry(&self, _path: &Path) -> Option<PathBuf> {
+        None
+    }
 }
 
 impl Dockerfile {

@@ -1,19 +1,27 @@
 //! Perl language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Perl language support.
 pub struct Perl;
 
 impl Language for Perl {
-    fn name(&self) -> &'static str { "Perl" }
-    fn extensions(&self) -> &'static [&'static str] { &["pl", "pm", "t"] }
-    fn grammar_name(&self) -> &'static str { "perl" }
+    fn name(&self) -> &'static str {
+        "Perl"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["pl", "pm", "t"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "perl"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["package_statement"]
@@ -23,7 +31,9 @@ impl Language for Perl {
         &["subroutine_declaration_statement"]
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["use_statement", "require_expression"]
@@ -60,16 +70,30 @@ impl Language for Perl {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["conditional_statement", "loop_statement", "for_statement", "cstyle_for_statement"]
+        &[
+            "conditional_statement",
+            "loop_statement",
+            "for_statement",
+            "cstyle_for_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["conditional_statement", "loop_statement", "for_statement",
-          "conditional_expression"]
+        &[
+            "conditional_statement",
+            "loop_statement",
+            "for_statement",
+            "conditional_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["subroutine_declaration_statement", "conditional_statement", "loop_statement", "block"]
+        &[
+            "subroutine_declaration_statement",
+            "conditional_statement",
+            "loop_statement",
+            "block",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -84,7 +108,11 @@ impl Language for Perl {
             docstring: self.extract_docstring(node, content),
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,
-            visibility: if name.starts_with('_') { Visibility::Private } else { Visibility::Public },
+            visibility: if name.starts_with('_') {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            },
             children: Vec::new(),
         })
     }
@@ -95,7 +123,8 @@ impl Language for Perl {
         }
 
         let text = &content[node.byte_range()];
-        let name = text.strip_prefix("package ")
+        let name = text
+            .strip_prefix("package ")
             .and_then(|s| s.split(';').next())
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "main".to_string());
@@ -112,7 +141,9 @@ impl Language for Perl {
         })
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // Perl uses # for comments, POD for docs
@@ -168,20 +199,29 @@ impl Language for Perl {
     }
 
     fn is_public(&self, node: &Node, content: &str) -> bool {
-        self.node_name(node, content).map_or(true, |n| !n.starts_with('_'))
+        self.node_name(node, content)
+            .map_or(true, |n| !n.starts_with('_'))
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
-        if self.is_public(node, content) { Visibility::Public } else { Visibility::Private }
+        if self.is_public(node, content) {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -190,37 +230,56 @@ impl Language for Perl {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["pl", "pm"].contains(&ext) { return None; }
+        if !["pl", "pm"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         let path = module.replace("::", "/");
-        vec![
-            format!("{}.pm", path),
-            format!("{}.pl", path),
-        ]
+        vec![format!("{}.pm", path), format!("{}.pl", path)]
     }
 
-    fn lang_key(&self) -> &'static str { "perl" }
+    fn lang_key(&self) -> &'static str {
+        "perl"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         // Core Perl modules
-        import_name == "strict" || import_name == "warnings" ||
-        import_name.starts_with("File::") || import_name.starts_with("IO::") ||
-        import_name.starts_with("Data::") || import_name.starts_with("Carp")
+        import_name == "strict"
+            || import_name == "warnings"
+            || import_name.starts_with("File::")
+            || import_name.starts_with("IO::")
+            || import_name.starts_with("Data::")
+            || import_name.starts_with("Carp")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         let path = import.replace("::", "/");
         let full = project_root.join("lib").join(format!("{}.pm", path));
-        if full.is_file() { Some(full) } else { None }
+        if full.is_file() {
+            Some(full)
+        } else {
+            None
+        }
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
@@ -234,28 +293,45 @@ impl Language for Perl {
         None
     }
 
-    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["pl", "pm"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["pl", "pm"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && name == "blib" { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && name == "blib" {
+            return true;
+        }
         !is_dir && !has_extension(name, &["pl", "pm"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".pm")
+        entry_name
+            .strip_suffix(".pm")
             .or_else(|| entry_name.strip_suffix(".pl"))
             .unwrap_or(entry_name)
             .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

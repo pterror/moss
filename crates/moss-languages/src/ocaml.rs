@@ -1,22 +1,34 @@
 //! OCaml language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// OCaml language support.
 pub struct OCaml;
 
 impl Language for OCaml {
-    fn name(&self) -> &'static str { "OCaml" }
-    fn extensions(&self) -> &'static [&'static str] { &["ml", "mli"] }
-    fn grammar_name(&self) -> &'static str { "ocaml" }
+    fn name(&self) -> &'static str {
+        "OCaml"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ml", "mli"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "ocaml"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["module_definition", "module_type_definition", "type_definition"]
+        &[
+            "module_definition",
+            "module_type_definition",
+            "type_definition",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
@@ -129,8 +141,10 @@ impl Language for OCaml {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" && text.starts_with("(**") {
                 let inner = text
-                    .strip_prefix("(**").unwrap_or(text)
-                    .strip_suffix("*)").unwrap_or(text)
+                    .strip_prefix("(**")
+                    .unwrap_or(text)
+                    .strip_suffix("*)")
+                    .unwrap_or(text)
                     .trim();
                 if !inner.is_empty() {
                     return Some(inner.to_string());
@@ -165,16 +179,24 @@ impl Language for OCaml {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -183,7 +205,9 @@ impl Language for OCaml {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "ml" && ext != "mli" { return None; }
+        if ext != "ml" && ext != "mli" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         // OCaml module names are capitalized
         let mut chars: Vec<char> = stem.chars().collect();
@@ -195,26 +219,59 @@ impl Language for OCaml {
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         let lower = module.to_lowercase();
-        vec![
-            format!("{}.ml", lower),
-            format!("{}.mli", lower),
-        ]
+        vec![format!("{}.ml", lower), format!("{}.mli", lower)]
     }
 
-    fn lang_key(&self) -> &'static str { "ocaml" }
+    fn lang_key(&self) -> &'static str {
+        "ocaml"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         // Core OCaml modules
-        matches!(import_name, "Stdlib" | "Pervasives" | "Printf" | "List" | "Array" |
-            "String" | "Bytes" | "Char" | "Int" | "Float" | "Bool" | "Unit" |
-            "Fun" | "Option" | "Result" | "Seq" | "Map" | "Set" | "Hashtbl" |
-            "Stack" | "Queue" | "Stream" | "Buffer" | "Format" | "Scanf" |
-            "Arg" | "Filename" | "Sys" | "Unix")
+        matches!(
+            import_name,
+            "Stdlib"
+                | "Pervasives"
+                | "Printf"
+                | "List"
+                | "Array"
+                | "String"
+                | "Bytes"
+                | "Char"
+                | "Int"
+                | "Float"
+                | "Bool"
+                | "Unit"
+                | "Fun"
+                | "Option"
+                | "Result"
+                | "Seq"
+                | "Map"
+                | "Set"
+                | "Hashtbl"
+                | "Stack"
+                | "Queue"
+                | "Stream"
+                | "Buffer"
+                | "Format"
+                | "Scanf"
+                | "Arg"
+                | "Filename"
+                | "Sys"
+                | "Unix"
+        )
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         let lower = import.to_lowercase();
         for ext in &["ml", "mli"] {
             let candidates = [
@@ -231,7 +288,11 @@ impl Language for OCaml {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
@@ -261,17 +322,27 @@ impl Language for OCaml {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["ml", "mli"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["ml", "mli"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && name == "_build" { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && name == "_build" {
+            return true;
+        }
         !is_dir && !has_extension(name, &["ml", "mli"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
         let stem = entry_name
@@ -287,7 +358,11 @@ impl Language for OCaml {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

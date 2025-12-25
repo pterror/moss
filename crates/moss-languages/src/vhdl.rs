@@ -1,22 +1,34 @@
 //! VHDL support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// VHDL language support.
 pub struct Vhdl;
 
 impl Language for Vhdl {
-    fn name(&self) -> &'static str { "VHDL" }
-    fn extensions(&self) -> &'static [&'static str] { &["vhd", "vhdl"] }
-    fn grammar_name(&self) -> &'static str { "vhdl" }
+    fn name(&self) -> &'static str {
+        "VHDL"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["vhd", "vhdl"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "vhdl"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["entity_declaration", "architecture_body", "package_declaration"]
+        &[
+            "entity_declaration",
+            "architecture_body",
+            "package_declaration",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
@@ -57,7 +69,12 @@ impl Language for Vhdl {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["entity_declaration", "architecture_body", "function_body", "procedure_body"]
+        &[
+            "entity_declaration",
+            "architecture_body",
+            "function_body",
+            "procedure_body",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
@@ -94,8 +111,10 @@ impl Language for Vhdl {
     }
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
-        if node.kind() != "entity_declaration" && node.kind() != "architecture_body"
-            && node.kind() != "package_declaration" {
+        if node.kind() != "entity_declaration"
+            && node.kind() != "architecture_body"
+            && node.kind() != "package_declaration"
+        {
             return None;
         }
 
@@ -135,7 +154,9 @@ impl Language for Vhdl {
         })
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "use_clause" {
@@ -153,16 +174,24 @@ impl Language for Vhdl {
         }]
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -171,7 +200,9 @@ impl Language for Vhdl {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["vhd", "vhdl"].contains(&ext) { return None; }
+        if !["vhd", "vhdl"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -180,34 +211,61 @@ impl Language for Vhdl {
         vec![format!("{}.vhd", module), format!("{}.vhdl", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "vhdl" }
+    fn lang_key(&self) -> &'static str {
+        "vhdl"
+    }
 
-    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool { false }
-    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["vhd", "vhdl"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _: &str, _: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["vhd", "vhdl"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["vhd", "vhdl"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".vhd")
+        entry_name
+            .strip_suffix(".vhd")
             .or_else(|| entry_name.strip_suffix(".vhdl"))
             .unwrap_or(entry_name)
             .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

@@ -2,10 +2,13 @@
 //!
 //! Extracts function/class signatures with optional docstrings.
 
+use crate::parsers::Parsers;
 use crate::tree::{ViewNode, ViewNodeKind};
 use arborium::tree_sitter;
-use crate::parsers::Parsers;
-use moss_languages::{support_for_grammar, support_for_path, Language, Symbol as LangSymbol, SymbolKind as LangSymbolKind};
+use moss_languages::{
+    support_for_grammar, support_for_path, Language, Symbol as LangSymbol,
+    SymbolKind as LangSymbolKind,
+};
 use std::path::Path;
 
 /// A code symbol with its signature
@@ -90,7 +93,8 @@ impl SkeletonResult {
         fn filter_symbol(sym: &SkeletonSymbol) -> Option<SkeletonSymbol> {
             if is_type_kind(sym.kind) {
                 // For types, keep only nested types (not methods)
-                let type_children: Vec<_> = sym.children
+                let type_children: Vec<_> = sym
+                    .children
                     .iter()
                     .filter_map(|c| filter_symbol(c))
                     .collect();
@@ -108,7 +112,8 @@ impl SkeletonResult {
             }
         }
 
-        let filtered_symbols: Vec<_> = self.symbols
+        let filtered_symbols: Vec<_> = self
+            .symbols
             .iter()
             .filter_map(|s| filter_symbol(s))
             .collect();
@@ -130,7 +135,10 @@ fn format_symbols(
 
     for sym in symbols {
         let size = sym.end_line.saturating_sub(sym.start_line) + 1;
-        lines.push(format!("{}{}: L{}-{} ({} lines)", prefix, sym.signature, sym.start_line, sym.end_line, size));
+        lines.push(format!(
+            "{}{}: L{}-{} ({} lines)",
+            prefix, sym.signature, sym.start_line, sym.end_line, size
+        ));
 
         if include_docstrings {
             if let Some(doc) = &sym.docstring {
@@ -158,9 +166,31 @@ fn format_symbols(
 fn is_useless_docstring(name: &str, docstring: &str) -> bool {
     // Common filler words to ignore
     const FILLER_WORDS: &[&str] = &[
-        "the", "a", "an", "this", "that", "given", "specified", "provided",
-        "returns", "return", "get", "gets", "set", "sets", "is", "are",
-        "for", "from", "to", "of", "with", "by", "in", "on", "as",
+        "the",
+        "a",
+        "an",
+        "this",
+        "that",
+        "given",
+        "specified",
+        "provided",
+        "returns",
+        "return",
+        "get",
+        "gets",
+        "set",
+        "sets",
+        "is",
+        "are",
+        "for",
+        "from",
+        "to",
+        "of",
+        "with",
+        "by",
+        "in",
+        "on",
+        "as",
     ];
 
     // Split function name into words (handle camelCase and snake_case)
@@ -172,7 +202,13 @@ fn is_useless_docstring(name: &str, docstring: &str) -> bool {
     // Clean docstring: lowercase, remove punctuation, split into words
     let doc_clean: String = docstring
         .chars()
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c.is_whitespace() {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect();
     let doc_words: Vec<String> = doc_clean
         .split_whitespace()
@@ -188,7 +224,11 @@ fn is_useless_docstring(name: &str, docstring: &str) -> bool {
     // Check if doc words are subset of name words (or very close)
     let matching = doc_words
         .iter()
-        .filter(|dw| name_words.iter().any(|nw| nw == *dw || nw.contains(dw.as_str()) || dw.contains(nw.as_str())))
+        .filter(|dw| {
+            name_words
+                .iter()
+                .any(|nw| nw == *dw || nw.contains(dw.as_str()) || dw.contains(nw.as_str()))
+        })
         .count();
 
     // If most doc words match name words, it's useless
@@ -308,12 +348,11 @@ impl SkeletonExtractor {
     }
 
     /// Extract using the Language trait (new unified approach)
-    fn extract_with_trait(
-        &self,
-        content: &str,
-        support: &dyn Language,
-    ) -> Vec<SkeletonSymbol> {
-        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
+    fn extract_with_trait(&self, content: &str, support: &dyn Language) -> Vec<SkeletonSymbol> {
+        let tree = match self
+            .parsers
+            .parse_with_grammar(support.grammar_name(), content)
+        {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -394,11 +433,20 @@ impl SkeletonExtractor {
             // Check for embedded content (e.g., <script> in Vue/Svelte/HTML)
             if let Some(embedded) = support.embedded_content(&node, content) {
                 if let Some(sub_lang) = support_for_grammar(embedded.grammar) {
-                    if let Some(sub_tree) = self.parsers.parse_with_grammar(embedded.grammar, &embedded.content) {
+                    if let Some(sub_tree) = self
+                        .parsers
+                        .parse_with_grammar(embedded.grammar, &embedded.content)
+                    {
                         let mut sub_symbols = Vec::new();
                         let sub_root = sub_tree.root_node();
                         let mut sub_cursor = sub_root.walk();
-                        self.collect_with_trait(&mut sub_cursor, &embedded.content, sub_lang, &mut sub_symbols, false);
+                        self.collect_with_trait(
+                            &mut sub_cursor,
+                            &embedded.content,
+                            sub_lang,
+                            &mut sub_symbols,
+                            false,
+                        );
 
                         // Adjust line numbers for embedded content offset
                         for mut sym in sub_symbols {
@@ -420,7 +468,8 @@ impl SkeletonExtractor {
             if support.function_kinds().contains(&kind) {
                 if let Some(sym) = support.extract_function(&node, content, in_container) {
                     // Filter by visibility unless show_all
-                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public)
+                    {
                         symbols.push(convert_symbol(&sym));
                     }
                 }
@@ -428,7 +477,8 @@ impl SkeletonExtractor {
             // Check if this is a container (class, impl, module)
             else if support.container_kinds().contains(&kind) {
                 if let Some(sym) = support.extract_container(&node, content) {
-                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public)
+                    {
                         let mut skeleton_sym = convert_symbol(&sym);
 
                         // Recurse into container body
@@ -455,9 +505,12 @@ impl SkeletonExtractor {
                 break;
             }
             // Check if this is a standalone type (struct, enum, etc.)
-            else if support.type_kinds().contains(&kind) && !support.container_kinds().contains(&kind) {
+            else if support.type_kinds().contains(&kind)
+                && !support.container_kinds().contains(&kind)
+            {
                 if let Some(sym) = support.extract_type(&node, content) {
-                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public) {
+                    if self.show_all || matches!(sym.visibility, moss_languages::Visibility::Public)
+                    {
                         symbols.push(convert_symbol(&sym));
                     }
                 }
@@ -474,7 +527,6 @@ impl SkeletonExtractor {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -833,11 +885,26 @@ end
         assert!(is_useless_docstring("init", "Initialize."));
 
         // Useful docstrings - provide additional context
-        assert!(!is_useless_docstring("setUserId", "Update the user ID from the authentication token"));
-        assert!(!is_useless_docstring("parse", "Parse JSON string into structured data"));
-        assert!(!is_useless_docstring("getUser", "Fetch user from database by ID"));
-        assert!(!is_useless_docstring("process", "Apply validation rules and normalize input"));
-        assert!(!is_useless_docstring("init", "Set up database connection pool with retry logic"));
+        assert!(!is_useless_docstring(
+            "setUserId",
+            "Update the user ID from the authentication token"
+        ));
+        assert!(!is_useless_docstring(
+            "parse",
+            "Parse JSON string into structured data"
+        ));
+        assert!(!is_useless_docstring(
+            "getUser",
+            "Fetch user from database by ID"
+        ));
+        assert!(!is_useless_docstring(
+            "process",
+            "Apply validation rules and normalize input"
+        ));
+        assert!(!is_useless_docstring(
+            "init",
+            "Set up database connection pool with retry logic"
+        ));
     }
 
     #[test]
@@ -948,8 +1015,14 @@ trait MyTrait {
     fn test_split_identifier() {
         assert_eq!(split_identifier("setUserId"), vec!["set", "user", "id"]);
         assert_eq!(split_identifier("get_user_id"), vec!["get", "user", "id"]);
-        assert_eq!(split_identifier("HTTPRequest"), vec!["h", "t", "t", "p", "request"]);
-        assert_eq!(split_identifier("parseJSON"), vec!["parse", "j", "s", "o", "n"]);
+        assert_eq!(
+            split_identifier("HTTPRequest"),
+            vec!["h", "t", "t", "p", "request"]
+        );
+        assert_eq!(
+            split_identifier("parseJSON"),
+            vec!["parse", "j", "s", "o", "n"]
+        );
         assert_eq!(split_identifier("simple"), vec!["simple"]);
     }
 

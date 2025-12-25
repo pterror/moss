@@ -1,30 +1,50 @@
 //! Ada language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Ada language support.
 pub struct Ada;
 
 impl Language for Ada {
-    fn name(&self) -> &'static str { "Ada" }
-    fn extensions(&self) -> &'static [&'static str] { &["ada", "adb", "ads"] }
-    fn grammar_name(&self) -> &'static str { "ada" }
+    fn name(&self) -> &'static str {
+        "Ada"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ada", "adb", "ads"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "ada"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["package_declaration", "package_body", "generic_package_declaration"]
+        &[
+            "package_declaration",
+            "package_body",
+            "generic_package_declaration",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["subprogram_declaration", "subprogram_body", "expression_function_declaration"]
+        &[
+            "subprogram_declaration",
+            "subprogram_body",
+            "expression_function_declaration",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["full_type_declaration", "private_type_declaration", "incomplete_type_declaration"]
+        &[
+            "full_type_declaration",
+            "private_type_declaration",
+            "incomplete_type_declaration",
+        ]
     }
 
     fn import_kinds(&self) -> &'static [&'static str] {
@@ -32,7 +52,11 @@ impl Language for Ada {
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["package_declaration", "subprogram_declaration", "full_type_declaration"]
+        &[
+            "package_declaration",
+            "subprogram_declaration",
+            "full_type_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -74,7 +98,12 @@ impl Language for Ada {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["package_body", "subprogram_body", "block_statement", "loop_statement"]
+        &[
+            "package_body",
+            "subprogram_body",
+            "block_statement",
+            "loop_statement",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
@@ -83,7 +112,11 @@ impl Language for Ada {
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["case_expression", "if_expression", "case_expression_alternative"]
+        &[
+            "case_expression",
+            "if_expression",
+            "case_expression_alternative",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
@@ -136,7 +169,9 @@ impl Language for Ada {
 
     fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
         match node.kind() {
-            "full_type_declaration" | "private_type_declaration" | "incomplete_type_declaration" => {
+            "full_type_declaration"
+            | "private_type_declaration"
+            | "incomplete_type_declaration" => {
                 let name = self.node_name(node, content)?;
                 let text = &content[node.byte_range()];
                 let first_line = text.lines().next().unwrap_or(text);
@@ -156,7 +191,9 @@ impl Language for Ada {
         }
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         match node.kind() {
@@ -186,17 +223,25 @@ impl Language for Ada {
         }
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("declarations")
             .or_else(|| node.child_by_field_name("statements"))
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -213,43 +258,63 @@ impl Language for Ada {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["ada", "adb", "ads"].contains(&ext) { return None; }
+        if !["ada", "adb", "ads"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.replace('-', "."))
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         let base = module.to_lowercase().replace('.', "-");
-        vec![
-            format!("{}.ads", base),
-            format!("{}.adb", base),
-        ]
+        vec![format!("{}.ads", base), format!("{}.adb", base)]
     }
 
-    fn lang_key(&self) -> &'static str { "ada" }
+    fn lang_key(&self) -> &'static str {
+        "ada"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         import_name.starts_with("Ada.") || import_name.starts_with("GNAT.")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["ada", "adb", "ads"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["ada", "adb", "ads"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["ada", "adb", "ads"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".ads")
+        entry_name
+            .strip_suffix(".ads")
             .or_else(|| entry_name.strip_suffix(".adb"))
             .or_else(|| entry_name.strip_suffix(".ada"))
             .unwrap_or(entry_name)
@@ -257,7 +322,11 @@ impl Language for Ada {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

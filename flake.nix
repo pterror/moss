@@ -15,9 +15,6 @@
         devShells.default = pkgs.mkShell rec {
           buildInputs = with pkgs; [
             stdenv.cc.cc
-            python313
-            uv
-            ruff
             ripgrep
             jq
             sqlite
@@ -25,7 +22,7 @@
             nodejs_22
             nodePackages.npm
             nodePackages.typescript
-            # Rust toolchain for moss-cli
+            # Rust toolchain
             rustc
             cargo
             rust-analyzer

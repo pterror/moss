@@ -1,10 +1,10 @@
 //! Go language support.
 
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use arborium::tree_sitter::Node;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
-use arborium::tree_sitter::Node;
 
 // ============================================================================
 // Go module parsing (for local import resolution)
@@ -279,11 +279,19 @@ fn resolve_go_mod_cache_import(import_path: &str, mod_cache: &Path) -> Option<Re
 pub struct Go;
 
 impl Language for Go {
-    fn name(&self) -> &'static str { "Go" }
-    fn extensions(&self) -> &'static [&'static str] { &["go"] }
-    fn grammar_name(&self) -> &'static str { "go" }
+    fn name(&self) -> &'static str {
+        "Go"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["go"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "go"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &[] // Go types don't have children in the tree-sitter sense
@@ -302,7 +310,13 @@ impl Language for Go {
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["function_declaration", "method_declaration", "type_spec", "const_spec", "var_spec"]
+        &[
+            "function_declaration",
+            "method_declaration",
+            "type_spec",
+            "const_spec",
+            "var_spec",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -310,35 +324,81 @@ impl Language for Go {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "if_statement", "expression_switch_statement", "type_switch_statement", "select_statement", "block"]
+        &[
+            "for_statement",
+            "if_statement",
+            "expression_switch_statement",
+            "type_switch_statement",
+            "select_statement",
+            "block",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "expression_switch_statement", "type_switch_statement", "select_statement", "return_statement", "break_statement", "continue_statement", "goto_statement", "defer_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "expression_switch_statement",
+            "type_switch_statement",
+            "select_statement",
+            "return_statement",
+            "break_statement",
+            "continue_statement",
+            "goto_statement",
+            "defer_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "expression_switch_statement", "type_switch_statement", "select_statement", "expression_case", "type_case", "communication_case", "binary_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "expression_switch_statement",
+            "type_switch_statement",
+            "select_statement",
+            "expression_case",
+            "type_case",
+            "communication_case",
+            "binary_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "expression_switch_statement", "type_switch_statement", "select_statement", "function_declaration", "method_declaration"]
+        &[
+            "if_statement",
+            "for_statement",
+            "expression_switch_statement",
+            "type_switch_statement",
+            "select_statement",
+            "function_declaration",
+            "method_declaration",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
         Some(Symbol {
             name: name.to_string(),
-            kind: if in_container { SymbolKind::Method } else { SymbolKind::Function },
+            kind: if in_container {
+                SymbolKind::Method
+            } else {
+                SymbolKind::Function
+            },
             signature: format!("func {}{}", name, params),
             docstring: None,
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,
-            visibility: if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            visibility: if name
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+            {
                 Visibility::Public
             } else {
                 Visibility::Private
@@ -372,7 +432,12 @@ impl Language for Go {
             docstring: None,
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,
-            visibility: if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            visibility: if name
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+            {
                 Visibility::Public
             } else {
                 Visibility::Private
@@ -455,7 +520,9 @@ impl Language for Go {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
         // Go doc comments could be extracted but need special handling
@@ -490,7 +557,9 @@ impl Language for Go {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "go" }
+    fn lang_key(&self) -> &'static str {
+        "go"
+    }
 
     fn resolve_local_import(
         &self,
@@ -513,7 +582,11 @@ impl Language for Go {
         None
     }
 
-    fn resolve_external_import(&self, import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Check stdlib first
         if is_go_stdlib_import(import_name) {
             if let Some(stdlib) = find_go_stdlib() {
@@ -594,7 +667,10 @@ impl Language for Go {
     }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".go").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".go")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn discover_packages(&self, source: &crate::PackageSource) -> Vec<(String, PathBuf)> {

@@ -1,37 +1,55 @@
 //! Kotlin language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
 use crate::java::{find_gradle_cache, find_maven_repository, get_java_version};
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Kotlin language support.
 pub struct Kotlin;
 
 impl Language for Kotlin {
-    fn name(&self) -> &'static str { "Kotlin" }
-    fn extensions(&self) -> &'static [&'static str] { &["kt", "kts"] }
-    fn grammar_name(&self) -> &'static str { "kotlin" }
+    fn name(&self) -> &'static str {
+        "Kotlin"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["kt", "kts"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "kotlin"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_declaration", "object_declaration", "enum_class_body"]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["function_declaration", "anonymous_function", "lambda_literal"]
+        &[
+            "function_declaration",
+            "anonymous_function",
+            "lambda_literal",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
         &["class_declaration", "object_declaration", "type_alias"]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["import_header"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["import_header"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "object_declaration", "function_declaration"]
+        &[
+            "class_declaration",
+            "object_declaration",
+            "function_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -63,29 +81,66 @@ impl Language for Kotlin {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "while_statement", "do_while_statement", "try_expression", "catch_block", "when_expression", "lambda_literal"]
+        &[
+            "for_statement",
+            "while_statement",
+            "do_while_statement",
+            "try_expression",
+            "catch_block",
+            "when_expression",
+            "lambda_literal",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_expression", "for_statement", "while_statement", "do_while_statement", "when_expression", "try_expression", "jump_expression"]
+        &[
+            "if_expression",
+            "for_statement",
+            "while_statement",
+            "do_while_statement",
+            "when_expression",
+            "try_expression",
+            "jump_expression",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_expression", "for_statement", "while_statement", "do_while_statement", "when_entry", "catch_block", "elvis_expression", "conjunction_expression", "disjunction_expression"]
+        &[
+            "if_expression",
+            "for_statement",
+            "while_statement",
+            "do_while_statement",
+            "when_entry",
+            "catch_block",
+            "elvis_expression",
+            "conjunction_expression",
+            "disjunction_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_expression", "for_statement", "while_statement", "do_while_statement", "when_expression", "try_expression", "function_declaration", "class_declaration"]
+        &[
+            "if_expression",
+            "for_statement",
+            "while_statement",
+            "do_while_statement",
+            "when_expression",
+            "try_expression",
+            "function_declaration",
+            "class_declaration",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        let params = node.child_by_field_name("value_parameters")
+        let params = node
+            .child_by_field_name("value_parameters")
             .or_else(|| node.child_by_field_name("parameters"))
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
-        let return_type = node.child_by_field_name("type")
+        let return_type = node
+            .child_by_field_name("type")
             .map(|t| format!(": {}", content[t.byte_range()].trim()))
             .unwrap_or_default();
 
@@ -123,7 +178,8 @@ impl Language for Kotlin {
     fn extract_type(&self, node: &Node, content: &str) -> Option<Symbol> {
         if node.kind() == "type_alias" {
             let name = self.node_name(node, content)?;
-            let target = node.child_by_field_name("type")
+            let target = node
+                .child_by_field_name("type")
                 .map(|t| content[t.byte_range()].to_string())
                 .unwrap_or_default();
             return Some(Symbol {
@@ -150,8 +206,10 @@ impl Language for Kotlin {
                     if text.starts_with("/**") {
                         // Strip /** and */ and leading *
                         let lines: Vec<&str> = text
-                            .strip_prefix("/**").unwrap_or(text)
-                            .strip_suffix("*/").unwrap_or(text)
+                            .strip_prefix("/**")
+                            .unwrap_or(text)
+                            .strip_suffix("*/")
+                            .unwrap_or(text)
                             .lines()
                             .map(|l| l.trim().strip_prefix("*").unwrap_or(l).trim())
                             .filter(|l| !l.is_empty())
@@ -203,7 +261,9 @@ impl Language for Kotlin {
         self.get_visibility(node, content) == Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("class_body")
@@ -242,7 +302,8 @@ impl Language for Kotlin {
             .or_else(|| path_str.strip_prefix("src/main/java/"))
             .or_else(|| path_str.strip_prefix("src/"))
             .unwrap_or(path_str);
-        let without_ext = rel.strip_suffix(".kt")
+        let without_ext = rel
+            .strip_suffix(".kt")
             .or_else(|| rel.strip_suffix(".kts"))?;
         Some(without_ext.replace('/', "."))
     }
@@ -273,18 +334,34 @@ impl Language for Kotlin {
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let mods = &content[child.byte_range()];
-                if mods.contains("private") { return Visibility::Private; }
-                if mods.contains("protected") { return Visibility::Protected; }
-                if mods.contains("internal") { return Visibility::Protected; } // internal ≈ protected for our purposes
-                if mods.contains("public") { return Visibility::Public; }
+                if mods.contains("private") {
+                    return Visibility::Private;
+                }
+                if mods.contains("protected") {
+                    return Visibility::Protected;
+                }
+                if mods.contains("internal") {
+                    return Visibility::Protected;
+                } // internal ≈ protected for our purposes
+                if mods.contains("public") {
+                    return Visibility::Public;
+                }
             }
             // Also check visibility_modifier directly
             if child.kind() == "visibility_modifier" {
                 let vis = &content[child.byte_range()];
-                if vis == "private" { return Visibility::Private; }
-                if vis == "protected" { return Visibility::Protected; }
-                if vis == "internal" { return Visibility::Protected; }
-                if vis == "public" { return Visibility::Public; }
+                if vis == "private" {
+                    return Visibility::Private;
+                }
+                if vis == "protected" {
+                    return Visibility::Protected;
+                }
+                if vis == "internal" {
+                    return Visibility::Protected;
+                }
+                if vis == "public" {
+                    return Visibility::Public;
+                }
             }
         }
         // Kotlin default is public (unlike Java's package-private)
@@ -293,7 +370,9 @@ impl Language for Kotlin {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "kotlin" }
+    fn lang_key(&self) -> &'static str {
+        "kotlin"
+    }
 
     fn resolve_local_import(
         &self,
@@ -316,7 +395,9 @@ impl Language for Kotlin {
         for src_dir in &source_dirs {
             // Try .kt first, then .java (Kotlin can import Java)
             for ext in &["kt", "java"] {
-                let source_path = project_root.join(src_dir).join(format!("{}.{}", path_part, ext));
+                let source_path = project_root
+                    .join(src_dir)
+                    .join(format!("{}.{}", path_part, ext));
                 if source_path.is_file() {
                     return Some(source_path);
                 }
@@ -338,7 +419,11 @@ impl Language for Kotlin {
         None
     }
 
-    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Kotlin uses Maven/Gradle like Java
         // Reuse Java's resolution (they share the same cache)
         crate::java::Java.resolve_external_import(import_name, project_root)
@@ -350,8 +435,7 @@ impl Language for Kotlin {
     }
 
     fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
-        find_maven_repository()
-            .or_else(find_gradle_cache)
+        find_maven_repository().or_else(find_gradle_cache)
     }
 
     fn indexable_extensions(&self) -> &'static [&'static str] {
@@ -364,8 +448,10 @@ impl Language for Kotlin {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "META-INF" || name == "test" || name == "tests") {
             return true;
         }

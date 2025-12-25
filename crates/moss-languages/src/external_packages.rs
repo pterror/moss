@@ -78,7 +78,7 @@ pub fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 // Global Package Index Database
 // =============================================================================
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 /// Parsed version as (major, minor).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,7 +143,10 @@ pub struct PackageRecord {
 
 impl PackageRecord {
     pub fn min_version(&self) -> Version {
-        Version { major: self.min_major, minor: self.min_minor }
+        Version {
+            major: self.min_major,
+            minor: self.min_minor,
+        }
     }
 
     pub fn max_version(&self) -> Option<Version> {
@@ -172,8 +175,9 @@ pub struct PackageIndex {
 
 impl PackageIndex {
     pub fn open() -> Result<Self, rusqlite::Error> {
-        let db_path = get_global_packages_db()
-            .ok_or_else(|| rusqlite::Error::InvalidPath("Cannot determine cache directory".into()))?;
+        let db_path = get_global_packages_db().ok_or_else(|| {
+            rusqlite::Error::InvalidPath("Cannot determine cache directory".into())
+        })?;
 
         let conn = Connection::open(&db_path)?;
         let index = PackageIndex { conn };
@@ -216,7 +220,7 @@ impl PackageIndex {
 
             CREATE INDEX IF NOT EXISTS idx_symbols_package ON symbols(package_id);
             CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
-            "
+            ",
         )?;
         Ok(())
     }
@@ -275,21 +279,23 @@ impl PackageIndex {
     ) -> Result<Option<PackageRecord>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT id, language, name, path, min_major, min_minor, max_major, max_minor
-             FROM packages WHERE language = ?1 AND name = ?2"
+             FROM packages WHERE language = ?1 AND name = ?2",
         )?;
 
-        let packages: Vec<PackageRecord> = stmt.query_map(params![language, name], |row| {
-            Ok(PackageRecord {
-                id: row.get(0)?,
-                language: row.get(1)?,
-                name: row.get(2)?,
-                path: row.get(3)?,
-                min_major: row.get(4)?,
-                min_minor: row.get(5)?,
-                max_major: row.get(6)?,
-                max_minor: row.get(7)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let packages: Vec<PackageRecord> = stmt
+            .query_map(params![language, name], |row| {
+                Ok(PackageRecord {
+                    id: row.get(0)?,
+                    language: row.get(1)?,
+                    name: row.get(2)?,
+                    path: row.get(3)?,
+                    min_major: row.get(4)?,
+                    min_minor: row.get(5)?,
+                    max_major: row.get(6)?,
+                    max_minor: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         if let Some(ver) = version {
             for pkg in packages {
@@ -306,19 +312,21 @@ impl PackageIndex {
     pub fn get_symbols(&self, package_id: i64) -> Result<Vec<SymbolRecord>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT id, package_id, name, kind, signature, line
-             FROM symbols WHERE package_id = ?1 ORDER BY line"
+             FROM symbols WHERE package_id = ?1 ORDER BY line",
         )?;
 
-        let symbols = stmt.query_map(params![package_id], |row| {
-            Ok(SymbolRecord {
-                id: row.get(0)?,
-                package_id: row.get(1)?,
-                name: row.get(2)?,
-                kind: row.get(3)?,
-                signature: row.get(4)?,
-                line: row.get(5)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let symbols = stmt
+            .query_map(params![package_id], |row| {
+                Ok(SymbolRecord {
+                    id: row.get(0)?,
+                    package_id: row.get(1)?,
+                    name: row.get(2)?,
+                    kind: row.get(3)?,
+                    signature: row.get(4)?,
+                    line: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(symbols)
     }
@@ -337,31 +345,34 @@ impl PackageIndex {
              WHERE p.language = ?1 AND s.name = ?2"
         )?;
 
-        let results: Vec<(PackageRecord, SymbolRecord)> = stmt.query_map(params![language, symbol_name], |row| {
-            Ok((
-                PackageRecord {
-                    id: row.get(0)?,
-                    language: row.get(1)?,
-                    name: row.get(2)?,
-                    path: row.get(3)?,
-                    min_major: row.get(4)?,
-                    min_minor: row.get(5)?,
-                    max_major: row.get(6)?,
-                    max_minor: row.get(7)?,
-                },
-                SymbolRecord {
-                    id: row.get(8)?,
-                    package_id: row.get(9)?,
-                    name: row.get(10)?,
-                    kind: row.get(11)?,
-                    signature: row.get(12)?,
-                    line: row.get(13)?,
-                },
-            ))
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let results: Vec<(PackageRecord, SymbolRecord)> = stmt
+            .query_map(params![language, symbol_name], |row| {
+                Ok((
+                    PackageRecord {
+                        id: row.get(0)?,
+                        language: row.get(1)?,
+                        name: row.get(2)?,
+                        path: row.get(3)?,
+                        min_major: row.get(4)?,
+                        min_minor: row.get(5)?,
+                        max_major: row.get(6)?,
+                        max_minor: row.get(7)?,
+                    },
+                    SymbolRecord {
+                        id: row.get(8)?,
+                        package_id: row.get(9)?,
+                        name: row.get(10)?,
+                        kind: row.get(11)?,
+                        signature: row.get(12)?,
+                        line: row.get(13)?,
+                    },
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         if let Some(ver) = version {
-            Ok(results.into_iter()
+            Ok(results
+                .into_iter()
                 .filter(|(pkg, _)| ver.in_range(pkg.min_version(), pkg.max_version()))
                 .collect())
         } else {
@@ -379,8 +390,12 @@ impl PackageIndex {
     }
 
     pub fn delete_package(&self, package_id: i64) -> Result<(), rusqlite::Error> {
-        self.conn.execute("DELETE FROM symbols WHERE package_id = ?1", params![package_id])?;
-        self.conn.execute("DELETE FROM packages WHERE id = ?1", params![package_id])?;
+        self.conn.execute(
+            "DELETE FROM symbols WHERE package_id = ?1",
+            params![package_id],
+        )?;
+        self.conn
+            .execute("DELETE FROM packages WHERE id = ?1", params![package_id])?;
         Ok(())
     }
 
@@ -397,15 +412,33 @@ mod tests {
 
     #[test]
     fn test_version_parsing() {
-        assert_eq!(Version::parse("3.11"), Some(Version { major: 3, minor: 11 }));
-        assert_eq!(Version::parse("1.21"), Some(Version { major: 1, minor: 21 }));
+        assert_eq!(
+            Version::parse("3.11"),
+            Some(Version {
+                major: 3,
+                minor: 11
+            })
+        );
+        assert_eq!(
+            Version::parse("1.21"),
+            Some(Version {
+                major: 1,
+                minor: 21
+            })
+        );
         assert_eq!(Version::parse("invalid"), None);
     }
 
     #[test]
     fn test_version_comparison() {
-        let v1 = Version { major: 3, minor: 10 };
-        let v2 = Version { major: 3, minor: 11 };
+        let v1 = Version {
+            major: 3,
+            minor: 10,
+        };
+        let v2 = Version {
+            major: 3,
+            minor: 11,
+        };
         let v3 = Version { major: 4, minor: 0 };
 
         assert!(v1 < v2);
@@ -419,16 +452,20 @@ mod tests {
         let index = PackageIndex::open_in_memory().unwrap();
 
         // Insert a package
-        let pkg_id = index.insert_package(
-            "python",
-            "requests",
-            "/path/to/requests",
-            Version { major: 3, minor: 8 },
-            None,
-        ).unwrap();
+        let pkg_id = index
+            .insert_package(
+                "python",
+                "requests",
+                "/path/to/requests",
+                Version { major: 3, minor: 8 },
+                None,
+            )
+            .unwrap();
 
         // Insert a symbol
-        index.insert_symbol(pkg_id, "get", "function", "def get(url)", 10).unwrap();
+        index
+            .insert_symbol(pkg_id, "get", "function", "def get(url)", 10)
+            .unwrap();
 
         // Find the package
         let found = index.find_package("python", "requests", None).unwrap();

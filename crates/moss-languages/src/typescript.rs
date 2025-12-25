@@ -1,10 +1,10 @@
 //! TypeScript language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, VisibilityMechanism, Visibility};
 use crate::ecmascript;
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// TypeScript language support.
 pub struct TypeScript;
@@ -13,26 +13,59 @@ pub struct TypeScript;
 pub struct Tsx;
 
 impl Language for TypeScript {
-    fn name(&self) -> &'static str { "TypeScript" }
-    fn extensions(&self) -> &'static [&'static str] { &["ts", "mts", "cts"] }
-    fn grammar_name(&self) -> &'static str { "typescript" }
+    fn name(&self) -> &'static str {
+        "TypeScript"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["ts", "mts", "cts"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "typescript"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { ecmascript::CONTAINER_KINDS }
-    fn function_kinds(&self) -> &'static [&'static str] { ecmascript::TS_FUNCTION_KINDS }
-    fn type_kinds(&self) -> &'static [&'static str] { ecmascript::TS_TYPE_KINDS }
-    fn import_kinds(&self) -> &'static [&'static str] { ecmascript::IMPORT_KINDS }
-    fn public_symbol_kinds(&self) -> &'static [&'static str] { ecmascript::PUBLIC_SYMBOL_KINDS }
-    fn visibility_mechanism(&self) -> VisibilityMechanism { VisibilityMechanism::ExplicitExport }
-    fn scope_creating_kinds(&self) -> &'static [&'static str] { ecmascript::SCOPE_CREATING_KINDS }
-    fn control_flow_kinds(&self) -> &'static [&'static str] { ecmascript::CONTROL_FLOW_KINDS }
-    fn complexity_nodes(&self) -> &'static [&'static str] { ecmascript::COMPLEXITY_NODES }
-    fn nesting_nodes(&self) -> &'static [&'static str] { ecmascript::NESTING_NODES }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        ecmascript::CONTAINER_KINDS
+    }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        ecmascript::TS_FUNCTION_KINDS
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        ecmascript::TS_TYPE_KINDS
+    }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        ecmascript::IMPORT_KINDS
+    }
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        ecmascript::PUBLIC_SYMBOL_KINDS
+    }
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::ExplicitExport
+    }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] {
+        ecmascript::SCOPE_CREATING_KINDS
+    }
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        ecmascript::CONTROL_FLOW_KINDS
+    }
+    fn complexity_nodes(&self) -> &'static [&'static str] {
+        ecmascript::COMPLEXITY_NODES
+    }
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        ecmascript::NESTING_NODES
+    }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        Some(ecmascript::extract_function(node, content, in_container, name))
+        Some(ecmascript::extract_function(
+            node,
+            content,
+            in_container,
+            name,
+        ))
     }
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
@@ -65,7 +98,9 @@ impl Language for TypeScript {
         Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -107,7 +142,9 @@ impl Language for TypeScript {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "js" } // Uses same cache as JS
+    fn lang_key(&self) -> &'static str {
+        "js"
+    } // Uses same cache as JS
 
     fn resolve_local_import(
         &self,
@@ -118,7 +155,11 @@ impl Language for TypeScript {
         ecmascript::resolve_local_import(module, current_file, ecmascript::TS_EXTENSIONS)
     }
 
-    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         ecmascript::resolve_external_import(import_name, project_root)
     }
 
@@ -149,9 +190,12 @@ impl Language for TypeScript {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests") {
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests")
+        {
             return true;
         }
         !is_dir && !has_extension(name, &["ts", "mts", "cts", "js", "mjs", "cjs", "d.ts"])
@@ -180,26 +224,59 @@ impl Language for TypeScript {
 
 // TSX shares the same implementation as TypeScript, just with a different grammar
 impl Language for Tsx {
-    fn name(&self) -> &'static str { "TSX" }
-    fn extensions(&self) -> &'static [&'static str] { &["tsx"] }
-    fn grammar_name(&self) -> &'static str { "tsx" }
+    fn name(&self) -> &'static str {
+        "TSX"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["tsx"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "tsx"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { ecmascript::CONTAINER_KINDS }
-    fn function_kinds(&self) -> &'static [&'static str] { ecmascript::TS_FUNCTION_KINDS }
-    fn type_kinds(&self) -> &'static [&'static str] { ecmascript::TS_TYPE_KINDS }
-    fn import_kinds(&self) -> &'static [&'static str] { ecmascript::IMPORT_KINDS }
-    fn public_symbol_kinds(&self) -> &'static [&'static str] { ecmascript::PUBLIC_SYMBOL_KINDS }
-    fn visibility_mechanism(&self) -> VisibilityMechanism { VisibilityMechanism::ExplicitExport }
-    fn scope_creating_kinds(&self) -> &'static [&'static str] { ecmascript::SCOPE_CREATING_KINDS }
-    fn control_flow_kinds(&self) -> &'static [&'static str] { ecmascript::CONTROL_FLOW_KINDS }
-    fn complexity_nodes(&self) -> &'static [&'static str] { ecmascript::COMPLEXITY_NODES }
-    fn nesting_nodes(&self) -> &'static [&'static str] { ecmascript::NESTING_NODES }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        ecmascript::CONTAINER_KINDS
+    }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        ecmascript::TS_FUNCTION_KINDS
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        ecmascript::TS_TYPE_KINDS
+    }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        ecmascript::IMPORT_KINDS
+    }
+    fn public_symbol_kinds(&self) -> &'static [&'static str] {
+        ecmascript::PUBLIC_SYMBOL_KINDS
+    }
+    fn visibility_mechanism(&self) -> VisibilityMechanism {
+        VisibilityMechanism::ExplicitExport
+    }
+    fn scope_creating_kinds(&self) -> &'static [&'static str] {
+        ecmascript::SCOPE_CREATING_KINDS
+    }
+    fn control_flow_kinds(&self) -> &'static [&'static str] {
+        ecmascript::CONTROL_FLOW_KINDS
+    }
+    fn complexity_nodes(&self) -> &'static [&'static str] {
+        ecmascript::COMPLEXITY_NODES
+    }
+    fn nesting_nodes(&self) -> &'static [&'static str] {
+        ecmascript::NESTING_NODES
+    }
 
     fn extract_function(&self, node: &Node, content: &str, in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        Some(ecmascript::extract_function(node, content, in_container, name))
+        Some(ecmascript::extract_function(
+            node,
+            content,
+            in_container,
+            name,
+        ))
     }
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
@@ -232,7 +309,9 @@ impl Language for Tsx {
         Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -257,10 +336,7 @@ impl Language for Tsx {
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.tsx", module),
-            format!("{}/index.tsx", module),
-        ]
+        vec![format!("{}.tsx", module), format!("{}/index.tsx", module)]
     }
 
     fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
@@ -273,7 +349,9 @@ impl Language for Tsx {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "js" }
+    fn lang_key(&self) -> &'static str {
+        "js"
+    }
 
     fn resolve_local_import(
         &self,
@@ -284,7 +362,11 @@ impl Language for Tsx {
         ecmascript::resolve_local_import(module, current_file, ecmascript::TS_EXTENSIONS)
     }
 
-    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         ecmascript::resolve_external_import(import_name, project_root)
     }
 
@@ -315,9 +397,12 @@ impl Language for Tsx {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests") {
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && (name == "node_modules" || name == ".bin" || name == "test" || name == "tests")
+        {
             return true;
         }
         !is_dir && !has_extension(name, &["tsx", "ts", "js", "d.ts"])

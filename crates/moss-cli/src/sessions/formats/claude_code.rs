@@ -30,7 +30,10 @@ impl LogFormat for ClaudeCodeFormat {
             if let Ok(entry) = serde_json::from_str::<Value>(&line) {
                 // Claude Code has type field with specific values
                 if let Some(t) = entry.get("type").and_then(|v| v.as_str()) {
-                    if matches!(t, "user" | "assistant" | "summary" | "file-history-snapshot") {
+                    if matches!(
+                        t,
+                        "user" | "assistant" | "summary" | "file-history-snapshot"
+                    ) {
                         return 1.0;
                     }
                 }
@@ -60,7 +63,10 @@ impl LogFormat for ClaudeCodeFormat {
         // Count message types
         for entry in &entries {
             if let Some(msg_type) = entry.get("type").and_then(|v| v.as_str()) {
-                *analysis.message_counts.entry(msg_type.to_string()).or_insert(0) += 1;
+                *analysis
+                    .message_counts
+                    .entry(msg_type.to_string())
+                    .or_insert(0) += 1;
             }
         }
 
@@ -158,8 +164,14 @@ fn analyze_tokens(entries: &[Value]) -> TokenStats {
             .unwrap_or("unknown")
             .to_string();
 
-        let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-        let output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        let input = usage
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let output = usage
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         let cache_read = usage
             .get("cache_read_input_tokens")
             .and_then(|v| v.as_u64())
@@ -232,10 +244,7 @@ fn find_error_patterns(entries: &[Value]) -> Vec<ErrorPattern> {
                     .collect::<String>();
 
                 let category = categorize_error(&error_text);
-                categories
-                    .entry(category)
-                    .or_default()
-                    .push(error_text);
+                categories.entry(category).or_default().push(error_text);
             }
         }
     }
@@ -297,7 +306,10 @@ fn analyze_file_tokens(entries: &[Value]) -> HashMap<String, u64> {
             let input = block.get("input");
 
             // Extract file_path from Read, Edit, Write
-            if let Some(fp) = input.and_then(|i| i.get("file_path")).and_then(|v| v.as_str()) {
+            if let Some(fp) = input
+                .and_then(|i| i.get("file_path"))
+                .and_then(|v| v.as_str())
+            {
                 data.paths.push(fp.to_string());
             }
 
@@ -308,14 +320,19 @@ fn analyze_file_tokens(entries: &[Value]) -> HashMap<String, u64> {
 
             // Extract from Bash commands (moss view/analyze)
             if tool_name == "Bash" {
-                if let Some(cmd) = input.and_then(|i| i.get("command")).and_then(|v| v.as_str()) {
+                if let Some(cmd) = input
+                    .and_then(|i| i.get("command"))
+                    .and_then(|v| v.as_str())
+                {
                     data.paths.extend(extract_symbol_paths_from_bash(cmd));
                 }
             }
 
             // Extract directory from Glob pattern
             if tool_name == "Glob" {
-                if let Some(pattern) = input.and_then(|i| i.get("pattern")).and_then(|v| v.as_str())
+                if let Some(pattern) = input
+                    .and_then(|i| i.get("pattern"))
+                    .and_then(|v| v.as_str())
                 {
                     if let Some(dir) = pattern.rsplit_once('/') {
                         if !dir.0.starts_with('*') {

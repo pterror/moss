@@ -1,19 +1,27 @@
 //! Clojure language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Clojure language support.
 pub struct Clojure;
 
 impl Language for Clojure {
-    fn name(&self) -> &'static str { "Clojure" }
-    fn extensions(&self) -> &'static [&'static str] { &["clj", "cljs", "cljc", "edn"] }
-    fn grammar_name(&self) -> &'static str { "clojure" }
+    fn name(&self) -> &'static str {
+        "Clojure"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["clj", "cljs", "cljc", "edn"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "clojure"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["list_lit"] // (defn ...), (ns ...), etc.
@@ -105,7 +113,11 @@ impl Language for Clojure {
             docstring: self.extract_docstring(node, content),
             start_line: node.start_position().row + 1,
             end_line: node.end_position().row + 1,
-            visibility: if form == "defn-" { Visibility::Private } else { Visibility::Public },
+            visibility: if form == "defn-" {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            },
             children: Vec::new(),
         })
     }
@@ -198,15 +210,25 @@ impl Language for Clojure {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["clj", "cljs", "cljc"].contains(&ext) { return None; }
+        if !["clj", "cljs", "cljc"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.replace('_', "-"))
     }
@@ -220,15 +242,24 @@ impl Language for Clojure {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "clojure" }
+    fn lang_key(&self) -> &'static str {
+        "clojure"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         import_name.starts_with("clojure.") || import_name.starts_with("cljs.")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, current_file: &Path, _project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
         let dir = current_file.parent()?;
         let path = import.replace('-', "_").replace('.', "/");
         for ext in &["clj", "cljs", "cljc"] {
@@ -240,7 +271,11 @@ impl Language for Clojure {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
@@ -267,17 +302,27 @@ impl Language for Clojure {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["clj", "cljs", "cljc"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["clj", "cljs", "cljc"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && name == "target" { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && name == "target" {
+            return true;
+        }
         !is_dir && !has_extension(name, &["clj", "cljs", "cljc"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
         entry_name
@@ -289,7 +334,11 @@ impl Language for Clojure {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

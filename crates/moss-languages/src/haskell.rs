@@ -1,19 +1,27 @@
 //! Haskell language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Haskell language support.
 pub struct Haskell;
 
 impl Language for Haskell {
-    fn name(&self) -> &'static str { "Haskell" }
-    fn extensions(&self) -> &'static [&'static str] { &["hs", "lhs"] }
-    fn grammar_name(&self) -> &'static str { "haskell" }
+    fn name(&self) -> &'static str {
+        "Haskell"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["hs", "lhs"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "haskell"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["data_type", "newtype", "type_synomym", "class", "instance"]
@@ -130,7 +138,8 @@ impl Language for Haskell {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" {
                 if text.starts_with("-- |") || text.starts_with("-- ^") {
-                    let line = text.strip_prefix("-- |")
+                    let line = text
+                        .strip_prefix("-- |")
                         .or_else(|| text.strip_prefix("-- ^"))
                         .unwrap_or(text)
                         .trim();
@@ -183,16 +192,24 @@ impl Language for Haskell {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("where")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -201,33 +218,41 @@ impl Language for Haskell {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "hs" && ext != "lhs" { return None; }
+        if ext != "hs" && ext != "lhs" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         let path = module.replace('.', "/");
-        vec![
-            format!("{}.hs", path),
-            format!("{}.lhs", path),
-        ]
+        vec![format!("{}.hs", path), format!("{}.lhs", path)]
     }
 
-    fn lang_key(&self) -> &'static str { "haskell" }
+    fn lang_key(&self) -> &'static str {
+        "haskell"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         // Common base libraries
-        import_name.starts_with("Prelude") ||
-        import_name.starts_with("Data.") ||
-        import_name.starts_with("Control.") ||
-        import_name.starts_with("System.") ||
-        import_name.starts_with("GHC.")
+        import_name.starts_with("Prelude")
+            || import_name.starts_with("Data.")
+            || import_name.starts_with("Control.")
+            || import_name.starts_with("System.")
+            || import_name.starts_with("GHC.")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         let path = import.replace('.', "/");
         for ext in &["hs", "lhs"] {
             let candidates = [
@@ -244,7 +269,11 @@ impl Language for Haskell {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
@@ -280,19 +309,27 @@ impl Language for Haskell {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["hs", "lhs"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["hs", "lhs"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "dist" || name == "dist-newstyle" || name == ".stack-work") {
             return true;
         }
         !is_dir && !has_extension(name, &["hs", "lhs"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
         entry_name
@@ -303,7 +340,11 @@ impl Language for Haskell {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

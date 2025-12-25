@@ -51,10 +51,7 @@ pub fn cmd_sessions_list(project: Option<&Path>, limit: usize, json: bool) -> i3
             .iter()
             .map(|(path, mtime)| {
                 let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                let age = mtime
-                    .elapsed()
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
+                let age = mtime.elapsed().map(|d| d.as_secs()).unwrap_or(0);
                 serde_json::json!({
                     "id": id,
                     "path": path,
@@ -206,10 +203,14 @@ fn cmd_sessions_analyze_multi(paths: &[PathBuf], format: Option<&str>, json: boo
                 aggregate.token_stats.cache_create += a.token_stats.cache_create;
                 aggregate.token_stats.api_calls += a.token_stats.api_calls;
                 if a.token_stats.min_context > 0 {
-                    aggregate.token_stats.update_context(a.token_stats.min_context);
+                    aggregate
+                        .token_stats
+                        .update_context(a.token_stats.min_context);
                 }
                 if a.token_stats.max_context > 0 {
-                    aggregate.token_stats.update_context(a.token_stats.max_context);
+                    aggregate
+                        .token_stats
+                        .update_context(a.token_stats.max_context);
                 }
 
                 // Aggregate file tokens

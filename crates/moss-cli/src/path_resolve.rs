@@ -130,7 +130,10 @@ pub fn resolve_unified(query: &str, root: &Path) -> Option<UnifiedPath> {
                 if m.kind == "file" {
                     return Some(UnifiedPath {
                         file_path: m.path.clone(),
-                        symbol_path: segments[split_point..].iter().map(|s| s.to_string()).collect(),
+                        symbol_path: segments[split_point..]
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect(),
                         is_directory: false,
                     });
                 } else if m.kind == "directory" && split_point == segments.len() {
@@ -211,7 +214,10 @@ pub fn resolve_unified_all(query: &str, root: &Path) -> Vec<UnifiedPath> {
                 .into_iter()
                 .map(|m| UnifiedPath {
                     file_path: m.path,
-                    symbol_path: segments[split_point..].iter().map(|s| s.to_string()).collect(),
+                    symbol_path: segments[split_point..]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                     is_directory: m.kind == "directory",
                 })
                 .collect();

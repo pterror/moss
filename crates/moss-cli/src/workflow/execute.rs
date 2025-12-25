@@ -5,8 +5,8 @@ use std::process::Command;
 
 use super::config::{WorkflowConfig, WorkflowState, WorkflowStep};
 use super::strategies::{
-    evaluate_condition, CacheStrategy, ContextStrategy, ExponentialRetry, FixedRetry,
-    FlatContext, InMemoryCache, NoCache, NoRetry, RetryStrategy,
+    evaluate_condition, CacheStrategy, ContextStrategy, ExponentialRetry, FixedRetry, FlatContext,
+    InMemoryCache, NoCache, NoRetry, RetryStrategy,
 };
 
 /// Result of running a workflow.
@@ -37,9 +37,21 @@ pub fn run_workflow(
 
     // Execute based on workflow type
     if config.is_step_based() {
-        run_step_workflow(&config, root, context.as_mut(), cache.as_mut(), retry.as_mut())
+        run_step_workflow(
+            &config,
+            root,
+            context.as_mut(),
+            cache.as_mut(),
+            retry.as_mut(),
+        )
     } else if config.is_state_machine() {
-        run_state_machine(&config, root, context.as_mut(), cache.as_mut(), retry.as_mut())
+        run_state_machine(
+            &config,
+            root,
+            context.as_mut(),
+            cache.as_mut(),
+            retry.as_mut(),
+        )
     } else {
         Err("Workflow must have either steps or states".to_string())
     }
@@ -145,11 +157,8 @@ fn run_state_machine(
         .as_ref()
         .ok_or("State machine workflow must have initial_state")?;
 
-    let states: std::collections::HashMap<_, _> = config
-        .states
-        .iter()
-        .map(|s| (s.name.as_str(), s))
-        .collect();
+    let states: std::collections::HashMap<_, _> =
+        config.states.iter().map(|s| (s.name.as_str(), s)).collect();
 
     let mut current_state_name = initial_state.as_str();
     let mut output = String::new();
@@ -236,8 +245,8 @@ fn execute_action(action: &str, root: &Path) -> Result<String, String> {
     }
 
     // Use current executable for moss commands
-    let current_exe = std::env::current_exe()
-        .map_err(|e| format!("Failed to get current executable: {}", e))?;
+    let current_exe =
+        std::env::current_exe().map_err(|e| format!("Failed to get current executable: {}", e))?;
 
     // Build moss command
     let output = Command::new(&current_exe)

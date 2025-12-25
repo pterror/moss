@@ -199,8 +199,7 @@ pub fn evaluate_condition(condition: &str, _context: &str, result: &str) -> bool
                 || result.to_lowercase().contains("failure")
         }
         "success" => {
-            !result.to_lowercase().contains("error")
-                && !result.to_lowercase().contains("failed")
+            !result.to_lowercase().contains("error") && !result.to_lowercase().contains("failed")
         }
         "empty" => result.trim().is_empty(),
         _ if condition.starts_with("contains:") => {
@@ -244,9 +243,17 @@ mod tests {
 
     #[test]
     fn test_evaluate_condition() {
-        assert!(evaluate_condition("has_errors", "", "Error: something failed"));
+        assert!(evaluate_condition(
+            "has_errors",
+            "",
+            "Error: something failed"
+        ));
         assert!(!evaluate_condition("has_errors", "", "All good"));
         assert!(evaluate_condition("success", "", "Completed successfully"));
-        assert!(evaluate_condition("contains:TODO", "", "Found TODO in code"));
+        assert!(evaluate_condition(
+            "contains:TODO",
+            "",
+            "Found TODO in code"
+        ));
     }
 }

@@ -1,25 +1,41 @@
 //! C language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
 use crate::c_cpp;
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// C language support.
 pub struct C;
 
 impl Language for C {
-    fn name(&self) -> &'static str { "C" }
-    fn extensions(&self) -> &'static [&'static str] { &["c", "h"] }
-    fn grammar_name(&self) -> &'static str { "c" }
+    fn name(&self) -> &'static str {
+        "C"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["c", "h"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "c"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { &[] } // C doesn't have containers
-    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
-    fn type_kinds(&self) -> &'static [&'static str] { &["struct_specifier", "enum_specifier", "type_definition"] }
-    fn import_kinds(&self) -> &'static [&'static str] { &["preproc_include"] }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        &[]
+    } // C doesn't have containers
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &["function_definition"]
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &["struct_specifier", "enum_specifier", "type_definition"]
+    }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["preproc_include"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["function_definition"]
@@ -29,11 +45,7 @@ impl Language for C {
         VisibilityMechanism::HeaderBased
     }
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &[
-            "for_statement",
-            "while_statement",
-            "compound_statement",
-        ]
+        &["for_statement", "while_statement", "compound_statement"]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
@@ -129,7 +141,9 @@ impl Language for C {
         for child in node.children(&mut cursor) {
             if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
                 let text = &content[child.byte_range()];
-                let module = text.trim_matches(|c| c == '"' || c == '<' || c == '>').to_string();
+                let module = text
+                    .trim_matches(|c| c == '"' || c == '<' || c == '>')
+                    .to_string();
                 let is_relative = text.starts_with('"');
                 return vec![Import {
                     module,
@@ -168,7 +182,9 @@ impl Language for C {
         Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -204,9 +220,10 @@ impl Language for C {
 
     fn is_stdlib_import(&self, include: &str, _project_root: &Path) -> bool {
         // Standard C headers
-        let stdlib = ["stdio.h", "stdlib.h", "string.h", "math.h", "time.h",
-                      "ctype.h", "errno.h", "float.h", "limits.h", "locale.h",
-                      "setjmp.h", "signal.h", "stdarg.h", "stddef.h", "assert.h"];
+        let stdlib = [
+            "stdio.h", "stdlib.h", "string.h", "math.h", "time.h", "ctype.h", "errno.h", "float.h",
+            "limits.h", "locale.h", "setjmp.h", "signal.h", "stdarg.h", "stddef.h", "assert.h",
+        ];
         stdlib.contains(&include)
     }
 
@@ -250,7 +267,9 @@ impl Language for C {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "c" }
+    fn lang_key(&self) -> &'static str {
+        "c"
+    }
 
     fn resolve_local_import(
         &self,
@@ -286,7 +305,11 @@ impl Language for C {
         None
     }
 
-    fn resolve_external_import(&self, include: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        include: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         let include_paths = c_cpp::find_cpp_include_paths();
         c_cpp::resolve_cpp_include(include, &include_paths)
     }
@@ -300,8 +323,10 @@ impl Language for C {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["c", "h"])
     }
 }

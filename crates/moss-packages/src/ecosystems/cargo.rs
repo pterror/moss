@@ -1,6 +1,9 @@
 //! Cargo (Rust) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, Feature, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, Feature, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -107,15 +110,18 @@ impl Ecosystem for Cargo {
                     arr.iter()
                         .filter_map(|m| m.as_str())
                         .filter_map(|member_path| {
-                            let member_manifest = workspace_root.join(member_path).join("Cargo.toml");
-                            std::fs::read_to_string(&member_manifest).ok().and_then(|c| {
-                                toml::from_str::<toml::Value>(&c).ok().and_then(|v| {
-                                    v.get("package")
-                                        .and_then(|p| p.get("name"))
-                                        .and_then(|n| n.as_str())
-                                        .map(String::from)
+                            let member_manifest =
+                                workspace_root.join(member_path).join("Cargo.toml");
+                            std::fs::read_to_string(&member_manifest)
+                                .ok()
+                                .and_then(|c| {
+                                    toml::from_str::<toml::Value>(&c).ok().and_then(|v| {
+                                        v.get("package")
+                                            .and_then(|p| p.get("name"))
+                                            .and_then(|n| n.as_str())
+                                            .map(String::from)
+                                    })
                                 })
-                            })
                         })
                         .collect()
                 })
@@ -125,7 +131,8 @@ impl Ecosystem for Cargo {
         };
 
         // Build package map: name -> (version, dependencies)
-        let mut packages: std::collections::HashMap<String, (String, Vec<String>)> = std::collections::HashMap::new();
+        let mut packages: std::collections::HashMap<String, (String, Vec<String>)> =
+            std::collections::HashMap::new();
         if let Some(pkgs) = parsed.get("package").and_then(|p| p.as_array()) {
             for pkg in pkgs {
                 let name = pkg.get("name").and_then(|n| n.as_str()).unwrap_or("");
@@ -183,7 +190,9 @@ impl Ecosystem for Cargo {
 }
 
 /// Find Cargo.lock, searching up from project_root to find workspace root
-fn find_cargo_lock(project_root: &Path) -> Result<(std::path::PathBuf, std::path::PathBuf), PackageError> {
+fn find_cargo_lock(
+    project_root: &Path,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), PackageError> {
     let mut current = project_root.to_path_buf();
     loop {
         let lockfile = current.join("Cargo.lock");
@@ -291,7 +300,10 @@ fn fetch_crates_io_info(query: &PackageQuery) -> Result<PackageInfo, PackageErro
         .unwrap_or(&version)
         .to_string();
 
-    let license = ver.get("license").and_then(|l| l.as_str()).map(String::from);
+    let license = ver
+        .get("license")
+        .and_then(|l| l.as_str())
+        .map(String::from);
 
     let features = ver
         .get("features")

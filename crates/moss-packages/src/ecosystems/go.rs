@@ -1,6 +1,9 @@
 //! Go modules ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -82,7 +85,8 @@ impl Ecosystem for Go {
                 // Inside require block: module/path v1.2.3
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                    let indirect = parts.len() > 2 && parts[2..].contains(&"//") && line.contains("indirect");
+                    let indirect =
+                        parts.len() > 2 && parts[2..].contains(&"//") && line.contains("indirect");
                     deps.push(Dependency {
                         name: parts[0].to_string(),
                         version_req: Some(parts[1].to_string()),
@@ -110,7 +114,12 @@ impl Ecosystem for Go {
                 mod_content
                     .lines()
                     .find(|l| l.starts_with("module "))
-                    .map(|line| line.strip_prefix("module ").unwrap_or("root").trim().to_string())
+                    .map(|line| {
+                        line.strip_prefix("module ")
+                            .unwrap_or("root")
+                            .trim()
+                            .to_string()
+                    })
             })
             .unwrap_or_else(|| "root".to_string());
 

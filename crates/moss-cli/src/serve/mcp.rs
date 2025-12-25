@@ -51,14 +51,16 @@ mod implementation {
 
         /// Code intelligence primitives.
         #[tool(description = "Code intelligence: view, analyze, grep")]
-        async fn moss(&self, Parameters(req): Parameters<MossRequest>) -> Result<CallToolResult, McpError> {
+        async fn moss(
+            &self,
+            Parameters(req): Parameters<MossRequest>,
+        ) -> Result<CallToolResult, McpError> {
             let root = self.root.clone();
             let command = req.command;
-            let (output, exit_code) = tokio::task::spawn_blocking(move || {
-                execute_moss_command(&command, &root)
-            })
-            .await
-            .unwrap_or_else(|e| (format!("Task panicked: {}", e), 1));
+            let (output, exit_code) =
+                tokio::task::spawn_blocking(move || execute_moss_command(&command, &root))
+                    .await
+                    .unwrap_or_else(|e| (format!("Task panicked: {}", e), 1));
 
             let content = if exit_code == 0 {
                 Content::text(&output)

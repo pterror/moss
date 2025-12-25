@@ -78,10 +78,7 @@ impl LogFormat for MossFormat {
                 .or_else(|| data.get("tokens_out"))
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0),
-            api_calls: data
-                .get("llm_calls")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize,
+            api_calls: data.get("llm_calls").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
             ..Default::default()
         };
 

@@ -1,6 +1,9 @@
 //! NuGet (.NET) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -69,12 +72,15 @@ impl Ecosystem for Nuget {
                                     let after = &line[include_start + 9..];
                                     if let Some(include_end) = after.find('"') {
                                         let name = after[..include_end].to_string();
-                                        let version_req = if let Some(ver_start) = line.find("Version=\"") {
-                                            let ver_after = &line[ver_start + 9..];
-                                            ver_after.find('"').map(|end| ver_after[..end].to_string())
-                                        } else {
-                                            None
-                                        };
+                                        let version_req =
+                                            if let Some(ver_start) = line.find("Version=\"") {
+                                                let ver_after = &line[ver_start + 9..];
+                                                ver_after
+                                                    .find('"')
+                                                    .map(|end| ver_after[..end].to_string())
+                                            } else {
+                                                None
+                                            };
                                         deps.push(Dependency {
                                             name,
                                             version_req,
@@ -95,8 +101,9 @@ impl Ecosystem for Nuget {
     fn dependency_tree(&self, project_root: &Path) -> Result<DependencyTree, PackageError> {
         // Parse packages.lock.json
         let lockfile = project_root.join("packages.lock.json");
-        let content = std::fs::read_to_string(&lockfile)
-            .map_err(|e| PackageError::ParseError(format!("failed to read packages.lock.json: {}", e)))?;
+        let content = std::fs::read_to_string(&lockfile).map_err(|e| {
+            PackageError::ParseError(format!("failed to read packages.lock.json: {}", e))
+        })?;
         let parsed: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| PackageError::ParseError(format!("invalid JSON: {}", e)))?;
 
@@ -227,7 +234,9 @@ fn parse_nuspec(xml: &str, package: &str, version: &str) -> Result<PackageInfo, 
                         let dep_name = id_content[..id_end].to_string();
                         let version_req = if let Some(ver_start) = dep_match.find("version=\"") {
                             let ver_content = &dep_match[ver_start + 9..];
-                            ver_content.find('"').map(|end| ver_content[..end].to_string())
+                            ver_content
+                                .find('"')
+                                .map(|end| ver_content[..end].to_string())
                         } else {
                             None
                         };

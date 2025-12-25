@@ -219,15 +219,8 @@ fn format_children(
 
 /// Default boilerplate directories that don't count against depth limit.
 /// These are common structural directories that add noise without information.
-pub const DEFAULT_BOILERPLATE_DIRS: &[&str] = &[
-    "src",
-    "lib",
-    "pkg",
-    "packages",
-    "crates",
-    "internal",
-    "cmd",
-];
+pub const DEFAULT_BOILERPLATE_DIRS: &[&str] =
+    &["src", "lib", "pkg", "packages", "crates", "internal", "cmd"];
 
 /// Options for tree generation
 #[derive(Clone)]
@@ -291,7 +284,7 @@ impl InternalTreeNode {
             child.is_dir = is_dir;
         } else {
             child.is_dir = true; // intermediate nodes are directories
-            // Boilerplate dirs don't count against depth
+                                 // Boilerplate dirs don't count against depth
             let next_depth = if boilerplate_dirs.contains(name) {
                 effective_depth
             } else {

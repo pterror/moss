@@ -400,7 +400,11 @@ pub fn analyze_file_complexity(file_path: &Path) -> Option<ComplexityReport> {
 }
 
 /// Analyze complexity across entire codebase, returning top N functions
-pub fn analyze_codebase_complexity(root: &Path, limit: usize, threshold: Option<usize>) -> ComplexityReport {
+pub fn analyze_codebase_complexity(
+    root: &Path,
+    limit: usize,
+    threshold: Option<usize>,
+) -> ComplexityReport {
     use crate::path_resolve;
     use rayon::prelude::*;
 
@@ -443,7 +447,10 @@ pub fn analyze_codebase_complexity(root: &Path, limit: usize, threshold: Option<
 
     // Filter by threshold if specified
     let mut filtered: Vec<_> = if let Some(t) = threshold {
-        all_functions.into_iter().filter(|f| f.complexity >= t).collect()
+        all_functions
+            .into_iter()
+            .filter(|f| f.complexity >= t)
+            .collect()
     } else {
         all_functions
     };
@@ -526,7 +533,11 @@ pub fn analyze(
                 root.to_path_buf()
             };
             if analysis_root.is_dir() {
-                Some(analyze_codebase_complexity(&analysis_root, 10, complexity_threshold))
+                Some(analyze_codebase_complexity(
+                    &analysis_root,
+                    10,
+                    complexity_threshold,
+                ))
             } else {
                 None
             }

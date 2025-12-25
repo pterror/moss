@@ -1,5 +1,5 @@
-use arborium::tree_sitter;
 use crate::parsers::Parsers;
+use arborium::tree_sitter;
 use moss_languages::{support_for_path, Language};
 use std::path::Path;
 
@@ -65,20 +65,26 @@ impl Editor {
             Some("function")
         } else if support.container_kinds().contains(&kind) {
             Some("class")
-        } else if support.type_kinds().contains(&kind) && !support.container_kinds().contains(&kind) {
+        } else if support.type_kinds().contains(&kind) && !support.container_kinds().contains(&kind)
+        {
             Some("type")
         } else {
             None
         };
 
         if let Some(sym_kind) = symbol_kind {
-            if let Some(name_node) = node.child_by_field_name("name")
-                .or_else(|| node.child_by_field_name("type")) // For impl blocks
+            if let Some(name_node) = node
+                .child_by_field_name("name")
+                .or_else(|| node.child_by_field_name("type"))
+            // For impl blocks
             {
                 let symbol_name = &content[name_node.byte_range()];
                 if symbol_name == name {
                     let start_byte = node.start_byte();
-                    let line_start = content[..start_byte].rfind('\n').map(|i| i + 1).unwrap_or(0);
+                    let line_start = content[..start_byte]
+                        .rfind('\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
                     let indent = content[line_start..start_byte]
                         .chars()
                         .take_while(|c| c.is_whitespace())
@@ -113,7 +119,10 @@ impl Editor {
         let mut result = String::new();
 
         // Find the start of the line containing the symbol
-        let line_start = content[..loc.start_byte].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line_start = content[..loc.start_byte]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
 
         // Find the end of the line containing the symbol end (include trailing newline)
         let mut end_byte = loc.end_byte;
@@ -123,8 +132,8 @@ impl Editor {
 
         // Smart whitespace: consume trailing blank lines to avoid double-blanks
         // But only if there's already a blank line before the symbol
-        let has_blank_before = line_start >= 2
-            && &content[line_start.saturating_sub(2)..line_start] == "\n\n";
+        let has_blank_before =
+            line_start >= 2 && &content[line_start.saturating_sub(2)..line_start] == "\n\n";
 
         if has_blank_before {
             // Consume trailing blank lines (up to one full blank line)
@@ -198,7 +207,10 @@ impl Editor {
         let mut result = String::new();
 
         // Find the start of the line containing the symbol
-        let line_start = content[..loc.start_byte].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line_start = content[..loc.start_byte]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
 
         // Detect spacing convention: how many blank lines before this symbol?
         let blank_lines = self.count_blank_lines_before(content, line_start);
@@ -308,7 +320,8 @@ impl Editor {
         // Only check container types
         if support.container_kinds().contains(&kind) {
             // Get the name of this container
-            let name_node = node.child_by_field_name("name")
+            let name_node = node
+                .child_by_field_name("name")
                 .or_else(|| node.child_by_field_name("type"))?; // impl blocks use "type"
             let container_name = &content[name_node.byte_range()];
 
@@ -318,7 +331,10 @@ impl Editor {
 
                 // Calculate inner indentation
                 let start_byte = node.start_byte();
-                let line_start = content[..start_byte].rfind('\n').map(|i| i + 1).unwrap_or(0);
+                let line_start = content[..start_byte]
+                    .rfind('\n')
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
                 let container_indent: String = content[line_start..start_byte]
                     .chars()
                     .take_while(|c| c.is_whitespace())
@@ -337,7 +353,9 @@ impl Editor {
         // Recurse into children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(body) = self.find_container_body_with_trait(child, content, name, grammar, support) {
+            if let Some(body) =
+                self.find_container_body_with_trait(child, content, name, grammar, support)
+            {
                 return Some(body);
             }
         }
@@ -542,7 +560,11 @@ impl Editor {
         // Trim trailing whitespace/newlines from existing content
         let mut end_pos = body.content_end;
         while end_pos > 0
-            && content.as_bytes().get(end_pos - 1).map(|&b| b == b'\n' || b == b' ') == Some(true)
+            && content
+                .as_bytes()
+                .get(end_pos - 1)
+                .map(|&b| b == b'\n' || b == b' ')
+                == Some(true)
         {
             end_pos -= 1;
         }
@@ -610,7 +632,9 @@ def bar():
     fn test_delete_symbol() {
         let editor = Editor::new();
         let content = "def foo():\n    pass\n\ndef bar():\n    return 42\n";
-        let loc = editor.find_symbol(&PathBuf::from("test.py"), content, "bar").unwrap();
+        let loc = editor
+            .find_symbol(&PathBuf::from("test.py"), content, "bar")
+            .unwrap();
         let result = editor.delete_symbol(content, &loc);
         assert!(!result.contains("bar"));
         assert!(result.contains("foo"));
@@ -620,7 +644,9 @@ def bar():
     fn test_insert_before() {
         let editor = Editor::new();
         let content = "def foo():\n    pass\n\ndef bar():\n    return 42\n";
-        let loc = editor.find_symbol(&PathBuf::from("test.py"), content, "bar").unwrap();
+        let loc = editor
+            .find_symbol(&PathBuf::from("test.py"), content, "bar")
+            .unwrap();
         let result = editor.insert_before(content, &loc, "def baz():\n    pass");
         assert!(result.contains("baz"));
         assert!(result.find("baz").unwrap() < result.find("bar").unwrap());
@@ -638,7 +664,8 @@ def bar():
         let body = editor
             .find_container_body(&PathBuf::from("test.py"), content, "Foo")
             .unwrap();
-        let result = editor.prepend_to_container(content, &body, "def new_method(self):\n    return 1");
+        let result =
+            editor.prepend_to_container(content, &body, "def new_method(self):\n    return 1");
         // New method should appear after docstring but before first
         assert!(result.contains("new_method"));
         let docstring_pos = result.find("Docstring").unwrap();
@@ -681,7 +708,8 @@ def bar():
         let body = editor
             .find_container_body(&PathBuf::from("test.rs"), content, "Foo")
             .unwrap();
-        let result = editor.prepend_to_container(content, &body, "fn new() -> Self {\n    Self {}\n}");
+        let result =
+            editor.prepend_to_container(content, &body, "fn new() -> Self {\n    Self {}\n}");
         assert!(result.contains("new"));
         let new_pos = result.find("new").unwrap();
         let first_pos = result.find("first").unwrap();
@@ -700,7 +728,8 @@ def bar():
         let body = editor
             .find_container_body(&PathBuf::from("test.rs"), content, "Foo")
             .unwrap();
-        let result = editor.append_to_container(content, &body, "fn last(&self) -> i32 {\n    99\n}");
+        let result =
+            editor.append_to_container(content, &body, "fn last(&self) -> i32 {\n    99\n}");
         assert!(result.contains("last"));
         let first_pos = result.find("first").unwrap();
         let last_pos = result.find("last").unwrap();

@@ -136,7 +136,9 @@ pub fn cmd_workflow_run(
         root.join(workflow)
     } else {
         // Look in .moss/workflows/
-        root.join(".moss").join("workflows").join(format!("{}.toml", workflow))
+        root.join(".moss")
+            .join("workflows")
+            .join(format!("{}.toml", workflow))
     };
 
     if !workflow_path.exists() {
@@ -168,7 +170,11 @@ pub fn cmd_workflow_run(
                     eprintln!("\nWorkflow failed after {} steps", result.steps_executed);
                 }
             }
-            if result.success { 0 } else { 1 }
+            if result.success {
+                0
+            } else {
+                1
+            }
         }
         Err(e) => {
             if json {
@@ -193,7 +199,9 @@ pub fn cmd_workflow_show(workflow: &str, root: Option<&Path>, json: bool) -> i32
     let workflow_path = if workflow.ends_with(".toml") {
         root.join(workflow)
     } else {
-        root.join(".moss").join("workflows").join(format!("{}.toml", workflow))
+        root.join(".moss")
+            .join("workflows")
+            .join(format!("{}.toml", workflow))
     };
 
     if !workflow_path.exists() {
@@ -389,7 +397,11 @@ pub fn cmd_workflow_new(
                 })
             );
         } else {
-            eprintln!("Workflow '{}' already exists at {}", name, workflow_path.display());
+            eprintln!(
+                "Workflow '{}' already exists at {}",
+                name,
+                workflow_path.display()
+            );
             eprintln!("Use --force to overwrite");
         }
         return 1;

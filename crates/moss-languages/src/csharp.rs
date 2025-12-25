@@ -1,40 +1,74 @@
 //! C# language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// C# language support.
 pub struct CSharp;
 
 impl Language for CSharp {
-    fn name(&self) -> &'static str { "C#" }
-    fn extensions(&self) -> &'static [&'static str] { &["cs"] }
-    fn grammar_name(&self) -> &'static str { "c_sharp" }
+    fn name(&self) -> &'static str {
+        "C#"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["cs"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "c_sharp"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "struct_declaration", "interface_declaration",
-          "enum_declaration", "record_declaration", "namespace_declaration"]
+        &[
+            "class_declaration",
+            "struct_declaration",
+            "interface_declaration",
+            "enum_declaration",
+            "record_declaration",
+            "namespace_declaration",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
-        &["method_declaration", "constructor_declaration", "property_declaration",
-          "local_function_statement", "lambda_expression"]
+        &[
+            "method_declaration",
+            "constructor_declaration",
+            "property_declaration",
+            "local_function_statement",
+            "lambda_expression",
+        ]
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "struct_declaration", "interface_declaration",
-          "enum_declaration", "record_declaration", "delegate_declaration"]
+        &[
+            "class_declaration",
+            "struct_declaration",
+            "interface_declaration",
+            "enum_declaration",
+            "record_declaration",
+            "delegate_declaration",
+        ]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["using_directive"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["using_directive"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "struct_declaration", "interface_declaration",
-          "enum_declaration", "record_declaration", "method_declaration", "property_declaration"]
+        &[
+            "class_declaration",
+            "struct_declaration",
+            "interface_declaration",
+            "enum_declaration",
+            "record_declaration",
+            "method_declaration",
+            "property_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -70,36 +104,75 @@ impl Language for CSharp {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "foreach_statement", "while_statement", "do_statement",
-          "try_statement", "catch_clause", "switch_statement", "using_statement", "block"]
+        &[
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "try_statement",
+            "catch_clause",
+            "switch_statement",
+            "using_statement",
+            "block",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "switch_statement", "try_statement", "return_statement",
-          "break_statement", "continue_statement", "throw_statement", "yield_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "switch_statement",
+            "try_statement",
+            "return_statement",
+            "break_statement",
+            "continue_statement",
+            "throw_statement",
+            "yield_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "switch_section", "catch_clause", "conditional_expression",
-          "binary_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "switch_section",
+            "catch_clause",
+            "conditional_expression",
+            "binary_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "foreach_statement", "while_statement",
-          "do_statement", "switch_statement", "try_statement", "method_declaration",
-          "class_declaration", "lambda_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "foreach_statement",
+            "while_statement",
+            "do_statement",
+            "switch_statement",
+            "try_statement",
+            "method_declaration",
+            "class_declaration",
+            "lambda_expression",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
-        let return_type = node.child_by_field_name("type")
+        let return_type = node
+            .child_by_field_name("type")
             .or_else(|| node.child_by_field_name("returns"))
             .map(|t| content[t.byte_range()].to_string());
 
@@ -110,7 +183,11 @@ impl Language for CSharp {
 
         Some(Symbol {
             name: name.to_string(),
-            kind: if node.kind() == "property_declaration" { SymbolKind::Variable } else { SymbolKind::Method },
+            kind: if node.kind() == "property_declaration" {
+                SymbolKind::Variable
+            } else {
+                SymbolKind::Method
+            },
             signature,
             docstring: self.extract_docstring(node, content),
             start_line: node.start_position().row + 1,
@@ -166,8 +243,10 @@ impl Language for CSharp {
                 } else if text.starts_with("/**") {
                     // Multi-line doc comment
                     let inner = text
-                        .strip_prefix("/**").unwrap_or(text)
-                        .strip_suffix("*/").unwrap_or(text);
+                        .strip_prefix("/**")
+                        .unwrap_or(text)
+                        .strip_suffix("*/")
+                        .unwrap_or(text);
                     for line in inner.lines() {
                         let clean = line.trim().strip_prefix("*").unwrap_or(line).trim();
                         let clean = strip_xml_tags(clean);
@@ -211,7 +290,11 @@ impl Language for CSharp {
                 return vec![Import {
                     module,
                     names: Vec::new(),
-                    alias: if is_static { Some("static".to_string()) } else { None },
+                    alias: if is_static {
+                        Some("static".to_string())
+                    } else {
+                        None
+                    },
                     is_wildcard: false,
                     is_relative: false,
                     line,
@@ -226,7 +309,9 @@ impl Language for CSharp {
         self.get_visibility(node, content) == Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -253,15 +338,11 @@ impl Language for CSharp {
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         // C# namespaces don't directly map to paths, but we can try
         let path = module.replace('.', "/");
-        vec![
-            format!("{}.cs", path),
-            format!("src/{}.cs", path),
-        ]
+        vec![format!("{}.cs", path), format!("src/{}.cs", path)]
     }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        import_name.starts_with("System")
-            || import_name.starts_with("Microsoft")
+        import_name.starts_with("System") || import_name.starts_with("Microsoft")
     }
 
     fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
@@ -274,17 +355,27 @@ impl Language for CSharp {
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let mod_text = &content[child.byte_range()];
-                if mod_text == "private" { return Visibility::Private; }
-                if mod_text == "protected" { return Visibility::Protected; }
-                if mod_text == "internal" { return Visibility::Protected; }
-                if mod_text == "public" { return Visibility::Public; }
+                if mod_text == "private" {
+                    return Visibility::Private;
+                }
+                if mod_text == "protected" {
+                    return Visibility::Protected;
+                }
+                if mod_text == "internal" {
+                    return Visibility::Protected;
+                }
+                if mod_text == "public" {
+                    return Visibility::Public;
+                }
             }
         }
         // C# default visibility depends on context, but for skeleton purposes treat as public
         Visibility::Public
     }
 
-    fn lang_key(&self) -> &'static str { "csharp" }
+    fn lang_key(&self) -> &'static str {
+        "csharp"
+    }
 
     fn resolve_local_import(
         &self,
@@ -303,7 +394,9 @@ impl Language for CSharp {
             }
 
             // Try src/ prefix
-            let source_path = project_root.join("src").join(format!("{}.{}", path_part, ext));
+            let source_path = project_root
+                .join("src")
+                .join(format!("{}.{}", path_part, ext));
             if source_path.is_file() {
                 return Some(source_path);
             }
@@ -312,7 +405,11 @@ impl Language for CSharp {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // NuGet package resolution would go here
         None
     }
@@ -326,9 +423,9 @@ impl Language for CSharp {
                 if let Some(idx) = content.find("\"version\"") {
                     let rest = &content[idx..];
                     if let Some(start) = rest.find(':') {
-                        let after_colon = rest[start+1..].trim();
+                        let after_colon = rest[start + 1..].trim();
                         if let Some(ver_start) = after_colon.find('"') {
-                            let ver_rest = &after_colon[ver_start+1..];
+                            let ver_rest = &after_colon[ver_start + 1..];
                             if let Some(ver_end) = ver_rest.find('"') {
                                 return Some(ver_rest[..ver_end].to_string());
                             }
@@ -366,8 +463,10 @@ impl Language for CSharp {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         if is_dir && (name == "bin" || name == "obj" || name == "packages") {
             return true;
         }
@@ -379,7 +478,10 @@ impl Language for CSharp {
     }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".cs").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".cs")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
@@ -394,15 +496,29 @@ impl Language for CSharp {
 fn strip_xml_tags(s: &str) -> String {
     let mut result = s.to_string();
     // Remove common tags
-    for tag in &["<summary>", "</summary>", "<param>", "</param>", "<returns>", "</returns>",
-                 "<remarks>", "</remarks>", "<example>", "</example>", "<c>", "</c>",
-                 "<see cref=\"", "\"/>", "<seealso cref=\""] {
+    for tag in &[
+        "<summary>",
+        "</summary>",
+        "<param>",
+        "</param>",
+        "<returns>",
+        "</returns>",
+        "<remarks>",
+        "</remarks>",
+        "<example>",
+        "</example>",
+        "<c>",
+        "</c>",
+        "<see cref=\"",
+        "\"/>",
+        "<seealso cref=\"",
+    ] {
         result = result.replace(tag, "");
     }
     // Handle self-closing see tags
     while let Some(start) = result.find("<see ") {
         if let Some(end) = result[start..].find("/>") {
-            result = format!("{}{}", &result[..start], &result[start+end+2..]);
+            result = format!("{}{}", &result[..start], &result[start + end + 2..]);
         } else {
             break;
         }

@@ -1,10 +1,10 @@
 //! Python language support.
 
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use arborium::tree_sitter::Node;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
-use arborium::tree_sitter::Node;
 
 // ============================================================================
 // Python path cache (filesystem-based detection, no subprocess calls)
@@ -83,7 +83,9 @@ impl PythonPathCache {
                         if name.starts_with("python") && entry.path().is_dir() {
                             let ver = name.trim_start_matches("python");
                             // Check it looks like a version (X.Y)
-                            if ver.contains('.') && ver.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                            if ver.contains('.')
+                                && ver.chars().next().is_some_and(|c| c.is_ascii_digit())
+                            {
                                 // Prefer higher versions
                                 if best_version.as_ref().is_none_or(|(v, _)| ver > v.as_str()) {
                                     best_version = Some((ver.to_string(), entry.path()));
@@ -101,17 +103,28 @@ impl PythonPathCache {
                         } else {
                             root.join("venv")
                         };
-                        let venv_site = venv.join("lib").join(format!("python{}", ver)).join("site-packages");
+                        let venv_site = venv
+                            .join("lib")
+                            .join(format!("python{}", ver))
+                            .join("site-packages");
                         if venv_site.exists() {
                             Some(venv_site)
                         } else {
                             // Fall back to system site-packages
                             let sys_site = stdlib_path.join("site-packages");
-                            if sys_site.exists() { Some(sys_site) } else { None }
+                            if sys_site.exists() {
+                                Some(sys_site)
+                            } else {
+                                None
+                            }
                         }
                     } else {
                         let sys_site = stdlib_path.join("site-packages");
-                        if sys_site.exists() { Some(sys_site) } else { None }
+                        if sys_site.exists() {
+                            Some(sys_site)
+                        } else {
+                            None
+                        }
                     };
 
                     (Some(ver), Some(stdlib_path), site)
@@ -384,11 +397,19 @@ fn resolve_python_import(import_name: &str, site_packages: &Path) -> Option<Reso
 pub struct Python;
 
 impl Language for Python {
-    fn name(&self) -> &'static str { "Python" }
-    fn extensions(&self) -> &'static [&'static str] { &["py", "pyi", "pyw"] }
-    fn grammar_name(&self) -> &'static str { "python" }
+    fn name(&self) -> &'static str {
+        "Python"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["py", "pyi", "pyw"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "python"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["class_definition"]
@@ -483,7 +504,8 @@ impl Language for Python {
         // (visibility filtering can be done by caller)
 
         // Check for async keyword as first child token
-        let is_async = node.child(0)
+        let is_async = node
+            .child(0)
             .map(|c| &content[c.byte_range()] == "async")
             .unwrap_or(false);
         let prefix = if is_async { "async def" } else { "def" };
@@ -739,7 +761,9 @@ impl Language for Python {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn body_has_docstring(&self, body: &Node, content: &str) -> bool {
         let _ = content;
@@ -763,7 +787,9 @@ impl Language for Python {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "python" }
+    fn lang_key(&self) -> &'static str {
+        "python"
+    }
 
     fn resolve_local_import(
         &self,
@@ -811,7 +837,10 @@ impl Language for Python {
         }
 
         // Try src/<module>/__init__.py
-        let src_pkg_path = project_root.join("src").join(&module_path).join("__init__.py");
+        let src_pkg_path = project_root
+            .join("src")
+            .join(&module_path)
+            .join("__init__.py");
         if src_pkg_path.exists() {
             return Some(src_pkg_path);
         }
@@ -831,7 +860,11 @@ impl Language for Python {
         None
     }
 
-    fn resolve_external_import(&self, import_name: &str, project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Check stdlib first
         if let Some(stdlib) = find_python_stdlib(project_root) {
             if let Some(pkg) = resolve_python_stdlib_import(import_name, &stdlib) {
@@ -901,7 +934,10 @@ impl Language for Python {
 
     fn package_module_name(&self, entry_name: &str) -> String {
         // Strip .py extension
-        entry_name.strip_suffix(".py").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".py")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn package_sources(&self, project_root: &Path) -> Vec<crate::PackageSource> {
@@ -973,7 +1009,7 @@ impl Language for Python {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arborium::{GrammarStore, tree_sitter::Parser};
+    use arborium::{tree_sitter::Parser, GrammarStore};
 
     fn parse_python(content: &str) -> arborium::tree_sitter::Tree {
         let store = GrammarStore::new();
@@ -1002,7 +1038,8 @@ mod tests {
 
         // Find function node
         let mut cursor = root.walk();
-        let func = root.children(&mut cursor)
+        let func = root
+            .children(&mut cursor)
             .find(|n| n.kind() == "function_definition")
             .unwrap();
 
@@ -1024,7 +1061,8 @@ mod tests {
         let root = tree.root_node();
 
         let mut cursor = root.walk();
-        let class = root.children(&mut cursor)
+        let class = root
+            .children(&mut cursor)
             .find(|n| n.kind() == "class_definition")
             .unwrap();
 
@@ -1047,14 +1085,27 @@ def __dunder__(): pass
         let root = tree.root_node();
 
         let mut cursor = root.walk();
-        let funcs: Vec<_> = root.children(&mut cursor)
+        let funcs: Vec<_> = root
+            .children(&mut cursor)
             .filter(|n| n.kind() == "function_definition")
             .collect();
 
-        assert_eq!(support.get_visibility(&funcs[0], content), Visibility::Public);
-        assert_eq!(support.get_visibility(&funcs[1], content), Visibility::Protected);
-        assert_eq!(support.get_visibility(&funcs[2], content), Visibility::Private);
-        assert_eq!(support.get_visibility(&funcs[3], content), Visibility::Public); // dunder
+        assert_eq!(
+            support.get_visibility(&funcs[0], content),
+            Visibility::Public
+        );
+        assert_eq!(
+            support.get_visibility(&funcs[1], content),
+            Visibility::Protected
+        );
+        assert_eq!(
+            support.get_visibility(&funcs[2], content),
+            Visibility::Private
+        );
+        assert_eq!(
+            support.get_visibility(&funcs[3], content),
+            Visibility::Public
+        ); // dunder
     }
 
     /// Documents node kinds that exist in the Python grammar but aren't used in trait methods.

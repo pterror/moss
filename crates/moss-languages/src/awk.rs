@@ -1,28 +1,42 @@
 //! AWK language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// AWK language support.
 pub struct Awk;
 
 impl Language for Awk {
-    fn name(&self) -> &'static str { "AWK" }
-    fn extensions(&self) -> &'static [&'static str] { &["awk", "gawk"] }
-    fn grammar_name(&self) -> &'static str { "awk" }
+    fn name(&self) -> &'static str {
+        "AWK"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["awk", "gawk"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "awk"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { &[] }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn function_kinds(&self) -> &'static [&'static str] {
         &["func_def"]
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
-    fn import_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["func_def"]
@@ -54,16 +68,31 @@ impl Language for Awk {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "while_statement", "for_statement", "for_in_statement"]
+        &[
+            "if_statement",
+            "while_statement",
+            "for_statement",
+            "for_in_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "while_statement", "for_statement", "for_in_statement",
-          "ternary_exp"]
+        &[
+            "if_statement",
+            "while_statement",
+            "for_statement",
+            "for_in_statement",
+            "ternary_exp",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["func_def", "if_statement", "while_statement", "for_statement"]
+        &[
+            "func_def",
+            "if_statement",
+            "while_statement",
+            "for_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -83,8 +112,12 @@ impl Language for Awk {
         })
     }
 
-    fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         let mut prev = node.prev_sibling();
@@ -109,15 +142,27 @@ impl Language for Awk {
         Some(doc_lines.join(" "))
     }
 
-    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> { Vec::new() }
+    fn extract_imports(&self, _node: &Node, _content: &str) -> Vec<Import> {
+        Vec::new()
+    }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -126,7 +171,9 @@ impl Language for Awk {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "awk" && ext != "gawk" { return None; }
+        if ext != "awk" && ext != "gawk" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -135,34 +182,61 @@ impl Language for Awk {
         vec![format!("{}.awk", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "awk" }
+    fn lang_key(&self) -> &'static str {
+        "awk"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["awk", "gawk"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["awk", "gawk"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["awk", "gawk"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".awk")
+        entry_name
+            .strip_suffix(".awk")
             .or_else(|| entry_name.strip_suffix(".gawk"))
             .unwrap_or(entry_name)
             .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

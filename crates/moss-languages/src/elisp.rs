@@ -1,19 +1,27 @@
 //! Emacs Lisp language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Emacs Lisp language support.
 pub struct Elisp;
 
 impl Language for Elisp {
-    fn name(&self) -> &'static str { "Emacs Lisp" }
-    fn extensions(&self) -> &'static [&'static str] { &["el", "elc"] }
-    fn grammar_name(&self) -> &'static str { "elisp" }
+    fn name(&self) -> &'static str {
+        "Emacs Lisp"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["el", "elc"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "elisp"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["list"] // (defgroup ...), etc.
@@ -63,10 +71,17 @@ impl Language for Elisp {
             }
         }
 
-        if text.starts_with("(defvar ") || text.starts_with("(defconst ") || text.starts_with("(defcustom ") {
-            let prefix_len = if text.starts_with("(defvar ") { 8 }
-                else if text.starts_with("(defconst ") { 10 }
-                else { 11 };
+        if text.starts_with("(defvar ")
+            || text.starts_with("(defconst ")
+            || text.starts_with("(defcustom ")
+        {
+            let prefix_len = if text.starts_with("(defvar ") {
+                8
+            } else if text.starts_with("(defconst ") {
+                10
+            } else {
+                11
+            };
             if let Some(name) = text[prefix_len..].split_whitespace().next() {
                 if !name.contains("--") {
                     return vec![Export {
@@ -116,7 +131,11 @@ impl Language for Elisp {
                         docstring: self.extract_docstring(node, content),
                         start_line: node.start_position().row + 1,
                         end_line: node.end_position().row + 1,
-                        visibility: if is_private { Visibility::Private } else { Visibility::Public },
+                        visibility: if is_private {
+                            Visibility::Private
+                        } else {
+                            Visibility::Public
+                        },
                         children: Vec::new(),
                     });
                 }
@@ -150,7 +169,9 @@ impl Language for Elisp {
         None
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // Elisp docstrings are strings after the argument list
@@ -204,18 +225,32 @@ impl Language for Elisp {
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
-        if self.is_public(node, content) { Visibility::Public } else { Visibility::Private }
+        if self.is_public(node, content) {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
-    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> { None }
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn container_body<'a>(&self, _node: &'a Node<'a>) -> Option<Node<'a>> {
+        None
+    }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "el" { return None; }
+        if ext != "el" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -224,21 +259,39 @@ impl Language for Elisp {
         vec![format!("{}.el", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "elisp" }
+    fn lang_key(&self) -> &'static str {
+        "elisp"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        matches!(import_name, "cl-lib" | "seq" | "subr-x" | "map" | "pcase" | "rx")
+        matches!(
+            import_name,
+            "cl-lib" | "seq" | "subr-x" | "map" | "pcase" | "rx"
+        )
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, current_file: &Path, _project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        _project_root: &Path,
+    ) -> Option<PathBuf> {
         let dir = current_file.parent()?;
         let full = dir.join(format!("{}.el", import));
-        if full.is_file() { Some(full) } else { None }
+        if full.is_file() {
+            Some(full)
+        } else {
+            None
+        }
     }
 
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
 
     fn get_version(&self, project_root: &Path) -> Option<String> {
         if project_root.join("Cask").is_file() {
@@ -257,23 +310,38 @@ impl Language for Elisp {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["el"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["el"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["el"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".el").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".el")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

@@ -1,6 +1,9 @@
 //! Python (pip/uv/poetry) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, Feature, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, Feature, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -108,7 +111,10 @@ impl Ecosystem for Python {
         None
     }
 
-    fn list_dependencies(&self, project_root: &Path) -> Result<Vec<crate::Dependency>, PackageError> {
+    fn list_dependencies(
+        &self,
+        project_root: &Path,
+    ) -> Result<Vec<crate::Dependency>, PackageError> {
         // Try pyproject.toml first
         let pyproject = project_root.join("pyproject.toml");
         if let Ok(content) = std::fs::read_to_string(&pyproject) {
@@ -117,7 +123,9 @@ impl Ecosystem for Python {
 
                 // PEP 621: [project.dependencies]
                 if let Some(project) = parsed.get("project") {
-                    if let Some(dependencies) = project.get("dependencies").and_then(|d| d.as_array()) {
+                    if let Some(dependencies) =
+                        project.get("dependencies").and_then(|d| d.as_array())
+                    {
                         for dep in dependencies {
                             if let Some(req) = dep.as_str().and_then(|s| parse_requirement(s)) {
                                 deps.push(req);
@@ -125,11 +133,16 @@ impl Ecosystem for Python {
                         }
                     }
                     // Optional dependencies
-                    if let Some(optional) = project.get("optional-dependencies").and_then(|o| o.as_table()) {
+                    if let Some(optional) = project
+                        .get("optional-dependencies")
+                        .and_then(|o| o.as_table())
+                    {
                         for (_group, group_deps) in optional {
                             if let Some(arr) = group_deps.as_array() {
                                 for dep in arr {
-                                    if let Some(mut req) = dep.as_str().and_then(|s| parse_requirement(s)) {
+                                    if let Some(mut req) =
+                                        dep.as_str().and_then(|s| parse_requirement(s))
+                                    {
                                         req.optional = true;
                                         deps.push(req);
                                     }
@@ -141,14 +154,18 @@ impl Ecosystem for Python {
 
                 // Poetry: [tool.poetry.dependencies]
                 if let Some(poetry) = parsed.get("tool").and_then(|t| t.get("poetry")) {
-                    if let Some(dependencies) = poetry.get("dependencies").and_then(|d| d.as_table()) {
+                    if let Some(dependencies) =
+                        poetry.get("dependencies").and_then(|d| d.as_table())
+                    {
                         for (name, value) in dependencies {
                             if name == "python" {
                                 continue;
                             }
                             let version_req = match value {
                                 toml::Value::String(v) => Some(v.clone()),
-                                toml::Value::Table(t) => t.get("version").and_then(|v| v.as_str()).map(String::from),
+                                toml::Value::Table(t) => {
+                                    t.get("version").and_then(|v| v.as_str()).map(String::from)
+                                }
                                 _ => None,
                             };
                             deps.push(crate::Dependency {
@@ -197,11 +214,16 @@ impl Ecosystem for Python {
             }
         }
 
-        Err(PackageError::ParseError("no lockfile found (uv.lock or poetry.lock)".to_string()))
+        Err(PackageError::ParseError(
+            "no lockfile found (uv.lock or poetry.lock)".to_string(),
+        ))
     }
 }
 
-fn build_python_tree(parsed: &toml::Value, project_root: &Path) -> Result<DependencyTree, PackageError> {
+fn build_python_tree(
+    parsed: &toml::Value,
+    project_root: &Path,
+) -> Result<DependencyTree, PackageError> {
     // Get project name from pyproject.toml
     let pyproject = project_root.join("pyproject.toml");
     let root_name = if let Ok(content) = std::fs::read_to_string(&pyproject) {
@@ -229,7 +251,8 @@ fn build_python_tree(parsed: &toml::Value, project_root: &Path) -> Result<Depend
     let root_name = root_name.unwrap_or_else(|| "root".to_string());
 
     // Build package map: name -> (version, dependencies)
-    let mut packages: std::collections::HashMap<String, (String, Vec<String>)> = std::collections::HashMap::new();
+    let mut packages: std::collections::HashMap<String, (String, Vec<String>)> =
+        std::collections::HashMap::new();
 
     if let Some(pkgs) = parsed.get("package").and_then(|p| p.as_array()) {
         for pkg in pkgs {
@@ -240,13 +263,14 @@ fn build_python_tree(parsed: &toml::Value, project_root: &Path) -> Result<Depend
                 .and_then(|d| d.as_array())
                 .map(|arr| {
                     arr.iter()
-                        .filter_map(|d| {
-                            d.get("name").and_then(|n| n.as_str()).map(String::from)
-                        })
+                        .filter_map(|d| d.get("name").and_then(|n| n.as_str()).map(String::from))
                         .collect()
                 })
                 .unwrap_or_default();
-            packages.insert(name.to_lowercase().replace(['-', '.'], "_"), (version.to_string(), deps));
+            packages.insert(
+                name.to_lowercase().replace(['-', '.'], "_"),
+                (version.to_string(), deps),
+            );
         }
     }
 
@@ -360,15 +384,13 @@ fn parse_pypi_json(json_str: &str, package: &str) -> Result<PackageInfo, Package
         .filter(|s| !s.is_empty())
         .map(String::from);
 
-    let repository = info
-        .get("project_urls")
-        .and_then(|urls| {
-            urls.get("Source")
-                .or_else(|| urls.get("Repository"))
-                .or_else(|| urls.get("GitHub"))
-                .and_then(|v| v.as_str())
-                .map(String::from)
-        });
+    let repository = info.get("project_urls").and_then(|urls| {
+        urls.get("Source")
+            .or_else(|| urls.get("Repository"))
+            .or_else(|| urls.get("GitHub"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    });
 
     // Parse requires_dist for dependencies
     let mut dependencies = Vec::new();
@@ -390,7 +412,11 @@ fn parse_pypi_json(json_str: &str, package: &str) -> Result<PackageInfo, Package
                 // Find dependencies that require this extra
                 let extra_deps: Vec<String> = dependencies
                     .iter()
-                    .filter(|d| d.version_req.as_ref().is_some_and(|v| v.contains(&format!("extra == '{}'", extra_name))))
+                    .filter(|d| {
+                        d.version_req
+                            .as_ref()
+                            .is_some_and(|v| v.contains(&format!("extra == '{}'", extra_name)))
+                    })
                     .map(|d| d.name.clone())
                     .collect();
 
@@ -420,11 +446,16 @@ fn parse_requirement(req: &str) -> Option<Dependency> {
     let req = req.trim();
 
     // Split on ; to separate requirement from marker
-    let (req_part, marker) = req.split_once(';').map(|(a, b)| (a.trim(), Some(b))).unwrap_or((req, None));
+    let (req_part, marker) = req
+        .split_once(';')
+        .map(|(a, b)| (a.trim(), Some(b)))
+        .unwrap_or((req, None));
 
     // Find the package name (before any [, (, <, >, =, !)
     let name_end = req_part
-        .find(|c: char| c == '[' || c == '(' || c == ' ' || c == '<' || c == '>' || c == '=' || c == '!')
+        .find(|c: char| {
+            c == '[' || c == '(' || c == ' ' || c == '<' || c == '>' || c == '=' || c == '!'
+        })
         .unwrap_or(req_part.len());
 
     let name = req_part[..name_end].trim().to_string();
@@ -433,7 +464,9 @@ fn parse_requirement(req: &str) -> Option<Dependency> {
     }
 
     // Extract version requirement (only from the part before the marker)
-    let version_req = if let Some(start) = req_part.find(|c: char| c == '<' || c == '>' || c == '=' || c == '!') {
+    let version_req = if let Some(start) =
+        req_part.find(|c: char| c == '<' || c == '>' || c == '=' || c == '!')
+    {
         let version_part = req_part[start..].trim();
         if version_part.is_empty() {
             None

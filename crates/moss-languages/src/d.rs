@@ -1,22 +1,35 @@
 //! D language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// D language support.
 pub struct D;
 
 impl Language for D {
-    fn name(&self) -> &'static str { "D" }
-    fn extensions(&self) -> &'static [&'static str] { &["d", "di"] }
-    fn grammar_name(&self) -> &'static str { "d" }
+    fn name(&self) -> &'static str {
+        "D"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["d", "di"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "d"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["module_declaration", "class_declaration", "struct_declaration", "interface_declaration"]
+        &[
+            "module_declaration",
+            "class_declaration",
+            "struct_declaration",
+            "interface_declaration",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
@@ -24,7 +37,12 @@ impl Language for D {
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["alias_declaration", "enum_declaration", "class_declaration", "struct_declaration"]
+        &[
+            "alias_declaration",
+            "enum_declaration",
+            "class_declaration",
+            "struct_declaration",
+        ]
     }
 
     fn import_kinds(&self) -> &'static [&'static str] {
@@ -32,7 +50,12 @@ impl Language for D {
     }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["module_declaration", "class_declaration", "struct_declaration", "auto_declaration"]
+        &[
+            "module_declaration",
+            "class_declaration",
+            "struct_declaration",
+            "auto_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -78,19 +101,43 @@ impl Language for D {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["function_literal", "class_declaration", "struct_declaration", "block_statement"]
+        &[
+            "function_literal",
+            "class_declaration",
+            "struct_declaration",
+            "block_statement",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "foreach_statement"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "foreach_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "foreach_statement", "catch"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "foreach_statement",
+            "catch",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "switch_statement", "while_statement", "for_statement", "class_declaration"]
+        &[
+            "if_statement",
+            "switch_statement",
+            "while_statement",
+            "for_statement",
+            "class_declaration",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -172,7 +219,9 @@ impl Language for D {
         }
     }
 
-    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> { None }
+    fn extract_docstring(&self, _node: &Node, _content: &str) -> Option<String> {
+        None
+    }
 
     fn extract_imports(&self, node: &Node, content: &str) -> Vec<Import> {
         if node.kind() != "import_declaration" {
@@ -206,13 +255,17 @@ impl Language for D {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -229,43 +282,63 @@ impl Language for D {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["d", "di"].contains(&ext) { return None; }
+        if !["d", "di"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
         let path = module.replace('.', "/");
-        vec![
-            format!("{}.d", path),
-            format!("{}/package.d", path),
-        ]
+        vec![format!("{}.d", path), format!("{}/package.d", path)]
     }
 
-    fn lang_key(&self) -> &'static str { "d" }
+    fn lang_key(&self) -> &'static str {
+        "d"
+    }
 
     fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
         import_name.starts_with("std.") || import_name.starts_with("core.")
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> { None }
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["d", "di"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_local_import(&self, _: &str, _: &Path, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["d", "di"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["d", "di"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".d")
+        entry_name
+            .strip_suffix(".d")
             .or_else(|| entry_name.strip_suffix(".di"))
             .unwrap_or(entry_name)
             .to_string()

@@ -1,8 +1,8 @@
 //! Ecosystem implementations.
 
 mod cargo;
-mod conan;
 mod composer;
+mod conan;
 mod gem;
 mod go;
 mod hex;
@@ -16,8 +16,8 @@ use crate::Ecosystem;
 use std::path::Path;
 
 pub use cargo::Cargo;
-pub use conan::Conan;
 pub use composer::Composer;
+pub use conan::Conan;
 pub use gem::Gem;
 pub use go::Go;
 pub use hex::Hex;
@@ -48,9 +48,9 @@ pub fn detect_all(project_root: &Path) -> Vec<&'static dyn Ecosystem> {
                     std::fs::read_dir(project_root)
                         .ok()
                         .map(|entries| {
-                            entries.flatten().any(|entry| {
-                                entry.file_name().to_string_lossy().ends_with(pattern)
-                            })
+                            entries
+                                .flatten()
+                                .any(|entry| entry.file_name().to_string_lossy().ends_with(pattern))
                         })
                         .unwrap_or(false)
                 } else {

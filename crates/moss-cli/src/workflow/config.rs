@@ -158,11 +158,10 @@ pub struct ParallelAction {
 
 /// Load and parse a workflow from a TOML file.
 pub fn load_workflow(path: &Path) -> Result<WorkflowConfig, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read workflow file: {}", e))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read workflow file: {}", e))?;
 
-    toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse workflow TOML: {}", e))
+    toml::from_str(&content).map_err(|e| format!("Failed to parse workflow TOML: {}", e))
 }
 
 impl WorkflowConfig {

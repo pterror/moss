@@ -2,11 +2,13 @@
 //!
 //! Extracts imports and exports from source files.
 
-use arborium::tree_sitter;
 use crate::parsers::Parsers;
-use moss_languages::{support_for_grammar, support_for_path, Language, SymbolKind as LangSymbolKind};
-use moss_languages::Import as LangImport;
+use arborium::tree_sitter;
 use moss_languages::Export as LangExport;
+use moss_languages::Import as LangImport;
+use moss_languages::{
+    support_for_grammar, support_for_path, Language, SymbolKind as LangSymbolKind,
+};
 use std::path::Path;
 
 /// An import statement
@@ -185,18 +187,19 @@ impl DepsExtractor {
     }
 
     /// Extract using the Language trait
-    fn extract_with_trait(
-        &self,
-        content: &str,
-        support: &dyn Language,
-    ) -> ExtractedDeps {
-        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
+    fn extract_with_trait(&self, content: &str, support: &dyn Language) -> ExtractedDeps {
+        let tree = match self
+            .parsers
+            .parse_with_grammar(support.grammar_name(), content)
+        {
             Some(t) => t,
-            None => return ExtractedDeps {
-                imports: Vec::new(),
-                exports: Vec::new(),
-                reexports: Vec::new(),
-            },
+            None => {
+                return ExtractedDeps {
+                    imports: Vec::new(),
+                    exports: Vec::new(),
+                    reexports: Vec::new(),
+                }
+            }
         };
 
         let mut imports = Vec::new();
@@ -227,12 +230,21 @@ impl DepsExtractor {
             // Check for embedded content (e.g., <script> in Vue/Svelte/HTML)
             if let Some(embedded) = support.embedded_content(&node, content) {
                 if let Some(sub_lang) = support_for_grammar(embedded.grammar) {
-                    if let Some(sub_tree) = self.parsers.parse_with_grammar(embedded.grammar, &embedded.content) {
+                    if let Some(sub_tree) = self
+                        .parsers
+                        .parse_with_grammar(embedded.grammar, &embedded.content)
+                    {
                         let mut sub_imports = Vec::new();
                         let mut sub_exports = Vec::new();
                         let sub_root = sub_tree.root_node();
                         let mut sub_cursor = sub_root.walk();
-                        self.collect_with_trait(&mut sub_cursor, &embedded.content, sub_lang, &mut sub_imports, &mut sub_exports);
+                        self.collect_with_trait(
+                            &mut sub_cursor,
+                            &embedded.content,
+                            sub_lang,
+                            &mut sub_imports,
+                            &mut sub_exports,
+                        );
 
                         // Adjust line numbers for embedded content offset
                         for mut imp in sub_imports {
@@ -279,11 +291,13 @@ impl DepsExtractor {
     fn extract_typescript(&self, content: &str) -> ExtractedDeps {
         let tree = match self.parsers.parse_with_grammar("typescript", content) {
             Some(t) => t,
-            None => return ExtractedDeps {
-                imports: Vec::new(),
-                exports: Vec::new(),
-                reexports: Vec::new(),
-            },
+            None => {
+                return ExtractedDeps {
+                    imports: Vec::new(),
+                    exports: Vec::new(),
+                    reexports: Vec::new(),
+                }
+            }
         };
         self.extract_js_ts_deps(&tree, content)
     }
@@ -291,11 +305,13 @@ impl DepsExtractor {
     fn extract_tsx(&self, content: &str) -> ExtractedDeps {
         let tree = match self.parsers.parse_with_grammar("tsx", content) {
             Some(t) => t,
-            None => return ExtractedDeps {
-                imports: Vec::new(),
-                exports: Vec::new(),
-                reexports: Vec::new(),
-            },
+            None => {
+                return ExtractedDeps {
+                    imports: Vec::new(),
+                    exports: Vec::new(),
+                    reexports: Vec::new(),
+                }
+            }
         };
         self.extract_js_ts_deps(&tree, content)
     }
@@ -303,28 +319,32 @@ impl DepsExtractor {
     fn extract_javascript(&self, content: &str) -> ExtractedDeps {
         let tree = match self.parsers.parse_with_grammar("javascript", content) {
             Some(t) => t,
-            None => return ExtractedDeps {
-                imports: Vec::new(),
-                exports: Vec::new(),
-                reexports: Vec::new(),
-            },
+            None => {
+                return ExtractedDeps {
+                    imports: Vec::new(),
+                    exports: Vec::new(),
+                    reexports: Vec::new(),
+                }
+            }
         };
         self.extract_js_ts_deps(&tree, content)
     }
 
     /// Shared extraction for JavaScript/TypeScript AST
-    fn extract_js_ts_deps(
-        &self,
-        tree: &tree_sitter::Tree,
-        content: &str,
-    ) -> ExtractedDeps {
+    fn extract_js_ts_deps(&self, tree: &tree_sitter::Tree, content: &str) -> ExtractedDeps {
         let mut imports = Vec::new();
         let mut exports = Vec::new();
         let mut reexports = Vec::new();
         let root = tree.root_node();
         let mut cursor = root.walk();
 
-        self.collect_js_ts_deps(&mut cursor, content, &mut imports, &mut exports, &mut reexports);
+        self.collect_js_ts_deps(
+            &mut cursor,
+            content,
+            &mut imports,
+            &mut exports,
+            &mut reexports,
+        );
         ExtractedDeps {
             imports,
             exports,
@@ -358,7 +378,8 @@ impl DepsExtractor {
                                 "string" | "string_fragment" => {
                                     // Extract module path (remove quotes)
                                     let text = &content[child.byte_range()];
-                                    module = text.trim_matches(|c| c == '"' || c == '\'').to_string();
+                                    module =
+                                        text.trim_matches(|c| c == '"' || c == '\'').to_string();
                                 }
                                 "import_clause" => {
                                     // Extract imported names
@@ -398,8 +419,9 @@ impl DepsExtractor {
                                 "string" => {
                                     // The source module in 'export ... from "module"'
                                     let text = &content[child.byte_range()];
-                                    source_module =
-                                        Some(text.trim_matches(|c| c == '"' || c == '\'').to_string());
+                                    source_module = Some(
+                                        text.trim_matches(|c| c == '"' || c == '\'').to_string(),
+                                    );
                                 }
                                 "*" => {
                                     // export * from './module'
@@ -411,7 +433,11 @@ impl DepsExtractor {
                                 }
                                 "export_clause" => {
                                     // export { foo, bar } from './module'
-                                    self.collect_export_clause_names(child, content, &mut named_exports);
+                                    self.collect_export_clause_names(
+                                        child,
+                                        content,
+                                        &mut named_exports,
+                                    );
                                 }
                                 "function_declaration" | "generator_function_declaration" => {
                                     if let Some(name_node) = child.child_by_field_name("name") {
@@ -532,7 +558,12 @@ impl DepsExtractor {
         }
     }
 
-    fn collect_import_names(&self, node: tree_sitter::Node, content: &str, names: &mut Vec<String>) {
+    fn collect_import_names(
+        &self,
+        node: tree_sitter::Node,
+        content: &str,
+        names: &mut Vec<String>,
+    ) {
         let mut cursor = node.walk();
         loop {
             let child = cursor.node();
@@ -570,7 +601,13 @@ impl DepsExtractor {
         }
     }
 
-    fn collect_variable_names(&self, node: tree_sitter::Node, content: &str, exports: &mut Vec<Export>, line: usize) {
+    fn collect_variable_names(
+        &self,
+        node: tree_sitter::Node,
+        content: &str,
+        exports: &mut Vec<Export>,
+        line: usize,
+    ) {
         let mut cursor = node.walk();
         loop {
             let child = cursor.node();
@@ -682,16 +719,28 @@ export { foo, bar } from './specific';
         assert_eq!(result.reexports.len(), 3);
 
         // Star re-export
-        let star = result.reexports.iter().find(|r| r.module == "./utils").unwrap();
+        let star = result
+            .reexports
+            .iter()
+            .find(|r| r.module == "./utils")
+            .unwrap();
         assert!(star.is_star);
         assert!(star.names.is_empty());
 
         // Namespace re-export (export * as helpers)
-        let namespace = result.reexports.iter().find(|r| r.module == "./helpers").unwrap();
+        let namespace = result
+            .reexports
+            .iter()
+            .find(|r| r.module == "./helpers")
+            .unwrap();
         assert!(namespace.is_star);
 
         // Named re-export
-        let named = result.reexports.iter().find(|r| r.module == "./specific").unwrap();
+        let named = result
+            .reexports
+            .iter()
+            .find(|r| r.module == "./specific")
+            .unwrap();
         assert!(!named.is_star);
         assert!(named.names.contains(&"foo".to_string()));
         assert!(named.names.contains(&"bar".to_string()));
@@ -770,13 +819,30 @@ const message = ref('Hello World');
         let result = extractor.extract(&PathBuf::from("App.vue"), content);
 
         // Check imports from embedded script
-        assert!(!result.imports.is_empty(), "Should extract imports from Vue script: {:?}", result.imports);
-        assert!(result.imports.iter().any(|i| i.module == "vue"), "Should have vue import");
-        assert!(result.imports.iter().any(|i| i.module == "./store" && i.is_relative), "Should have relative store import");
+        assert!(
+            !result.imports.is_empty(),
+            "Should extract imports from Vue script: {:?}",
+            result.imports
+        );
+        assert!(
+            result.imports.iter().any(|i| i.module == "vue"),
+            "Should have vue import"
+        );
+        assert!(
+            result
+                .imports
+                .iter()
+                .any(|i| i.module == "./store" && i.is_relative),
+            "Should have relative store import"
+        );
 
         // Verify line numbers are correctly offset
         let vue_import = result.imports.iter().find(|i| i.module == "vue").unwrap();
-        assert!(vue_import.line >= 7, "Vue import should be on line 7 or later (was {})", vue_import.line);
+        assert!(
+            vue_import.line >= 7,
+            "Vue import should be on line 7 or later (was {})",
+            vue_import.line
+        );
     }
 
     #[test]
@@ -799,7 +865,13 @@ const message = ref('Hello World');
         let result = extractor.extract(&PathBuf::from("index.html"), content);
 
         // Check imports from embedded script
-        assert!(!result.imports.is_empty(), "Should extract imports from HTML script");
-        assert!(result.imports.iter().any(|i| i.module == "./app.js"), "Should have app.js import");
+        assert!(
+            !result.imports.is_empty(),
+            "Should extract imports from HTML script"
+        );
+        assert!(
+            result.imports.iter().any(|i| i.module == "./app.js"),
+            "Should have app.js import"
+        );
     }
 }

@@ -449,7 +449,9 @@ mod tests {
                         if unnamed_id == 0 {
                             errors.push(format!(
                                 "{}: {}() contains invalid node kind '{}'",
-                                lang.name(), method, kind
+                                lang.name(),
+                                method,
+                                kind
                             ));
                         }
                     }
@@ -478,13 +480,45 @@ mod tests {
 
         // Keywords that suggest a node kind might be useful
         let interesting_patterns = [
-            "statement", "expression", "definition", "declaration",
-            "clause", "block", "body", "import", "export", "function",
-            "method", "class", "struct", "enum", "interface", "trait",
-            "module", "type", "return", "if", "else", "for", "while",
-            "loop", "match", "case", "try", "catch", "except", "throw",
-            "raise", "with", "async", "await", "yield", "lambda",
-            "comprehension", "generator", "operator",
+            "statement",
+            "expression",
+            "definition",
+            "declaration",
+            "clause",
+            "block",
+            "body",
+            "import",
+            "export",
+            "function",
+            "method",
+            "class",
+            "struct",
+            "enum",
+            "interface",
+            "trait",
+            "module",
+            "type",
+            "return",
+            "if",
+            "else",
+            "for",
+            "while",
+            "loop",
+            "match",
+            "case",
+            "try",
+            "catch",
+            "except",
+            "throw",
+            "raise",
+            "with",
+            "async",
+            "await",
+            "yield",
+            "lambda",
+            "comprehension",
+            "generator",
+            "operator",
         ];
 
         for lang in supported_languages() {
@@ -497,15 +531,33 @@ mod tests {
 
             // Collect all kinds currently used by the language
             let mut used_kinds: HashSet<&str> = HashSet::new();
-            for kind in lang.container_kinds() { used_kinds.insert(kind); }
-            for kind in lang.function_kinds() { used_kinds.insert(kind); }
-            for kind in lang.type_kinds() { used_kinds.insert(kind); }
-            for kind in lang.import_kinds() { used_kinds.insert(kind); }
-            for kind in lang.public_symbol_kinds() { used_kinds.insert(kind); }
-            for kind in lang.scope_creating_kinds() { used_kinds.insert(kind); }
-            for kind in lang.control_flow_kinds() { used_kinds.insert(kind); }
-            for kind in lang.complexity_nodes() { used_kinds.insert(kind); }
-            for kind in lang.nesting_nodes() { used_kinds.insert(kind); }
+            for kind in lang.container_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.function_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.type_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.import_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.public_symbol_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.scope_creating_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.control_flow_kinds() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.complexity_nodes() {
+                used_kinds.insert(kind);
+            }
+            for kind in lang.nesting_nodes() {
+                used_kinds.insert(kind);
+            }
 
             // Get all valid named node kinds from grammar
             let mut all_kinds: Vec<&str> = Vec::new();
@@ -532,8 +584,12 @@ mod tests {
             unused_interesting.sort();
 
             if !unused_interesting.is_empty() {
-                println!("\n=== {} ({}) - {} potentially useful unused kinds ===",
-                    lang.name(), grammar_name, unused_interesting.len());
+                println!(
+                    "\n=== {} ({}) - {} potentially useful unused kinds ===",
+                    lang.name(),
+                    grammar_name,
+                    unused_interesting.len()
+                );
                 for kind in &unused_interesting {
                     println!("  {}", kind);
                 }
@@ -553,36 +609,87 @@ pub fn validate_unused_kinds_audit(
     lang: &dyn Language,
     documented_unused: &[&str],
 ) -> Result<(), String> {
-    use std::collections::HashSet;
     use arborium::GrammarStore;
+    use std::collections::HashSet;
 
     let store = GrammarStore::new();
-    let grammar = store.get(lang.grammar_name())
+    let grammar = store
+        .get(lang.grammar_name())
         .ok_or_else(|| format!("Grammar '{}' not found", lang.grammar_name()))?;
     let ts_lang = grammar.language();
 
     // Keywords that suggest a node kind might be useful (same as cross_check_node_kinds)
     let interesting_patterns = [
-        "statement", "expression", "definition", "declaration",
-        "clause", "block", "body", "import", "export", "function",
-        "method", "class", "struct", "enum", "interface", "trait",
-        "module", "type", "return", "if", "else", "for", "while",
-        "loop", "match", "case", "try", "catch", "except", "throw",
-        "raise", "with", "async", "await", "yield", "lambda",
-        "comprehension", "generator", "operator",
+        "statement",
+        "expression",
+        "definition",
+        "declaration",
+        "clause",
+        "block",
+        "body",
+        "import",
+        "export",
+        "function",
+        "method",
+        "class",
+        "struct",
+        "enum",
+        "interface",
+        "trait",
+        "module",
+        "type",
+        "return",
+        "if",
+        "else",
+        "for",
+        "while",
+        "loop",
+        "match",
+        "case",
+        "try",
+        "catch",
+        "except",
+        "throw",
+        "raise",
+        "with",
+        "async",
+        "await",
+        "yield",
+        "lambda",
+        "comprehension",
+        "generator",
+        "operator",
     ];
 
     // Collect all kinds used by Language trait methods
     let mut used_kinds: HashSet<&str> = HashSet::new();
-    for kind in lang.container_kinds() { used_kinds.insert(kind); }
-    for kind in lang.function_kinds() { used_kinds.insert(kind); }
-    for kind in lang.type_kinds() { used_kinds.insert(kind); }
-    for kind in lang.import_kinds() { used_kinds.insert(kind); }
-    for kind in lang.public_symbol_kinds() { used_kinds.insert(kind); }
-    for kind in lang.scope_creating_kinds() { used_kinds.insert(kind); }
-    for kind in lang.control_flow_kinds() { used_kinds.insert(kind); }
-    for kind in lang.complexity_nodes() { used_kinds.insert(kind); }
-    for kind in lang.nesting_nodes() { used_kinds.insert(kind); }
+    for kind in lang.container_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.function_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.type_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.import_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.public_symbol_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.scope_creating_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.control_flow_kinds() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.complexity_nodes() {
+        used_kinds.insert(kind);
+    }
+    for kind in lang.nesting_nodes() {
+        used_kinds.insert(kind);
+    }
 
     let documented_set: HashSet<&str> = documented_unused.iter().copied().collect();
 
@@ -603,11 +710,17 @@ pub fn validate_unused_kinds_audit(
     // Check 1: All documented unused kinds must exist in grammar
     for kind in documented_unused {
         if !grammar_kinds.contains(*kind) {
-            errors.push(format!("Documented kind '{}' doesn't exist in grammar", kind));
+            errors.push(format!(
+                "Documented kind '{}' doesn't exist in grammar",
+                kind
+            ));
         }
         // Also check it's not actually being used
         if used_kinds.contains(*kind) {
-            errors.push(format!("Documented kind '{}' is actually used in trait methods", kind));
+            errors.push(format!(
+                "Documented kind '{}' is actually used in trait methods",
+                kind
+            ));
         }
     }
 
@@ -617,13 +730,20 @@ pub fn validate_unused_kinds_audit(
         let is_interesting = interesting_patterns.iter().any(|p| lower.contains(p));
 
         if is_interesting && !used_kinds.contains(*kind) && !documented_set.contains(*kind) {
-            errors.push(format!("Potentially useful kind '{}' is neither used nor documented", kind));
+            errors.push(format!(
+                "Potentially useful kind '{}' is neither used nor documented",
+                kind
+            ));
         }
     }
 
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(format!("{} validation errors:\n  - {}", errors.len(), errors.join("\n  - ")))
+        Err(format!(
+            "{} validation errors:\n  - {}",
+            errors.len(),
+            errors.join("\n  - ")
+        ))
     }
 }

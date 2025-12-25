@@ -1,6 +1,8 @@
-use arborium::tree_sitter;
 use crate::parsers::Parsers;
-use moss_languages::{support_for_grammar, support_for_path, Language, SymbolKind as LangSymbolKind};
+use arborium::tree_sitter;
+use moss_languages::{
+    support_for_grammar, support_for_path, Language, SymbolKind as LangSymbolKind,
+};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -52,10 +54,16 @@ impl SymbolKind {
 fn convert_symbol_kind(kind: LangSymbolKind) -> SymbolKind {
     match kind {
         LangSymbolKind::Function => SymbolKind::Function,
-        LangSymbolKind::Class | LangSymbolKind::Struct | LangSymbolKind::Enum
-        | LangSymbolKind::Interface | LangSymbolKind::Trait | LangSymbolKind::Type => SymbolKind::Class,
+        LangSymbolKind::Class
+        | LangSymbolKind::Struct
+        | LangSymbolKind::Enum
+        | LangSymbolKind::Interface
+        | LangSymbolKind::Trait
+        | LangSymbolKind::Type => SymbolKind::Class,
         LangSymbolKind::Method => SymbolKind::Method,
-        LangSymbolKind::Variable | LangSymbolKind::Constant | LangSymbolKind::Module
+        LangSymbolKind::Variable
+        | LangSymbolKind::Constant
+        | LangSymbolKind::Module
         | LangSymbolKind::Heading => SymbolKind::Variable,
     }
 }
@@ -81,7 +89,10 @@ impl SymbolParser {
     }
 
     fn parse_with_trait(&self, content: &str, support: &dyn Language) -> Vec<Symbol> {
-        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
+        let tree = match self
+            .parsers
+            .parse_with_grammar(support.grammar_name(), content)
+        {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -140,11 +151,20 @@ impl SymbolParser {
             // Check for embedded content (e.g., <script> in Vue/Svelte/HTML)
             if let Some(embedded) = support.embedded_content(&node, content) {
                 if let Some(sub_lang) = support_for_grammar(embedded.grammar) {
-                    if let Some(sub_tree) = self.parsers.parse_with_grammar(embedded.grammar, &embedded.content) {
+                    if let Some(sub_tree) = self
+                        .parsers
+                        .parse_with_grammar(embedded.grammar, &embedded.content)
+                    {
                         let mut sub_symbols = Vec::new();
                         let sub_root = sub_tree.root_node();
                         let mut sub_cursor = sub_root.walk();
-                        self.collect_with_trait(&mut sub_cursor, &embedded.content, sub_lang, &mut sub_symbols, parent);
+                        self.collect_with_trait(
+                            &mut sub_cursor,
+                            &embedded.content,
+                            sub_lang,
+                            &mut sub_symbols,
+                            parent,
+                        );
 
                         // Adjust line numbers for embedded content offset
                         for mut sym in sub_symbols {
@@ -240,7 +260,10 @@ impl SymbolParser {
             return Vec::new();
         }
 
-        let tree = match self.parsers.parse_with_grammar(support.grammar_name(), content) {
+        let tree = match self
+            .parsers
+            .parse_with_grammar(support.grammar_name(), content)
+        {
             Some(t) => t,
             None => return Vec::new(),
         };
@@ -266,11 +289,19 @@ impl SymbolParser {
             // Check for embedded content (e.g., <script> in Vue/Svelte/HTML)
             if let Some(embedded) = support.embedded_content(&node, content) {
                 if let Some(sub_lang) = support_for_grammar(embedded.grammar) {
-                    if let Some(sub_tree) = self.parsers.parse_with_grammar(embedded.grammar, &embedded.content) {
+                    if let Some(sub_tree) = self
+                        .parsers
+                        .parse_with_grammar(embedded.grammar, &embedded.content)
+                    {
                         let mut sub_imports = Vec::new();
                         let sub_root = sub_tree.root_node();
                         let mut sub_cursor = sub_root.walk();
-                        self.collect_imports_with_trait(&mut sub_cursor, &embedded.content, sub_lang, &mut sub_imports);
+                        self.collect_imports_with_trait(
+                            &mut sub_cursor,
+                            &embedded.content,
+                            sub_lang,
+                            &mut sub_imports,
+                        );
 
                         // Adjust line numbers for embedded content offset
                         for mut imp in sub_imports {
@@ -454,8 +485,12 @@ impl SymbolParser {
         match ext {
             "py" => self.find_python_calls_with_lines(&source, symbol.start_line),
             "rs" => self.find_rust_calls_with_lines(&source, symbol.start_line),
-            "ts" | "tsx" => self.find_typescript_calls_with_lines(&source, symbol.start_line, ext == "tsx"),
-            "js" | "mjs" | "cjs" => self.find_javascript_calls_with_lines(&source, symbol.start_line),
+            "ts" | "tsx" => {
+                self.find_typescript_calls_with_lines(&source, symbol.start_line, ext == "tsx")
+            }
+            "js" | "mjs" | "cjs" => {
+                self.find_javascript_calls_with_lines(&source, symbol.start_line)
+            }
             "java" => self.find_java_calls_with_lines(&source, symbol.start_line),
             "go" => self.find_go_calls_with_lines(&source, symbol.start_line),
             _ => Vec::new(),

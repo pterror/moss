@@ -1,7 +1,7 @@
 //! View command - unified view of files, directories, and symbols.
 
-use crate::{deps, index, path_resolve, skeleton, symbols, tree};
 use crate::tree::{FormatOptions, ViewNode, ViewNodeKind};
+use crate::{deps, index, path_resolve, skeleton, symbols, tree};
 use moss_languages::support_for_path;
 use std::path::{Path, PathBuf};
 
@@ -41,7 +41,14 @@ fn cmd_view_symbol_direct(
     full: bool,
     json: bool,
 ) -> i32 {
-    cmd_view_symbol(file_path, &[symbol_name.to_string()], root, depth, full, json)
+    cmd_view_symbol(
+        file_path,
+        &[symbol_name.to_string()],
+        root,
+        depth,
+        full,
+        json,
+    )
 }
 
 /// Unified view command
@@ -124,10 +131,13 @@ pub fn cmd_view(
                         })
                     })
                     .collect();
-                println!("{}", serde_json::json!({
-                    "file_matches": file_items,
-                    "symbol_matches": symbol_items
-                }));
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "file_matches": file_items,
+                        "symbol_matches": symbol_items
+                    })
+                );
             } else {
                 eprintln!("Multiple matches for '{}' - be more specific:", target);
                 for m in &matches {
@@ -139,7 +149,10 @@ pub fn cmd_view(
                         Some(p) => format!("{}/{}", p, sym.name),
                         None => sym.name.clone(),
                     };
-                    println!("  {}/{} ({}, line {})", sym.file, symbol_path, sym.kind, sym.start_line);
+                    println!(
+                        "  {}/{} ({}, line {})",
+                        sym.file, symbol_path, sym.kind, sym.start_line
+                    );
                 }
             }
             return 1;
@@ -288,7 +301,11 @@ fn cmd_view_filtered(root: &Path, scope: &str, kind: &str, json: bool) -> i32 {
 }
 
 fn cmd_view_directory(dir: &Path, _root: &Path, depth: i32, raw: bool, json: bool) -> i32 {
-    let effective_depth = if depth < 0 { None } else { Some(depth as usize) };
+    let effective_depth = if depth < 0 {
+        None
+    } else {
+        Some(depth as usize)
+    };
 
     // Generate ViewNode tree
     let view_node = tree::generate_view_tree(
@@ -346,7 +363,8 @@ fn resolve_import(module: &str, current_file: &Path, root: &Path) -> Option<Path
     }
 
     // Fall back to external resolution
-    lang.resolve_external_import(module, root).map(|pkg| pkg.path)
+    lang.resolve_external_import(module, root)
+        .map(|pkg| pkg.path)
 }
 
 fn cmd_view_file(
@@ -479,9 +497,8 @@ fn cmd_view_file(
 
             let mut resolved: Vec<(String, PathBuf, String)> = Vec::new();
             for imp in &deps.imports {
-                let matches_filter = filter_all
-                    || imp.module.contains(focus_filter)
-                    || imp.module == focus_filter;
+                let matches_filter =
+                    filter_all || imp.module.contains(focus_filter) || imp.module == focus_filter;
 
                 if matches_filter {
                     if let Some(resolved_path) = resolve_import(&imp.module, &full_path, root) {
@@ -502,7 +519,8 @@ fn cmd_view_file(
                 for (module_name, resolved_path, display) in resolved {
                     if let Ok(import_content) = std::fs::read_to_string(&resolved_path) {
                         let mut import_extractor = skeleton::SkeletonExtractor::new();
-                        let import_skeleton = import_extractor.extract(&resolved_path, &import_content);
+                        let import_skeleton =
+                            import_extractor.extract(&resolved_path, &import_content);
                         let import_skeleton = if types_only {
                             import_skeleton.filter_types()
                         } else {
@@ -518,10 +536,13 @@ fn cmd_view_file(
                         // Check for barrel file re-exports and follow them
                         let import_deps = deps_extractor.extract(&resolved_path, &import_content);
                         for reexp in &import_deps.reexports {
-                            if let Some(reexp_path) = resolve_import(&reexp.module, &resolved_path, root) {
+                            if let Some(reexp_path) =
+                                resolve_import(&reexp.module, &resolved_path, root)
+                            {
                                 if let Ok(reexp_content) = std::fs::read_to_string(&reexp_path) {
                                     let mut reexp_extractor = skeleton::SkeletonExtractor::new();
-                                    let reexp_skeleton = reexp_extractor.extract(&reexp_path, &reexp_content);
+                                    let reexp_skeleton =
+                                        reexp_extractor.extract(&reexp_path, &reexp_content);
                                     let reexp_skeleton = if types_only {
                                         reexp_skeleton.filter_types()
                                     } else {
@@ -543,7 +564,10 @@ fn cmd_view_file(
                                                 reexp.module
                                             )
                                         };
-                                        println!("\n### {} → {} ({})", module_name, export_desc, reexp_display);
+                                        println!(
+                                            "\n### {} → {} ({})",
+                                            module_name, export_desc, reexp_display
+                                        );
                                         println!("{}", formatted);
                                     }
                                 }
@@ -568,10 +592,12 @@ fn cmd_view_file(
                 if let Some(resolved_path) = resolve_import(&imp.module, &full_path, root) {
                     if let Ok(import_content) = std::fs::read_to_string(&resolved_path) {
                         let mut import_extractor = skeleton::SkeletonExtractor::new();
-                        let import_skeleton = import_extractor.extract(&resolved_path, &import_content);
+                        let import_skeleton =
+                            import_extractor.extract(&resolved_path, &import_content);
 
                         for name in &imp.names {
-                            if let Some(sig) = find_symbol_signature(&import_skeleton.symbols, name) {
+                            if let Some(sig) = find_symbol_signature(&import_skeleton.symbols, name)
+                            {
                                 resolved_symbols.push((imp.module.clone(), name.clone(), sig));
                             }
                         }

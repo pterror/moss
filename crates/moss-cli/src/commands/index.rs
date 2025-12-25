@@ -1,9 +1,9 @@
 //! Index management commands.
 
 use crate::index;
+use crate::paths::get_moss_dir;
 use crate::skeleton;
 use clap::Subcommand;
-use crate::paths::get_moss_dir;
 use moss_languages::external_packages;
 use std::path::{Path, PathBuf};
 
@@ -46,7 +46,9 @@ pub fn cmd_index(action: IndexAction, root: Option<&Path>, json: bool) -> i32 {
     match action {
         IndexAction::Rebuild { call_graph } => cmd_rebuild(root, call_graph),
         IndexAction::Stats => cmd_stats(root, json),
-        IndexAction::Files { prefix, limit } => cmd_list_files(prefix.as_deref(), root, limit, json),
+        IndexAction::Files { prefix, limit } => {
+            cmd_list_files(prefix.as_deref(), root, limit, json)
+        }
         IndexAction::Packages { only, clear } => cmd_packages(&only, clear, root, json),
     }
 }
@@ -121,9 +123,7 @@ fn cmd_stats(root: Option<&Path>, json: bool) -> i32 {
     let moss_dir = get_moss_dir(&root);
     let db_path = moss_dir.join("index.sqlite");
 
-    let db_size = std::fs::metadata(&db_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let db_size = std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
 
     let idx = match index::FileIndex::open(&root) {
         Ok(idx) => idx,
@@ -203,7 +203,10 @@ fn cmd_stats(root: Option<&Path>, json: bool) -> i32 {
             db_path.display(),
             db_size as f64 / 1024.0
         );
-        println!("Codebase:     {:.1} MB", codebase_size as f64 / 1024.0 / 1024.0);
+        println!(
+            "Codebase:     {:.1} MB",
+            codebase_size as f64 / 1024.0 / 1024.0
+        );
         println!(
             "Ratio:        {:.2}%",
             if codebase_size > 0 {
@@ -347,14 +350,23 @@ fn cmd_packages(only: &[String], clear: bool, root: Option<&Path>, json: bool) -
     if json {
         let mut json_obj = serde_json::Map::new();
         for (key, counts) in &results {
-            json_obj.insert(format!("{}_packages", key), serde_json::json!(counts.packages));
-            json_obj.insert(format!("{}_symbols", key), serde_json::json!(counts.symbols));
+            json_obj.insert(
+                format!("{}_packages", key),
+                serde_json::json!(counts.packages),
+            );
+            json_obj.insert(
+                format!("{}_symbols", key),
+                serde_json::json!(counts.symbols),
+            );
         }
         println!("{}", serde_json::Value::Object(json_obj));
     } else {
         println!("\nIndexing complete:");
         for (key, counts) in &results {
-            println!("  {}: {} packages, {} symbols", key, counts.packages, counts.symbols);
+            println!(
+                "  {}: {} packages, {} symbols",
+                key, counts.packages, counts.symbols
+            );
         }
     }
 
@@ -393,11 +405,18 @@ fn index_language_packages(
 
     let lang_key = lang.lang_key();
     if lang_key.is_empty() {
-        return IndexedCounts { packages: 0, symbols: 0 };
+        return IndexedCounts {
+            packages: 0,
+            symbols: 0,
+        };
     }
 
     if !json {
-        println!("Indexing {} packages (version {:?})...", lang.name(), version);
+        println!(
+            "Indexing {} packages (version {:?})...",
+            lang.name(),
+            version
+        );
     }
 
     let sources = lang.package_sources(project_root);
@@ -405,7 +424,10 @@ fn index_language_packages(
         if !json {
             println!("  No package sources found");
         }
-        return IndexedCounts { packages: 0, symbols: 0 };
+        return IndexedCounts {
+            packages: 0,
+            symbols: 0,
+        };
     }
 
     let min_version = version.unwrap_or(external_packages::Version { major: 0, minor: 0 });
@@ -418,7 +440,11 @@ fn index_language_packages(
             println!("  {}: {}", source.name, source.path.display());
         }
 
-        let max_version = if source.version_specific { version } else { None };
+        let max_version = if source.version_specific {
+            version
+        } else {
+            None
+        };
         let discovered = lang.discover_packages(&source);
 
         for (pkg_name, pkg_path) in discovered {
@@ -438,7 +464,8 @@ fn index_language_packages(
             };
 
             total_packages += 1;
-            total_symbols += index_package_symbols(lang, pkg_index, &mut extractor, pkg_id, &pkg_path);
+            total_symbols +=
+                index_package_symbols(lang, pkg_index, &mut extractor, pkg_id, &pkg_path);
         }
     }
 

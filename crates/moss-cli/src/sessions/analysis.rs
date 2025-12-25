@@ -77,7 +77,6 @@ impl ErrorPattern {
             examples: Vec::new(),
         }
     }
-
 }
 
 /// Complete analysis of a session.
@@ -131,9 +130,15 @@ impl SessionAnalysis {
             String::new(),
             format!("- **Format**: {}", self.format),
             format!("- **Tool calls**: {}", self.total_tool_calls()),
-            format!("- **Success rate**: {:.1}%", self.overall_success_rate() * 100.0),
+            format!(
+                "- **Success rate**: {:.1}%",
+                self.overall_success_rate() * 100.0
+            ),
             format!("- **Total turns**: {}", self.total_turns),
-            format!("- **Parallel opportunities**: {}", self.parallel_opportunities),
+            format!(
+                "- **Parallel opportunities**: {}",
+                self.parallel_opportunities
+            ),
             String::new(),
         ];
 
@@ -250,7 +255,10 @@ pub fn normalize_path(path: &str) -> String {
     // Find common project markers and make relative
     let parts: Vec<&str> = path.split('/').collect();
     for (i, part) in parts.iter().enumerate() {
-        if matches!(*part, "src" | "lib" | "crates" | "tests" | "docs" | "packages") {
+        if matches!(
+            *part,
+            "src" | "lib" | "crates" | "tests" | "docs" | "packages"
+        ) {
             return parts[i..].join("/");
         }
     }

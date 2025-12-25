@@ -259,10 +259,18 @@ struct ServerResponse {
 
 impl ServerResponse {
     fn ok(data: serde_json::Value) -> Self {
-        Self { ok: true, data: Some(data), error: None }
+        Self {
+            ok: true,
+            data: Some(data),
+            error: None,
+        }
     }
     fn err(msg: &str) -> Self {
-        Self { ok: false, data: None, error: Some(msg.to_string()) }
+        Self {
+            ok: false,
+            data: None,
+            error: Some(msg.to_string()),
+        }
     }
 }
 
@@ -376,7 +384,10 @@ pub async fn run_daemon(root: &Path) -> Result<i32, Box<dyn std::error::Error>> 
         let mut idx = server.index.lock().unwrap();
         let file_count = idx.refresh()?;
         let stats = idx.incremental_call_graph_refresh()?;
-        eprintln!("Indexed {} files, {} symbols, {} calls", file_count, stats.symbols, stats.calls);
+        eprintln!(
+            "Indexed {} files, {} symbols, {} calls",
+            file_count, stats.symbols, stats.calls
+        );
     }
 
     // Start file watcher - triggers incremental refresh on changes
@@ -404,9 +415,10 @@ pub async fn run_daemon(root: &Path) -> Result<i32, Box<dyn std::error::Error>> 
         for res in rx {
             if let Ok(event) = res {
                 // Skip .moss directory
-                let dominated_by_moss = event.paths.iter().all(|p| {
-                    p.to_string_lossy().contains(".moss")
-                });
+                let dominated_by_moss = event
+                    .paths
+                    .iter()
+                    .all(|p| p.to_string_lossy().contains(".moss"));
                 if dominated_by_moss {
                     continue;
                 }

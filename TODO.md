@@ -73,6 +73,54 @@ Consolidate to subcommands:
 - [ ] Remove Python-related CI/tooling
 - [ ] Update installation docs
 
+**Python Package Inventory (pre-deletion reference):**
+
+moss-orchestration (~112 files):
+- Session management with checkpointing (session.py, shadow_git.py)
+- Driver protocol for agent decision-making (drivers.py, execution_adapters.py)
+- Rules engine with SARIF output (rules_single.py, sarif.py) - custom pattern matching
+- Plugin system (plugins/) - linters, markdown, data files, tree-sitter
+- Event bus, validators, policies (events.py, validators.py, policy.py)
+- PR review, diff analysis (pr_review.py, diff_analysis.py)
+- Watch/test runners (watch_tests.py, watcher.py)
+- Gen commands for MCP/HTTP/gRPC/LSP (gen/)
+
+moss-intelligence (~36 files):
+- Skeleton extraction (skeleton.py) - now in Rust
+- Complexity analysis (complexity.py) - now in Rust
+- Dependency analysis (dependencies.py, dependency_analysis.py) - now in Rust
+- Security analysis (security.py) - now in Rust
+- Edit routing (edit.py) - LLM-powered structural editing
+- Summarization (summarize.py) - LLM-powered
+- Rust shim for passthrough (rust_shim.py)
+
+moss-llm:
+- LLM adapters using litellm (LLMSummarizer, LLMDecider)
+- Model abstraction for Anthropic/OpenAI/etc
+
+moss-context:
+- Working memory with summarization
+- Context compilation (skeleton + deps + summary)
+
+moss-mcp/acp:
+- MCP server implementation (Python, now also in Rust)
+- ACP (Agent Communication Protocol) server
+- dwim.py integration for tool resolution
+
+moss-lsp:
+- LSP server implementation (planned for Rust)
+
+moss-cli:
+- Remaining commands: init, run, status, config, distros, context, gen, watch, hooks, rules, edit, pr, diff, roadmap, coverage, lint, help
+
+**Rust redesign candidates:**
+- Rules engine: consider semgrep/ruff integration instead of custom
+- Plugin system: Rust trait-based plugins or external tool orchestration
+- Edit routing: workflow engine with LLM decision points
+- Session/checkpoint: workflow state persistence
+- PR/diff analysis: `moss analyze --pr` or similar
+- Context compilation: `moss view --context` combining skeleton + deps
+
 ## Backlog
 
 **Language Support:** 98 languages implemented - all arborium grammars covered.

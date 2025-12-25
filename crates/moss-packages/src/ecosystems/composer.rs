@@ -1,6 +1,9 @@
 //! Composer (PHP) ecosystem.
 
-use crate::{Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo, PackageQuery, TreeNode};
+use crate::{
+    Dependency, DependencyTree, Ecosystem, LockfileManager, PackageError, PackageInfo,
+    PackageQuery, TreeNode,
+};
 use std::path::Path;
 use std::process::Command;
 
@@ -40,7 +43,10 @@ impl Ecosystem for Composer {
             if let Some(pkgs) = parsed.get(key).and_then(|p| p.as_array()) {
                 for pkg in pkgs {
                     if pkg.get("name").and_then(|n| n.as_str()) == Some(package) {
-                        return pkg.get("version").and_then(|v| v.as_str()).map(String::from);
+                        return pkg
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
                     }
                 }
             }
@@ -50,8 +56,9 @@ impl Ecosystem for Composer {
 
     fn list_dependencies(&self, project_root: &Path) -> Result<Vec<Dependency>, PackageError> {
         let manifest = project_root.join("composer.json");
-        let content = std::fs::read_to_string(&manifest)
-            .map_err(|e| PackageError::ParseError(format!("failed to read composer.json: {}", e)))?;
+        let content = std::fs::read_to_string(&manifest).map_err(|e| {
+            PackageError::ParseError(format!("failed to read composer.json: {}", e))
+        })?;
         let parsed: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| PackageError::ParseError(format!("invalid JSON: {}", e)))?;
 
@@ -86,8 +93,9 @@ impl Ecosystem for Composer {
     fn dependency_tree(&self, project_root: &Path) -> Result<DependencyTree, PackageError> {
         // Parse composer.lock for full dependency list
         let lockfile = project_root.join("composer.lock");
-        let content = std::fs::read_to_string(&lockfile)
-            .map_err(|e| PackageError::ParseError(format!("failed to read composer.lock: {}", e)))?;
+        let content = std::fs::read_to_string(&lockfile).map_err(|e| {
+            PackageError::ParseError(format!("failed to read composer.lock: {}", e))
+        })?;
         let parsed: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| PackageError::ParseError(format!("invalid JSON: {}", e)))?;
 

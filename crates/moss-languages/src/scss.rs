@@ -1,19 +1,27 @@
 //! SCSS language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// SCSS language support.
 pub struct Scss;
 
 impl Language for Scss {
-    fn name(&self) -> &'static str { "SCSS" }
-    fn extensions(&self) -> &'static [&'static str] { &["scss", "sass"] }
-    fn grammar_name(&self) -> &'static str { "scss" }
+    fn name(&self) -> &'static str {
+        "SCSS"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["scss", "sass"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "scss"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["rule_set", "mixin_statement", "function_statement"]
@@ -23,7 +31,9 @@ impl Language for Scss {
         &["mixin_statement", "function_statement"]
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["import_statement", "use_statement", "forward_statement"]
@@ -65,15 +75,30 @@ impl Language for Scss {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "each_statement", "while_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "each_statement",
+            "while_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "each_statement", "while_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "each_statement",
+            "while_statement",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["rule_set", "mixin_statement", "function_statement", "if_statement"]
+        &[
+            "rule_set",
+            "mixin_statement",
+            "function_statement",
+            "if_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -119,7 +144,9 @@ impl Language for Scss {
         None
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // SCSS uses /// for SassDoc
@@ -193,13 +220,18 @@ impl Language for Scss {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
-
-    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
-        node.child_by_field_name("body").or_else(|| node.child_by_field_name("block"))
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
+        node.child_by_field_name("body")
+            .or_else(|| node.child_by_field_name("block"))
+    }
+
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -208,7 +240,9 @@ impl Language for Scss {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "scss" && ext != "sass" { return None; }
+        if ext != "scss" && ext != "sass" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -222,12 +256,23 @@ impl Language for Scss {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "scss" }
+    fn lang_key(&self) -> &'static str {
+        "scss"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         let dir = current_file.parent()?;
 
         // SCSS allows omitting _ prefix and extension
@@ -258,25 +303,42 @@ impl Language for Scss {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         None
     }
 
-    fn get_version(&self, _project_root: &Path) -> Option<String> { None }
-    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> { None }
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["scss", "sass"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn get_version(&self, _project_root: &Path) -> Option<String> {
+        None
+    }
+    fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["scss", "sass"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         !is_dir && !has_extension(name, &["scss", "sass"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".scss")
+        entry_name
+            .strip_suffix(".scss")
             .or_else(|| entry_name.strip_suffix(".sass"))
             .map(|s| s.trim_start_matches('_'))
             .unwrap_or(entry_name)
@@ -284,7 +346,11 @@ impl Language for Scss {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

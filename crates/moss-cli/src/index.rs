@@ -1,5 +1,5 @@
-use ignore::WalkBuilder;
 use crate::paths::get_moss_dir;
+use ignore::WalkBuilder;
 use moss_languages::support_for_path;
 use rayon::prelude::*;
 use rusqlite::{params, Connection};
@@ -24,8 +24,8 @@ const SCHEMA_VERSION: i64 = 3;
 
 /// Supported source file extensions for call graph indexing
 const SOURCE_EXTENSIONS: &[&str] = &[
-    ".py", ".rs", ".java", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".go",
-    ".json", ".yaml", ".yml", ".toml",
+    ".py", ".rs", ".java", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".go", ".json", ".yaml", ".yml",
+    ".toml",
 ];
 
 /// Check if a file path has a supported source extension
@@ -308,10 +308,7 @@ impl FileIndex {
             if let Ok(rel) = path.strip_prefix(&self.root) {
                 let rel_str = rel.to_string_lossy().to_string();
                 // Skip internal directories
-                if rel_str.is_empty()
-                    || rel_str == ".git"
-                    || rel_str.starts_with(".git/")
-                {
+                if rel_str.is_empty() || rel_str == ".git" || rel_str.starts_with(".git/") {
                     continue;
                 }
                 seen.insert(rel_str.clone());
@@ -412,10 +409,7 @@ impl FileIndex {
             if let Ok(rel) = path.strip_prefix(&self.root) {
                 let rel_str = rel.to_string_lossy().to_string();
                 // Skip internal directories
-                if rel_str.is_empty()
-                    || rel_str == ".git"
-                    || rel_str.starts_with(".git/")
-                {
+                if rel_str.is_empty() || rel_str == ".git" || rel_str.starts_with(".git/") {
                     continue;
                 }
 
@@ -706,7 +700,8 @@ impl FileIndex {
                         WHEN LOWER(name) LIKE ?4 THEN 1
                         ELSE 2 END,
                    LENGTH(name), name
-                 LIMIT ?5".to_string()
+                 LIMIT ?5"
+                    .to_string()
             } else {
                 "SELECT name, kind, file, start_line, end_line, parent FROM symbols
                  WHERE LOWER(name) LIKE ?1
@@ -715,7 +710,8 @@ impl FileIndex {
                         WHEN LOWER(name) LIKE ?3 THEN 1
                         ELSE 2 END,
                    LENGTH(name), name
-                 LIMIT ?4".to_string()
+                 LIMIT ?4"
+                    .to_string()
             };
 
             if let Some(k) = kind {
@@ -747,11 +743,13 @@ impl FileIndex {
             let sql = if kind.is_some() {
                 "SELECT name, kind, file, start_line, end_line, parent FROM symbols
                  WHERE LOWER(name) = LOWER(?1) AND kind = ?2
-                 LIMIT ?3".to_string()
+                 LIMIT ?3"
+                    .to_string()
             } else {
                 "SELECT name, kind, file, start_line, end_line, parent FROM symbols
                  WHERE LOWER(name) = LOWER(?1)
-                 LIMIT ?2".to_string()
+                 LIMIT ?2"
+                    .to_string()
             };
 
             if let Some(k) = kind {
@@ -775,7 +773,8 @@ impl FileIndex {
         };
 
         let mut stmt = self.conn.prepare(&sql)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let symbols = stmt
             .query_map(params_refs.as_slice(), |row| {
@@ -1000,22 +999,42 @@ impl FileIndex {
                 "INSERT INTO calls (caller_file, caller_symbol, callee_name, callee_qualifier, line) VALUES (?1, ?2, ?3, ?4, ?5)"
             )?;
             let mut import_stmt = tx.prepare_cached(
-                "INSERT INTO imports (file, module, name, alias, line) VALUES (?1, ?2, ?3, ?4, ?5)"
+                "INSERT INTO imports (file, module, name, alias, line) VALUES (?1, ?2, ?3, ?4, ?5)",
             )?;
 
             for data in &parsed_data {
                 for (name, kind, start_line, end_line, parent, complexity) in &data.symbols {
-                    sym_stmt.execute(params![data.file_path, name, kind, start_line, end_line, parent, complexity])?;
+                    sym_stmt.execute(params![
+                        data.file_path,
+                        name,
+                        kind,
+                        start_line,
+                        end_line,
+                        parent,
+                        complexity
+                    ])?;
                     symbol_count += 1;
                 }
 
                 for (caller_symbol, callee_name, qualifier, line) in &data.calls {
-                    call_stmt.execute(params![data.file_path, caller_symbol, callee_name, qualifier, line])?;
+                    call_stmt.execute(params![
+                        data.file_path,
+                        caller_symbol,
+                        callee_name,
+                        qualifier,
+                        line
+                    ])?;
                     call_count += 1;
                 }
 
                 for imp in &data.imports {
-                    import_stmt.execute(params![data.file_path, imp.module, imp.name, imp.alias, imp.line])?;
+                    import_stmt.execute(params![
+                        data.file_path,
+                        imp.module,
+                        imp.name,
+                        imp.alias,
+                        imp.line
+                    ])?;
                     import_count += 1;
                 }
             }

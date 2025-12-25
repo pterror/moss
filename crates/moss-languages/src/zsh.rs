@@ -1,27 +1,39 @@
 //! Zsh language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Zsh language support.
 pub struct Zsh;
 
 impl Language for Zsh {
-    fn name(&self) -> &'static str { "Zsh" }
-    fn extensions(&self) -> &'static [&'static str] { &["zsh", "zshrc", "zshenv", "zprofile"] }
-    fn grammar_name(&self) -> &'static str { "zsh" }
+    fn name(&self) -> &'static str {
+        "Zsh"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["zsh", "zshrc", "zshenv", "zprofile"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "zsh"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { &[] }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn function_kinds(&self) -> &'static [&'static str] {
         &["function_definition"]
     }
 
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["command"] // source, .
@@ -57,16 +69,32 @@ impl Language for Zsh {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "while_statement", "case_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "case_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "elif_clause", "for_statement", "while_statement",
-          "case_statement", "case_item"]
+        &[
+            "if_statement",
+            "elif_clause",
+            "for_statement",
+            "while_statement",
+            "case_statement",
+            "case_item",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["function_definition", "if_statement", "for_statement", "while_statement"]
+        &[
+            "function_definition",
+            "if_statement",
+            "for_statement",
+            "while_statement",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -86,8 +114,12 @@ impl Language for Zsh {
         })
     }
 
-    fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_container(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         let mut prev = node.prev_sibling();
@@ -143,16 +175,24 @@ impl Language for Zsh {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -169,25 +209,36 @@ impl Language for Zsh {
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.zsh", module),
-            format!("functions/{}", module),
-        ]
+        vec![format!("{}.zsh", module), format!("functions/{}", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "zsh" }
+    fn lang_key(&self) -> &'static str {
+        "zsh"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
     fn resolve_local_import(&self, import: &str, current_file: &Path, _: &Path) -> Option<PathBuf> {
         let dir = current_file.parent()?;
         let full = dir.join(import);
-        if full.is_file() { Some(full) } else { None }
+        if full.is_file() {
+            Some(full)
+        } else {
+            None
+        }
     }
 
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
-    fn get_version(&self, _: &Path) -> Option<String> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
+    fn get_version(&self, _: &Path) -> Option<String> {
+        None
+    }
 
     fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
         if let Some(home) = std::env::var_os("HOME") {
@@ -203,25 +254,42 @@ impl Language for Zsh {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["zsh"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["zsh"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
         use crate::traits::skip_dotfiles;
-        if skip_dotfiles(name) { return true; }
-        if is_dir { return false; }
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir {
+            return false;
+        }
         // Zsh files often don't have extensions
         !name.ends_with(".zsh") && !name.contains("zsh")
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".zsh").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".zsh")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

@@ -1,26 +1,38 @@
 //! HCL (HashiCorp Configuration Language) support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// HCL language support (Terraform, Packer, etc.).
 pub struct Hcl;
 
 impl Language for Hcl {
-    fn name(&self) -> &'static str { "HCL" }
-    fn extensions(&self) -> &'static [&'static str] { &["tf", "tfvars", "hcl"] }
-    fn grammar_name(&self) -> &'static str { "hcl" }
+    fn name(&self) -> &'static str {
+        "HCL"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["tf", "tfvars", "hcl"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "hcl"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["block"] // resource, data, module, variable, output, locals, provider
     }
 
-    fn function_kinds(&self) -> &'static [&'static str] { &[] }
-    fn type_kinds(&self) -> &'static [&'static str] { &[] }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn import_kinds(&self) -> &'static [&'static str] {
         &["block"] // module blocks are imports
@@ -75,7 +87,12 @@ impl Language for Hcl {
         &["block", "object"]
     }
 
-    fn extract_function(&self, _node: &Node, _content: &str, _in_container: bool) -> Option<Symbol> {
+    fn extract_function(
+        &self,
+        _node: &Node,
+        _content: &str,
+        _in_container: bool,
+    ) -> Option<Symbol> {
         None
     }
 
@@ -105,7 +122,9 @@ impl Language for Hcl {
         })
     }
 
-    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> { None }
+    fn extract_type(&self, _node: &Node, _content: &str) -> Option<Symbol> {
+        None
+    }
 
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         // HCL uses # or // for comments
@@ -115,9 +134,7 @@ impl Language for Hcl {
         while let Some(sibling) = prev {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" {
-                let line = text.trim_start_matches('#')
-                    .trim_start_matches("//")
-                    .trim();
+                let line = text.trim_start_matches('#').trim_start_matches("//").trim();
                 doc_lines.push(line.to_string());
                 prev = sibling.prev_sibling();
             } else {
@@ -171,38 +188,58 @@ impl Language for Hcl {
         Vec::new()
     }
 
-    fn is_public(&self, _node: &Node, _content: &str) -> bool { true }
-    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility { Visibility::Public }
+    fn is_public(&self, _node: &Node, _content: &str) -> bool {
+        true
+    }
+    fn get_visibility(&self, _node: &Node, _content: &str) -> Visibility {
+        Visibility::Public
+    }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> { None }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
+    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+        None
+    }
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if ext != "tf" && ext != "tfvars" && ext != "hcl" { return None; }
+        if ext != "tf" && ext != "tfvars" && ext != "hcl" {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
 
     fn module_name_to_paths(&self, module: &str) -> Vec<String> {
-        vec![
-            format!("{}.tf", module),
-            format!("{}/main.tf", module),
-        ]
+        vec![format!("{}.tf", module), format!("{}/main.tf", module)]
     }
 
-    fn lang_key(&self) -> &'static str { "hcl" }
+    fn lang_key(&self) -> &'static str {
+        "hcl"
+    }
 
-    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool { false }
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, _import_name: &str, _project_root: &Path) -> bool {
+        false
+    }
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
-    fn resolve_local_import(&self, import: &str, _current_file: &Path, project_root: &Path) -> Option<PathBuf> {
+    fn resolve_local_import(
+        &self,
+        import: &str,
+        _current_file: &Path,
+        project_root: &Path,
+    ) -> Option<PathBuf> {
         if import.starts_with("./") || import.starts_with("../") {
             let full = project_root.join(import);
             if full.is_dir() {
@@ -215,7 +252,11 @@ impl Language for Hcl {
         None
     }
 
-    fn resolve_external_import(&self, _import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        _import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         // Terraform registry resolution would go here
         None
     }
@@ -251,20 +292,31 @@ impl Language for Hcl {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["tf"] }
-    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["tf"]
+    }
+    fn package_sources(&self, _project_root: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && name == ".terraform" { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && name == ".terraform" {
+            return true;
+        }
         !is_dir && !has_extension(name, &["tf", "tfvars", "hcl"])
     }
 
-    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".tf")
+        entry_name
+            .strip_suffix(".tf")
             .or_else(|| entry_name.strip_suffix(".tfvars"))
             .or_else(|| entry_name.strip_suffix(".hcl"))
             .unwrap_or(entry_name)
@@ -295,9 +347,7 @@ impl Hcl {
                     block_type = Some(content[child.byte_range()].to_string());
                 }
                 "string_lit" => {
-                    let text = content[child.byte_range()]
-                        .trim_matches('"')
-                        .to_string();
+                    let text = content[child.byte_range()].trim_matches('"').to_string();
                     labels.push(text);
                 }
                 _ => {}

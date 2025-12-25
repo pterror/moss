@@ -1,10 +1,10 @@
 //! Rust language support.
 
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use arborium::tree_sitter::Node;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
-use arborium::tree_sitter::Node;
 
 // ============================================================================
 // Rust external package resolution
@@ -43,7 +43,10 @@ pub fn find_cargo_registry() -> Option<PathBuf> {
 
     // Fall back to ~/.cargo/registry/src
     if let Ok(home) = std::env::var("HOME") {
-        let registry = PathBuf::from(home).join(".cargo").join("registry").join("src");
+        let registry = PathBuf::from(home)
+            .join(".cargo")
+            .join("registry")
+            .join("src");
         if registry.is_dir() {
             return Some(registry);
         }
@@ -51,7 +54,10 @@ pub fn find_cargo_registry() -> Option<PathBuf> {
 
     // Windows fallback
     if let Ok(home) = std::env::var("USERPROFILE") {
-        let registry = PathBuf::from(home).join(".cargo").join("registry").join("src");
+        let registry = PathBuf::from(home)
+            .join(".cargo")
+            .join("registry")
+            .join("src");
         if registry.is_dir() {
             return Some(registry);
         }
@@ -102,11 +108,19 @@ fn resolve_rust_crate(crate_name: &str, registry: &Path) -> Option<ResolvedPacka
 pub struct Rust;
 
 impl Language for Rust {
-    fn name(&self) -> &'static str { "Rust" }
-    fn extensions(&self) -> &'static [&'static str] { &["rs"] }
-    fn grammar_name(&self) -> &'static str { "rust" }
+    fn name(&self) -> &'static str {
+        "Rust"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["rs"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "rust"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
         &["impl_item", "trait_item"]
@@ -421,7 +435,9 @@ impl Language for Rust {
         Visibility::Private
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -446,9 +462,7 @@ impl Language for Rust {
         let path_str = path.to_str()?;
 
         // Strip src/ prefix if present
-        let rel_path = path_str
-            .strip_prefix("src/")
-            .unwrap_or(path_str);
+        let rel_path = path_str.strip_prefix("src/").unwrap_or(path_str);
 
         // Remove .rs extension
         let module_path = rel_path.strip_suffix(".rs")?;
@@ -475,7 +489,9 @@ impl Language for Rust {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "rust" }
+    fn lang_key(&self) -> &'static str {
+        "rust"
+    }
 
     fn resolve_local_import(
         &self,
@@ -540,7 +556,11 @@ impl Language for Rust {
         None
     }
 
-    fn resolve_external_import(&self, crate_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        crate_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         let registry = find_cargo_registry()?;
         resolve_rust_crate(crate_name, &registry)
     }
@@ -582,10 +602,14 @@ impl Language for Rust {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         // Skip target, tests directories
-        if is_dir && (name == "target" || name == "tests" || name == "benches" || name == "examples") {
+        if is_dir
+            && (name == "target" || name == "tests" || name == "benches" || name == "examples")
+        {
             return true;
         }
         // Only index .rs files
@@ -601,7 +625,10 @@ impl Language for Rust {
 
     fn package_module_name(&self, entry_name: &str) -> String {
         // Strip .rs extension
-        entry_name.strip_suffix(".rs").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".rs")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
@@ -653,7 +680,8 @@ fn discover_cargo_packages(registry: &Path) -> Vec<(String, PathBuf)> {
             }
 
             // Extract crate name (remove version suffix: "foo-1.2.3" -> "foo")
-            let name = crate_name.rsplit_once('-')
+            let name = crate_name
+                .rsplit_once('-')
                 .map(|(n, _)| n)
                 .unwrap_or(&crate_name);
 

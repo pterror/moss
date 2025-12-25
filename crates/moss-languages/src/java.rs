@@ -1,10 +1,10 @@
 //! Java language support.
 
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
+use arborium::tree_sitter::Node;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
-use arborium::tree_sitter::Node;
 
 // ============================================================================
 // Java external package resolution
@@ -67,7 +67,10 @@ pub fn find_maven_repository() -> Option<PathBuf> {
 pub fn find_gradle_cache() -> Option<PathBuf> {
     // Check GRADLE_USER_HOME env var
     if let Ok(gradle_home) = std::env::var("GRADLE_USER_HOME") {
-        let cache = PathBuf::from(gradle_home).join("caches").join("modules-2").join("files-2.1");
+        let cache = PathBuf::from(gradle_home)
+            .join("caches")
+            .join("modules-2")
+            .join("files-2.1");
         if cache.is_dir() {
             return Some(cache);
         }
@@ -75,7 +78,11 @@ pub fn find_gradle_cache() -> Option<PathBuf> {
 
     // Default ~/.gradle/caches/modules-2/files-2.1
     if let Ok(home) = std::env::var("HOME") {
-        let cache = PathBuf::from(home).join(".gradle").join("caches").join("modules-2").join("files-2.1");
+        let cache = PathBuf::from(home)
+            .join(".gradle")
+            .join("caches")
+            .join("modules-2")
+            .join("files-2.1");
         if cache.is_dir() {
             return Some(cache);
         }
@@ -83,7 +90,11 @@ pub fn find_gradle_cache() -> Option<PathBuf> {
 
     // Windows fallback
     if let Ok(home) = std::env::var("USERPROFILE") {
-        let cache = PathBuf::from(home).join(".gradle").join("caches").join("modules-2").join("files-2.1");
+        let cache = PathBuf::from(home)
+            .join(".gradle")
+            .join("caches")
+            .join("modules-2")
+            .join("files-2.1");
         if cache.is_dir() {
             return Some(cache);
         }
@@ -93,7 +104,11 @@ pub fn find_gradle_cache() -> Option<PathBuf> {
 }
 
 /// Resolve a Java import to a source file in Maven/Gradle cache.
-fn resolve_java_import(import: &str, maven_repo: Option<&Path>, gradle_cache: Option<&Path>) -> Option<ResolvedPackage> {
+fn resolve_java_import(
+    import: &str,
+    maven_repo: Option<&Path>,
+    gradle_cache: Option<&Path>,
+) -> Option<ResolvedPackage> {
     let package_path = import.replace('.', "/");
 
     // Try Maven first
@@ -113,7 +128,11 @@ fn resolve_java_import(import: &str, maven_repo: Option<&Path>, gradle_cache: Op
     None
 }
 
-fn find_java_package_in_maven(maven_repo: &Path, package_path: &str, import: &str) -> Option<ResolvedPackage> {
+fn find_java_package_in_maven(
+    maven_repo: &Path,
+    package_path: &str,
+    import: &str,
+) -> Option<ResolvedPackage> {
     let target_dir = maven_repo.join(package_path);
     if target_dir.is_dir() {
         return find_maven_artifact(&target_dir, import);
@@ -143,7 +162,8 @@ fn find_java_package_in_maven(maven_repo: &Path, package_path: &str, import: &st
 }
 
 fn find_maven_artifact(artifact_dir: &Path, import: &str) -> Option<ResolvedPackage> {
-    let versions: Vec<_> = std::fs::read_dir(artifact_dir).ok()?
+    let versions: Vec<_> = std::fs::read_dir(artifact_dir)
+        .ok()?
         .flatten()
         .filter(|e| e.path().is_dir())
         .collect();
@@ -186,7 +206,11 @@ fn find_maven_artifact(artifact_dir: &Path, import: &str) -> Option<ResolvedPack
     None
 }
 
-fn find_java_package_in_gradle(gradle_cache: &Path, package_path: &str, import: &str) -> Option<ResolvedPackage> {
+fn find_java_package_in_gradle(
+    gradle_cache: &Path,
+    package_path: &str,
+    import: &str,
+) -> Option<ResolvedPackage> {
     let parts: Vec<&str> = package_path.split('/').collect();
 
     for i in (2..parts.len()).rev() {
@@ -208,7 +232,8 @@ fn find_java_package_in_gradle(gradle_cache: &Path, package_path: &str, import: 
 }
 
 fn find_gradle_artifact(artifact_dir: &Path, import: &str) -> Option<ResolvedPackage> {
-    let versions: Vec<_> = std::fs::read_dir(artifact_dir).ok()?
+    let versions: Vec<_> = std::fs::read_dir(artifact_dir)
+        .ok()?
         .flatten()
         .filter(|e| e.path().is_dir())
         .collect();
@@ -226,7 +251,8 @@ fn find_gradle_artifact(artifact_dir: &Path, import: &str) -> Option<ResolvedPac
 
     let version_dir = versions.last()?.path();
 
-    let hash_dirs: Vec<_> = std::fs::read_dir(&version_dir).ok()?
+    let hash_dirs: Vec<_> = std::fs::read_dir(&version_dir)
+        .ok()?
         .flatten()
         .filter(|e| e.path().is_dir())
         .collect();
@@ -252,7 +278,10 @@ fn find_gradle_artifact(artifact_dir: &Path, import: &str) -> Option<ResolvedPac
         if let Ok(entries) = std::fs::read_dir(&hash_path) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.ends_with(".jar") && !name.ends_with("-sources.jar") && !name.ends_with("-javadoc.jar") {
+                if name.ends_with(".jar")
+                    && !name.ends_with("-sources.jar")
+                    && !name.ends_with("-javadoc.jar")
+                {
                     return Some(ResolvedPackage {
                         path: entry.path(),
                         name: import.to_string(),
@@ -287,14 +316,26 @@ fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 pub struct Java;
 
 impl Language for Java {
-    fn name(&self) -> &'static str { "Java" }
-    fn extensions(&self) -> &'static [&'static str] { &["java"] }
-    fn grammar_name(&self) -> &'static str { "java" }
+    fn name(&self) -> &'static str {
+        "Java"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["java"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "java"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "enum_declaration"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "enum_declaration",
+        ]
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
@@ -302,13 +343,24 @@ impl Language for Java {
     }
 
     fn type_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "enum_declaration"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "enum_declaration",
+        ]
     }
 
-    fn import_kinds(&self) -> &'static [&'static str] { &["import_declaration"] }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["import_declaration"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
-        &["class_declaration", "interface_declaration", "enum_declaration", "method_declaration"]
+        &[
+            "class_declaration",
+            "interface_declaration",
+            "enum_declaration",
+            "method_declaration",
+        ]
     }
 
     fn visibility_mechanism(&self) -> VisibilityMechanism {
@@ -341,24 +393,66 @@ impl Language for Java {
     }
 
     fn scope_creating_kinds(&self) -> &'static [&'static str] {
-        &["for_statement", "enhanced_for_statement", "while_statement", "do_statement", "try_statement", "catch_clause", "switch_expression", "block"]
+        &[
+            "for_statement",
+            "enhanced_for_statement",
+            "while_statement",
+            "do_statement",
+            "try_statement",
+            "catch_clause",
+            "switch_expression",
+            "block",
+        ]
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_expression", "try_statement", "return_statement", "break_statement", "continue_statement", "throw_statement"]
+        &[
+            "if_statement",
+            "for_statement",
+            "enhanced_for_statement",
+            "while_statement",
+            "do_statement",
+            "switch_expression",
+            "try_statement",
+            "return_statement",
+            "break_statement",
+            "continue_statement",
+            "throw_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_label", "catch_clause", "ternary_expression", "binary_expression"]
+        &[
+            "if_statement",
+            "for_statement",
+            "enhanced_for_statement",
+            "while_statement",
+            "do_statement",
+            "switch_label",
+            "catch_clause",
+            "ternary_expression",
+            "binary_expression",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_statement", "enhanced_for_statement", "while_statement", "do_statement", "switch_expression", "try_statement", "method_declaration", "class_declaration"]
+        &[
+            "if_statement",
+            "for_statement",
+            "enhanced_for_statement",
+            "while_statement",
+            "do_statement",
+            "switch_expression",
+            "try_statement",
+            "method_declaration",
+            "class_declaration",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| content[p.byte_range()].to_string())
             .unwrap_or_else(|| "()".to_string());
 
@@ -423,7 +517,11 @@ impl Language for Java {
                 return vec![Import {
                     module,
                     names: Vec::new(),
-                    alias: if is_static { Some("static".to_string()) } else { None },
+                    alias: if is_static {
+                        Some("static".to_string())
+                    } else {
+                        None
+                    },
                     is_wildcard,
                     is_relative: false,
                     line,
@@ -438,7 +536,9 @@ impl Language for Java {
         self.get_visibility(node, content) == Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -490,8 +590,12 @@ impl Language for Java {
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let mods = &content[child.byte_range()];
-                if mods.contains("private") { return Visibility::Private; }
-                if mods.contains("protected") { return Visibility::Protected; }
+                if mods.contains("private") {
+                    return Visibility::Private;
+                }
+                if mods.contains("protected") {
+                    return Visibility::Protected;
+                }
                 // public or no modifier = visible in skeleton
                 return Visibility::Public;
             }
@@ -502,7 +606,9 @@ impl Language for Java {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "java" }
+    fn lang_key(&self) -> &'static str {
+        "java"
+    }
 
     fn resolve_local_import(
         &self,
@@ -522,7 +628,9 @@ impl Language for Java {
         ];
 
         for src_dir in &source_dirs {
-            let source_path = project_root.join(src_dir).join(format!("{}.java", path_part));
+            let source_path = project_root
+                .join(src_dir)
+                .join(format!("{}.java", path_part));
             if source_path.is_file() {
                 return Some(source_path);
             }
@@ -543,15 +651,15 @@ impl Language for Java {
         None
     }
 
-    fn resolve_external_import(&self, import_name: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        import_name: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         let maven_repo = find_maven_repository();
         let gradle_cache = find_gradle_cache();
 
-        resolve_java_import(
-            import_name,
-            maven_repo.as_deref(),
-            gradle_cache.as_deref(),
-        )
+        resolve_java_import(import_name, maven_repo.as_deref(), gradle_cache.as_deref())
     }
 
     fn get_version(&self, _project_root: &Path) -> Option<String> {
@@ -559,8 +667,7 @@ impl Language for Java {
     }
 
     fn find_package_cache(&self, _project_root: &Path) -> Option<PathBuf> {
-        find_maven_repository()
-            .or_else(find_gradle_cache)
+        find_maven_repository().or_else(find_gradle_cache)
     }
 
     fn indexable_extensions(&self) -> &'static [&'static str] {
@@ -590,8 +697,10 @@ impl Language for Java {
     }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
         // Skip META-INF, test dirs
         if is_dir && (name == "META-INF" || name == "test" || name == "tests") {
             return true;
@@ -602,13 +711,18 @@ impl Language for Java {
     fn discover_packages(&self, source: &crate::PackageSource) -> Vec<(String, PathBuf)> {
         match source.kind {
             crate::PackageSourceKind::Maven => discover_maven_packages(&source.path, &source.path),
-            crate::PackageSourceKind::Gradle => discover_gradle_packages(&source.path, &source.path),
+            crate::PackageSourceKind::Gradle => {
+                discover_gradle_packages(&source.path, &source.path)
+            }
             _ => Vec::new(),
         }
     }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".java").unwrap_or(entry_name).to_string()
+        entry_name
+            .strip_suffix(".java")
+            .unwrap_or(entry_name)
+            .to_string()
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
@@ -635,9 +749,7 @@ fn has_jar_files(path: &Path) -> bool {
 /// Find the main JAR in a Maven version directory.
 fn find_maven_jar(version_dir: &Path, artifact: &str) -> Option<PathBuf> {
     // Prefer sources JAR
-    let entries: Vec<_> = std::fs::read_dir(version_dir).ok()?
-        .flatten()
-        .collect();
+    let entries: Vec<_> = std::fs::read_dir(version_dir).ok()?.flatten().collect();
 
     // Look for artifact-version-sources.jar first
     for entry in &entries {
@@ -650,8 +762,11 @@ fn find_maven_jar(version_dir: &Path, artifact: &str) -> Option<PathBuf> {
     // Fall back to regular jar
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with(artifact) && name.ends_with(".jar")
-            && !name.ends_with("-sources.jar") && !name.ends_with("-javadoc.jar") {
+        if name.starts_with(artifact)
+            && name.ends_with(".jar")
+            && !name.ends_with("-sources.jar")
+            && !name.ends_with("-javadoc.jar")
+        {
             return Some(entry.path());
         }
     }
@@ -722,12 +837,13 @@ fn discover_gradle_packages(gradle_cache: &Path, current: &Path) -> Vec<(String,
                             if let Ok(rel) = current.strip_prefix(gradle_cache) {
                                 let parts: Vec<_> = rel.components().collect();
                                 if parts.len() >= 2 {
-                                    let group = parts[..parts.len()-1]
+                                    let group = parts[..parts.len() - 1]
                                         .iter()
                                         .map(|c| c.as_os_str().to_string_lossy())
                                         .collect::<Vec<_>>()
                                         .join(".");
-                                    let artifact = parts.last().unwrap().as_os_str().to_string_lossy();
+                                    let artifact =
+                                        parts.last().unwrap().as_os_str().to_string_lossy();
                                     let pkg_name = format!("{}:{}", group, artifact);
                                     packages.push((pkg_name, file.path()));
                                 }

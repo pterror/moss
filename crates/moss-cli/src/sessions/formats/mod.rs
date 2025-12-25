@@ -83,7 +83,10 @@ pub fn analyze_session(path: &Path) -> Result<SessionAnalysis, String> {
 }
 
 /// Analyze a session log with explicit format.
-pub fn analyze_session_with_format(path: &Path, format_name: &str) -> Result<SessionAnalysis, String> {
+pub fn analyze_session_with_format(
+    path: &Path,
+    format_name: &str,
+) -> Result<SessionAnalysis, String> {
     let registry = FormatRegistry::new();
     let format = registry
         .get(format_name)
@@ -107,6 +110,7 @@ pub(crate) fn peek_lines(path: &Path, n: usize) -> Vec<String> {
 pub(crate) fn read_file(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut content = String::new();
-    file.read_to_string(&mut content).map_err(|e| e.to_string())?;
+    file.read_to_string(&mut content)
+        .map_err(|e| e.to_string())?;
     Ok(content)
 }

@@ -1,25 +1,46 @@
 //! C++ language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
-use crate::external_packages::ResolvedPackage;
 use crate::c_cpp;
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// C++ language support.
 pub struct Cpp;
 
 impl Language for Cpp {
-    fn name(&self) -> &'static str { "C++" }
-    fn extensions(&self) -> &'static [&'static str] { &["cpp", "cc", "cxx", "hpp", "hh", "hxx"] }
-    fn grammar_name(&self) -> &'static str { "cpp" }
+    fn name(&self) -> &'static str {
+        "C++"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["cpp", "cc", "cxx", "hpp", "hh", "hxx"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "cpp"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
-    fn container_kinds(&self) -> &'static [&'static str] { &["class_specifier", "struct_specifier"] }
-    fn function_kinds(&self) -> &'static [&'static str] { &["function_definition"] }
-    fn type_kinds(&self) -> &'static [&'static str] { &["class_specifier", "struct_specifier", "enum_specifier", "type_definition"] }
-    fn import_kinds(&self) -> &'static [&'static str] { &["preproc_include"] }
+    fn container_kinds(&self) -> &'static [&'static str] {
+        &["class_specifier", "struct_specifier"]
+    }
+    fn function_kinds(&self) -> &'static [&'static str] {
+        &["function_definition"]
+    }
+    fn type_kinds(&self) -> &'static [&'static str] {
+        &[
+            "class_specifier",
+            "struct_specifier",
+            "enum_specifier",
+            "type_definition",
+        ]
+    }
+    fn import_kinds(&self) -> &'static [&'static str] {
+        &["preproc_include"]
+    }
 
     fn public_symbol_kinds(&self) -> &'static [&'static str] {
         &["function_definition", "class_specifier", "struct_specifier"]
@@ -97,7 +118,11 @@ impl Language for Cpp {
 
         Some(Symbol {
             name: name.to_string(),
-            kind: if in_container { SymbolKind::Method } else { SymbolKind::Function },
+            kind: if in_container {
+                SymbolKind::Method
+            } else {
+                SymbolKind::Function
+            },
             signature: name.to_string(),
             docstring: None,
             start_line: node.start_position().row + 1,
@@ -109,7 +134,11 @@ impl Language for Cpp {
 
     fn extract_container(&self, node: &Node, content: &str) -> Option<Symbol> {
         let name = self.node_name(node, content)?;
-        let kind = if node.kind() == "class_specifier" { SymbolKind::Class } else { SymbolKind::Struct };
+        let kind = if node.kind() == "class_specifier" {
+            SymbolKind::Class
+        } else {
+            SymbolKind::Struct
+        };
 
         Some(Symbol {
             name: name.to_string(),
@@ -141,7 +170,9 @@ impl Language for Cpp {
         for child in node.children(&mut cursor) {
             if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
                 let text = &content[child.byte_range()];
-                let module = text.trim_matches(|c| c == '"' || c == '<' || c == '>').to_string();
+                let module = text
+                    .trim_matches(|c| c == '"' || c == '<' || c == '>')
+                    .to_string();
                 let is_relative = text.starts_with('"');
                 return vec![Import {
                     module,
@@ -183,7 +214,9 @@ impl Language for Cpp {
         Visibility::Public
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
@@ -217,9 +250,24 @@ impl Language for Cpp {
 
     fn is_stdlib_import(&self, include: &str, _project_root: &Path) -> bool {
         // C++ standard library headers (no extension)
-        let stdlib = ["iostream", "vector", "string", "map", "set", "algorithm",
-                      "memory", "utility", "functional", "iterator", "numeric",
-                      "cstdio", "cstdlib", "cstring", "cmath", "climits"];
+        let stdlib = [
+            "iostream",
+            "vector",
+            "string",
+            "map",
+            "set",
+            "algorithm",
+            "memory",
+            "utility",
+            "functional",
+            "iterator",
+            "numeric",
+            "cstdio",
+            "cstdlib",
+            "cstring",
+            "cmath",
+            "climits",
+        ];
         stdlib.contains(&include)
     }
 
@@ -249,7 +297,9 @@ impl Language for Cpp {
 
     // === Import Resolution ===
 
-    fn lang_key(&self) -> &'static str { "cpp" }
+    fn lang_key(&self) -> &'static str {
+        "cpp"
+    }
 
     fn resolve_local_import(
         &self,
@@ -285,7 +335,11 @@ impl Language for Cpp {
         None
     }
 
-    fn resolve_external_import(&self, include: &str, _project_root: &Path) -> Option<ResolvedPackage> {
+    fn resolve_external_import(
+        &self,
+        include: &str,
+        _project_root: &Path,
+    ) -> Option<ResolvedPackage> {
         let include_paths = c_cpp::find_cpp_include_paths();
         c_cpp::resolve_cpp_include(include, &include_paths)
     }
@@ -313,10 +367,16 @@ impl Language for Cpp {
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
         use crate::traits::skip_dotfiles;
-        if skip_dotfiles(name) { return true; }
+        if skip_dotfiles(name) {
+            return true;
+        }
         // Skip the "bits" directory (C++ internal headers)
-        if is_dir && name == "bits" { return true; }
-        if is_dir { return false; }
+        if is_dir && name == "bits" {
+            return true;
+        }
+        if is_dir {
+            return false;
+        }
         // Check if it's a valid header: explicit extensions or extensionless stdlib headers
         let is_header = name.ends_with(".h")
             || name.ends_with(".hpp")

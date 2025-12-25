@@ -1,22 +1,30 @@
 //! Groovy language support.
 
-use std::path::{Path, PathBuf};
-use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Language, Symbol, SymbolKind, Visibility, VisibilityMechanism};
 use arborium::tree_sitter::Node;
+use std::path::{Path, PathBuf};
 
 /// Groovy language support.
 pub struct Groovy;
 
 impl Language for Groovy {
-    fn name(&self) -> &'static str { "Groovy" }
-    fn extensions(&self) -> &'static [&'static str] { &["groovy", "gradle", "gvy", "gy", "gsh"] }
-    fn grammar_name(&self) -> &'static str { "groovy" }
+    fn name(&self) -> &'static str {
+        "Groovy"
+    }
+    fn extensions(&self) -> &'static [&'static str] {
+        &["groovy", "gradle", "gvy", "gy", "gsh"]
+    }
+    fn grammar_name(&self) -> &'static str {
+        "groovy"
+    }
 
-    fn has_symbols(&self) -> bool { true }
+    fn has_symbols(&self) -> bool {
+        true
+    }
 
     fn container_kinds(&self) -> &'static [&'static str] {
-        &["class_definition"]  // Groovy grammar only has class_definition
+        &["class_definition"] // Groovy grammar only has class_definition
     }
 
     fn function_kinds(&self) -> &'static [&'static str] {
@@ -63,18 +71,36 @@ impl Language for Groovy {
     }
 
     fn control_flow_kinds(&self) -> &'static [&'static str] {
-        &["if_statement", "for_loop", "for_in_loop", "while_loop", "switch_statement",
-          "try_statement"]
+        &[
+            "if_statement",
+            "for_loop",
+            "for_in_loop",
+            "while_loop",
+            "switch_statement",
+            "try_statement",
+        ]
     }
 
     fn complexity_nodes(&self) -> &'static [&'static str] {
-        &["if_statement", "for_loop", "for_in_loop", "while_loop",
-          "switch_statement", "case", "ternary_op"]
+        &[
+            "if_statement",
+            "for_loop",
+            "for_in_loop",
+            "while_loop",
+            "switch_statement",
+            "case",
+            "ternary_op",
+        ]
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
-        &["class_definition", "function_definition", "if_statement", "for_loop",
-          "closure"]
+        &[
+            "class_definition",
+            "function_definition",
+            "if_statement",
+            "for_loop",
+            "closure",
+        ]
     }
 
     fn extract_function(&self, node: &Node, content: &str, _in_container: bool) -> Option<Symbol> {
@@ -128,9 +154,7 @@ impl Language for Groovy {
             let text = &content[sibling.byte_range()];
             if sibling.kind() == "comment" {
                 if text.starts_with("/**") {
-                    let inner = text.trim_start_matches("/**")
-                        .trim_end_matches("*/")
-                        .trim();
+                    let inner = text.trim_start_matches("/**").trim_end_matches("*/").trim();
                     if !inner.is_empty() {
                         // Get first non-empty line, strip leading *
                         for line in inner.lines() {
@@ -190,13 +214,17 @@ impl Language for Groovy {
         }
     }
 
-    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> { None }
+    fn embedded_content(&self, _node: &Node, _content: &str) -> Option<crate::EmbeddedBlock> {
+        None
+    }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
         node.child_by_field_name("body")
     }
 
-    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool { false }
+    fn body_has_docstring(&self, _body: &Node, _content: &str) -> bool {
+        false
+    }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         node.child_by_field_name("name")
@@ -205,7 +233,9 @@ impl Language for Groovy {
 
     fn file_path_to_module_name(&self, path: &Path) -> Option<String> {
         let ext = path.extension()?.to_str()?;
-        if !["groovy", "gradle", "gvy", "gy", "gsh"].contains(&ext) { return None; }
+        if !["groovy", "gradle", "gvy", "gy", "gsh"].contains(&ext) {
+            return None;
+        }
         let stem = path.file_stem()?.to_str()?;
         Some(stem.to_string())
     }
@@ -218,19 +248,26 @@ impl Language for Groovy {
         ]
     }
 
-    fn lang_key(&self) -> &'static str { "groovy" }
-
-    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
-        import_name.starts_with("groovy.") || import_name.starts_with("java.") ||
-        import_name.starts_with("javax.")
+    fn lang_key(&self) -> &'static str {
+        "groovy"
     }
 
-    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> { None }
+    fn is_stdlib_import(&self, import_name: &str, _project_root: &Path) -> bool {
+        import_name.starts_with("groovy.")
+            || import_name.starts_with("java.")
+            || import_name.starts_with("javax.")
+    }
+
+    fn find_stdlib(&self, _project_root: &Path) -> Option<PathBuf> {
+        None
+    }
 
     fn resolve_local_import(&self, import: &str, _: &Path, project_root: &Path) -> Option<PathBuf> {
         let path = import.replace('.', "/");
         let candidates = [
-            project_root.join("src/main/groovy").join(format!("{}.groovy", path)),
+            project_root
+                .join("src/main/groovy")
+                .join(format!("{}.groovy", path)),
             project_root.join(format!("{}.groovy", path)),
         ];
         for c in &candidates {
@@ -241,7 +278,9 @@ impl Language for Groovy {
         None
     }
 
-    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> { None }
+    fn resolve_external_import(&self, _: &str, _: &Path) -> Option<ResolvedPackage> {
+        None
+    }
 
     fn get_version(&self, project_root: &Path) -> Option<String> {
         if project_root.join("build.gradle").is_file() {
@@ -263,20 +302,31 @@ impl Language for Groovy {
         None
     }
 
-    fn indexable_extensions(&self) -> &'static [&'static str] { &["groovy", "gvy"] }
-    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> { Vec::new() }
+    fn indexable_extensions(&self) -> &'static [&'static str] {
+        &["groovy", "gvy"]
+    }
+    fn package_sources(&self, _: &Path) -> Vec<crate::PackageSource> {
+        Vec::new()
+    }
 
     fn should_skip_package_entry(&self, name: &str, is_dir: bool) -> bool {
-        use crate::traits::{skip_dotfiles, has_extension};
-        if skip_dotfiles(name) { return true; }
-        if is_dir && (name == "build" || name == ".gradle") { return true; }
+        use crate::traits::{has_extension, skip_dotfiles};
+        if skip_dotfiles(name) {
+            return true;
+        }
+        if is_dir && (name == "build" || name == ".gradle") {
+            return true;
+        }
         !is_dir && !has_extension(name, &["groovy", "gradle", "gvy", "gy", "gsh"])
     }
 
-    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> { Vec::new() }
+    fn discover_packages(&self, _: &crate::PackageSource) -> Vec<(String, PathBuf)> {
+        Vec::new()
+    }
 
     fn package_module_name(&self, entry_name: &str) -> String {
-        entry_name.strip_suffix(".groovy")
+        entry_name
+            .strip_suffix(".groovy")
             .or_else(|| entry_name.strip_suffix(".gradle"))
             .or_else(|| entry_name.strip_suffix(".gvy"))
             .unwrap_or(entry_name)
@@ -284,7 +334,11 @@ impl Language for Groovy {
     }
 
     fn find_package_entry(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_file() { Some(path.to_path_buf()) } else { None }
+        if path.is_file() {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
     }
 }
 

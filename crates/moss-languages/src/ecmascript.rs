@@ -3,11 +3,11 @@
 //! This module contains common logic shared between JavaScript, TypeScript, and TSX.
 //! Each language struct delegates to these functions for DRY implementation.
 
+use crate::external_packages::ResolvedPackage;
+use crate::{Export, Import, Symbol, SymbolKind, Visibility};
+use arborium::tree_sitter::Node;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::{Export, Import, Symbol, SymbolKind, Visibility};
-use crate::external_packages::ResolvedPackage;
-use arborium::tree_sitter::Node;
 
 // ============================================================================
 // Node kind constants
@@ -15,36 +15,72 @@ use arborium::tree_sitter::Node;
 
 pub const CONTAINER_KINDS: &[&str] = &["class_declaration", "class"];
 
-pub const JS_FUNCTION_KINDS: &[&str] = &["function_declaration", "method_definition", "generator_function_declaration"];
+pub const JS_FUNCTION_KINDS: &[&str] = &[
+    "function_declaration",
+    "method_definition",
+    "generator_function_declaration",
+];
 pub const TS_FUNCTION_KINDS: &[&str] = &["function_declaration", "method_definition"];
 
 pub const JS_TYPE_KINDS: &[&str] = &["class_declaration"];
-pub const TS_TYPE_KINDS: &[&str] = &["class_declaration", "interface_declaration", "type_alias_declaration", "enum_declaration"];
+pub const TS_TYPE_KINDS: &[&str] = &[
+    "class_declaration",
+    "interface_declaration",
+    "type_alias_declaration",
+    "enum_declaration",
+];
 
 pub const IMPORT_KINDS: &[&str] = &["import_statement"];
 pub const PUBLIC_SYMBOL_KINDS: &[&str] = &["export_statement"];
 
 pub const SCOPE_CREATING_KINDS: &[&str] = &[
-    "for_statement", "for_in_statement", "while_statement", "do_statement",
-    "try_statement", "catch_clause", "switch_statement", "arrow_function"
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+    "try_statement",
+    "catch_clause",
+    "switch_statement",
+    "arrow_function",
 ];
 
 pub const CONTROL_FLOW_KINDS: &[&str] = &[
-    "if_statement", "for_statement", "for_in_statement", "while_statement",
-    "do_statement", "switch_statement", "try_statement", "return_statement",
-    "break_statement", "continue_statement", "throw_statement"
+    "if_statement",
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "try_statement",
+    "return_statement",
+    "break_statement",
+    "continue_statement",
+    "throw_statement",
 ];
 
 pub const COMPLEXITY_NODES: &[&str] = &[
-    "if_statement", "for_statement", "for_in_statement", "while_statement",
-    "do_statement", "switch_case", "catch_clause", "ternary_expression",
-    "binary_expression"
+    "if_statement",
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+    "switch_case",
+    "catch_clause",
+    "ternary_expression",
+    "binary_expression",
 ];
 
 pub const NESTING_NODES: &[&str] = &[
-    "if_statement", "for_statement", "for_in_statement", "while_statement",
-    "do_statement", "switch_statement", "try_statement", "function_declaration",
-    "method_definition", "class_declaration"
+    "if_statement",
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "try_statement",
+    "function_declaration",
+    "method_definition",
+    "class_declaration",
 ];
 
 // ============================================================================
@@ -66,7 +102,11 @@ pub fn extract_function(node: &Node, content: &str, in_container: bool, name: &s
 
     Symbol {
         name: name.to_string(),
-        kind: if in_container { SymbolKind::Method } else { SymbolKind::Function },
+        kind: if in_container {
+            SymbolKind::Method
+        } else {
+            SymbolKind::Function
+        },
         signature,
         docstring: None,
         start_line: node.start_position().row + 1,
@@ -396,10 +436,17 @@ fn parse_node_package_name(import_path: &str) -> ParsedPackage<'_> {
         let parts: Vec<&str> = import_path.splitn(3, '/').collect();
         if parts.len() >= 2 {
             let name = format!("{}/{}", parts[0], parts[1]);
-            let subpath = if parts.len() > 2 { Some(parts[2]) } else { None };
+            let subpath = if parts.len() > 2 {
+                Some(parts[2])
+            } else {
+                None
+            };
             return ParsedPackage { name, subpath };
         }
-        ParsedPackage { name: import_path.to_string(), subpath: None }
+        ParsedPackage {
+            name: import_path.to_string(),
+            subpath: None,
+        }
     } else {
         // Regular package: name or name/subpath
         if let Some(idx) = import_path.find('/') {
@@ -407,7 +454,10 @@ fn parse_node_package_name(import_path: &str) -> ParsedPackage<'_> {
             let subpath = Some(&import_path[idx + 1..]);
             ParsedPackage { name, subpath }
         } else {
-            ParsedPackage { name: import_path.to_string(), subpath: None }
+            ParsedPackage {
+                name: import_path.to_string(),
+                subpath: None,
+            }
         }
     }
 }
@@ -548,7 +598,10 @@ pub fn get_deno_version() -> Option<String> {
                 let parts: Vec<&str> = version_part.split('.').collect();
                 if parts.len() >= 2 {
                     let major = parts[0].trim();
-                    let minor = parts[1].chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+                    let minor = parts[1]
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .collect::<String>();
                     return Some(format!("{}.{}", major, minor));
                 }
             }
@@ -676,8 +729,14 @@ fn resolve_deno_npm_import(npm_spec: &str, cache: &Path) -> Option<ResolvedPacka
 
 fn resolve_deno_url_import(url: &str, cache: &Path) -> Option<ResolvedPackage> {
     let deps_dir = cache.join("deps");
-    let url_parsed = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
-    let scheme = if url.starts_with("https://") { "https" } else { "http" };
+    let url_parsed = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let scheme = if url.starts_with("https://") {
+        "https"
+    } else {
+        "http"
+    };
 
     let scheme_dir = deps_dir.join(scheme);
     if !scheme_dir.is_dir() {
@@ -734,10 +793,7 @@ fn find_best_version_dir(pkg_path: &Path, version_spec: Option<&str>) -> Option<
         }
     }
 
-    let mut versions: Vec<_> = entries
-        .into_iter()
-        .filter(|e| e.path().is_dir())
-        .collect();
+    let mut versions: Vec<_> = entries.into_iter().filter(|e| e.path().is_dir()).collect();
     versions.sort_by(|a, b| {
         let a_name = a.file_name().to_string_lossy().to_string();
         let b_name = b.file_name().to_string_lossy().to_string();
