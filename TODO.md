@@ -7,25 +7,25 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 - Investigate slow `moss analyze --health` (+500ms over baseline)
 - view.rs internal cleanup (see CLI Surface Cleanup)
 - Rust crate feature lookup (see Tooling)
-- Add more languages (59 remaining)
+- Add more languages (48 remaining)
 
 Test Status: 85 passing, 0 failing
 
 ## Backlog
 
-**Language Support:** 39 languages implemented, 59 remaining from arborium.
+**Language Support:** 50 languages implemented, 48 remaining from arborium.
 See `docs/language-support.md` for design. Run `scripts/missing-grammars.sh` to refresh.
 
 Missing languages (grouped by category):
-- **Functional:** commonlisp, elisp, elm, gleam, idris, lean, prolog, rescript, scheme
+- **Functional:** commonlisp, elisp, gleam, idris, lean, prolog, rescript, scheme
 - **Systems/Low-level:** ada, asm, d, objc, verilog, vhdl, x86asm
-- **Scripting:** awk, fish, jq, perl, powershell, r, vim, zsh
-- **Scientific:** agda, julia, matlab, typst, uiua
+- **Scripting:** awk, fish, jq, powershell, zsh
+- **Scientific:** agda, matlab, typst, uiua
 - **Config/Data:** caddy, capnp, devicetree, diff, dot, ini, jinja2, kdl, meson, nginx, ninja, query, ron, sparql, ssh-config, starlark, textproto, thrift, tlaplus, wit, yuri
-- **Build:** batch, cmake, groovy
+- **Build:** batch, groovy
 - **Shaders:** glsl, hlsl
 - **Docs:** asciidoc, postscript
-- **Other:** tsx, vb
+- **Other:** vb
 
 **CLI Redundancy:** See `docs/llm-code-consistency.md`
 - [ ] Rust: OutputFormatter trait for JSON/text output
