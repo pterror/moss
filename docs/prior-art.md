@@ -1681,6 +1681,94 @@ jobs:
 - Categories: bugs, security, style, performance
 - Consider: Review guidelines from CLAUDE.md as prompt context
 
+## Context Engineering Resources
+
+### Agent Skills for Context Engineering
+- **Repo**: https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering
+- **What it is**: Curated collection of reusable "skills" for building AI agent systems, focused on context management
+
+**Core Insight**: Context engineering differs from prompt engineering - it's about "holistic curation of all information entering the model's limited attention budget."
+
+**Key Concepts:**
+
+**1. Context Compression Strategies:**
+- **Anchored Iterative Summarization**: Maintains persistent summaries with dedicated sections (session intent, file modifications, decisions, next steps). New content merged incrementally, not regenerated.
+- **Opaque Compression**: Highly compressed representations for reconstruction, sacrifices human readability
+- **Regenerative Full Summary**: Detailed structured summaries each cycle, readable but potentially lossy
+
+**Compression Triggers:**
+- Fixed threshold (70-80% context utilization)
+- Sliding window (last N turns + summary)
+- Importance-based (prioritize low-relevance sections)
+- Task-boundary (compress at logical completion points)
+
+**Evaluation**: Probe-based testing for factual recall, artifact trail integrity, continuation capability.
+**Key Metric**: "Tokens-per-task" not tokens-per-request - aggressive compression often triggers costly re-fetching.
+
+**2. Memory System Architectures (Spectrum Approach):**
+| Level | Scope | Latency | Persistence |
+|-------|-------|---------|-------------|
+| Working Memory | Context window | Zero | Volatile |
+| Short-Term | Session-scoped | Low | Session |
+| Long-Term | Cross-session | Medium | Permanent |
+| Entity Memory | Entity tracking | Low | Cross-session |
+| Temporal KGs | Time-aware facts | Medium | Permanent |
+
+**Implementation Patterns:**
+- File-System-as-Memory: Directory hierarchies + structured formats (no infrastructure)
+- Vector RAG with Metadata: Semantic search + rich filtering
+- Knowledge Graphs: Explicit entity/relationship modeling
+- Temporal KGs: Facts with "valid from/until" timestamps
+
+**Performance**: Zep benchmark shows 90% latency reduction (2.58s vs 28.9s) at 94.8% accuracy vs 60-70% for vector RAG.
+
+**3. Multi-Agent Patterns:**
+
+| Pattern | Key Insight |
+|---------|-------------|
+| Supervisor/Orchestrator | **"Telephone game problem"** - supervisors paraphrase incorrectly. Solution: `forward_message` tool for direct passthrough |
+| Peer-to-Peer/Swarm | No single point of failure, exploration-based |
+| Hierarchical | Strategy → Planning → Execution layers |
+
+**Critical Insight**: "Sub-agents exist primarily to isolate context" - not to simulate organizational roles.
+
+**4. Tool Design Principles:**
+- **Consolidation Principle**: "If a human can't definitively say which tool to use, an agent can't either" - favor comprehensive over fragmented tools
+- **Descriptions as Prompts**: Answer what/when/inputs/outputs explicitly
+- **Architectural Reduction**: Provide primitives over specialized tools (when data is well-documented)
+- **Response Format Optimization**: Let agents control verbosity
+- **Tool Limit**: ~10-20 tools to prevent selection confusion
+
+**5. Context Optimization Techniques:**
+- **Compaction**: Summarize at limits, never compress system prompt
+- **Observation Masking**: Replace verbose tool outputs (80%+ of tokens) with references
+- **KV-Cache Optimization**: Stable elements first (system prompt, tool defs) for cache hits
+- **Context Partitioning**: Distribute to sub-agents with isolated contexts
+
+**Triggers**: Optimize when context utilization >70%. Targets: 50-70% token reduction, 70%+ cache hits.
+
+**Moss Observations:**
+
+**Actually Useful:**
+- **Tool Consolidation Principle**: Validates moss's few-powerful-tools philosophy (view, edit, analyze)
+- **Progressive disclosure**: Moss's skeleton view is exactly this pattern
+- **Memory architecture spectrum**: Could inform cross-session learning design
+
+**Addresses Symptoms, Not Causes:**
+Most techniques here are reactive fixes for the **append-only trajectory** anti-pattern:
+- Compression triggers, observation masking, context compaction - all band-aids for "log grew too big"
+- Sub-agent context isolation - treats sub-agents as garbage collectors rather than meaningful abstractions
+
+The root cause: treating conversation as an append-only log that inevitably fills up.
+
+Moss's approach differs on two axes:
+1. **Structural awareness**: Load only what's needed (skeleton, targeted extraction)
+2. **Dynamic context**: Trajectory is not append-only - context can be reshaped throughout execution
+
+When context is dynamic rather than accumulated, compression/masking become unnecessary.
+
+**Key Metric Worth Adopting**: "Tokens-per-task" not tokens-per-request. Measures end-to-end efficiency including re-fetching costs from over-aggressive compression.
+
 ## Benchmarking TODO
 
 - [ ] Implement SWE-bench evaluation harness
