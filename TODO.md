@@ -27,6 +27,7 @@ See `docs/language-support.md` for design. Future languages: OCaml, Haskell, Clo
 - Audit Rust codebase for tuple returns - replace with structs unconditionally
   - Already fixed: `find_symbols` → `SymbolMatch`, `call_graph_stats` → `CallGraphStats`, `get_changed_files` → `ChangedFiles`
   - Also fixed: `IndexedCounts`, `CollapsedChain`, `ParsedPackage`, `ExtractedDeps`
+- Validate node kinds against grammars (test that kinds like "if_statement" exist in grammar)
 - Directory context: attach LLM-relevant context to directories (like CLAUDE.md but hierarchical)
 
 **Bugs:**
@@ -36,6 +37,7 @@ See `docs/language-support.md` for design. Future languages: OCaml, Haskell, Clo
 - Investigate slow `moss analyze --health` (+500ms over baseline, not uv startup)
 
 **Integration:**
+- Complete daemon integration (FileIndex API methods currently unused)
 - LSP refactor actions (rename symbol across files)
 - Cross-language reference tracking (Python ↔ Rust)
 
@@ -53,6 +55,7 @@ See `docs/language-support.md` for design. Future languages: OCaml, Haskell, Clo
 - YOLO mode evaluation
 - Diffusion-like parallel refactors
 - Claude Code over-reliance on Explore agents: spawns agents for direct tool tasks. Symptom of deeper issue?
+- Session analysis: detect correction patterns ("You're right", "Good point", "isn't working")
 - LLM code consistency: see `docs/llm-code-consistency.md` for research notes
 
 **Session Tooling:**
