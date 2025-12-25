@@ -24,6 +24,7 @@ ALWAYS NOTE THINGS DOWN. When you discover something important, write it immedia
 - Framework/library quirk discovered → add to relevant docs/ file
 - "I'll remember this" thought → you won't, write it down now
 - **"Aha" moment about design** → add to CLAUDE.md Design Principles NOW
+- **Citing CLAUDE.md as excuse** → if you say "CLAUDE.md says X" after failing to do X, the file failed its purpose. Adjust CLAUDE.md to actually prevent the failure, don't just note the rule exists.
 
 ## Negative Constraints
 
