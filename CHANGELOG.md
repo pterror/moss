@@ -45,6 +45,10 @@ Major refactoring to align with three-primitive philosophy (view, edit, analyze)
 - **Removed `skeleton` command**: consolidated into `view` (docstrings now shown by default)
 - **Added `--dirs-only` and `--raw` flags** to `view` command for directory trees
 
+### Performance
+
+- **analyze --health 2x faster**: Shared GrammarStore across threads (350ms vs 866ms previously)
+
 ### Session Analysis Command
 
 New `moss sessions` command for analyzing Claude Code and Gemini CLI logs:

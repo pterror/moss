@@ -4,7 +4,6 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 ## Next Up
 
-- Investigate slow `moss analyze --health` (+500ms over baseline)
 - view.rs internal cleanup (see CLI Surface Cleanup)
 - Rust crate feature lookup (see Tooling)
 
@@ -32,9 +31,6 @@ See `docs/language-support.md` for design. Run `scripts/missing-grammars.sh` to 
 
 **Bugs:**
 - Call graph shows same-named method on different object as self-call (e.g., `suggest_tool` calls `router.suggest_tool`)
-
-**Performance:**
-- Investigate slow `moss analyze --health` (+500ms over baseline, not uv startup)
 
 **Integration:**
 - Complete daemon integration (FileIndex API methods currently unused)

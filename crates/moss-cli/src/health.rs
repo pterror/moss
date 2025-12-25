@@ -186,6 +186,9 @@ pub fn analyze_health(root: &Path) -> HealthReport {
     // Thread-safe language file counts
     let files_by_language: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
 
+    // Shared analyzer - GrammarStore is expensive to create, so share it across threads
+    let analyzer = ComplexityAnalyzer::new();
+
     // Process files in parallel
     let stats: Vec<FileStats> = files
         .par_iter()
@@ -214,8 +217,6 @@ pub fn analyze_health(root: &Path) -> HealthReport {
                 });
             }
 
-            // Create thread-local analyzer
-            let analyzer = ComplexityAnalyzer::new();
             let report = analyzer.analyze(&path, &content);
 
             let mut functions = 0;
