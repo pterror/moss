@@ -65,6 +65,14 @@ Our system prompt for sub-agents (`src/moss/agent_loop.py:LLMConfig.system_promp
 - HashMap > inventory crate. OnceLock > lazy_static. Functions > traits (until you need the trait).
 - "Going in circles" = signal to simplify, not add complexity.
 
+**Conversational architecture is flawed.**
+The chatbot model (user → assistant → user, appending to a growing log) is wrong for agents. It leads to:
+- Context that inevitably fills up, requiring compression/masking band-aids
+- Lost-in-the-middle problems from accumulated history
+- Treating sub-agents as garbage collectors for context isolation
+
+Moss's alternative: dynamic context that can be reshaped throughout execution, not append-only accumulation. Combined with structural awareness (load only what's needed), this avoids the problem rather than managing symptoms.
+
 **When stuck (2+ failed attempts):**
 - Step back and reconsider the problem itself, not just try more solutions.
 - Ask: "Am I solving the right problem?" (go-imports: naming issue vs architecture issue)
