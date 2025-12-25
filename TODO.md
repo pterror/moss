@@ -45,7 +45,7 @@ Run `scripts/missing-grammars.sh` for all 64 remaining arborium grammars.
 **Tooling:**
 - Avoid web search for Rust crate features: `cargo info <crate> --features` or similar offline lookup
 - Structured TODO.md editing: first-class `moss todo` command to add/complete/move items without losing content (Opus 4.5 drops TODO items when editing markdown)
-- Multi-file batch edit: grep to find occurrences, then apply same edit across all files in one call (less latency than N sequential edits)
+- Multi-file batch edit: less latency than N sequential edits. Not for identical replacements (use sed) or semantic renames (use LSP). For structured batch edits where each file needs similar-but-contextual changes (e.g., adding a trait method to 35 language files).
 
 **View Filtering:**
 - Filter out tests from views (--no-tests or --exclude=tests)
