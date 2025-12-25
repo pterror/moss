@@ -5,7 +5,7 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 ## Next Up
 
 - view.rs internal cleanup (see CLI Surface Cleanup)
-- `moss package info` implementation (see Tooling)
+- `moss package info` implementation (see Tooling) - design complete, ready to implement
 
 Test Status: 107 passing, 0 failing (moss-languages)
 
