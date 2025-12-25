@@ -2761,6 +2761,7 @@ dependencies = [
  "jaq-core",
  "jaq-json",
  "jaq-std",
+ "libc",
  "moss-languages",
  "moss-packages",
  "moss-tools",

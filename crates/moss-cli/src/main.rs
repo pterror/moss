@@ -369,7 +369,19 @@ enum ServeProtocol {
     Lsp,
 }
 
+/// Reset SIGPIPE to default behavior so piping to `head` etc. doesn't panic.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {}
+
 fn main() {
+    reset_sigpipe();
     let cli = Cli::parse();
 
     let exit_code = match cli.command {
