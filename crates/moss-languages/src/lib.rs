@@ -53,7 +53,7 @@ pub mod java;
 #[cfg(feature = "lang-kotlin")]
 pub mod kotlin;
 
-#[cfg(feature = "lang-csharp")]
+#[cfg(feature = "lang-c-sharp")]
 pub mod csharp;
 
 #[cfg(feature = "lang-swift")]
@@ -165,7 +165,7 @@ pub use java::Java;
 #[cfg(feature = "lang-kotlin")]
 pub use kotlin::Kotlin;
 
-#[cfg(feature = "lang-csharp")]
+#[cfg(feature = "lang-c-sharp")]
 pub use csharp::CSharp;
 
 #[cfg(feature = "lang-swift")]

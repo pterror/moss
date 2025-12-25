@@ -45,7 +45,7 @@ fn init_builtin() {
         #[cfg(feature = "lang-kotlin")]
         register(&crate::kotlin::Kotlin);
 
-        #[cfg(feature = "lang-csharp")]
+        #[cfg(feature = "lang-c-sharp")]
         register(&crate::csharp::CSharp);
 
         #[cfg(feature = "lang-swift")]

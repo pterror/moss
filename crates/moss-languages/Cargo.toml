@@ -16,7 +16,7 @@ default = ["all-languages"]
 # Meta-features
 all-languages = [
     "lang-python", "lang-rust", "lang-javascript", "lang-typescript",
-    "lang-go", "lang-java", "lang-kotlin", "lang-csharp", "lang-swift",
+    "lang-go", "lang-java", "lang-kotlin", "lang-c-sharp", "lang-swift",
     "lang-php", "lang-dockerfile", "lang-c", "lang-cpp", "lang-ruby",
     "lang-scala", "lang-vue", "lang-markdown", "lang-json", "lang-yaml",
     "lang-toml", "lang-html", "lang-css", "lang-bash",
@@ -52,7 +52,7 @@ lang-css = ["arborium/lang-css"]
 lang-bash = ["arborium/lang-bash"]
 
 lang-kotlin = ["arborium/lang-kotlin"]
-lang-csharp = ["arborium/lang-c-sharp"]
+lang-c-sharp = ["arborium/lang-c-sharp"]
 lang-swift = ["arborium/lang-swift"]
 lang-php = ["arborium/lang-php"]
 lang-dockerfile = ["arborium/lang-dockerfile"]
