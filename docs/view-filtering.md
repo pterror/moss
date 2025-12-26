@@ -194,17 +194,33 @@ LLMs working with a codebase need to know what aliases are available and what th
 
 ```bash
 $ moss filter aliases
-Built-in aliases:
+Aliases:
   @tests     *_test.go, test_*.py, *_test.rs, ...  (detected: go, python, rust)
   @config    *.toml, *.yaml, *.json, ...
   @build     target/, dist/, node_modules/, ...
   @docs      *.md, docs/
   @generated *.gen.*, *.pb.go, ...
-
-Project overrides (.moss/config.toml):
-  @tests     my_custom_tests/**  (overrides built-in)
   @vendor    vendor/**, third_party/**  (custom)
 ```
+
+With config overrides:
+```bash
+$ moss filter aliases
+Aliases:
+  @tests     (disabled)                             # tests = [] in config
+  @config    *.toml, *.yaml, *.json, ...
+  @build     target/, dist/, node_modules/, ...
+  @docs      *.md, docs/
+  @generated *.gen.*, *.pb.go, ...
+  @vendor    vendor/**, third_party/**  (custom)   # added in config
+  @legacy    old_code/**  (custom)                 # added in config
+```
+
+The output is merged: shows effective aliases after config is applied. Annotations clarify origin:
+- No annotation = built-in (unmodified)
+- `(custom)` = defined in config, not a built-in
+- `(disabled)` = config set empty array `[]` to disable built-in
+- `(overridden)` = config replaced built-in patterns
 
 This lets LLMs:
 1. Check available aliases before suggesting commands
