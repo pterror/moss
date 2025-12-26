@@ -104,6 +104,9 @@ fn default_base_delay() -> f64 {
 /// LLM configuration (optional).
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LlmConfig {
+    /// Provider name (anthropic, openai, etc.)
+    #[serde(default)]
+    pub provider: Option<String>,
     #[serde(default = "default_llm_strategy")]
     pub strategy: String,
     #[serde(default)]
@@ -112,6 +115,30 @@ pub struct LlmConfig {
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub allow_parallel: bool,
+    /// Enable streaming output.
+    #[serde(default)]
+    pub streaming: bool,
+    /// Tools available to the LLM.
+    #[serde(default)]
+    pub tools: Vec<ToolConfig>,
+}
+
+/// Tool configuration for LLM function calling.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ToolConfig {
+    /// Tool name (unique identifier).
+    pub name: String,
+    /// Tool description for LLM context.
+    pub description: String,
+    /// Shell command to execute (with {arg} placeholders).
+    #[serde(default)]
+    pub command: Option<String>,
+    /// Moss command to execute.
+    #[serde(default)]
+    pub moss_command: Option<String>,
+    /// JSON schema for parameters (optional).
+    #[serde(default)]
+    pub parameters: Option<serde_json::Value>,
 }
 
 fn default_llm_strategy() -> String {

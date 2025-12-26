@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use super::config::WorkflowConfig;
+use super::llm::{build_llm_strategy, LlmStrategy};
 use super::strategies::{
     evaluate_condition, CacheStrategy, ContextStrategy, ExponentialRetry, FixedRetry, FlatContext,
     InMemoryCache, NoCache, NoRetry, RetryStrategy,
@@ -29,6 +30,7 @@ pub fn run_workflow(
     let mut context = build_context_strategy(&config);
     let mut cache = build_cache_strategy(&config);
     let mut retry = build_retry_strategy(&config);
+    let llm = build_llm_strategy_from_config(&config);
 
     // Add initial task to context
     if !task.is_empty() {
@@ -43,6 +45,7 @@ pub fn run_workflow(
             context.as_mut(),
             cache.as_mut(),
             retry.as_mut(),
+            llm.as_ref(),
         )
     } else if config.is_state_machine() {
         run_state_machine(
@@ -51,9 +54,18 @@ pub fn run_workflow(
             context.as_mut(),
             cache.as_mut(),
             retry.as_mut(),
+            llm.as_ref(),
         )
     } else {
         Err("Workflow must have either steps or states".to_string())
+    }
+}
+
+fn build_llm_strategy_from_config(config: &WorkflowConfig) -> Box<dyn LlmStrategy> {
+    if let Some(ref llm_config) = config.workflow.llm {
+        build_llm_strategy(llm_config.provider.as_deref(), llm_config.model.as_deref())
+    } else {
+        build_llm_strategy(None, None)
     }
 }
 
@@ -92,10 +104,22 @@ fn run_step_workflow(
     context: &mut dyn ContextStrategy,
     cache: &mut dyn CacheStrategy,
     _retry: &mut dyn RetryStrategy,
+    llm: &dyn LlmStrategy,
 ) -> Result<WorkflowResult, String> {
     let mut output = String::new();
     let mut combined_outputs: Vec<(String, String)> = Vec::new();
     let mut steps_executed = 0;
+    let streaming = config
+        .workflow
+        .llm
+        .as_ref()
+        .map(|l| l.streaming)
+        .unwrap_or(false);
+    let system_prompt = config
+        .workflow
+        .llm
+        .as_ref()
+        .and_then(|l| l.system_prompt.as_deref());
 
     for step in &config.steps {
         // Check condition if present
@@ -117,7 +141,7 @@ fn run_step_workflow(
         }
 
         // Execute the action
-        match execute_action(&step.action, root) {
+        match execute_action(&step.action, root, llm, system_prompt, streaming) {
             Ok(result) => {
                 context.add(&step.name, &result);
                 cache.set(&step.action, &result);
@@ -166,6 +190,7 @@ fn run_state_machine(
     context: &mut dyn ContextStrategy,
     cache: &mut dyn CacheStrategy,
     _retry: &mut dyn RetryStrategy,
+    llm: &dyn LlmStrategy,
 ) -> Result<WorkflowResult, String> {
     let initial_state = config
         .workflow
@@ -180,6 +205,17 @@ fn run_state_machine(
     let mut output = String::new();
     let mut turns = 0;
     let max_turns = config.workflow.limits.max_turns;
+    let streaming = config
+        .workflow
+        .llm
+        .as_ref()
+        .map(|l| l.streaming)
+        .unwrap_or(false);
+    let system_prompt = config
+        .workflow
+        .llm
+        .as_ref()
+        .and_then(|l| l.system_prompt.as_deref());
 
     loop {
         if turns >= max_turns {
@@ -209,7 +245,7 @@ fn run_state_machine(
             if let Some(cached) = cache.get(action) {
                 output = cached;
             } else {
-                match execute_action(action, root) {
+                match execute_action(action, root, llm, system_prompt, streaming) {
                     Ok(result) => {
                         cache.set(action, &result);
                         output = result;
@@ -256,11 +292,23 @@ fn run_state_machine(
 ///
 /// Action types:
 /// - `shell: <command>` - Execute shell command
+/// - `llm: <prompt>` - Execute LLM prompt (streaming if enabled)
 /// - `<args>` - Execute moss command (default)
-fn execute_action(action: &str, root: &Path) -> Result<String, String> {
+fn execute_action(
+    action: &str,
+    root: &Path,
+    llm: &dyn LlmStrategy,
+    system_prompt: Option<&str>,
+    streaming: bool,
+) -> Result<String, String> {
     // Check for shell: prefix
     if let Some(shell_cmd) = action.strip_prefix("shell:") {
         return execute_shell(shell_cmd.trim(), root);
+    }
+
+    // Check for llm: prefix
+    if let Some(prompt) = action.strip_prefix("llm:") {
+        return execute_llm(prompt.trim(), llm, system_prompt, streaming);
     }
 
     // Parse action into command and args
@@ -285,6 +333,36 @@ fn execute_action(action: &str, root: &Path) -> Result<String, String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("Action failed: {}", stderr))
+    }
+}
+
+/// Execute an LLM prompt.
+fn execute_llm(
+    prompt: &str,
+    llm: &dyn LlmStrategy,
+    system_prompt: Option<&str>,
+    streaming: bool,
+) -> Result<String, String> {
+    use std::io::{self, Write};
+
+    if streaming {
+        let callback: super::llm::StreamCallback = Box::new(|chunk: &str| {
+            print!("{}", chunk);
+            let _ = io::stdout().flush();
+        });
+
+        let result = if let Some(system) = system_prompt {
+            llm.complete_with_system_streaming(system, prompt, callback)?
+        } else {
+            llm.complete_streaming(prompt, callback)?
+        };
+
+        println!(); // Newline after streaming
+        Ok(result)
+    } else if let Some(system) = system_prompt {
+        llm.complete_with_system(system, prompt)
+    } else {
+        llm.complete(prompt)
     }
 }
 

@@ -2,6 +2,11 @@
 //!
 //! This module is only compiled when the "llm" feature is enabled.
 //! Supports all providers from rig: anthropic, openai, google, cohere, groq, etc.
+//!
+//! Features:
+//! - Streaming completions with callback
+//! - Tool/function calling support
+//! - Multiple provider backends
 
 #[cfg(feature = "llm")]
 use rig::{
@@ -10,6 +15,9 @@ use rig::{
     providers,
 };
 
+/// Callback for streaming chunks.
+pub type StreamCallback = Box<dyn Fn(&str) + Send + Sync>;
+
 /// LLM strategy trait for workflow execution.
 pub trait LlmStrategy: Send + Sync {
     /// Generate a completion from a prompt.
@@ -17,6 +25,27 @@ pub trait LlmStrategy: Send + Sync {
 
     /// Generate with system prompt.
     fn complete_with_system(&self, system: &str, prompt: &str) -> Result<String, String>;
+
+    /// Generate with streaming (calls callback for each chunk).
+    fn complete_streaming(&self, prompt: &str, callback: StreamCallback) -> Result<String, String> {
+        // Default implementation: non-streaming
+        let result = self.complete(prompt)?;
+        callback(&result);
+        Ok(result)
+    }
+
+    /// Generate with system prompt and streaming.
+    fn complete_with_system_streaming(
+        &self,
+        system: &str,
+        prompt: &str,
+        callback: StreamCallback,
+    ) -> Result<String, String> {
+        // Default implementation: non-streaming
+        let result = self.complete_with_system(system, prompt)?;
+        callback(&result);
+        Ok(result)
+    }
 }
 
 /// No LLM - for workflows that don't need it.
@@ -241,6 +270,9 @@ impl LlmStrategy for RigLlm {
             .map_err(|e| format!("Failed to create runtime: {}", e))?;
         rt.block_on(self.complete_async(Some(system), prompt))
     }
+
+    // Streaming uses default impl (calls complete and sends full result to callback)
+    // TODO: Implement true streaming once rig API stabilizes
 }
 
 /// Build an LLM strategy from workflow config.

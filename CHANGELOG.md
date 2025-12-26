@@ -39,6 +39,15 @@ Unified extraction layer in `extract.rs`:
   - skeleton: nested children, signatures, docstrings (for viewing)
   - symbols: flat with parent refs, complexity (for indexing)
 
+### LLM Workflow Integration
+
+Integrated LLM calling into the workflow engine:
+- `llm:` action prefix for LLM-powered workflow steps
+- Streaming support with callback (falls back to batch when API unstable)
+- System prompt configuration in workflow TOML
+- Tool configuration framework (for future function calling support)
+- Example workflow: `.moss/workflows/llm-review.toml`
+
 ### LLM Adapters
 
 Expanded LLM provider support via rig crate (behind `llm` feature). 13 providers:

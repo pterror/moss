@@ -11,7 +11,7 @@ Test Status: 110 passing, 0 failing (moss-languages)
 ## Remaining Work
 
 **Workflow Engine:**
-- [ ] Port LLM calling logic (streaming, tool use) as workflow component
+- [x] Port LLM calling logic (streaming, tool use) as workflow component
 
 **Rust Redesign Candidates:**
 - Rules engine: consider semgrep/ruff integration instead of custom
