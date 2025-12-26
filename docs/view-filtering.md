@@ -222,6 +222,13 @@ The output is merged: shows effective aliases after config is applied. Annotatio
 - `(disabled)` = config set empty array `[]` to disable built-in
 - `(overridden)` = config replaced built-in patterns
 
+### Error Handling
+
+- **Unknown alias** → error: `error: unknown alias @typo`
+- **Disabled alias** → warning: `warning: @tests is disabled (matches nothing)`
+
+Unknown is likely a typo. Disabled is intentional config—warn but proceed.
+
 This lets LLMs:
 1. Check available aliases before suggesting commands
 2. See what patterns an alias expands to
