@@ -305,10 +305,6 @@ enum Commands {
         #[arg(short, long)]
         root: Option<PathBuf>,
 
-        /// Glob pattern to filter files (e.g., "*.py")
-        #[arg(short, long)]
-        glob: Option<String>,
-
         /// Maximum number of matches to return
         #[arg(short, long, default_value = "100")]
         limit: usize,
@@ -316,6 +312,14 @@ enum Commands {
         /// Case-insensitive search
         #[arg(short = 'i', long)]
         ignore_case: bool,
+
+        /// Exclude files matching patterns or aliases (e.g., @tests, *.test.js)
+        #[arg(long, value_delimiter = ',')]
+        exclude: Vec<String>,
+
+        /// Only include files matching patterns or aliases (e.g., @docs, *.py)
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
     },
 
     /// Analyze Claude Code and other agent session logs
@@ -586,17 +590,19 @@ fn main() {
         Commands::Grep {
             pattern,
             root,
-            glob,
             limit,
             ignore_case,
+            exclude,
+            only,
         } => commands::grep::cmd_grep(
             &pattern,
             root.as_deref(),
-            glob.as_deref(),
             limit,
             ignore_case,
             cli.json,
             cli.jq.as_deref(),
+            &exclude,
+            &only,
         ),
         Commands::Sessions {
             session,

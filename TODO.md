@@ -64,7 +64,8 @@ Current scaffold is TOML state machines. Needs design work:
 - [x] `view` command: `--exclude`, `--only` flags with `@alias` and glob support
 - [x] `analyze` command: complexity filtering with `--exclude`, `--only`
 - [x] `edit` command: filter guards target resolution
-- [ ] Cross-command unification: grep, lint (still need filtering)
+- [x] `grep` command: replaced `--glob` with `--exclude`/`--only`
+- [ ] `lint` command: decided against - linter configs handle exclusions
 
 **Agent Research:**
 - Conversational loop pattern (vs hierarchical)

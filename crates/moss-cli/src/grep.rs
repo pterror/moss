@@ -1,5 +1,6 @@
 //! Fast text search using ripgrep's grep crate.
 
+use crate::filter::Filter;
 use crate::output::OutputFormatter;
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcher;
@@ -34,7 +35,7 @@ pub struct GrepResult {
 pub fn grep(
     pattern: &str,
     root: &Path,
-    glob_pattern: Option<&str>,
+    filter: Option<&Filter>,
     limit: usize,
     ignore_case: bool,
 ) -> io::Result<GrepResult> {
@@ -58,16 +59,6 @@ pub fn grep(
     builder.git_global(true);
     builder.git_exclude(true);
 
-    // Apply glob pattern if provided
-    if let Some(glob) = glob_pattern {
-        let mut types = ignore::types::TypesBuilder::new();
-        types.add("custom", glob).ok();
-        types.select("custom");
-        if let Ok(types) = types.build() {
-            builder.types(types);
-        }
-    }
-
     let walker = builder.build_parallel();
 
     walker.run(|| {
@@ -88,6 +79,15 @@ pub fn grep(
             }
 
             let path = entry.path();
+
+            // Apply filter if provided
+            let rel_path = path.strip_prefix(root).unwrap_or(path);
+            if let Some(f) = filter {
+                if !f.matches(rel_path) {
+                    return ignore::WalkState::Continue;
+                }
+            }
+
             files_searched.fetch_add(1, Ordering::Relaxed);
 
             let mut searcher = Searcher::new();
