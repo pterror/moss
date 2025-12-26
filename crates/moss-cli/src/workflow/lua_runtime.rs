@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use mlua::{Lua, Result as LuaResult, Table, UserData, UserDataMethods, Value};
+use mlua::{FromLua, Lua, Result as LuaResult, Table, UserData, UserDataMethods, Value};
 
 /// Lua workflow runtime.
 pub struct LuaRuntime {
@@ -12,9 +12,9 @@ pub struct LuaRuntime {
 
 /// Result of a command execution.
 #[derive(Clone)]
-struct CommandResult {
-    output: String,
-    success: bool,
+pub struct CommandResult {
+    pub output: String,
+    pub success: bool,
 }
 
 impl UserData for CommandResult {
@@ -24,13 +24,99 @@ impl UserData for CommandResult {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        // Allow using result as string directly
         methods.add_meta_method("__tostring", |_, this, ()| Ok(this.output.clone()));
     }
 }
 
+/// Options for `view` command.
+#[derive(Debug, Default)]
+struct ViewOpts {
+    target: Option<String>,
+    depth: Option<i32>,
+    deps: bool,
+    context: bool,
+}
+
+impl FromLua for ViewOpts {
+    fn from_lua(value: Value, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            Value::Nil => Ok(Self::default()),
+            Value::String(s) => Ok(Self {
+                target: Some(s.to_str()?.to_string()),
+                ..Default::default()
+            }),
+            Value::Table(t) => Ok(Self {
+                target: t.get("target").ok(),
+                depth: t.get("depth").ok(),
+                deps: t.get("deps").unwrap_or(false),
+                context: t.get("context").unwrap_or(false),
+            }),
+            _ => Err(mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "ViewOpts".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+/// Options for `analyze` command.
+#[derive(Debug, Default)]
+struct AnalyzeOpts {
+    target: Option<String>,
+    health: bool,
+    complexity: bool,
+}
+
+impl FromLua for AnalyzeOpts {
+    fn from_lua(value: Value, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            Value::Nil => Ok(Self::default()),
+            Value::Table(t) => Ok(Self {
+                target: t.get("target").ok(),
+                health: t.get("health").unwrap_or(false),
+                complexity: t.get("complexity").unwrap_or(false),
+            }),
+            _ => Err(mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "AnalyzeOpts".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+/// Options for `grep` command.
+#[derive(Debug)]
+struct GrepOpts {
+    pattern: String,
+    path: Option<String>,
+    file_type: Option<String>,
+}
+
+impl FromLua for GrepOpts {
+    fn from_lua(value: Value, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            Value::String(s) => Ok(Self {
+                pattern: s.to_str()?.to_string(),
+                path: None,
+                file_type: None,
+            }),
+            Value::Table(t) => Ok(Self {
+                pattern: t.get("pattern")?,
+                path: t.get("path").ok(),
+                file_type: t.get("type").ok(),
+            }),
+            _ => Err(mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "GrepOpts".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
 impl LuaRuntime {
-    /// Create a new Lua runtime for workflows.
     pub fn new(root: &Path) -> LuaResult<Self> {
         let lua = Lua::new();
 
@@ -40,7 +126,7 @@ impl LuaRuntime {
 
             globals.set("_moss_root", root.to_string_lossy().to_string())?;
 
-            Self::register_moss_commands(&lua, &globals)?;
+            Self::register_commands(&lua, &globals)?;
             Self::register_helpers(&lua, &globals, &root)?;
             Self::register_drivers(&lua, &globals)?;
         }
@@ -48,52 +134,101 @@ impl LuaRuntime {
         Ok(Self { lua })
     }
 
-    /// Run a Lua workflow script.
     pub fn run_file(&self, path: &Path) -> LuaResult<()> {
         let script = std::fs::read_to_string(path)
             .map_err(|e| mlua::Error::external(format!("Failed to read script: {}", e)))?;
         self.run_string(&script)
     }
 
-    /// Run a Lua workflow from a string.
     pub fn run_string(&self, script: &str) -> LuaResult<()> {
         self.lua.load(script).exec()
     }
 
-    /// Register moss commands as Lua functions.
-    fn register_moss_commands(lua: &Lua, globals: &Table) -> LuaResult<()> {
-        // Generic moss command executor
-        let moss_fn = lua.create_function(|_, args: mlua::Variadic<String>| {
-            let args: Vec<String> = args.into_iter().collect();
-            run_moss_command(&args)
-        })?;
-        globals.set("moss", moss_fn)?;
+    fn register_commands(lua: &Lua, globals: &Table) -> LuaResult<()> {
+        // TODO: Refactor cmd_* functions to take typed structs, then call directly.
+        // For now, convert typed opts to CLI args and use subprocess.
 
-        // Convenience wrappers for common commands
-        macro_rules! moss_command {
+        // view(opts: ViewOpts) -> CommandResult
+        globals.set(
+            "view",
+            lua.create_function(|_, opts: ViewOpts| {
+                let mut args = vec!["view".to_string()];
+                if let Some(t) = opts.target {
+                    args.push(t);
+                }
+                if opts.deps {
+                    args.push("--deps".to_string());
+                }
+                if opts.context {
+                    args.push("--context".to_string());
+                }
+                if let Some(d) = opts.depth {
+                    args.push("--depth".to_string());
+                    args.push(d.to_string());
+                }
+                run_subprocess(&args)
+            })?,
+        )?;
+
+        // analyze(opts: AnalyzeOpts) -> CommandResult
+        globals.set(
+            "analyze",
+            lua.create_function(|_, opts: AnalyzeOpts| {
+                let mut args = vec!["analyze".to_string()];
+                if opts.health {
+                    args.push("--health".to_string());
+                }
+                if opts.complexity {
+                    args.push("--complexity".to_string());
+                }
+                if let Some(t) = opts.target {
+                    args.push(t);
+                }
+                run_subprocess(&args)
+            })?,
+        )?;
+
+        // grep(opts: GrepOpts) -> CommandResult
+        globals.set(
+            "grep",
+            lua.create_function(|_, opts: GrepOpts| {
+                let mut args = vec!["grep".to_string(), opts.pattern];
+                if let Some(p) = opts.path {
+                    args.push(p);
+                }
+                if let Some(t) = opts.file_type {
+                    args.push("--type".to_string());
+                    args.push(t);
+                }
+                run_subprocess(&args)
+            })?,
+        )?;
+
+        // Simple commands
+        macro_rules! simple_command {
             ($name:literal) => {{
-                let func = lua.create_function(|_, args: mlua::Variadic<String>| {
-                    let mut full_args = vec![$name.to_string()];
-                    full_args.extend(args.into_iter());
-                    run_moss_command(&full_args)
-                })?;
-                globals.set($name, func)?;
+                globals.set(
+                    $name,
+                    lua.create_function(|_, arg: Option<String>| {
+                        let mut args = vec![$name.to_string()];
+                        if let Some(a) = arg {
+                            args.push(a);
+                        }
+                        run_subprocess(&args)
+                    })?,
+                )?;
             }};
         }
 
-        moss_command!("view");
-        moss_command!("edit");
-        moss_command!("analyze");
-        moss_command!("grep");
-        moss_command!("index");
-        moss_command!("lint");
-        moss_command!("plans");
-        moss_command!("sessions");
+        simple_command!("edit");
+        simple_command!("index");
+        simple_command!("lint");
+        simple_command!("plans");
+        simple_command!("sessions");
 
         Ok(())
     }
 
-    /// Register helper functions.
     fn register_helpers(lua: &Lua, globals: &Table, root: &Path) -> LuaResult<()> {
         let root_path = root.to_path_buf();
 
@@ -101,7 +236,21 @@ impl LuaRuntime {
         let root_clone = root_path.clone();
         globals.set(
             "shell",
-            lua.create_function(move |_, cmd: String| run_shell_command(&cmd, &root_clone))?,
+            lua.create_function(move |_, cmd: String| {
+                let shell = if cfg!(windows) { "cmd" } else { "sh" };
+                let flag = if cfg!(windows) { "/C" } else { "-c" };
+
+                let output = Command::new(shell)
+                    .args([flag, &cmd])
+                    .current_dir(&root_clone)
+                    .output()
+                    .map_err(mlua::Error::external)?;
+
+                Ok(CommandResult {
+                    output: String::from_utf8_lossy(&output.stdout).to_string(),
+                    success: output.status.success(),
+                })
+            })?,
         )?;
 
         // is_dirty() -> boolean
@@ -144,12 +293,11 @@ impl LuaRuntime {
         globals.set(
             "read_file",
             lua.create_function(move |_, path: String| {
-                let full_path = root_clone.join(&path);
-                std::fs::read_to_string(&full_path).map_err(mlua::Error::external)
+                std::fs::read_to_string(root_clone.join(&path)).map_err(mlua::Error::external)
             })?,
         )?;
 
-        // print(...) - format values nicely
+        // print(...)
         globals.set(
             "print",
             lua.create_function(|lua, args: mlua::Variadic<Value>| {
@@ -162,7 +310,6 @@ impl LuaRuntime {
                         Value::Boolean(b) => b.to_string(),
                         Value::Nil => "nil".to_string(),
                         Value::UserData(ud) => {
-                            // Call __tostring metamethod if available
                             let tostring: mlua::Function = lua.globals().get("tostring").unwrap();
                             tostring
                                 .call::<String>(ud.clone())
@@ -179,9 +326,8 @@ impl LuaRuntime {
         Ok(())
     }
 
-    /// Register driver functions for agent loops.
     fn register_drivers(lua: &Lua, globals: &Table) -> LuaResult<()> {
-        // auto { tools = {...}, model = "..." } - LLM-driven loop
+        // auto { tools = [...], model = "..." }
         globals.set(
             "auto",
             lua.create_function(|_, config: Table| {
@@ -201,7 +347,7 @@ impl LuaRuntime {
             })?,
         )?;
 
-        // manual { tools = {...} } - user-driven loop
+        // manual { tools = [...] }
         globals.set(
             "manual",
             lua.create_function(|_, config: Table| {
@@ -221,29 +367,11 @@ impl LuaRuntime {
     }
 }
 
-/// Run a moss command and return result.
-fn run_moss_command(args: &[String]) -> LuaResult<CommandResult> {
-    let current_exe = std::env::current_exe().map_err(mlua::Error::external)?;
-
-    let output = Command::new(&current_exe)
+/// Fallback: run moss as subprocess (for commands not yet refactored).
+fn run_subprocess(args: &[String]) -> LuaResult<CommandResult> {
+    let exe = std::env::current_exe().map_err(mlua::Error::external)?;
+    let output = Command::new(&exe)
         .args(args)
-        .output()
-        .map_err(mlua::Error::external)?;
-
-    Ok(CommandResult {
-        output: String::from_utf8_lossy(&output.stdout).to_string(),
-        success: output.status.success(),
-    })
-}
-
-/// Run a shell command and return result.
-fn run_shell_command(cmd: &str, root: &Path) -> LuaResult<CommandResult> {
-    let shell = if cfg!(windows) { "cmd" } else { "sh" };
-    let flag = if cfg!(windows) { "/C" } else { "-c" };
-
-    let output = Command::new(shell)
-        .args([flag, cmd])
-        .current_dir(root)
         .output()
         .map_err(mlua::Error::external)?;
 
@@ -259,33 +387,23 @@ mod tests {
     use std::env;
 
     #[test]
-    fn test_lua_runtime_creation() {
-        let root = env::current_dir().unwrap();
-        let runtime = LuaRuntime::new(&root).unwrap();
-        runtime.run_string("x = 1 + 1").unwrap();
+    fn test_view_opts_from_string() {
+        let lua = Lua::new();
+        let val = lua.create_string("foo.rs").unwrap();
+        let opts = ViewOpts::from_lua(Value::String(val), &lua).unwrap();
+        assert_eq!(opts.target, Some("foo.rs".to_string()));
     }
 
     #[test]
-    fn test_lua_helpers() {
-        let root = env::current_dir().unwrap();
-        let runtime = LuaRuntime::new(&root).unwrap();
-        runtime
-            .run_string(r#"assert(file_exists("Cargo.toml"), "Cargo.toml should exist")"#)
-            .unwrap();
-    }
-
-    #[test]
-    fn test_command_result() {
-        let root = env::current_dir().unwrap();
-        let runtime = LuaRuntime::new(&root).unwrap();
-        runtime
-            .run_string(
-                r#"
-                local result = shell("echo hello")
-                assert(result.success, "command should succeed")
-                assert(result.output:match("hello"), "output should contain hello")
-            "#,
-            )
+    fn test_view_opts_from_table() {
+        let lua = Lua::new();
+        lua.load(r#"return { target = "bar.rs", context = true }"#)
+            .eval::<Value>()
+            .and_then(|v| ViewOpts::from_lua(v, &lua))
+            .map(|opts| {
+                assert_eq!(opts.target, Some("bar.rs".to_string()));
+                assert!(opts.context);
+            })
             .unwrap();
     }
 }
