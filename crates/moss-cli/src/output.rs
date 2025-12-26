@@ -10,10 +10,8 @@ pub enum OutputFormat {
     /// Human-readable text output (default).
     #[default]
     Text,
-    /// Compact JSON (single line).
+    /// JSON output.
     Json,
-    /// Pretty-printed JSON (indented).
-    JsonPretty,
     /// JSON filtered through jq expression.
     Jq(String),
 }
@@ -30,10 +28,7 @@ impl OutputFormat {
 
     /// Is this a JSON-based format?
     pub fn is_json(&self) -> bool {
-        matches!(
-            self,
-            OutputFormat::Json | OutputFormat::JsonPretty | OutputFormat::Jq(_)
-        )
+        matches!(self, OutputFormat::Json | OutputFormat::Jq(_))
     }
 }
 
@@ -51,9 +46,6 @@ pub trait OutputFormatter: Serialize {
             OutputFormat::Text => println!("{}", self.format_text()),
             OutputFormat::Json => {
                 println!("{}", serde_json::to_string(self).unwrap_or_default())
-            }
-            OutputFormat::JsonPretty => {
-                println!("{}", serde_json::to_string_pretty(self).unwrap_or_default())
             }
             OutputFormat::Jq(filter) => {
                 let json = serde_json::to_value(self).unwrap_or_default();
