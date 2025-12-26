@@ -60,10 +60,9 @@ Current scaffold is TOML state machines. Needs design work:
 - `lint list` now ~100ms (removed recursive dir scans, config-only detection)
 
 **View Filtering:**
-- Filter out tests from views (--no-tests or --exclude=tests)
-- Filter by category: tests, config files, build files, etc.
-- Inverse: show only specific categories (--only=tests)
-- Filter view children by type/name (needs design: glob patterns? symbol kinds?)
+- See `docs/view-filtering.md` for design (Option E: @alias sigil with built-ins + config override)
+- Implementation: `--exclude`, `--only` flags with `@alias` and glob support
+- Cross-command unification: view, analyze, grep, lint
 
 **Agent Research:**
 - Conversational loop pattern (vs hierarchical)
