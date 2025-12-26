@@ -65,6 +65,14 @@ Added `session-summary` workflow for end-of-session stats:
 - `combine_outputs` option for workflows that collect multiple outputs
 - `shell:` action prefix for arbitrary shell commands in workflows
 
+### OpenAPI Client Codegen
+
+New `moss-openapi` crate for generating API clients from OpenAPI specs:
+- `moss generate client <spec.json> -l typescript` - TypeScript (fetch) client
+- `moss generate client <spec.json> -l python` - Python (urllib) client
+- Trait-based design (`OpenApiClientGenerator`) for extensibility
+- Generates types, dataclasses, and client class with methods
+
 ### Unified Filtering
 
 Added `--exclude` and `--only` flags for filtering across commands (`view`, `analyze`, `edit`, `grep`):

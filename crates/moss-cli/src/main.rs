@@ -391,6 +391,29 @@ enum Commands {
         #[arg(short, long, global = true)]
         root: Option<PathBuf>,
     },
+
+    /// Generate code from API spec
+    Generate {
+        #[command(subcommand)]
+        target: GenerateTarget,
+    },
+}
+
+#[derive(Subcommand)]
+enum GenerateTarget {
+    /// Generate API client from OpenAPI spec
+    Client {
+        /// OpenAPI spec JSON file
+        spec: PathBuf,
+
+        /// Target language: typescript, python
+        #[arg(short, long)]
+        lang: String,
+
+        /// Output file (stdout if not specified)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -704,6 +727,45 @@ fn main() {
             ServeProtocol::Lsp => {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(serve::lsp::run_lsp_server(root.as_deref()))
+            }
+        },
+        Commands::Generate { target } => match target {
+            GenerateTarget::Client { spec, lang, output } => {
+                let Some(generator) = moss_openapi::find_generator(&lang) else {
+                    eprintln!("Unknown language: {}. Available:", lang);
+                    for (lang, variant) in moss_openapi::list_generators() {
+                        eprintln!("  {} ({})", lang, variant);
+                    }
+                    std::process::exit(1);
+                };
+
+                let content = match std::fs::read_to_string(&spec) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("Failed to read {}: {}", spec.display(), e);
+                        std::process::exit(1);
+                    }
+                };
+                let spec_json: serde_json::Value = match serde_json::from_str(&content) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        eprintln!("Failed to parse JSON: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+
+                let code = generator.generate(&spec_json);
+
+                if let Some(path) = output {
+                    if let Err(e) = std::fs::write(&path, &code) {
+                        eprintln!("Failed to write {}: {}", path.display(), e);
+                        std::process::exit(1);
+                    }
+                    eprintln!("Generated {}", path.display());
+                } else {
+                    print!("{}", code);
+                }
+                0
             }
         },
     };

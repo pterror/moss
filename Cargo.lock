@@ -2852,6 +2852,7 @@ dependencies = [
  "jaq-std",
  "libc",
  "moss-languages",
+ "moss-openapi",
  "moss-packages",
  "moss-tools",
  "notify",
@@ -2881,6 +2882,13 @@ version = "0.1.0"
 dependencies = [
  "arborium",
  "rusqlite",
+ "serde_json",
+]
+
+[[package]]
+name = "moss-openapi"
+version = "0.1.0"
+dependencies = [
  "serde_json",
 ]
 

@@ -42,8 +42,8 @@ Current scaffold is TOML state machines. Needs design work:
 - Multi-codebase: single daemon indexing multiple roots simultaneously
 - Minimal memory footprint (currently loads full index per root)
 
-**HTTP Server:**
-- Codegen from OpenAPI: generate TypeScript/Python/Rust clients
+**Codegen:**
+- JSON Schema codegen: generate types from JSON schema (separate from OpenAPI)
 
 **Tooling:**
 - Structured TODO.md editing: first-class `moss todo` command to add/complete/move items without losing content (Opus 4.5 drops TODO items when editing markdown)
