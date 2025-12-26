@@ -43,6 +43,7 @@ Examples:
 - Three primitives (view, edit, analyze) with rich options, not 100 specialized tools
 - Log formats as plugins, not N hardcoded parsers
 - `--json` + `--jq` + `--compact` flags, not `--format=X` for every format
+- Lua for workflows instead of TOML-for-simple + DSL-for-complex (see `crates/moss-cli/src/workflow/mod.rs`)
 - Distros that compose, not fork
 
 Complexity grows linearly with primitives, exponentially with combinations. A system with 3 composable primitives is simpler than one with 30 specialized tools, even if the 30-tool system has less code per tool.

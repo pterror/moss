@@ -1,9 +1,14 @@
 //! Lua-based workflow runtime using LuaJIT.
 
 use std::path::Path;
+#[cfg(feature = "llm")]
+use std::path::PathBuf;
 use std::process::Command;
 
 use mlua::{FromLua, Lua, Result as LuaResult, Table, UserData, UserDataMethods, Value};
+
+#[cfg(feature = "llm")]
+use super::llm::{parse_agent_response, AgentAction, LlmClient, AGENT_SYSTEM_PROMPT};
 
 /// Lua workflow runtime.
 pub struct LuaRuntime {
@@ -128,7 +133,7 @@ impl LuaRuntime {
 
             Self::register_commands(&lua, &globals)?;
             Self::register_helpers(&lua, &globals, &root)?;
-            Self::register_drivers(&lua, &globals)?;
+            Self::register_drivers(&lua, &globals, &root)?;
         }
 
         Ok(Self { lua })
@@ -326,28 +331,31 @@ impl LuaRuntime {
         Ok(())
     }
 
-    fn register_drivers(lua: &Lua, globals: &Table) -> LuaResult<()> {
-        // auto { tools = [...], model = "..." }
-        globals.set(
-            "auto",
-            lua.create_function(|_, config: Table| {
-                let tools: Option<Vec<String>> = config.get("tools")?;
-                let model: Option<String> = config.get("model")?;
+    fn register_drivers(lua: &Lua, globals: &Table, root: &Path) -> LuaResult<()> {
+        // auto { model = "...", prompt = "..." } -> CommandResult
+        #[cfg(feature = "llm")]
+        {
+            let root_path = root.to_path_buf();
+            globals.set(
+                "auto",
+                lua.create_function(move |_, config: Table| run_auto_loop(&config, &root_path))?,
+            )?;
+        }
 
-                println!("[auto] LLM-driven loop");
-                if let Some(m) = model {
-                    println!("  model: {}", m);
-                }
-                if let Some(t) = tools {
-                    println!("  tools: {}", t.join(", "));
-                }
-                println!("  (not yet implemented)");
+        #[cfg(not(feature = "llm"))]
+        {
+            let _ = root; // suppress unused warning
+            globals.set(
+                "auto",
+                lua.create_function(|_, _config: Table| {
+                    Err::<CommandResult, _>(mlua::Error::external(
+                        "auto{} requires the 'llm' feature. Rebuild with: cargo build --features llm",
+                    ))
+                })?,
+            )?;
+        }
 
-                Ok(())
-            })?,
-        )?;
-
-        // manual { tools = [...] }
+        // manual { tools = [...] } - user-driven interactive loop
         globals.set(
             "manual",
             lua.create_function(|_, config: Table| {
@@ -359,12 +367,105 @@ impl LuaRuntime {
                 }
                 println!("  (not yet implemented)");
 
-                Ok(())
+                Ok(CommandResult {
+                    output: String::new(),
+                    success: true,
+                })
             })?,
         )?;
 
         Ok(())
     }
+}
+
+/// Run an LLM-driven autonomous loop.
+#[cfg(feature = "llm")]
+fn run_auto_loop(config: &Table, root: &PathBuf) -> LuaResult<CommandResult> {
+    // Parse config
+    let model: Option<String> = config.get("model").ok();
+    let prompt: String = config
+        .get("prompt")
+        .unwrap_or_else(|_| "Help me with this codebase.".to_string());
+    let max_turns: usize = config.get("max_turns").unwrap_or(10);
+
+    // Extract provider from model (format: "provider/model" or just "provider")
+    let (provider, model_name) = if let Some(ref m) = model {
+        if let Some((p, n)) = m.split_once('/') {
+            (p, Some(n))
+        } else {
+            (m.as_str(), None)
+        }
+    } else {
+        ("anthropic", None)
+    };
+
+    // Create LLM client
+    let client = LlmClient::new(provider, model_name).map_err(mlua::Error::external)?;
+
+    // Build conversation
+    let mut conversation = format!("Task: {}\n\nCurrent directory: {}", prompt, root.display());
+    let mut all_output = String::new();
+
+    for turn in 0..max_turns {
+        println!("[auto] Turn {}/{}", turn + 1, max_turns);
+
+        // Get LLM response
+        let response = client
+            .complete(Some(AGENT_SYSTEM_PROMPT), &conversation)
+            .map_err(mlua::Error::external)?;
+
+        println!("{}", response);
+        all_output.push_str(&response);
+        all_output.push('\n');
+
+        // Parse response
+        match parse_agent_response(&response) {
+            AgentAction::Command { name, args } => {
+                // Execute command
+                let mut cmd_args = vec![name.clone()];
+                cmd_args.extend(args);
+
+                println!("[auto] Executing: {}", cmd_args.join(" "));
+
+                let result = run_subprocess_in_dir(&cmd_args, root)?;
+
+                // Add result to conversation
+                conversation.push_str("\n\nAssistant: ");
+                conversation.push_str(&response);
+                conversation.push_str("\n\nCommand output:\n");
+                conversation.push_str(&result.output);
+
+                if !result.success {
+                    conversation.push_str("\n(command failed)");
+                }
+            }
+            AgentAction::Done { message } => {
+                println!("[auto] Done: {}", message);
+                break;
+            }
+        }
+    }
+
+    Ok(CommandResult {
+        output: all_output,
+        success: true,
+    })
+}
+
+/// Run moss subprocess in a specific directory.
+#[cfg(feature = "llm")]
+fn run_subprocess_in_dir(args: &[String], dir: &Path) -> LuaResult<CommandResult> {
+    let exe = std::env::current_exe().map_err(mlua::Error::external)?;
+    let output = Command::new(&exe)
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .map_err(mlua::Error::external)?;
+
+    Ok(CommandResult {
+        output: String::from_utf8_lossy(&output.stdout).to_string(),
+        success: output.status.success(),
+    })
 }
 
 /// Fallback: run moss as subprocess (for commands not yet refactored).

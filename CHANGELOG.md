@@ -4,6 +4,25 @@
 
 First release. See `docs/` for design docs and `README.md` for usage.
 
+### Lua Workflow Engine
+
+Replaced TOML workflow engine with Lua (LuaJIT via mlua):
+- Moss commands as typed Lua functions: `view()`, `analyze()`, `grep()`, etc.
+- Accept string or table: `view("foo.rs")` or `view{target="foo.rs", context=true}`
+- Helpers: `shell()`, `is_dirty()`, `tests_pass()`, `file_exists()`, `read_file()`
+- `auto{}` driver: LLM-driven autonomous agent loop
+- LuaCats type definitions for IDE support (`.moss/workflows/moss.lua`)
+- Example: `.moss/workflows/test.lua`
+
+### LLM Agent Driver
+
+Implemented `auto{}` driver for Lua workflows (requires `llm` feature):
+- Simple text-based command format: `> view src/main.rs`
+- LLM outputs commands, we execute and feed results back
+- Supports all 13 rig providers (anthropic, openai, gemini, etc.)
+- Minimal system prompt for token efficiency
+- Example: `auto{prompt="Find and fix bugs", model="anthropic"}`
+
 ### Documentation Reference Checking
 
 `moss analyze --check-refs` scans markdown files for code references in backticks and validates against indexed symbols. Reports broken references with file:line and context.

@@ -24,12 +24,10 @@ Test Status: 110 passing, 0 failing (moss-languages)
 **Language Support:** 98 languages implemented - all arborium grammars covered.
 See `docs/language-support.md` for design. Run `scripts/missing-grammars.sh` to verify.
 
-**Workflow Engine Design:**
-Current scaffold is TOML state machines. Needs design work:
-- Interactive/agentic sessions (user-driven, not TOML-defined)
-- Relationship between `moss workflow` and interactive sessions
-- Where LLM decision-making hooks in (workflow plugin? separate mode?)
-- Unify or separate: scripted workflows vs interactive agent loops
+
+**Workflow Engine:**
+- Implement `manual{}` driver for user-driven interactive loops
+- Consider streaming output for `auto{}` driver
 
 **Code Quality:**
 - Validate node kinds against grammars: `validate_unused_kinds_audit()` in each language file ensures documented unused kinds stay in sync with grammar
