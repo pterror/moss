@@ -65,23 +65,36 @@ moss view src/ --exclude=tests --exclude="*.gen.go"
 - Con: What if category name contains special chars? (unlikely but...)
 - Con: Implicit behavior surprises users
 
-**Option E: Categories as Aliases**
+**Option E: Categories as Aliases** ✓ CHOSEN
 
-Categories are just named glob sets in config, `--exclude` only takes globs:
-```toml
-# .moss/config.toml or global config
-[filter.categories]
-tests = ["*_test.*", "test_*.*", "**/tests/**", "**/__tests__/**", "*.spec.*"]
-```
+Built-in aliases with config override. `@name` expands to glob patterns.
+
 ```bash
-moss view src/ --exclude=@tests          # expands to globs from config
+moss view src/ --exclude=@tests          # expands to built-in test patterns
 moss view src/ --exclude="*.gen.go"      # literal glob
 ```
-- Pro: User-configurable categories
-- Pro: Explicit expansion (@ means "look up in config")
-- Pro: No hardcoded language knowledge
-- Con: Requires config for categories to work
-- Con: Still has a sigil
+
+Built-in aliases (language-aware, no config needed):
+- `@tests` - test files for detected languages
+- `@config` - config files (*.toml, *.yaml, etc.)
+- `@build` - build artifacts (target/, dist/, node_modules/)
+- `@docs` - documentation (*.md, docs/)
+- `@generated` - generated code
+
+Override or extend in config:
+```toml
+# .moss/config.toml
+[filter.aliases]
+tests = ["*_test.*", "my_custom_tests/**"]  # override built-in
+vendor = ["vendor/**", "third_party/**"]     # add new alias
+config = []                                   # disable built-in (matches nothing)
+```
+
+- Pro: Semantic abstraction over language-specific patterns
+- Pro: Built-ins work out of box, config optional
+- Pro: `@` sigil is explicit ("resolve this name")
+- Pro: Empty array disables cleanly
+- Con: Sigil adds syntax, but justified
 
 **Option F: Subcommand for Complex Filtering**
 ```bash
@@ -93,9 +106,9 @@ moss filter tests | moss view src/       # piped filter spec (overdesigned?)
 
 ---
 
-**Recommendation:** Option A (globs only) or Option E (config-based categories).
+**Decision:** Option E.
 
-Option A is simplest. If we want categories, Option E keeps them user-defined rather than hardcoded, and the `@` sigil is explicit about "this is a lookup, not a literal pattern".
+The value isn't brevity—it's semantic abstraction over language-specific details. Users say "exclude tests" without knowing Python uses `test_*.py` while Go uses `*_test.go`. Built-in aliases handle this; config allows override.
 
 ### Symbol Kind Filter (extend existing)
 
@@ -172,6 +185,39 @@ These flags should work identically across view, analyze, and future batch comma
 1. Add `--type` alias to analyze's `--kind` (deprecate `--kind`)
 2. Add shared filters to view first
 3. Propagate to analyze, grep, lint
+
+## Alias Discoverability
+
+LLMs working with a codebase need to know what aliases are available and what they expand to. A user's config may override built-ins or add custom aliases.
+
+**Solution:** `moss filter aliases` command
+
+```bash
+$ moss filter aliases
+Built-in aliases:
+  @tests     *_test.go, test_*.py, *_test.rs, ...  (detected: go, python, rust)
+  @config    *.toml, *.yaml, *.json, ...
+  @build     target/, dist/, node_modules/, ...
+  @docs      *.md, docs/
+  @generated *.gen.*, *.pb.go, ...
+
+Project overrides (.moss/config.toml):
+  @tests     my_custom_tests/**  (overrides built-in)
+  @vendor    vendor/**, third_party/**  (custom)
+```
+
+This lets LLMs:
+1. Check available aliases before suggesting commands
+2. See what patterns an alias expands to
+3. Discover project-specific aliases
+
+When alias is used, output shows expansion:
+```
+src/ (filtered: @tests → *_test.go, test_*.py)
+├── lib/
+├── main.rs
+└── ...
+```
 
 ## Not Included (Too Complex)
 
