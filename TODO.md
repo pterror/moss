@@ -88,7 +88,6 @@ Current scaffold is TOML state machines. Needs design work:
 **LLM-Powered:**
 - Edit routing
 - Summarization
-- LLM adapters (rig crate available)
 - Working memory with summarization
 
 ## Implementation Notes

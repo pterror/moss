@@ -39,6 +39,14 @@ Unified extraction layer in `extract.rs`:
   - skeleton: nested children, signatures, docstrings (for viewing)
   - symbols: flat with parent refs, complexity (for indexing)
 
+### LLM Adapters
+
+Expanded LLM provider support via rig crate (behind `llm` feature):
+- Anthropic (Claude), OpenAI (GPT), Google (Gemini)
+- Uses rustls for TLS (no OpenSSL dependency)
+- Provider aliases: "claude" → anthropic, "gpt" → openai, "gemini" → google
+- Auto-detects API keys from environment variables
+
 ### OpenAPI Auto-Generation
 
 HTTP server now auto-generates OpenAPI spec using utoipa:

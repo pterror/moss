@@ -72,7 +72,7 @@ jaq-core = "2"
 jaq-std = "2"
 jaq-json = { version = "1", features = ["serde_json"] }
 toml = "0.8"
-rig-core = { version = "0.27", optional = true }
+rig-core = { version = "0.27", optional = true, default-features = false, features = ["reqwest-rustls"] }
 rmcp = { version = "0.12", features = ["server", "macros", "schemars", "transport-io"], optional = true }
 schemars = { version = "1", optional = true }
 tower-lsp = "0.20"
