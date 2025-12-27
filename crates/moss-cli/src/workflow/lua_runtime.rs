@@ -492,12 +492,10 @@ impl LuaRuntime {
         lua.load(
             r#"
             function manual(config)
-                local actions = config.actions or {
-                    view = function() return view(prompt("Path: ")) end,
-                    analyze = function() return analyze() end,
-                    grep = function() return grep(prompt("Pattern: ")) end,
-                    shell = function() return shell(prompt("Command: ")) end,
-                }
+                local actions = config.actions
+                if not actions then
+                    error("manual{} requires actions table")
+                end
 
                 -- Build menu options from action names
                 local options = {}
@@ -723,13 +721,23 @@ mod tests {
     #[test]
     fn test_manual_driver() {
         let runtime = LuaRuntime::new(std::path::Path::new(".")).unwrap();
-        let session = runtime.create_session(r#"manual{}"#).unwrap();
+        let session = runtime
+            .create_session(
+                r#"manual{
+                    actions = {
+                        check = function() return analyze() end,
+                        find = function() return grep(prompt("Pattern: ")) end,
+                    }
+                }"#,
+            )
+            .unwrap();
 
-        // Start - should show menu with default actions + quit
+        // Start - should show menu with defined actions + quit
         match session.step(None).unwrap() {
             RuntimeState::Waiting(RuntimeYield::Menu { options }) => {
                 assert!(options.contains(&"quit".to_string()));
-                assert!(options.contains(&"view".to_string()));
+                assert!(options.contains(&"check".to_string()));
+                assert!(options.contains(&"find".to_string()));
             }
             other => panic!("Expected Menu, got {:?}", other),
         }
@@ -739,5 +747,17 @@ mod tests {
             RuntimeState::Done(_) => {}
             other => panic!("Expected Done after quit, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_manual_driver_requires_actions() {
+        let runtime = LuaRuntime::new(std::path::Path::new(".")).unwrap();
+        let session = runtime.create_session(r#"manual{}"#).unwrap();
+
+        // Start - should error because no actions provided
+        let result = session.step(None);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("requires actions table"), "Error was: {}", err);
     }
 }
