@@ -487,24 +487,49 @@ impl LuaRuntime {
             )?;
         }
 
-        // manual { tools = [...] } - user-driven interactive loop
-        globals.set(
-            "manual",
-            lua.create_function(|_, config: Table| {
-                let tools: Option<Vec<String>> = config.get("tools")?;
-
-                println!("[manual] User-driven loop");
-                if let Some(t) = tools {
-                    println!("  tools: {}", t.join(", "));
+        // manual { actions = {...} } - user-driven interactive loop
+        // Defined in Lua because it needs to yield for user input
+        lua.load(
+            r#"
+            function manual(config)
+                local actions = config.actions or {
+                    view = function() return view(prompt("Path: ")) end,
+                    analyze = function() return analyze() end,
+                    grep = function() return grep(prompt("Pattern: ")) end,
+                    shell = function() return shell(prompt("Command: ")) end,
                 }
-                println!("  (not yet implemented)");
 
-                Ok(CommandResult {
-                    output: String::new(),
-                    success: true,
-                })
-            })?,
-        )?;
+                -- Build menu options from action names
+                local options = {}
+                for name, _ in pairs(actions) do
+                    table.insert(options, name)
+                end
+                table.insert(options, "quit")
+                table.sort(options)
+
+                -- Main loop
+                while true do
+                    local choice = menu(options)
+                    if choice == "quit" then
+                        break
+                    end
+
+                    local action = actions[choice]
+                    if action then
+                        local ok, result = pcall(action)
+                        if ok and result then
+                            print(result)
+                        elseif not ok then
+                            print("Error: " .. tostring(result))
+                        end
+                    end
+                end
+
+                return { output = "", success = true }
+            end
+            "#,
+        )
+        .exec()?;
 
         Ok(())
     }
@@ -692,6 +717,27 @@ mod tests {
         match session.step(None).unwrap() {
             RuntimeState::Done(_) => {}
             other => panic!("Expected Done, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_manual_driver() {
+        let runtime = LuaRuntime::new(std::path::Path::new(".")).unwrap();
+        let session = runtime.create_session(r#"manual{}"#).unwrap();
+
+        // Start - should show menu with default actions + quit
+        match session.step(None).unwrap() {
+            RuntimeState::Waiting(RuntimeYield::Menu { options }) => {
+                assert!(options.contains(&"quit".to_string()));
+                assert!(options.contains(&"view".to_string()));
+            }
+            other => panic!("Expected Menu, got {:?}", other),
+        }
+
+        // Select quit - should finish
+        match session.step(Some("quit")).unwrap() {
+            RuntimeState::Done(_) => {}
+            other => panic!("Expected Done after quit, got {:?}", other),
         }
     }
 }

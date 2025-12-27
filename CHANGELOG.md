@@ -28,6 +28,7 @@ Implemented `auto{}` driver for Lua workflows (requires `llm` feature):
 Coroutine-based sessions for interactive workflows:
 - `prompt(message)` - yields to frontend for text input
 - `menu(options)` - yields to frontend for selection from list
+- `manual{}` driver - user-driven loop with default actions (view, analyze, grep, shell)
 - `WorkflowSession::step()` - drive workflow from frontend
 - `RuntimeState` enum: `Waiting(Prompt|Menu)`, `Done`, `Error`
 - Lua code looks synchronous, frontend controls the event loop

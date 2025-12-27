@@ -26,8 +26,8 @@ See `docs/language-support.md` for design. Run `scripts/missing-grammars.sh` to 
 
 
 **Workflow Engine:**
-- Implement `manual{}` driver for user-driven interactive loops
 - Consider streaming output for `auto{}` driver
+- JSON Schema for complex action parameters (currently string-only)
 
 **Code Quality:**
 - Validate node kinds against grammars: `validate_unused_kinds_audit()` in each language file ensures documented unused kinds stay in sync with grammar
