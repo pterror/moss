@@ -2700,6 +2700,47 @@ global measures need a new value type on `Metric::measure_all`.
   source-archive URL. Aligned with the CLAUDE.md "maximum quality for every language"
   goal.
 
+- **`sessions` tool-call query surface.** `normalize sessions` should let you query tool
+  calls the way you'd query a database — filter, group, and aggregate across sessions by
+  any attribute of the tool invocation. Two gaps stand between the current state and that:
+
+  **Gap 1 — Structured output.** Tool invocations currently render as flattened text
+  (e.g. `"Read\n  file_path: /foo/bar"`), even though the underlying JSONL has real
+  structured fields (`tool_name` / `input` as JSON objects, not stringified blobs). Add a
+  mode — e.g. `--role tool-call` or a `--structured` flag — that emits one record per
+  tool invocation with `tool_name`, `input`, and `output` as actual JSON, not stringified
+  rendering. `--has-tool` already filters turns that used a tool, but the emitted text
+  still isn't machine-parseable per-call.
+
+  **Gap 2 — Rich filtering / grouping / aggregation.** Once the structured record exists,
+  expose filters and aggregators on any tool-call attribute:
+  - **Tool name** (`--tool-name Read`, `--tool-name Bash`).
+  - **Input fields** — regex against specific input keys (`--input-field command~'rm -rf'`,
+    `--input-field file_path~'Cargo\.toml'`). General enough to work across tool schemas.
+  - **Derived duration** — the raw JSONL has per-message `timestamp` and occasionally
+    explicit `durationMs` (hooks, subagent results, `turn_duration` system events), but
+    most individual tool calls have no explicit duration. Compute per-call duration from
+    the timestamp delta between the `tool_use` content block and its matching
+    `tool_result`, and expose as a filterable/sortable field
+    (`--min-duration`, `--max-duration`, `--sort duration`).
+  - **Output content** — regex against the tool result text (`--output-grep`). Useful for
+    finding error messages, specific file contents returned by Read, etc.
+  - **Exit code** — for Bash calls, the result carries `exitCode`; filter on it
+    (`--exit-code 0`, `--exit-code-not 0`).
+  - **Error status** — tool results can carry `is_error: true`; filter for failed calls
+    (`--errors-only` already exists at turn level, extend to per-call level).
+  - **Grouping / aggregation** — `--group-by tool_name` with count/total-duration/
+    avg-duration aggregates; `--group-by session` for cross-session comparison;
+    `--group-by input.file_path` for file-level tool-usage heatmaps (complementing the
+    existing `sessions heatmap` but driven from the query surface rather than a
+    special-purpose command).
+
+  The vision: `normalize sessions messages --role tool-call --tool-name Bash
+  --input-field command~'cargo test' --min-duration 5000 --sort -duration --json` returns
+  every Bash `cargo test` invocation across sessions that took over 5s, sorted slowest
+  first, as structured JSON. Or `--group-by tool_name --sort -count` to see which tools
+  dominate a session. This replaces ad-hoc `jq` pipelines over raw JSONL with a
+  first-class query interface.
 - `normalize jq` multi-format support (YAML/CBOR/TOML/XML via `jaq-all` with `formats` feature): currently using `jaq-core/std/json` directly to avoid `jaq-fmts` bloat. Low priority — vanilla jq is JSON-only anyway.
 - `normalize rg` PCRE2 support (pcre2 feature not enabled)
 - `normalize fetch`: web content retrieval for LLM context (needs design: chunking, streaming, headless browser?)
