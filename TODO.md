@@ -2735,6 +2735,29 @@ global measures need a new value type on `Metric::measure_all`.
     existing `sessions heatmap` but driven from the query surface rather than a
     special-purpose command).
 
+  **Gap 3 — Async tool-call correlation.** Background agents (`Agent` with
+  `run_in_background`) and background Bash calls (`run_in_background: true`) produce
+  split events: an initiation record (the `tool_use` content block) and a completion
+  record (the `tool_result`, possibly many turns later). These share a `tool_use_id`
+  (or `agentId` for agents). The query surface must link initiation and completion by
+  ID to compute duration and present the pair as a single logical invocation, not two
+  disconnected records. Without this, background work is either double-counted (one
+  record for launch, one for result) or its duration is silently wrong (measured as
+  zero because the `tool_result` timestamp is used alone).
+
+  Edge cases that need explicit handling:
+  - **Killed tasks** — a background agent or Bash call terminated before natural
+    completion (user interrupt, timeout). The initiation record exists but the
+    completion record is absent or carries a cancellation marker. Duration should be
+    computed from initiation to kill-time (if recorded) or marked as `killed`.
+  - **Abandoned work** — sessions ending with still-running background agents/tasks.
+    No completion event ever arrives. These need an explicit `abandoned` status rather
+    than silently missing duration. Detectable by scanning for `tool_use` IDs in a
+    session that have no matching `tool_result`.
+  - **Status field** — each correlated tool-call record should carry a status:
+    `completed`, `killed`, `abandoned`, `error` — so queries can filter by outcome
+    (`--status completed`, `--status-not abandoned`).
+
   The vision: `normalize sessions messages --role tool-call --tool-name Bash
   --input-field command~'cargo test' --min-duration 5000 --sort -duration --json` returns
   every Bash `cargo test` invocation across sessions that took over 5s, sorted slowest
