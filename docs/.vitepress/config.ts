@@ -15,10 +15,12 @@ export default withMermaid(
     },
   },
 
-  title: 'Normalize',
+  title: 'normalize',
   description: 'Code intelligence CLI with structural awareness',
 
   base: '/normalize/',
+
+  srcExclude: ['**/CLAUDE.md'],
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/normalize/logo.svg' }],
