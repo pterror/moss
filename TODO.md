@@ -750,16 +750,24 @@ Correct recipes (especially extract/inline) need semantic infrastructure normali
 2. **Control flow graph** — Phase 1+2+3 complete. `.cfg.scm` queries for 76 languages; `BasicBlock` with `DefSite`/`UseSite`/`effects`; SQLite persistence including `cfg_effects`; Datalog relations. See CFG section above.
 3. **Liveness analysis** — Phase 2 complete. `liveness.dl` builtin Datalog rule; `normalize analyze liveness <file> --function <name>` CLI command. Backward-dataflow fixed-point over CFG blocks from the index.
 4. **Effect/mutation tracking** — Phase 3 complete for structural effects (await, defer, yield, acquire/release, send/receive). `normalize analyze effects <file>` command. Precise mutation tracking (Rust `&mut` vs `&`) still needs compiler integration.
-5. **Type information** — tiered strategy:
-   - **Tier A (in-house):** Syntactic extraction from declarations (struct fields, function signatures, typed lets). Mechanical.
-   - **Tier B (in-house):** Type-flow across the call graph — `let x = foo()` resolves to `foo`'s declared return type. Datalog-friendly once Tier A exists.
-   - **Tier C (LSP delegation):** Query language servers for type-at-position when tiers A+B can't resolve. Pragmatic; not ideological. Accepts runtime dependency on LSPs for the hard cases.
-   - **Tier D (warnings/placeholders):** When even LSP fails, emit placeholders (`_` in Rust, `any` in TS) and surface warnings.
+5. **Type information** — tiered strategy. normalize's mission is to be an **omni-language semantic
+   framework**, built by extending the tree-sitter ecosystem in-house (CSTs + `.scm` query
+   classification + Rust-side extraction — the same pattern already used for tags/complexity/imports),
+   not by wrapping per-language native compiler APIs (syn, go/types, tsc, libcst). Tiers A and B are
+   the permanent architecture; Tier C is an interim/deprecation-track measure only:
+   - **Tier A (in-house, permanent):** Syntactic extraction from declarations (struct fields, function signatures, typed lets). Mechanical.
+   - **Tier B (in-house, permanent):** Type-flow across the call graph via Datalog — `let x = foo()` resolves to `foo`'s declared return type. Datalog-friendly once Tier A exists.
+   - **Tier C (LSP delegation, interim only):** Query language servers for type-at-position when tiers A+B can't resolve. Not a permanent pillar — it exists to cover gaps while Tier B is immature, and usage should shrink toward zero as in-house resolution deepens. Real engineering cost even as a stopgap: spawning/managing live per-language LSP server processes, each with its own project-build precondition (resolvable `cargo metadata`, `npm install`, working Maven/Gradle) — heavier than the single-file model everything else in normalize uses.
+   - **Tier D (warnings/placeholders, unchanged):** When no tier can resolve a type, emit placeholders (`_` in Rust, `any` in TS) and surface warnings rather than fabricate structure — consistent with normalize's existing honesty principle (don't fabricate semantic structure).
+
+   **Rejected as primary resolution mechanisms** (evaluated and ruled out, not just "considered"):
+   - **SCIP** — `SymbolInformation` has no structured field for a struct's field types, enum variants, or generics; the only place type info lives is `signature_documentation.text`, which is hover-tooltip display text, not a parsed type expression. Extracting structure from it means writing a per-language string parser for each indexer's hover format. Every real SCIP indexer (scip-typescript, scip-java, rust-analyzer's exporter) also requires the target project to fully build — heavier than tree-sitter's single-file, no-build-step model.
+   - **Generic LSP wrapping** — same underlying problem: `DocumentSymbol`/`SymbolInformation.detail` and `textDocument/hover`'s `MarkupContent` are free-form display text, not structured type data; `textDocument/typeDefinition` returns only a `Location` (file+range) at a definition site, not its shape. Also operationally heavier than SCIP: requires a live, stateful server process per language per project (spawn, initialize handshake, keep running) vs. SCIP's one-shot static index.
 
 Per-language difficulty:
 - **Tractable in-house (tiers A+B sufficient):** Go, Java, C, dynamically-typed langs (Python/Ruby/JS — no types needed)
 - **Full HM languages (OCaml, Haskell-minus-extensions, Rust's core type system):** HM is well-trodden literature; implementable in-house if we commit to it
-- **Research-grade hard (LSP delegation recommended):** TypeScript (conditional/mapped/template-literal types), C++ (templates, SFINAE, concepts), Scala (implicits, path-dependent types), Rust trait resolution under generics (the machinery, not the types)
+- **Research-grade hard (Tier C interim fallback):** TypeScript (conditional/mapped/template-literal types), C++ (templates, SFINAE, concepts), Scala (implicits, path-dependent types), Rust trait resolution under generics (the machinery, not the types) — target these for eventual in-house Tier B coverage; LSP delegation is the stopgap, not the destination.
 
 This is an epic, not a drive-by. Do the tractable recipes (`move_item`, `add_parameter`, `inline_variable`) first — they expose less of the semantic gap — then build the foundation (1→2→3→5), then revisit extract/inline with real scope and type info.
 
