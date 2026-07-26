@@ -47,6 +47,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   accumulated per turn. Sync-over-async bridge reuses the `block_on` / `spawn_scoped`
   pattern from `normalize-facts/src/ca_cache.rs`.
 
+### Fixed
+
+- **Lua symbol extraction now recognizes `function Table.method()` and
+  `function Table:method()` declarations.** The tags query only matched
+  `function_declaration` nodes whose `name` field was a plain `(identifier)`,
+  silently missing the standard Lua OOP idioms (`function Stack.new() ... end`,
+  `function Stack:push() ... end`) used throughout real-world Lua code —
+  tree-sitter query field-type matching requires exact node-type agreement, so
+  these forms produced no error, just undercounted symbols. Added patterns for
+  `dot_index_expression` and `method_index_expression` name fields. Also fixed
+  two latent compile-breaking bugs in the same query file discovered while
+  adding test coverage: a `local_function` pattern referencing a node type that
+  doesn't exist in this grammar (`local function foo()` already parses as
+  `function_declaration`, so the pattern was dead and has been removed), and an
+  assignment-form `Foo:bar = function() end` pattern targeting syntax that
+  isn't valid Lua (colon syntax cannot be an assignment target) — both caused
+  `Query::new` to fail outright, so the entire `lua.tags.scm` query never
+  compiled and no Lua symbols were ever extracted.
+
 ### Fixed (internal)
 
 - **Codex session parser rewritten for current rollout protocol (Phase 2b).** The prior

@@ -6819,6 +6819,37 @@ fn r_decorations_finds_comment() {
 const LUA_SAMPLE: &str = include_str!("fixtures/lua/sample.lua");
 
 #[test]
+fn lua_tags_finds_functions_and_methods() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_tags: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_tags: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("lua").expect("lua tags query missing");
+    let names = collect_captures(&lang, LUA_SAMPLE, &query_str, "name");
+    assert!(
+        names.contains(&"classify".to_string()),
+        "expected 'classify' function in lua tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"new".to_string()),
+        "expected 'new' from 'function Stack.new()' in lua tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"push".to_string()),
+        "expected 'push' from 'function Stack:push()' in lua tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"is_empty".to_string()),
+        "expected 'is_empty' from 'function Stack:is_empty()' in lua tags, got: {names:?}"
+    );
+}
+
+#[test]
 fn lua_decorations_finds_comment() {
     let Some(gdir) = require_grammar_dir() else {
         eprintln!("Skipping lua_decorations: run `cargo xtask build-grammars` first");
