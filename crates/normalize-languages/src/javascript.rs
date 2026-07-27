@@ -353,7 +353,6 @@ mod tests {
         let documented_unused: &[&str] = &[
             // STRUCTURAL
             "class_body",              // class body block
-            "class_heritage",          // extends clause
             "class_static_block",      // static { }
             "formal_parameters",       // function params
             "field_definition",        // class field              // too common
