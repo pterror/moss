@@ -19,12 +19,5 @@
     "name": "multiply",
     "parent": null,
     "start_line": 14
-  },
-  {
-    "file": "SUMMARY.md",
-    "kind": "Heading",
-    "name": "perl/add_numbers — project source",
-    "parent": null,
-    "start_line": 1
   }
 ]

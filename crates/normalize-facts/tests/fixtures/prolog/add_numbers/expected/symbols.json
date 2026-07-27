@@ -1,12 +1,5 @@
 [
   {
-    "file": "SUMMARY.md",
-    "kind": "Heading",
-    "name": "prolog/add_numbers — project source",
-    "parent": null,
-    "start_line": 1
-  },
-  {
     "file": "main.pro",
     "kind": "Module",
     "name": "use_module",

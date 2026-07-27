@@ -26,12 +26,5 @@
     "name": "main",
     "parent": null,
     "start_line": 3
-  },
-  {
-    "file": "SUMMARY.md",
-    "kind": "Heading",
-    "name": "fsharp/add_numbers — project source",
-    "parent": null,
-    "start_line": 1
   }
 ]
