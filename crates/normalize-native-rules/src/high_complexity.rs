@@ -68,19 +68,14 @@ impl FileRule for HighComplexityRule {
             Some(t) => t,
             None => return Vec::new(),
         };
-        let ts_lang = match loader.get(grammar_name) {
-            Ok(l) => l,
-            Err(_) => return Vec::new(),
-        };
-        let tags_query = match tree_sitter::Query::new(&ts_lang, &tags_scm) {
-            Ok(q) => q,
-            Err(_) => return Vec::new(),
+        let tags_query = match loader.get_compiled_query(grammar_name, "tags", &tags_scm) {
+            Some(q) => q,
+            None => return Vec::new(),
         };
 
-        let complexity_query = loader.get_complexity(grammar_name).and_then(|scm| {
-            let grammar = loader.get(grammar_name).ok()?;
-            tree_sitter::Query::new(&grammar, &scm).ok()
-        });
+        let complexity_query = loader
+            .get_complexity(grammar_name)
+            .and_then(|scm| loader.get_compiled_query(grammar_name, "complexity", &scm));
 
         let capture_names = tags_query.capture_names();
         let root_node = tree.root_node();

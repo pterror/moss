@@ -198,7 +198,9 @@ impl<'a> ScopeEngine<'a> {
         let grammar = self.loader.get(lang).ok()?;
         let locals_src = self.loader.get_locals(lang)?;
 
-        let query = tree_sitter::Query::new(&grammar, &locals_src).ok()?;
+        let query = self
+            .loader
+            .get_compiled_query(lang, "locals", &locals_src)?;
 
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&grammar).ok()?;

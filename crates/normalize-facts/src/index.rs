@@ -4430,10 +4430,13 @@ fn build_cfg_data_for_file(
         return empty_cfg_data!();
     }
 
-    // Find function body byte ranges using the tags query.
-    let tags_query = match tree_sitter::Query::new(&ts_language, &tags_query_src) {
-        Ok(q) => q,
-        Err(_) => return empty_cfg_data!(),
+    // Find function body byte ranges using the tags query. Routed through
+    // `GrammarLoader::get_compiled_query` (rather than calling
+    // `tree_sitter::Query::new` directly) so a broken `.scm` file logs loudly
+    // instead of silently producing empty CFG data.
+    let tags_query = match loader.get_compiled_query(grammar_name, "tags", &tags_query_src) {
+        Some(q) => q,
+        None => return empty_cfg_data!(),
     };
     let capture_names = tags_query.capture_names().to_vec();
     let mut cursor = tree_sitter::QueryCursor::new();

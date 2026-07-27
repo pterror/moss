@@ -25,7 +25,12 @@ impl RefactorCaptures {
     /// Run the `refactor` query for `grammar` over `tree`, collecting capture
     /// membership. Returns `None` when no `*.refactor.scm` exists for the grammar
     /// (i.e. the language is not supported by the refactoring engine) or the
-    /// grammar/query fails to load/compile.
+    /// grammar/query fails to load/compile. The two cases look the same here
+    /// (silent degradation is the right UX for a best-effort refactor engine —
+    /// callers fall back to non-refactor behavior either way), but a compile
+    /// failure specifically is not silent overall: `GrammarLoader::get_compiled_query`
+    /// logs it via `log::error!` and records it for introspection via
+    /// `GrammarLoader::query_compile_error`.
     pub fn load(grammar: &str, root: Node<'_>, content: &str) -> Option<Self> {
         let loader = grammar_loader();
         let query_src = loader.get_refactor(grammar)?;

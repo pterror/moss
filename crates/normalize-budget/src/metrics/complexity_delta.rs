@@ -122,13 +122,11 @@ fn analyze_file_complexity(
     let tree = normalize_facts::parse_with_grammar(grammar_name, content)?;
 
     let tags_scm = loader.get_tags(grammar_name)?;
-    let ts_lang = loader.get(grammar_name).ok()?;
-    let tags_query = tree_sitter::Query::new(&ts_lang, &tags_scm).ok()?;
+    let tags_query = loader.get_compiled_query(grammar_name, "tags", &tags_scm)?;
 
-    let complexity_query = loader.get_complexity(grammar_name).and_then(|scm| {
-        let grammar = loader.get(grammar_name).ok()?;
-        tree_sitter::Query::new(&grammar, &scm).ok()
-    });
+    let complexity_query = loader
+        .get_complexity(grammar_name)
+        .and_then(|scm| loader.get_compiled_query(grammar_name, "complexity", &scm));
 
     struct TagInfo {
         start_byte: usize,

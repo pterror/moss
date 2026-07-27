@@ -9,43 +9,27 @@ use normalize_languages::Symbol;
 use normalize_languages::{GrammarLoader, support_for_grammar, support_for_path};
 use nu_ansi_term::Color::{LightCyan, LightGreen, LightMagenta, Red, White as LightGray, Yellow};
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::Arc;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Query, QueryCursor};
 
-/// Cached compiled queries for highlighting - Query::new is expensive (~100ms).
-static HIGHLIGHT_QUERY_CACHE: OnceLock<RwLock<HashMap<String, Arc<Query>>>> = OnceLock::new();
-static INJECTION_QUERY_CACHE: OnceLock<RwLock<HashMap<String, Arc<Query>>>> = OnceLock::new();
-
-fn get_cached_query(
-    cache: &OnceLock<RwLock<HashMap<String, Arc<Query>>>>,
-    grammar: &str,
-    language: &tree_sitter::Language,
-    query_str: Option<Arc<String>>,
-) -> Option<Arc<Query>> {
-    let cache = cache.get_or_init(|| RwLock::new(HashMap::new()));
-    if let Ok(read_guard) = cache.read()
-        && let Some(query) = read_guard.get(grammar)
-    {
-        return Some(Arc::clone(query));
-    }
-    let query = Arc::new(Query::new(language, query_str?.as_str()).ok()?);
-    if let Ok(mut write_guard) = cache.write() {
-        write_guard.insert(grammar.to_string(), Arc::clone(&query));
-    }
-    Some(query)
+// Compiled highlight/injection queries are cached (and compile failures logged)
+// by `GrammarLoader::get_compiled_query` itself, so this module no longer needs
+// its own query cache — it just delegates. `language` is accepted for call-site
+// compatibility but no longer used directly; `GrammarLoader` re-resolves the
+// grammar internally.
+fn get_highlight_query(grammar: &str, _language: &tree_sitter::Language) -> Option<Arc<Query>> {
+    let loader = grammar_loader();
+    let query_str = loader.get_highlights(grammar)?;
+    loader.get_compiled_query(grammar, "highlights", &query_str)
 }
 
-fn get_highlight_query(grammar: &str, language: &tree_sitter::Language) -> Option<Arc<Query>> {
-    let query_str = grammar_loader().get_highlights(grammar);
-    get_cached_query(&HIGHLIGHT_QUERY_CACHE, grammar, language, query_str)
-}
-
-fn get_injection_query(grammar: &str, language: &tree_sitter::Language) -> Option<Arc<Query>> {
-    let query_str = grammar_loader().get_injections(grammar);
-    get_cached_query(&INJECTION_QUERY_CACHE, grammar, language, query_str)
+fn get_injection_query(grammar: &str, _language: &tree_sitter::Language) -> Option<Arc<Query>> {
+    let loader = grammar_loader();
+    let query_str = loader.get_injections(grammar)?;
+    loader.get_compiled_query(grammar, "injections", &query_str)
 }
 
 /// Unified node for viewing directories, files, and symbols.

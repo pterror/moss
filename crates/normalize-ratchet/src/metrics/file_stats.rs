@@ -60,8 +60,7 @@ impl Metric for FunctionCountMetric {
                 let grammar_name = support.grammar_name();
                 let tree = normalize_facts::parse_with_grammar(grammar_name, &content)?;
                 let tags_scm = loader.get_tags(grammar_name)?;
-                let ts_lang = loader.get(grammar_name).ok()?;
-                let tags_query = tree_sitter::Query::new(&ts_lang, &tags_scm).ok()?;
+                let tags_query = loader.get_compiled_query(grammar_name, "tags", &tags_scm)?;
 
                 let capture_names = tags_query.capture_names();
                 let root_node = tree.root_node();
@@ -109,8 +108,7 @@ impl Metric for ClassCountMetric {
                 let grammar_name = support.grammar_name();
                 let tree = normalize_facts::parse_with_grammar(grammar_name, &content)?;
                 let tags_scm = loader.get_tags(grammar_name)?;
-                let ts_lang = loader.get(grammar_name).ok()?;
-                let tags_query = tree_sitter::Query::new(&ts_lang, &tags_scm).ok()?;
+                let tags_query = loader.get_compiled_query(grammar_name, "tags", &tags_scm)?;
 
                 let capture_names = tags_query.capture_names();
                 let root_node = tree.root_node();

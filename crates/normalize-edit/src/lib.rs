@@ -313,8 +313,7 @@ impl Editor {
         // Use the tags query to locate container nodes by name.
         let loader = grammar_loader();
         let tags_scm = loader.get_tags(grammar)?;
-        let ts_lang = loader.get(grammar).ok()?;
-        let tags_query = tree_sitter::Query::new(&ts_lang, &tags_scm).ok()?;
+        let tags_query = loader.get_compiled_query(grammar, "tags", &tags_scm)?;
         find_container_body_via_tags(&tree, &tags_query, content, name, support)
     }
 

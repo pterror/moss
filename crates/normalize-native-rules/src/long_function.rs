@@ -67,13 +67,9 @@ impl FileRule for LongFunctionRule {
             Some(t) => t,
             None => return Vec::new(),
         };
-        let ts_lang = match loader.get(grammar_name) {
-            Ok(l) => l,
-            Err(_) => return Vec::new(),
-        };
-        let tags_query = match tree_sitter::Query::new(&ts_lang, &tags_scm) {
-            Ok(q) => q,
-            Err(_) => return Vec::new(),
+        let tags_query = match loader.get_compiled_query(grammar_name, "tags", &tags_scm) {
+            Some(q) => q,
+            None => return Vec::new(),
         };
 
         let capture_names = tags_query.capture_names();

@@ -78,13 +78,9 @@ impl DepsExtractor {
             Some(q) => q,
             None => return Vec::new(),
         };
-        let ts_lang = match loader.get(grammar_name).ok() {
-            Some(l) => l,
+        let query = match loader.get_compiled_query(grammar_name, "tags", &tags_query_str) {
+            Some(q) => q,
             None => return Vec::new(),
-        };
-        let query = match tree_sitter::Query::new(&ts_lang, &tags_query_str) {
-            Ok(q) => q,
-            Err(_) => return Vec::new(),
         };
 
         let capture_names = query.capture_names().to_vec();
@@ -201,8 +197,7 @@ impl DepsExtractor {
         query_str: &str,
         loader: &normalize_languages::GrammarLoader,
     ) -> Option<(Vec<Import>, Vec<ReExport>)> {
-        let ts_lang = loader.get(grammar_name).ok()?;
-        let query = tree_sitter::Query::new(&ts_lang, query_str).ok()?;
+        let query = loader.get_compiled_query(grammar_name, "imports", query_str)?;
 
         let capture_names = query.capture_names().to_vec();
         let root = tree.root_node();
