@@ -72,8 +72,12 @@ cache/
 
 # debugging text files
 *.txt
-# ...except fixture expected outputs
-!**/tests/fixtures/**/expected/*.txt
+# ...except fixture inputs/outputs — these are committed test data, not
+# scratch debugging output. The narrower "expected/*.txt"-only exception
+# previously let a real fixture (tests/fixtures/cmake/CMakeLists.txt) get
+# silently dropped by `git add`, breaking the whole query_fixtures test
+# binary's compilation with no warning at commit time.
+!**/tests/fixtures/**/*.txt
 # ...except embedded help text included via include_str!
 !**/src/**/help.txt
 
