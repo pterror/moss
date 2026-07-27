@@ -318,6 +318,12 @@ normalize tools lint --json
 Normalize supports 98 languages via tree-sitter grammars including:
 Python, Rust, TypeScript, JavaScript, Go, Java, C, C++, Ruby, PHP, Swift, Kotlin, Scala, and many more.
 
+**Known issue:** Zsh support is implemented but non-functional — the vendored
+`arborium-zsh` grammar is missing a required external scanner upstream, so
+real zsh source parses into error-laden trees. Run `normalize grammars list`
+to see any grammar's known-issue status; see `docs/language-support.md` for
+details.
+
 ## Development
 
 ```bash

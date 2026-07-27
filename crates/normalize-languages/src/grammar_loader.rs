@@ -963,6 +963,43 @@ fn bundled_tags_query(name: &str) -> Option<&'static str> {
     }
 }
 
+/// Return a reason string for grammars that are known to be broken at the
+/// *parse* level, distinct from a `.scm` query compile failure (see
+/// [`GrammarLoader::query_compile_error`]).
+///
+/// These grammars load fine and their bundled/external queries compile fine
+/// (`tree_sitter::Query::new` succeeds), but the underlying tree-sitter parse
+/// of realistic source is itself broken — usually because the vendored
+/// grammar package is missing a required external scanner. Every query type
+/// (tags/imports/calls/complexity/cfg) for a listed grammar will silently
+/// return near-zero real captures on realistic input; this is not something
+/// a query rewrite in this repo can fix. Callers that would otherwise present
+/// an empty/silent result to the user (CLI commands, `grammars list`, first-use
+/// diagnostics) should surface this reason instead — see
+/// `crates/normalize-facts/src/extract.rs` and `commands/grammars.rs` for the
+/// current call sites.
+///
+/// Returns `None` for every grammar not on this list — i.e. "no known defect",
+/// not "verified working". Add an entry here only after the defect has been
+/// root-caused against the actual upstream grammar source (see TODO.md for the
+/// investigation methodology), never on suspicion alone.
+pub fn known_broken_grammar(name: &str) -> Option<&'static str> {
+    match name {
+        "zsh" => Some(
+            "the vendored arborium-zsh grammar (2.17.0 and 2.18.1, byte-identical) ships \
+             \"externals\": [] and no scanner.c, while upstream tree-sitter-zsh \
+             (georgeharker/tree-sitter-zsh @ c50ded6979eb7aae8b8da5da9ac2e9e984804881) has a \
+             ~92KB hand-written scanner.c that the grammar requires for keyword/word/argument \
+             disambiguation. Without it, even `echo hi` fails to parse as a `command` node, and \
+             if/for/while/case never produce their statement nodes. This is a packaging defect \
+             in bearcove/arborium's grammar-generation pipeline, not in the upstream grammar, \
+             and not fixable by a query rewrite in this repo. Blocked on an upstream arborium \
+             fix — see TODO.md for the full investigation and a draft issue report.",
+        ),
+        _ => None,
+    }
+}
+
 /// Get the shared library extension for the current platform.
 fn grammar_extension() -> &'static str {
     if cfg!(target_os = "macos") {

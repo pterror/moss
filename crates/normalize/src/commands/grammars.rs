@@ -13,6 +13,11 @@ use std::path::PathBuf;
 pub struct GrammarEntry {
     pub name: String,
     pub path: String,
+    /// Set when this grammar is on the [`normalize_languages::known_broken_grammar`]
+    /// list — the shared library loads and its queries compile, but real-world
+    /// parsing is fundamentally broken (e.g. a missing external scanner upstream).
+    /// `None` means "no known defect", not "verified working".
+    pub known_issue: Option<String>,
 }
 
 /// Grammar list report
@@ -26,9 +31,14 @@ impl GrammarListReport {
         Self {
             grammars: grammars
                 .into_iter()
-                .map(|(name, path)| GrammarEntry {
-                    name,
-                    path: path.display().to_string(),
+                .map(|(name, path)| {
+                    let known_issue = normalize_languages::known_broken_grammar(&name)
+                        .map(|reason| reason.to_string());
+                    GrammarEntry {
+                        name,
+                        path: path.display().to_string(),
+                        known_issue,
+                    }
                 })
                 .collect(),
         }
@@ -48,8 +58,32 @@ impl OutputFormatter for GrammarListReport {
         } else {
             let mut lines = vec![format!("Installed grammars ({}):", self.grammars.len())];
             for entry in &self.grammars {
-                lines.push(entry.name.clone());
+                if entry.known_issue.is_some() {
+                    lines.push(format!("{} (known issue, see below)", entry.name));
+                } else {
+                    lines.push(entry.name.clone());
+                }
             }
+
+            let broken: Vec<&GrammarEntry> = self
+                .grammars
+                .iter()
+                .filter(|e| e.known_issue.is_some())
+                .collect();
+            if !broken.is_empty() {
+                lines.push(String::new());
+                lines.push(
+                    "Known issues (blocked on upstream, not fixable in this repo):".to_string(),
+                );
+                for entry in broken {
+                    lines.push(format!(
+                        "  {}: {}",
+                        entry.name,
+                        entry.known_issue.as_deref().unwrap_or_default()
+                    ));
+                }
+            }
+
             lines.join("\n")
         }
     }

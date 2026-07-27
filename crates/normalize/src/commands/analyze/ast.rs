@@ -259,9 +259,21 @@ pub fn build_ast_output(
     if resolution.reason != normalize_languages::ResolutionReason::Unambiguous {
         tracing::info!("{}", resolution.describe(ext));
     }
-    let lang = resolution
-        .language
-        .ok_or_else(|| format!("Unknown file type: {} ({})", file.display(), resolution.describe(ext)))?;
+    let lang = resolution.language.ok_or_else(|| {
+        format!(
+            "Unknown file type: {} ({})",
+            file.display(),
+            resolution.describe(ext)
+        )
+    })?;
+
+    if let Some(reason) = normalize_languages::known_broken_grammar(lang.grammar_name()) {
+        eprintln!(
+            "warning: '{}' grammar is known-broken — the AST below reflects the actual \
+             (broken) parse, it is not a display bug: {reason}",
+            lang.grammar_name()
+        );
+    }
 
     let loader = grammar_loader();
     let grammar = loader

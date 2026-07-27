@@ -87,6 +87,12 @@ impl CfgService {
 
         let grammar_name = lang_support.grammar_name();
 
+        if let Some(reason) = normalize_languages::known_broken_grammar(grammar_name) {
+            return Err(format!(
+                "'{grammar_name}' grammar is known-broken, CFG extraction would be unreliable: {reason}"
+            ));
+        }
+
         // Load grammar.
         let loader = normalize_languages::parsers::grammar_loader();
         let ts_language = loader
