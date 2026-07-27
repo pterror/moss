@@ -193,6 +193,17 @@ mod tests {
         let documented_unused: &[&str] = &[
             // STRUCTURAL
             "bitfield_clause",         // : width             // declaration
+            "declaration",             // plain var decl (no body) — a bodyless
+                                        // `union Foo instance;`/forward reference
+                                        // is deliberately NOT tagged as a
+                                        // definition; see c.tags.scm's union
+                                        // pattern for why (the old
+                                        // `declaration type: (union_specifier
+                                        // ...)` shape mislabeled a usage as a
+                                        // definition — fixed by requiring
+                                        // `union_specifier` to carry a body
+                                        // directly, matching struct_specifier's
+                                        // existing pattern).
             "declaration_list",        // decl list
             "enumerator",              // enum value
             "enumerator_list",         // enum body
@@ -210,7 +221,6 @@ mod tests {
             "type_descriptor",         // type desc
             "type_identifier",         // type name
             "type_qualifier",          // const, volatile
-            "union_specifier",         // union
 
             // CLAUSE
             "else_clause",             // else
@@ -241,7 +251,6 @@ mod tests {
             "preproc_elif",            // #elif
             "preproc_elifdef",         // #elifdef
             "preproc_else",            // #else
-            "preproc_function_def",    // function macro
             "preproc_if",              // #if
             "preproc_ifdef",           // #ifdef
 
