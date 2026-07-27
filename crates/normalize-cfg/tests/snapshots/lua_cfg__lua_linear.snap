@@ -1,5 +1,10 @@
 ---
 source: crates/normalize-cfg/tests/lua_cfg.rs
+assertion_line: 99
 expression: mermaid
 ---
-lua tags query incompatible with installed grammar — skipped
+flowchart TD
+    b0(["entry"])
+    b1(["exit"])
+
+    b0 -->|"return"| b1
