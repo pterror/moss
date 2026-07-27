@@ -47,6 +47,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   accumulated per turn. Sync-over-async bridge reuses the `block_on` / `spawn_scoped`
   pattern from `normalize-facts/src/ca_cache.rs`.
 
+### Changed
+
+- **Broken `.scm` queries now log loudly instead of silently degrading to "no
+  data".** `GrammarLoader::get_compiled_query` previously did
+  `tree_sitter::Query::new(...).ok()`, so a query that exists but fails to
+  compile (a bug in the `.scm` file — the class of bug behind the 59-query Lua/
+  Gleam/R/etc. fix above) looked identical to "this language legitimately has
+  no query for this purpose" (e.g. CSS has no `calls.scm`). Both silently
+  produced empty results with no diagnostic. `get_compiled_query` now logs a
+  `log::error!` the first time a query fails to compile (once per
+  grammar/query-type, cached alongside the existing successful-compile cache)
+  and records the compile error for introspection via the new
+  `GrammarLoader::query_compile_error(grammar, query_type)`. The `Option`
+  return type is unchanged — existing callers keep their current fallback
+  behavior — but a broken query is no longer invisible. Several call sites
+  that previously called `tree_sitter::Query::new(...)` directly (bypassing
+  the loader's cache and, as a result, this new logging) were routed through
+  `get_compiled_query` instead: `normalize-facts`, `normalize-deps`,
+  `normalize-edit`, `normalize-budget`, `normalize-ratchet`,
+  `normalize-native-rules`, `normalize-git-history`, `normalize-scope`, and
+  `normalize`'s `tree.rs`/`analyze/{complexity,function_length}.rs` — these
+  also picked up query-compilation caching (previously some of these
+  recompiled the same query on every file).
+
 ### Fixed
 
 - **Lua symbol extraction now recognizes `function Table.method()` and
