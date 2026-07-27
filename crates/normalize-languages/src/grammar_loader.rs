@@ -107,6 +107,13 @@ pub struct GrammarLoader {
     cfg_cache: RwLock<HashMap<String, Arc<String>>>,
     /// Cached compiled tree-sitter queries (keyed by "grammar:query_type").
     compiled_query_cache: RwLock<HashMap<String, Arc<tree_sitter::Query>>>,
+    /// Compile errors for queries that exist but failed `tree_sitter::Query::new`
+    /// (keyed by "grammar:query_type"). This is distinct from "no query for this
+    /// purpose" — callers only reach `get_compiled_query` after confirming a query
+    /// string exists (via `get_tags`/`get_calls`/etc.), so a failure recorded here
+    /// is unambiguously a bug in the `.scm` file, not a legitimate absence. Cached
+    /// so a broken query logs once per process instead of on every call.
+    failed_query_cache: RwLock<HashMap<String, Arc<String>>>,
 }
 
 impl GrammarLoader {
@@ -148,6 +155,7 @@ impl GrammarLoader {
             test_regions_cache: RwLock::new(HashMap::new()),
             cfg_cache: RwLock::new(HashMap::new()),
             compiled_query_cache: RwLock::new(HashMap::new()),
+            failed_query_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -169,6 +177,7 @@ impl GrammarLoader {
             test_regions_cache: RwLock::new(HashMap::new()),
             cfg_cache: RwLock::new(HashMap::new()),
             compiled_query_cache: RwLock::new(HashMap::new()),
+            failed_query_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -569,7 +578,21 @@ impl GrammarLoader {
     /// `query_type` is the query category (e.g. "tags", "complexity", "calls").
     /// `query_str` is the raw .scm query string.
     ///
-    /// Returns the compiled query or None if compilation fails.
+    /// Returns the compiled query, or `None` if compilation fails.
+    ///
+    /// # `None` here is always a bug, never a legitimate absence
+    ///
+    /// Callers only reach this function after already confirming a query string
+    /// exists for the language/purpose (via `get_tags`, `get_calls`, `get_imports`,
+    /// etc., which return `None` themselves when the language genuinely has no
+    /// `.scm` file for that purpose — e.g. CSS has no `calls.scm`). So by the time
+    /// `query_str` is non-empty and passed here, a `None` return means
+    /// `tree_sitter::Query::new` rejected it — a structurally invalid pattern in
+    /// the `.scm` file, not "no data for this language". That failure is logged
+    /// via `log::error!` (once per grammar/query_type, thanks to caching) and the
+    /// error text is retained — see [`Self::query_compile_error`] — so callers
+    /// that want to surface it (diagnostics, health checks, tests) can, without
+    /// every hot-path caller having to thread a `Result` through.
     pub fn get_compiled_query(
         &self,
         grammar_name: &str,
@@ -578,7 +601,7 @@ impl GrammarLoader {
     ) -> Option<Arc<tree_sitter::Query>> {
         let key = format!("{grammar_name}:{query_type}");
 
-        // Check cache
+        // Check success cache
         {
             let cache = self
                 .compiled_query_cache
@@ -589,17 +612,57 @@ impl GrammarLoader {
             }
         }
 
+        // Check failure cache — avoids recompiling (and re-logging) a known-broken
+        // query on every call.
+        {
+            let failed = self
+                .failed_query_cache
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            if failed.contains_key(&key) {
+                return None;
+            }
+        }
+
         // Compile and cache
         let grammar = self.get(grammar_name).ok()?;
-        let compiled = tree_sitter::Query::new(&grammar, query_str).ok()?;
-        let arc = Arc::new(compiled);
+        match tree_sitter::Query::new(&grammar, query_str) {
+            Ok(compiled) => {
+                let arc = Arc::new(compiled);
+                self.compiled_query_cache
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(key, Arc::clone(&arc));
+                Some(arc)
+            }
+            Err(e) => {
+                log::error!(
+                    "normalize-languages: {query_type} query for grammar '{grammar_name}' \
+                     exists but failed to compile — this is a bug in the .scm file, not a \
+                     missing feature: {e}"
+                );
+                self.failed_query_cache
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(key, Arc::new(e.to_string()));
+                None
+            }
+        }
+    }
 
-        self.compiled_query_cache
-            .write()
+    /// Return the compile error for `grammar_name:query_type`, if
+    /// [`Self::get_compiled_query`] has previously failed to compile it.
+    ///
+    /// Returns `None` both when the query compiled successfully and when it was
+    /// never attempted — this is an introspection helper for diagnostics/tests,
+    /// not a substitute for checking `get_compiled_query`'s return value.
+    pub fn query_compile_error(&self, grammar_name: &str, query_type: &str) -> Option<Arc<String>> {
+        let key = format!("{grammar_name}:{query_type}");
+        self.failed_query_cache
+            .read()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(key, Arc::clone(&arc));
-
-        Some(arc)
+            .get(&key)
+            .cloned()
     }
 
     /// Load a grammar from external .so file.
@@ -1980,5 +2043,79 @@ mod tests {
         unsafe {
             std::env::remove_var("NORMALIZE_GRAMMAR_PATH");
         }
+    }
+
+    /// Regression test for the class of bug fixed by af9dbc0b (59 silently-broken
+    /// `.scm` files): a query that exists but fails to compile must not look the
+    /// same as "this language has no query for this purpose". Injects a
+    /// deliberately invalid query string (references a node type that cannot
+    /// exist in any grammar) and asserts the failure is retrievable, not just
+    /// swallowed into `None`.
+    #[test]
+    fn test_get_compiled_query_surfaces_compile_failure() {
+        let loader = GrammarLoader::new();
+        if loader.get("rust").is_err() {
+            eprintln!(
+                "Skipping test_get_compiled_query_surfaces_compile_failure: rust grammar .so \
+                 not found, run `cargo xtask build-grammars` first"
+            );
+            return;
+        }
+
+        // No compile attempted yet — introspection must report nothing.
+        assert!(
+            loader
+                .query_compile_error("rust", "bogus_purpose")
+                .is_none()
+        );
+
+        let broken_query = "(this_node_type_does_not_exist_anywhere) @capture";
+        let result = loader.get_compiled_query("rust", "bogus_purpose", broken_query);
+        assert!(
+            result.is_none(),
+            "a structurally invalid query must not compile"
+        );
+
+        let err = loader.query_compile_error("rust", "bogus_purpose");
+        assert!(
+            err.is_some(),
+            "get_compiled_query must record the compile error so it's distinguishable \
+             from a legitimate 'no query for this language' absence"
+        );
+        assert!(
+            err.unwrap()
+                .contains("this_node_type_does_not_exist_anywhere"),
+            "recorded error should mention the invalid node type"
+        );
+
+        // Second call must hit the failure cache, not recompile (and thus not
+        // double-log) — still None, error still retrievable.
+        let result2 = loader.get_compiled_query("rust", "bogus_purpose", broken_query);
+        assert!(result2.is_none());
+        assert!(
+            loader
+                .query_compile_error("rust", "bogus_purpose")
+                .is_some()
+        );
+    }
+
+    /// A genuinely valid query, by contrast, must compile and must NOT leave a
+    /// recorded compile error behind — proving the two cases (absence vs. bug)
+    /// stay distinguishable in both directions.
+    #[test]
+    fn test_get_compiled_query_success_leaves_no_error() {
+        let loader = GrammarLoader::new();
+        if loader.get("rust").is_err() {
+            eprintln!(
+                "Skipping test_get_compiled_query_success_leaves_no_error: rust grammar .so \
+                 not found, run `cargo xtask build-grammars` first"
+            );
+            return;
+        }
+
+        let valid_query = "(function_item name: (identifier) @name)";
+        let result = loader.get_compiled_query("rust", "ok_purpose", valid_query);
+        assert!(result.is_some(), "valid query should compile");
+        assert!(loader.query_compile_error("rust", "ok_purpose").is_none());
     }
 }
