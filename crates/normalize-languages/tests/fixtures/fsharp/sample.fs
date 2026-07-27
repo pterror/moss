@@ -44,9 +44,56 @@ let distance (a: Point) (b: Point) =
     let dy = b.Y - a.Y
     Math.Sqrt(dx * dx + dy * dy)
 
+// Loop until a condition holds
+let countDown n =
+    let mutable i = n
+    while i > 0 do
+        i <- i - 1
+    i
+
+// Safe division with try/with, and a try/finally cleanup
+let safeDivide a b =
+    try
+        a / b
+    with
+    | :? System.DivideByZeroException -> 0
+    | ex -> failwith ex.Message
+
+let withCleanup () =
+    try
+        1
+    finally
+        printfn "cleanup"
+
+// Validation that raises on bad input
+let validate x =
+    if x < 0 then
+        raise (System.ArgumentException("must be non-negative"))
+    x
+
+// Computation expressions: explicit return/yield
+let asyncClassify x =
+    async {
+        if x < 0 then
+            return "negative"
+        else
+            return "non-negative"
+    }
+
+let evenSeq upper =
+    seq {
+        for i in 1 .. upper do
+            if i % 2 = 0 then
+                yield i
+    }
+
 [<EntryPoint>]
 let main _ =
     printfn "%s" (classify -5)
     printfn "%d" (sumEvens [1..10])
     printfn "%d" (factorial 5)
+    printfn "%d" (countDown 3)
+    printfn "%d" (safeDivide 4 2)
+    withCleanup ()
+    printfn "%d" (validate 5)
     0

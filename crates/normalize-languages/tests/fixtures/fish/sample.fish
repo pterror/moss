@@ -44,6 +44,39 @@ function setup_dir
     end
 end
 
+function count_down
+    set n $argv[1]
+    while test $n -gt 0
+        echo $n
+        set n (math $n - 1)
+    end
+end
+
+function describe_day
+    set day $argv[1]
+    switch $day
+        case Mon Tue Wed Thu Fri
+            echo "Weekday"
+        case Sat Sun
+            echo "Weekend"
+        case '*'
+            echo "Unknown"
+    end
+end
+
+function early_exit
+    for i in (seq 1 10)
+        if test $i -eq 5
+            break
+        end
+        if test $i -eq 3
+            continue
+        end
+        echo $i
+    end
+    return 0
+end
+
 greet "Fish"
 classify -3
 classify 0
@@ -51,3 +84,6 @@ classify 5
 sum_list 1 2 3 4 5
 repeat_msg "hello" 3
 setup_dir /tmp/fish_test
+count_down 3
+describe_day Mon
+early_exit

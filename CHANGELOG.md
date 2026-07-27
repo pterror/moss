@@ -139,6 +139,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   CST output via `normalize syntax query`/`normalize syntax ast`, with
   fixtures extended (Bash, C#, D, Dart, Elixir) where the existing sample
   lacked the control-flow constructs needed to exercise the fix.
+- **CFG extraction restored for Erlang, Fish, F#, Gleam, GLSL, Go, Groovy,
+  Haskell, and HCL** — second batch of the `.cfg.scm` remediation; 27
+  languages remain broken and are tracked in `TODO.md`. Notable causes:
+  Erlang's `if_expr`/`case_expr`/`receive_expr`/`try_expr` all use
+  different field names than assumed (`guard:`/`body:` on `if_clause`,
+  `clauses:` on `case_expr`/`receive_expr`, `exprs:`/`catch:`/`after:` on
+  `try_expr`), there is no `after_clause` node type (`receive_after`/
+  `try_after` are distinct), and `erlang:throw/exit/error` calls use a
+  `remote`/`remote_module` shape with a `fun:` field, not `function:`.
+  Fish's `if_statement`/`for_statement`/`while_statement` have no `body`
+  field at all — the body is unfielded, anchored positionally (same
+  technique as Bash). F#'s `if_expression` uses `guard:`/`then:`/`else:`
+  fields (not condition/then_expression/else_expression), `elif` is a
+  separate flat `elif_expression` sibling, `for_expression`/
+  `while_expression`/`try_expression` are entirely unfielded (anchored on
+  the anonymous `in`/`do`/`with`/`finally`/`try` keyword tokens), there is
+  no `for_each_expression`/`return_expression`/`raise_expression` node type
+  (`raise`/`reraise`/`failwith` are plain function applications; `return`/
+  `yield` are anonymous tokens inside `prefixed_expression`, used in
+  computation expressions). Gleam has no if/else-expression node in this
+  grammar version at all — a hand-parsed `if x { } else { }` snippet
+  produces two bare identifiers plus anonymous blocks, not a branch node,
+  so no `@cfg.branch` pattern is emitted; `case`'s arms live under
+  `clauses: (case_clauses (case_clause ...))`, not bare siblings. GLSL has
+  no `discard_statement` node — `discard;` parses as an
+  `expression_statement` wrapping a bare identifier, matched by `#eq?`.
+  Go's switch arms are `expression_case`, not `expression_case_clause`.
+  Groovy has no `throw_statement` (`throw expr` is a `juxt_function_call`
+  matched by identifier text) and no `catch_clause`/`finally_clause`
+  wrapper nodes (`catch_body:`/`finally_body:` are flat optional fields
+  directly on `try_statement`); `if_statement` uses `body:`/`else_body:`,
+  and `for_loop`'s `condition:` lives one level down inside
+  `for_parameters`. Haskell's `conditional` uses `if:`/`then:`/`else:`
+  fields, and `case`'s scrutinee is unfielded (anchored between the `case`
+  and `of` tokens) with arms under `alternatives: (alternatives
+  (alternative ...))`, not bare `(match)` nodes. HCL's `conditional` has no
+  fields at all — condition/then/else are three positional `(expression)`
+  children anchored around the `?`/`:` tokens. All verified against real
+  CST output via `normalize syntax query`/`normalize syntax ast`, with
+  fixtures extended (all nine languages) where the existing sample lacked
+  the control-flow constructs needed to exercise the fix.
 
 ### Fixed (internal)
 

@@ -1,5 +1,17 @@
 ---
 source: crates/normalize-cfg/tests/go_cfg.rs
+assertion_line: 100
 expression: mermaid
 ---
-go grammar not installed — skipped
+flowchart TD
+    b0{"Branch<br/>lines 1-4"}
+    b1(["exit"])
+    b2["Statement<br/>lines 4-6"]
+    b3["Statement<br/>lines 8-9"]
+    b4["Statement<br/>lines 6-8"]
+
+    b0 -->|"true"| b2
+    b0 -->|"false"| b4
+    b2 --> b3
+    b4 --> b3
+    b3 --> b1

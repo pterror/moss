@@ -43,6 +43,13 @@ classify n =
 countUnique :: Ord a => [a] -> Int
 countUnique xs = length (nub (sort xs))
 
+-- | Describe a number via a case expression with a guarded alternative
+describe :: Int -> String
+describe n = case n of
+    0 -> "zero"
+    x | x > 0 -> "positive"
+      | otherwise -> "negative"
+
 -- | Build frequency map
 frequencyMap :: Ord a => [a] -> Map a Int
 frequencyMap = foldr (\x m -> Map.insertWith (+) x 1 m) Map.empty

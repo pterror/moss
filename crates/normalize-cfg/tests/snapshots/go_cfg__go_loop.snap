@@ -1,5 +1,16 @@
 ---
 source: crates/normalize-cfg/tests/go_cfg.rs
+assertion_line: 106
 expression: mermaid
 ---
-go grammar not installed — skipped
+flowchart TD
+    b0(["entry"])
+    b1(["exit"])
+    b2{"LoopHead<br/>line 5"}
+    b3["LoopExit<br/>lines 10-11"]
+    b4["LoopBody<br/>lines 5-10"]
+
+    b0 --> b2
+    b2 --> b4
+    b4 -->|"back"| b2
+    b3 -->|"return"| b1

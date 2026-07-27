@@ -71,4 +71,10 @@
 
 (continue_statement) @cfg.exit.continue
 
-(discard_statement) @cfg.exit.throw
+; `discard` is not a distinct grammar construct here — this C-derived
+; grammar has no GLSL-specific keywords, so `discard;` parses as an
+; `expression_statement` wrapping a bare `identifier`, matched by name.
+(expression_statement
+  (identifier) @_kw
+  (#eq? @_kw "discard")
+) @cfg.exit.throw

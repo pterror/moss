@@ -44,6 +44,62 @@ vec3 applyFog(vec3 color, float depth) {
     return mix(vec3(0.5, 0.6, 0.7), color, fogFactor);
 }
 
+// Classify a scalar via if/else if/else
+float classify(float n) {
+    if (n < 0.0) {
+        return -1.0;
+    } else if (n > 0.0) {
+        return 1.0;
+    } else {
+        return 0.0;
+    }
+}
+
+// Select a tone-mapping mode via switch
+vec3 toneMap(int mode, vec3 color) {
+    switch (mode) {
+        case 0:
+            return color;
+        case 1:
+            return color * 1.2;
+        default:
+            return vec3(0.0);
+    }
+}
+
+// Sum weighted samples with break/continue
+float weightedSum(int count) {
+    float total = 0.0;
+    for (int i = 0; i < count; i++) {
+        if (i == 5) {
+            continue;
+        }
+        if (i == 20) {
+            break;
+        }
+        total += float(i);
+    }
+    return total;
+}
+
+// Accumulate via while and do-while
+float accumulate(int limit) {
+    int i = 0;
+    float total = 0.0;
+    while (i < limit) {
+        total += float(i);
+        i++;
+    }
+
+    int j = 0;
+    do {
+        total += 0.5;
+        j++;
+    } while (j < limit);
+
+    return total;
+}
+
 void main() {
     vec3 norm = normalize(v_Normal);
     vec3 lightDir = normalize(u_LightPos - v_Position);
@@ -56,6 +112,11 @@ void main() {
     vec3 result = (vec3(0.1) + diffuse + specular) * albedo.rgb;
     float depth = length(u_CameraPos - v_Position);
     result = applyFog(result, depth);
+
+    // Discard fully transparent fragments
+    if (albedo.a < 0.01) {
+        discard;
+    }
 
     fragColor = vec4(result, albedo.a);
 }

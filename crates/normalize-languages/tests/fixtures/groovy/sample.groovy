@@ -31,6 +31,56 @@ class MathUtils {
         if (n <= 1) return 1
         return n * factorial(n - 1)
     }
+
+    static String describe(int x) {
+        switch (x) {
+            case 0:
+                return "zero"
+            case 1:
+                return "one"
+            default:
+                return "other"
+        }
+    }
+
+    static int sumRange(List<Integer> xs) {
+        int total = 0
+        for (x in xs) {
+            if (x < 0) {
+                continue
+            }
+            if (x > 100) {
+                break
+            }
+            total += x
+        }
+        return total
+    }
+
+    static int countDown(int n) {
+        int i = n
+        while (i > 0) {
+            i--
+        }
+        return i
+    }
+
+    static int checkPositive(int n) {
+        if (n < 0) {
+            throw new IllegalArgumentException("negative")
+        }
+        return n
+    }
+
+    static void safeCall() {
+        try {
+            checkPositive(-1)
+        } catch (IllegalArgumentException e) {
+            println e
+        } finally {
+            println "done"
+        }
+    }
 }
 
 def greet(String name) {

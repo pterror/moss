@@ -59,6 +59,15 @@ output "instance_ids" {
   description = "IDs of the created EC2 instances"
 }
 
+locals {
+  # Conditional (ternary) expression — branch
+  instance_type = var.instance_count > 1 ? "m5.large" : "t3.micro"
+
+  # for-expression comprehensions — loop-like constructs
+  instance_names = [for i in range(var.instance_count) : "web-${i}"]
+  instance_map   = { for i in range(var.instance_count) : i => "web-${i}" if i > 0 }
+}
+
 output "vpc_id" {
   value       = module.vpc.id
   description = "ID of the created VPC"

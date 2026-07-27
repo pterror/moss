@@ -24,11 +24,11 @@
 
 (expression_switch_statement
   value: (_) @cfg.match.scrutinee
-  (expression_case_clause) @cfg.match.arm
+  (expression_case) @cfg.match.arm
 ) @cfg.match
 
 (expression_switch_statement
-  (expression_case_clause) @cfg.match.arm
+  (expression_case) @cfg.match.arm
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------

@@ -43,3 +43,34 @@ make_point(X, Y) ->
 %% Sort a list via a remote (module-qualified) call
 sorted(List) ->
     lists:sort(List).
+
+%% Classify via an if-expression (guards as conditions)
+sign(X) ->
+    if
+        X > 0 -> positive;
+        X < 0 -> negative;
+        true -> zero
+    end.
+
+%% Receive a message with a timeout branch
+wait_for_message() ->
+    receive
+        {msg, X} -> X
+    after 1000 ->
+        timeout
+    end.
+
+%% Try/catch/after around a fallible call
+safe_call() ->
+    try
+        do_something()
+    catch
+        error:Reason -> {error, Reason};
+        throw:Value -> {caught, Value}
+    after
+        cleanup()
+    end.
+
+%% Explicit throw via the erlang module
+fail(Reason) ->
+    erlang:throw(Reason).

@@ -1,7 +1,13 @@
 ; Fish shell CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Fish grammar node types.
+; Verified against arborium Fish grammar node types via `normalize syntax ast`.
+;
+; `if_statement`, `for_statement`, and `while_statement` have no `body:`
+; field — the branch/loop body is one or more unfielded statement children
+; following the anonymous keyword/condition. The anchor below binds to the
+; single statement immediately following the condition (mirrors the same
+; grammar shape in Bash).
 
 ; ---------------------------------------------------------------------------
 ; if / else if / else (branch)
@@ -9,21 +15,16 @@
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_clause
-    body: (_) @cfg.branch.else)
-) @cfg.branch
-
-(if_statement
-  condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_if_clause) @cfg.branch.else
-) @cfg.branch
-
-(if_statement
-  condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
   .
+  (_) @cfg.branch.then
+) @cfg.branch
+
+(if_statement
+  (else_clause) @cfg.branch.else
+) @cfg.branch
+
+(if_statement
+  (else_if_clause) @cfg.branch.else
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -40,8 +41,9 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  variable: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  value: (_) @cfg.loop.condition
+  .
+  (_) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -50,7 +52,8 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  .
+  (_) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------

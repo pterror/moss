@@ -44,6 +44,19 @@ pub fn greet(name: String) -> String {
   "Hello, " <> name <> "!"
 }
 
+// Unreachable branch — exits via panic
+pub fn unreachable(n: Int) -> String {
+  case n {
+    0 -> "zero"
+    _ -> panic as "unexpected value"
+  }
+}
+
+// Not yet implemented — exits via todo
+pub fn not_done(n: Int) -> Int {
+  todo
+}
+
 pub fn main() {
   io.println(classify(-3))
   io.println(greet("World"))
