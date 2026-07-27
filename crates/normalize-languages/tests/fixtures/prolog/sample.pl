@@ -43,3 +43,27 @@ max_val(_, Y, Y).
 % Rule: append two lists
 my_append([], L, L).
 my_append([H|T], L, [H|R]) :- my_append(T, L, R).
+
+% Rule: classify using if-then-else instead of cut+clause-matching
+classify_ite(N, Result) :-
+    ( N < 0
+    -> Result = negative
+    ;  N =:= 0
+    -> Result = zero
+    ;  Result = positive
+    ).
+
+% Rule: safe division using catch/3
+safe_div(X, Y, Result) :-
+    catch(
+        Result is X / Y,
+        error(evaluation_error(zero_divisor), _),
+        Result = undefined
+    ).
+
+% Rule: throw/1
+validate_positive(N) :-
+    ( N > 0
+    -> true
+    ;  throw(error(not_positive(N), _))
+    ).

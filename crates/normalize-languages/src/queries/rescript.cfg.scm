@@ -1,25 +1,54 @@
 ; ReScript CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium ReScript grammar node types.
 ;
-; ReScript is a functional language compiling to JavaScript.
-; Control flow: if expressions, switch expressions (pattern matching).
+; Verified against arborium ReScript grammar via
+;   normalize syntax ast <file> --compact --depth=-1
+;   normalize syntax query <query> -p <file> --show-source
+;
+; ReScript is a functional language compiling to JavaScript: functions
+; return the value of their last expression implicitly — there is no
+; explicit return keyword and no "return_expression" node type, so no
+; cfg.exit.return capture exists here (nothing to capture).
+;
+; if_expression has NO "condition"/"consequence"/"alternative" fields
+; at all — the condition and (block) body are unnamed positional
+; children, and else_if_clause/else_clause are flat unnamed siblings
+; of the initial if/block pair (not nested inside each other), mirrored
+; here the same way Lua's elseif_statement/else_statement are handled.
+; switch_expression's scrutinee is likewise an unnamed positional child
+; (no "value" field) — anchored with a leading "." so the wildcard
+; can't also bind to a later (switch_match) arm.
 
 ; ---------------------------------------------------------------------------
-; if / else (branch expression)
+; if / else if / else (branch expression)
 ; ---------------------------------------------------------------------------
 
 (if_expression
-  condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
-  alternative: (_) @cfg.branch.else
+  (_) @cfg.branch.condition
+  (block) @cfg.branch.then
+  (else_if_clause) @cfg.branch.else
 ) @cfg.branch
 
 (if_expression
-  condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
+  (_) @cfg.branch.condition
+  (block) @cfg.branch.then
+  (else_clause) @cfg.branch.else
+) @cfg.branch
+
+(if_expression
+  (_) @cfg.branch.condition
+  (block) @cfg.branch.then
   .
+) @cfg.branch
+
+(else_if_clause
+  (_) @cfg.branch.condition
+  (block) @cfg.branch.then
+) @cfg.branch
+
+(else_clause
+  (block) @cfg.branch.then
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -27,15 +56,13 @@
 ; ---------------------------------------------------------------------------
 
 (switch_expression
-  value: (_) @cfg.match.scrutinee
+  . (_) @cfg.match.scrutinee
   (switch_match) @cfg.match.arm
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
 ; Exits
 ; ---------------------------------------------------------------------------
-
-(return_expression) @cfg.exit.return
 
 ; raise is the throw equivalent
 (call_expression

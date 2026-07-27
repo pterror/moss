@@ -29,7 +29,7 @@
 
 (match_expression
   value: (_) @cfg.match.scrutinee
-  body: (match_block
+  body: (case_block
     (case_clause) @cfg.match.arm
   )
 ) @cfg.match
@@ -79,8 +79,13 @@
 
 (return_expression) @cfg.exit.return
 
-(break_statement) @cfg.exit.break
-
-(continue) @cfg.exit.continue
+; Scala has no break/continue keywords or dedicated node types at all
+; — non-local loop exit is done via scala.util.control.Breaks'
+; break()/continue() library functions, which are ordinary
+; call_expressions indistinguishable from any other call without
+; import-tracking. Matching on the bare identifier text would be a
+; much higher false-positive risk here than for e.g. Perl's die() or
+; Ruby's raise (which are universal builtins, not opt-in library
+; calls), so no capture is emitted rather than guessing.
 
 (throw_expression) @cfg.exit.throw

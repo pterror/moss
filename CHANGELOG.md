@@ -226,6 +226,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   scratch probe test for MATLAB), with fixtures extended (Idris, Lean,
   Meson) where the existing sample lacked the control-flow constructs
   needed to exercise the fix.
+- **Restored CFG extraction for Perl, PHP, PowerShell, Prolog, ReScript,
+  Ruby, Scala, Starlark, and Svelte** — fourth batch of the `.cfg.scm`
+  remediation; 9 languages remain broken and are tracked in `TODO.md`.
+  Notable causes: Perl's `conditional_statement` uses `condition:`/
+  `block:` fields (not `consequence:`/`alternative:`) with a recursively
+  nested `elsif`/`else` chain, and `last`/`next`/`redo` are
+  `(loopex_expression loopex: "last"|"next"|"redo")`, not their own node
+  types — `die` is an ordinary function call matched via `#eq?`, same as
+  Lua's `error()`. PHP's `match_expression` arms nest
+  `match_condition_list` one level deeper than expected, and there is no
+  `throw_statement` node type (only `throw_expression`). PowerShell has
+  no `body` field anywhere — switch/for/foreach/while/do bodies are all
+  unnamed positional `statement_block`s — and `return`/`break`/
+  `continue`/`throw` are all `(flow_control_statement <keyword>)`, not
+  separate node types. Prolog's grammar is a generic term reader with no
+  `if_then`/`call` node types at all; if-then-else and `catch`/`throw`
+  are matched via operator text (`->`, `;`) and functor-name `#eq?` on
+  generic `operator_notation`/`functional_notation` nodes. ReScript has
+  no `return_expression` node type at all — functions return their last
+  expression implicitly, genuinely absent, documented rather than
+  fabricated — and `if_expression`/`switch_expression` have no named
+  fields. Ruby's `case/in` pattern matching (3+) uses a distinct
+  `case_match`/`in_clause` node pair (not `case`/`in_pattern`);
+  `begin`/`rescue`/`ensure` have no `body` field (this was a real bug —
+  the try-body was never captured at all despite the query having
+  compiled fine before); `for`'s iterable is field `value` not `pattern`
+  (also a real semantic bug — the original captured the loop variable as
+  the loop condition). Scala's `match_expression` body is `case_block`
+  not `match_block`; Scala has no break/continue keywords or node types
+  at all — non-local loop exit is via the opt-in
+  `scala.util.control.Breaks` library calls, judged too
+  false-positive-prone to match heuristically and left uncaptured,
+  documented rather than guessed. Starlark's `if_statement`/
+  `elif_clause` then-arm field is `consequence`, not `body`. Svelte's
+  template-directive `if_statement`/`each_statement` have no `condition`/
+  `consequence`/`body` fields at all — condition is raw unparsed text
+  nested in `if_start`/`each_start`, and then/else bodies are flat
+  unnamed siblings with no wrapper node — confirmed Svelte's `<script>`
+  JS logic is intentionally out of scope for this template-only query
+  (not a delegation bug, unlike the Vue landmine still pending). All
+  verified against real CST output via `normalize syntax query`/
+  `normalize syntax ast`; Perl was probed through `.pm`-renamed fixture
+  copies since `.pl` collides with Prolog in the CLI's language registry
+  (newly flagged, not fixed — see `TODO.md`). Fixtures extended for
+  Prolog (if-then-else, catch/3, throw/1) where the existing sample
+  lacked the control-flow constructs needed to exercise the fix.
 
 ### Fixed (internal)
 
