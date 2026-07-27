@@ -259,9 +259,13 @@ pub fn build_ast_output(
     if resolution.reason != normalize_languages::ResolutionReason::Unambiguous {
         tracing::info!("{}", resolution.describe(ext));
     }
-    let lang = resolution
-        .language
-        .ok_or_else(|| format!("Unknown file type: {} ({})", file.display(), resolution.describe(ext)))?;
+    let lang = resolution.language.ok_or_else(|| {
+        format!(
+            "Unknown file type: {} ({})",
+            file.display(),
+            resolution.describe(ext)
+        )
+    })?;
 
     let loader = grammar_loader();
     let grammar = loader

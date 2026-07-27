@@ -129,7 +129,9 @@ impl LanguagesConfig {
     /// Convert to the resolver's runtime override set.
     pub fn to_overrides(&self) -> normalize_languages::LanguageOverrides {
         normalize_languages::LanguageOverrides::new(
-            self.0.iter().map(|(pattern, lang)| (pattern.clone(), lang.clone())),
+            self.0
+                .iter()
+                .map(|(pattern, lang)| (pattern.clone(), lang.clone())),
         )
     }
 }
