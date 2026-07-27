@@ -1,5 +1,14 @@
 ---
 source: crates/normalize-cfg/tests/java_cfg.rs
+assertion_line: 125
 expression: mermaid
 ---
-java grammar not installed — skipped
+flowchart TD
+    b0["Statement<br/>lines 1-3"]
+    b1(["exit"])
+    b2["Statement<br/>lines 12-14"]
+    b3["Statement<br/>lines 3-8"]
+
+    b0 --> b3
+    b3 --> b2
+    b2 --> b1

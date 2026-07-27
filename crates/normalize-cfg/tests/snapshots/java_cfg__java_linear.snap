@@ -1,5 +1,10 @@
 ---
 source: crates/normalize-cfg/tests/java_cfg.rs
+assertion_line: 98
 expression: mermaid
 ---
-java grammar not installed — skipped
+flowchart TD
+    b0(["entry"])
+    b1(["exit"])
+
+    b0 -->|"return"| b1
