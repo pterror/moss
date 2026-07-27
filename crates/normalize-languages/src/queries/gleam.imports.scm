@@ -6,17 +6,16 @@
 
 ; import module/path
 (import
-  (module) @import.path) @import
+  module: (module) @import.path) @import
 
 ; import module/path as alias
 (import
-  (module) @import.path
-  (import_alias
-    (identifier) @import.alias)) @import
+  module: (module) @import.path
+  alias: (identifier) @import.alias) @import
 
 ; import module/path.{Type, function}
 (import
-  (module) @import.path
-  (unqualified_imports
+  module: (module) @import.path
+  imports: (unqualified_imports
     (unqualified_import
-      (identifier) @import.name))) @import
+      name: (_) @import.name))) @import

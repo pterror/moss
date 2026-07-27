@@ -65,6 +65,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   isn't valid Lua (colon syntax cannot be an assignment target) — both caused
   `Query::new` to fail outright, so the entire `lua.tags.scm` query never
   compiled and no Lua symbols were ever extracted.
+- **Extraction restored for Gleam, R, Haskell, Erlang, F#, Groovy, MATLAB,
+  Caddy, Dockerfile, and Thrift** — a guardrail test found 13 more `.scm`
+  query files (of the same bug class as the Lua fix above) that referenced
+  node types or field names that don't exist in their grammar, so
+  `Query::new` failed and `GrammarLoader::get_compiled_query()` silently
+  returned `None`, producing zero symbols/calls/imports/types/complexity at
+  runtime with no error surfaced. All four Gleam query purposes
+  (`tags`/`calls`/`complexity`/`imports`) were broken — Gleam extraction was
+  entirely non-functional. Also fixed: `r.calls.scm` (namespace-qualified
+  calls used a nonexistent `namespace_get` node instead of the real
+  `namespace_operator`), `haskell.calls.scm` (qualified calls used
+  nonexistent `qualified_variable`/`qualified_constructor` nodes instead of
+  the real unified `qualified` node), `erlang.calls.scm` (wrong field names
+  `target:`/`function:` instead of `expr:`/`fun:`), `fsharp.calls.scm`
+  (`application_expression` has no named fields at all — patterns rewritten
+  to anchor positionally), `groovy.types.scm` (`qualified_name` only appears
+  in import/package statements, never in type positions — rewritten to read
+  the `type:` field on `declaration`/`parameter`/`function_definition` and
+  descend into `type_with_generics`/`generics` for generic arguments),
+  `matlab.imports.scm` (the `command` node has no fields; the `import`
+  command name/argument are the terminal `command_name`/`command_argument`
+  node types), `caddy.imports.scm` (the node type is `directive_import`, not
+  `import`, and only the parenthesized snippet-reference form
+  `import (name)` is modeled by this grammar), `dockerfile.imports.scm`
+  (`as:` is a direct field on `from_instruction`; there is no intermediate
+  `as_instruction` node), and `thrift.imports.scm` (`include_statement`'s
+  path child is a `string` node, not `literal`). Verified against real CST
+  output via `normalize syntax query`/`normalize syntax ast`, not guessed
+  from `node-types.json` alone. Added fixtures for Caddy and Dockerfile
+  (previously untested) and extraction-correctness tests (not just
+  "compiles") for all ten languages.
 
 ### Fixed (internal)
 

@@ -47,4 +47,5 @@ factorial_r <- function(n) {
 
 print(classify(-3))
 print(sum_evens(1:10))
+print(stats::median(1:10))
 print(factorial_r(5))

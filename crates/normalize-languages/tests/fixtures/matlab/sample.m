@@ -25,6 +25,8 @@ end
 
 function result = factorial(n)
 % Compute factorial of n
+    import matlab.io.*
+    import matlab.net.http.RequestMessage
     if n <= 1
         result = 1;
     else

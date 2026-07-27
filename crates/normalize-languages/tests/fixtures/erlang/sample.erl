@@ -39,3 +39,7 @@ member(Elem, [_ | Rest]) ->
 %% Create a point record
 make_point(X, Y) ->
     #point{x = X, y = Y}.
+
+%% Sort a list via a remote (module-qualified) call
+sorted(List) ->
+    lists:sort(List).

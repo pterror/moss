@@ -6,12 +6,14 @@
 ; and their branches, and if expressions.
 
 ; Complexity nodes
+;
+; Gleam has no `if` expression (branching is done via `case`), so there is no
+; `if` node type in the grammar — confirmed via `normalize syntax query`
+; (Query::new fails with "Invalid node type \"if\"").
 (case) @complexity
 (case_clause) @complexity
-(if) @complexity
 
 ; Nesting nodes
 (case) @nesting
-(if) @nesting
 (function) @nesting
 (anonymous_function) @nesting

@@ -7,11 +7,11 @@
 
 ; Type definitions (ADTs / custom types)
 (type_definition
-  name: (type_identifier) @name) @definition.class
+  (type_name name: (type_identifier) @name)) @definition.class
 
 ; Type aliases
 (type_alias
-  name: (type_identifier) @name) @definition.type
+  (type_name name: (type_identifier) @name)) @definition.type
 
 ; Constants
 (constant

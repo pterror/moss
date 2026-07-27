@@ -251,7 +251,7 @@ mod tests {
             "data_constructors", "external_type", "function_parameter", "function_parameter_types",
             "function_parameters", "function_type", "opacity_modifier", "remote_type_identifier",
             "tuple_type", "type", "type_argument", "type_arguments", "type_hole", "type_identifier",
-            "type_name", "type_parameter", "type_parameters", "type_var", "visibility_modifier",
+            "type_parameter", "type_parameters", "type_var", "visibility_modifier",
             // Case clause patterns
             "case_clause_guard", "case_clause_pattern", "case_clause_patterns", "case_clauses",
             "case_subjects",

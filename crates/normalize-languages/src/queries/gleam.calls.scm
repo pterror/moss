@@ -10,4 +10,4 @@
 (function_call
   function: (field_access
     record: (_) @call.qualifier
-    label: (label) @call))
+    field: (label) @call))

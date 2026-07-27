@@ -3,5 +3,7 @@
 ; @import.path  — the included file path
 
 ; include "shared.thrift"
+; The quoted path is a `string` node (quotes stripped by Rust); `literal`
+; is not a node type this grammar produces here.
 (include_statement
-  (literal) @import.path) @import
+  (string) @import.path) @import

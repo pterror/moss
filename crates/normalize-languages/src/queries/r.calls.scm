@@ -10,7 +10,9 @@
   function: (identifier) @call)
 
 ; Namespace-qualified call: pkg::func(args) or pkg:::func(args)
+; The node type is `namespace_operator` with `lhs:`/`rhs:` fields, not
+; `namespace_get` with `namespace:`/`function:`.
 (call
-  function: (namespace_get
-    namespace: (_) @call.qualifier
-    function: (identifier) @call))
+  function: (namespace_operator
+    lhs: (_) @call.qualifier
+    rhs: (identifier) @call))

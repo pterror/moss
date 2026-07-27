@@ -13,6 +13,7 @@
 ///   cargo xtask build-grammars && cargo test -p normalize-languages -- --nocapture
 use normalize_languages::GrammarLoader;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 // ---------------------------------------------------------------------------
@@ -4782,6 +4783,31 @@ fn matlab_complexity_finds_control_flow() {
     );
 }
 
+#[test]
+fn matlab_imports_finds_import_paths() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping matlab_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("matlab").ok() else {
+        eprintln!("Skipping matlab_imports: matlab grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("matlab")
+        .expect("matlab imports query missing");
+    let paths = collect_captures(&lang, MATLAB_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p == "matlab.io.*"),
+        "expected 'matlab.io.*' in matlab imports, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p == "matlab.net.http.RequestMessage"),
+        "expected 'matlab.net.http.RequestMessage' in matlab imports, got: {paths:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // TLA+
 // ---------------------------------------------------------------------------
@@ -6309,6 +6335,38 @@ fn haskell_tags_no_duplicate_signatures() {
     );
 }
 
+#[test]
+fn haskell_calls_finds_local_qualified_and_constructor_calls() {
+    let loader = normalize_languages::GrammarLoader::new();
+    let Some(lang) = loader.get("haskell").ok() else {
+        eprintln!(
+            "Skipping haskell_calls_finds_local_qualified_and_constructor_calls: haskell grammar not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_calls("haskell")
+        .expect("haskell calls query missing");
+    let calls = collect_captures(&lang, HASKELL_SAMPLE, &query_str, "call");
+    assert!(
+        calls.contains(&"insert".to_string()),
+        "expected local 'insert' call in haskell calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"Node".to_string()),
+        "expected constructor 'Node' application in haskell calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"insertWith".to_string()),
+        "expected qualified 'Map.insertWith' call to capture 'insertWith' in haskell calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, HASKELL_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"Map".to_string()),
+        "expected 'Map' qualifier in haskell calls, got: {qualifiers:?}"
+    );
+}
+
 const GROOVY_SAMPLE: &str = include_str!("fixtures/groovy/sample.groovy");
 
 #[test]
@@ -6333,6 +6391,35 @@ fn groovy_imports_live() {
             .iter()
             .any(|p| p.contains("ArrayList") || p.contains("java")),
         "expected 'java.util.ArrayList' in groovy import paths, got: {paths:?}"
+    );
+}
+
+#[test]
+fn groovy_types_live() {
+    let loader = normalize_languages::GrammarLoader::new();
+    let Some(lang) = loader.get("groovy").ok() else {
+        eprintln!("Skipping groovy_types_live: groovy grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("groovy")
+        .expect("groovy types query missing");
+    let types = collect_captures(&lang, GROOVY_SAMPLE, &query_str, "type.reference");
+    assert!(
+        types.contains(&"Point".to_string()),
+        "expected 'Point' parameter type in groovy types, got: {types:?}"
+    );
+    assert!(
+        types.contains(&"String".to_string()),
+        "expected 'String' return type in groovy types, got: {types:?}"
+    );
+    assert!(
+        types.contains(&"List".to_string()),
+        "expected base generic type 'List' in groovy types, got: {types:?}"
+    );
+    assert!(
+        types.contains(&"Integer".to_string()),
+        "expected generic type argument 'Integer' in groovy types, got: {types:?}"
     );
 }
 
@@ -6622,6 +6709,40 @@ fn fsharp_decorations_finds_attribute_and_comment() {
 }
 
 #[test]
+fn fsharp_calls_finds_application_and_qualified_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping fsharp_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("fsharp").ok() else {
+        eprintln!("Skipping fsharp_calls: fsharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("fsharp")
+        .expect("fsharp calls query missing");
+    let calls = collect_captures(&lang, FSHARP_SAMPLE, &query_str, "call");
+    assert!(
+        calls.contains(&"classify".to_string()),
+        "expected 'classify' application call in fsharp calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"sumEvens".to_string()),
+        "expected 'sumEvens' application call in fsharp calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"Sqrt".to_string()),
+        "expected qualified 'Math.Sqrt' call to capture 'Sqrt' in fsharp calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, FSHARP_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"Math".to_string()),
+        "expected 'Math' qualifier in fsharp calls, got: {qualifiers:?}"
+    );
+}
+
+#[test]
 fn elixir_decorations_finds_module_attribute_and_comment() {
     let Some(gdir) = require_grammar_dir() else {
         eprintln!("Skipping elixir_decorations: run `cargo xtask build-grammars` first");
@@ -6651,6 +6772,36 @@ fn erlang_decorations_finds_attribute_and_comment() {
     );
 }
 
+#[test]
+fn erlang_calls_finds_local_and_remote_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping erlang_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("erlang").ok() else {
+        eprintln!("Skipping erlang_calls: erlang grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("erlang")
+        .expect("erlang calls query missing");
+    let calls = collect_captures(&lang, ERLANG_SAMPLE, &query_str, "call");
+    assert!(
+        calls.contains(&"factorial".to_string()),
+        "expected recursive local 'factorial' call in erlang calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"sort".to_string()),
+        "expected remote 'lists:sort' call to capture 'sort' in erlang calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, ERLANG_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"lists".to_string()),
+        "expected 'lists' qualifier (without trailing ':') in erlang calls, got: {qualifiers:?}"
+    );
+}
+
 const GLEAM_SAMPLE: &str = include_str!("fixtures/gleam/sample.gleam");
 
 #[test]
@@ -6664,6 +6815,130 @@ fn gleam_decorations_finds_doc_comment_and_comment() {
         "gleam",
         GLEAM_SAMPLE,
         &["/// Classify", "// Type definition"],
+    );
+}
+
+#[test]
+fn gleam_tags_finds_functions_types_and_constants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping gleam_tags: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("gleam").ok() else {
+        eprintln!("Skipping gleam_tags: gleam grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("gleam").expect("gleam tags query missing");
+    let names = collect_captures(&lang, GLEAM_SAMPLE, &query_str, "name");
+    assert!(
+        names.contains(&"classify".to_string()),
+        "expected 'classify' function in gleam tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"factorial".to_string()),
+        "expected 'factorial' function in gleam tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Shape".to_string()),
+        "expected 'Shape' custom type in gleam tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Name".to_string()),
+        "expected 'Name' type alias in gleam tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"max_size".to_string()),
+        "expected 'max_size' constant in gleam tags, got: {names:?}"
+    );
+}
+
+#[test]
+fn gleam_calls_finds_local_and_qualified_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping gleam_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("gleam").ok() else {
+        eprintln!("Skipping gleam_calls: gleam grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("gleam")
+        .expect("gleam calls query missing");
+    let calls = collect_captures(&lang, GLEAM_SAMPLE, &query_str, "call");
+    assert!(
+        calls.contains(&"factorial".to_string()),
+        "expected recursive 'factorial' call in gleam calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"filter".to_string()),
+        "expected qualified 'list.filter' call to capture 'filter' in gleam calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"println".to_string()),
+        "expected qualified 'io.println' call to capture 'println' in gleam calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, GLEAM_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"list".to_string()),
+        "expected 'list' qualifier in gleam calls, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"io".to_string()),
+        "expected 'io' qualifier in gleam calls, got: {qualifiers:?}"
+    );
+}
+
+#[test]
+fn gleam_complexity_finds_case_expressions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping gleam_complexity: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("gleam").ok() else {
+        eprintln!("Skipping gleam_complexity: gleam grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("gleam")
+        .expect("gleam complexity query missing");
+    let complexity = collect_captures(&lang, GLEAM_SAMPLE, &query_str, "complexity");
+    assert!(
+        complexity.len() >= 5,
+        "expected at least 5 complexity nodes (case + case_clause) in gleam sample, got {} ({complexity:?})",
+        complexity.len()
+    );
+}
+
+#[test]
+fn gleam_imports_finds_module_paths_aliases_and_names() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping gleam_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("gleam").ok() else {
+        eprintln!("Skipping gleam_imports: gleam grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("gleam")
+        .expect("gleam imports query missing");
+    let paths = collect_captures(&lang, GLEAM_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.contains(&"gleam/io".to_string()),
+        "expected 'gleam/io' import path in gleam imports, got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"gleam/list".to_string()),
+        "expected 'gleam/list' import path in gleam imports, got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"gleam/int".to_string()),
+        "expected 'gleam/int' import path in gleam imports, got: {paths:?}"
     );
 }
 
@@ -6813,6 +7088,34 @@ fn r_decorations_finds_comment() {
         "r",
         R_SAMPLE,
         &["# Classify a number"],
+    );
+}
+
+#[test]
+fn r_calls_finds_local_and_namespace_qualified_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping r_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_calls: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("r").expect("r calls query missing");
+    let calls = collect_captures(&lang, R_SAMPLE, &query_str, "call");
+    assert!(
+        calls.contains(&"classify".to_string()),
+        "expected local 'classify' call in r calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"median".to_string()),
+        "expected namespace-qualified 'stats::median' call to capture 'median' in r calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, R_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"stats".to_string()),
+        "expected 'stats' qualifier in r calls, got: {qualifiers:?}"
     );
 }
 
@@ -7040,6 +7343,27 @@ fn thrift_decorations_finds_comment() {
 }
 
 #[test]
+fn thrift_imports_finds_include_path() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping thrift_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("thrift").ok() else {
+        eprintln!("Skipping thrift_imports: thrift grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("thrift")
+        .expect("thrift imports query missing");
+    let paths = collect_captures(&lang, THRIFT_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p.contains("shared.thrift")),
+        "expected 'shared.thrift' include path in thrift imports, got: {paths:?}"
+    );
+}
+
+#[test]
 fn graphql_decorations_finds_description_and_comment() {
     let Some(gdir) = require_grammar_dir() else {
         eprintln!("Skipping graphql_decorations: run `cargo xtask build-grammars` first");
@@ -7118,5 +7442,195 @@ fn prolog_decorations_finds_comment() {
         "prolog",
         PROLOG_SAMPLE,
         &["% Facts: family relationships"],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Caddy / Dockerfile
+// ---------------------------------------------------------------------------
+
+const CADDY_SAMPLE: &str = include_str!("fixtures/caddy/sample.caddyfile");
+
+#[test]
+fn caddy_imports_finds_snippet_reference() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping caddy_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("caddy").ok() else {
+        eprintln!("Skipping caddy_imports: caddy grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("caddy")
+        .expect("caddy imports query missing");
+    let paths = collect_captures(&lang, CADDY_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p.contains("common-headers")),
+        "expected '(common-headers)' snippet reference in caddy imports, got: {paths:?}"
+    );
+}
+
+const DOCKERFILE_SAMPLE: &str = include_str!("fixtures/dockerfile/Sample.dockerfile");
+
+#[test]
+fn dockerfile_imports_finds_base_image_and_stage_alias() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping dockerfile_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_imports: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("dockerfile")
+        .expect("dockerfile imports query missing");
+    let paths = collect_captures(&lang, DOCKERFILE_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.contains(&"ubuntu:20.04".to_string()),
+        "expected 'ubuntu:20.04' base image in dockerfile imports, got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"golang:1.21".to_string()),
+        "expected 'golang:1.21' base image in dockerfile imports, got: {paths:?}"
+    );
+    let aliases = collect_captures(&lang, DOCKERFILE_SAMPLE, &query_str, "import.alias");
+    assert!(
+        aliases.contains(&"builder".to_string()),
+        "expected 'builder' stage alias in dockerfile imports, got: {aliases:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Guardrail: every registered `.scm` query file must compile.
+//
+// This is the regression test for the class of bug fixed by af9dbc0b: a
+// `.scm` file with a structurally-invalid pattern (references a node type
+// that doesn't exist in the grammar, or targets syntax that's actually a
+// parse error) makes `tree_sitter::Query::new` fail. Every call site that
+// consumes these queries (`GrammarLoader::get_compiled_query`, and the many
+// production call sites that do `Query::new(..).ok()?`) treats that failure
+// as "no query" and silently produces zero results — no panic, no log, no
+// error surfaced to the user. `lua.tags.scm` shipped broken for an unknown
+// period of time before anything caught it, because no test compiled every
+// bundled query against its real grammar; only a hand-picked subset was
+// covered by `test_tags_queries_compile` and similar spot checks.
+//
+// This test is the general form: it walks every `.scm` file physically
+// present under `src/queries/` (which — per a one-time audit — is exactly
+// the set reachable via `include_str!` from `grammar_loader.rs`, i.e. the
+// full "registered" set), asks `GrammarLoader` for that query the same way
+// production code does (`get_tags`, `get_calls`, etc.), and compiles it
+// against the real grammar with the exact same `tree_sitter::Query::new`
+// call production uses. Adding a new `.scm` file automatically gets covered
+// — nothing to remember to wire up.
+// ---------------------------------------------------------------------------
+
+/// Look up the query source for `(lang, purpose)` via the same public
+/// `GrammarLoader` getter that production code calls for that query
+/// purpose. Keep this in sync with the query "purposes" the loader
+/// supports (tags/calls/complexity/types/imports/decorations/refactor/
+/// test_regions/cfg) — a purpose present as a filename suffix under
+/// `src/queries/` but missing here fails loudly below rather than being
+/// silently skipped.
+fn query_source_for(loader: &GrammarLoader, lang: &str, purpose: &str) -> Option<Arc<String>> {
+    match purpose {
+        "tags" => loader.get_tags(lang),
+        "calls" => loader.get_calls(lang),
+        "complexity" => loader.get_complexity(lang),
+        "types" => loader.get_types(lang),
+        "imports" => loader.get_imports(lang),
+        "decorations" => loader.get_decorations(lang),
+        "refactor" => loader.get_refactor(lang),
+        "test_regions" => loader.get_test_regions(lang),
+        "cfg" => loader.get_cfg(lang),
+        _ => None,
+    }
+}
+
+#[test]
+fn all_registered_queries_compile() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!(
+            "Skipping all_registered_queries_compile: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+
+    let queries_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/queries");
+    let mut entries: Vec<(String, String)> = std::fs::read_dir(&queries_dir)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", queries_dir.display()))
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            let stem = name.strip_suffix(".scm")?;
+            let (lang, purpose) = stem.rsplit_once('.')?;
+            Some((lang.to_string(), purpose.to_string()))
+        })
+        .collect();
+    entries.sort();
+
+    assert!(
+        !entries.is_empty(),
+        "no .scm query files found under {} — grammar_dir/CARGO_MANIFEST_DIR probably wrong",
+        queries_dir.display()
+    );
+
+    let mut failures = Vec::new();
+    let mut skipped_no_grammar = Vec::new();
+    let mut compiled = 0usize;
+
+    for (lang, purpose) in &entries {
+        let query_str = match query_source_for(&loader, lang, purpose) {
+            Some(q) => q,
+            None => {
+                failures.push(format!(
+                    "{lang}.{purpose}.scm: file exists on disk but query_source_for() in \
+                     this test has no getter mapped for purpose '{purpose}' — add it there"
+                ));
+                continue;
+            }
+        };
+        let grammar = match loader.get(lang) {
+            Ok(g) => g,
+            Err(e) => {
+                skipped_no_grammar.push(format!("{lang} ({e})"));
+                continue;
+            }
+        };
+        match tree_sitter::Query::new(&grammar, &query_str) {
+            Ok(_) => compiled += 1,
+            Err(e) => {
+                failures.push(format!("{lang}.{purpose}.scm: Query::new failed: {e}"));
+            }
+        }
+    }
+
+    if !skipped_no_grammar.is_empty() {
+        eprintln!(
+            "all_registered_queries_compile: skipped {} language(s) with no compiled grammar \
+             .so in the grammar dir (not a query bug, just missing grammar): {}",
+            skipped_no_grammar.len(),
+            skipped_no_grammar.join(", ")
+        );
+    }
+
+    assert!(
+        failures.is_empty(),
+        "{} of {} registered query file(s) failed to compile against their grammar:\n{}",
+        failures.len(),
+        entries.len(),
+        failures.join("\n")
+    );
+
+    eprintln!(
+        "all_registered_queries_compile: {compiled} of {} registered query files compiled \
+         successfully ({} skipped for missing grammar)",
+        entries.len(),
+        skipped_no_grammar.len()
     );
 }
