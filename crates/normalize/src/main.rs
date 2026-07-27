@@ -357,6 +357,11 @@ async fn main() -> std::process::ExitCode {
     // informational flags.
     if !should_skip_grammar_check(&argv) {
         let _ = normalize::commands::grammars::ensure_grammars_first_use();
+        // Dev-workflow nudge: warn if a local `target/grammars` rebuild is
+        // newer than what actually gets loaded (~/.config/normalize/grammars).
+        // No-op outside a workspace checkout. See warn_if_dev_grammars_stale
+        // doc comment for the failure mode this catches.
+        normalize::commands::grammars::warn_if_dev_grammars_stale();
     }
 
     // Expand @-sigil command aliases before any other dispatch.

@@ -8,6 +8,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Dev-workflow warning for stale `~/.config/normalize/grammars/`.** When
+  `NORMALIZE_GRAMMAR_PATH` is unset and a `./target/grammars/` directory exists (i.e. a
+  workspace checkout where `cargo xtask build-grammars` was run) with `.so`/`.dylib`/`.dll`
+  files newer than the ones actually loaded from the config dir, the CLI now prints a
+  one-line stderr warning naming the stale grammars and the remediation
+  (`NORMALIZE_GRAMMAR_PATH=target/grammars` or `normalize grammars install --force`).
+  Previously a locally rebuilt grammar could silently sit unused behind a stale installed
+  copy with no signal. No-op for installed end-user binaries (no `target/grammars` next to
+  their cwd).
+
 - **`normalize alias save <name>` writes the previous command as a named alias.**
   Every invocation now records its argv to `.normalize/.last-command`; `alias save`
   reads that state (or an explicit `--command` override), infers the syntax with the

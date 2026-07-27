@@ -12,8 +12,9 @@
 
 ; Method declarations: function Table:method(...) ... end
 (function_declaration
-  name: (method_index_expression
-    method: (identifier) @name)) @definition.method
+  name:
+    (method_index_expression
+      method: (identifier) @name)) @definition.method
 
 ; Note: `local function foo(...) ... end` also parses as `function_declaration`
 ; with a leading `local` token (there is no distinct `local_function` node type

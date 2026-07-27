@@ -231,6 +231,85 @@ pub fn ensure_grammars_first_use() -> GrammarsFirstRun {
     }
 }
 
+/// Warn when a locally-built `./target/grammars/` (from `cargo xtask
+/// build-grammars`, run from a workspace checkout) contains grammars newer
+/// than the ones the CLI will actually load from `~/.config/normalize/grammars/`.
+///
+/// Without this, a developer who rebuilds a grammar after editing its source
+/// (or a `.scm` query bundled into the `.so`) but forgets to also set
+/// `NORMALIZE_GRAMMAR_PATH=target/grammars` silently keeps exercising the old
+/// shared library — `GrammarLoader::new()` prefers the env var when set, but
+/// falls back to the config dir otherwise, and there is no content/version
+/// check tying the two together (the install-stamp version check in
+/// `ensure_grammars_first_use` only guards against a *release* binary/grammar
+/// mismatch, not same-version local rebuilds). This is dev-workflow-only: end
+/// users never have a `target/grammars` directory next to their cwd, so the
+/// check is a no-op for them.
+///
+/// Best-effort and silent on any I/O error — this is a convenience nudge, not
+/// a correctness guarantee.
+#[cfg(feature = "cli")]
+pub fn warn_if_dev_grammars_stale() {
+    // If the env var is set, it already wins in `GrammarLoader::new()`'s
+    // search order — nothing to warn about.
+    if std::env::var_os("NORMALIZE_GRAMMAR_PATH").is_some() {
+        return;
+    }
+
+    let local_dir = PathBuf::from("target/grammars");
+    if !dir_has_grammars(&local_dir) {
+        return;
+    }
+
+    let Some(config_dir) = user_grammars_dir() else {
+        return;
+    };
+
+    let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+
+    let Ok(entries) = std::fs::read_dir(&local_dir) else {
+        return;
+    };
+
+    let mut stale: Vec<String> = entries
+        .flatten()
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .is_some_and(|ext| matches!(ext, "so" | "dylib" | "dll"))
+        })
+        .filter_map(|e| {
+            let local_path = e.path();
+            let name = local_path.file_name()?.to_str()?.to_string();
+            let local_mtime = mtime(&local_path)?;
+            let installed_path = config_dir.join(&name);
+            // Newer-than-installed (or not installed at all under this name)
+            // both count as "the local rebuild isn't what will actually load".
+            let is_stale = match mtime(&installed_path) {
+                Some(installed_mtime) => local_mtime > installed_mtime,
+                None => false, // never installed under this name — not a staleness signal
+            };
+            is_stale.then_some(name)
+        })
+        .collect();
+
+    if stale.is_empty() {
+        return;
+    }
+    stale.sort();
+
+    eprintln!(
+        "warning: {} grammar(s) in ./target/grammars/ are newer than the ones \
+         normalize will actually load from {} — set NORMALIZE_GRAMMAR_PATH=target/grammars \
+         to use the local build, or run `normalize grammars install --force` to refresh \
+         the installed copy.\n  stale: {}",
+        stale.len(),
+        config_dir.display(),
+        stale.join(", ")
+    );
+}
+
 /// Build a grammar paths report (shared with the service layer).
 pub fn build_paths_report() -> GrammarPathsReport {
     let mut raw_paths = Vec::new();
