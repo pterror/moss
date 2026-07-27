@@ -32,6 +32,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   aliases are validated against the full clap `Command` tree — unknown subcommands and
   invalid flags are caught early with warnings.
 
+### Fixed
+
+- **Go query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
+  and verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Type aliases (`type MyInt = int`) were entirely unhandled** in both
+    `go.tags.scm` and `go.types.scm`. `type_alias` is a distinct grammar node
+    from `type_spec` (no `=` in a `type_spec`); only `type_spec` was matched,
+    silently dropping every type-alias definition.
+  - **Multi-name `const` declarations lost every name after the first**
+    (`const (A, B = iota, iota)` — only `A` was found). tree-sitter-go only
+    tags the *first* identifier in a comma-separated const_spec name list
+    with the `name` field; later names are unfielded children. Fixed by
+    matching positionally instead of by field.
+  - **Raw-string-literal import paths** (`` import `pkg` ``, grammar-legal
+    but rare) were unmatched — only `interpreted_string_literal` paths were
+    handled in all four `import_spec` forms (plain/aliased/dot/blank).
+  - Documented (not fixed, since there is no stable callee name to
+    capture) three `call_expression.function` variants deliberately excluded
+    from `go.calls.scm`/`go.tags.scm`'s `@call`/`@reference.call`:
+    immediately-invoked closures (`go func(){}()`, `defer func(){}()` — the
+    idiomatic Go concurrency pattern), curried calls (`adder(1)(2)`), and
+    dispatch-table calls (`funcs[0]()`). Also documented that explicit
+    generic-function instantiation calls (`Sum[int](args)`) do not parse as
+    `call_expression` at all in this grammar version — a tree-sitter-go
+    parsing ambiguity with generic-type conversion, not fixable via query.
+
 ### Added (internal)
 
 - **OpenCode session source via libsql (Phase 2c).** `normalize-chat-sessions` now ships

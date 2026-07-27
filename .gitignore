@@ -76,6 +76,9 @@ cache/
 !**/tests/fixtures/**/expected/*.txt
 # ...except embedded help text included via include_str!
 !**/src/**/help.txt
+# ...except CMake fixtures (CMakeLists.txt is the canonical, unambiguous
+# build-file name — not a debugging text dump)
+!**/tests/fixtures/**/CMakeLists.txt
 
 *.cpuprofile
 
