@@ -272,6 +272,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (newly flagged, not fixed — see `TODO.md`). Fixtures extended for
   Prolog (if-then-else, catch/3, throw/1) where the existing sample
   lacked the control-flow constructs needed to exercise the fix.
+- **Restored CFG extraction for Swift, TLA+, VB, Verilog, VHDL, Vim, Vue,
+  and Zig — fifth and final batch of the `.cfg.scm` remediation.** This
+  closes the effort: all 46 originally-broken `.cfg.scm` files (plus the
+  13 non-`.cfg.scm` files from the initial pass) are now fixed, and the
+  `all_registered_queries_compile` guardrail test passes with 0 failures
+  across all 474 registered query files. Notable causes: Swift's
+  `if_statement` has no `else_clause` wrapper — else is a bare `else`
+  node followed by either a nested `if_statement` or a `(statements)`
+  block — and `return`/`break`/`continue` are anonymous tokens inside a
+  shared `control_transfer_statement` (throw is the named
+  `throw_keyword`). TLA+'s `if_then_else` condition field is `if`, not
+  `predicate`. VB's branch/loop bodies are plain `(statement)` siblings
+  with no `body:` field, there is no `for_to_clause` wrapper node, the
+  Do/Loop node is `do_statement` not `do_loop_statement`, and
+  try/catch/finally use `catch_block`/`finally_block` not `*_clause`.
+  Verilog's `cond_predicate`/`case_expression`/`statement_or_null`/
+  `for_initialization`/`for_step` are bare named nodes, not fields, and
+  return/break/continue are anonymous tokens inside a shared
+  `jump_statement`. VHDL's `if_statement` has no `condition:` field and
+  no `elsif_sequence_of_statements`/`else_sequence_of_statements` nodes
+  — instead repeatable `(if ...)`/`(elsif ...)`/`(else ...)` children
+  each wrap their own `conditional_expression`/`sequence_of_statements`;
+  `loop_statement` wraps a bare `(for_loop)`/`(while_loop)`, not an
+  `iteration_scheme`. Vim's branch/loop body is a named `(body)` node,
+  not a `body:` field, and `for_loop`'s iterable is field `iter:`, not
+  `variable:`. Vue's directive attributes have no `directive_argument`
+  node type — the condition/for-head is raw unparsed text at
+  `(directive_attribute (quoted_attribute_value (attribute_value)))`,
+  and `v-else-if`/`v-else` are disambiguated from `v-if` via `#match?`
+  on the directive name (template-directive-only scope, matching the
+  Svelte precedent). Zig has no `condition:`/`body:` fields anywhere and
+  no `ElseSuffix`/`ReturnStatement`/`BreakStatement`/`ContinueStatement`
+  node types — return/break/continue are anonymous tokens inside a
+  shared `AssignExpr`, and the `catch` error-handler is the `right:`
+  field of a `BinaryExpr` whose operator is a `BitwiseOp` wrapping
+  `catch` (no dedicated try/catch node). Zsh's query was fixed to be
+  schema-correct against `node-types.json` but its runtime capture
+  behavior is unverified — the compiled `arborium-zsh` 2.17.0 grammar
+  cannot parse real zsh source beyond trivial single-word input (a
+  genuine upstream grammar defect, not a query-authoring issue, tracked
+  in `TODO.md`). All verified against real CST output via `normalize
+  syntax query`/`normalize syntax ast` (except zsh); fixtures extended
+  for TLA+, Verilog, VHDL, Vim, Vue, and Zig where the existing sample
+  lacked the control-flow constructs needed to exercise the fix.
 
 ### Fixed (internal)
 

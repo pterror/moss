@@ -55,6 +55,41 @@ begin
         end if;
     end process;
 
+    -- Exercise elsif chains, case, for/while loops, and exit/next
+    process(clk) is
+        variable idx : integer := 0;
+    begin
+        case wr_ptr is
+            when "0000" =>
+                idx := 0;
+            when "0001" =>
+                idx := 1;
+            when others =>
+                idx := -1;
+        end case;
+
+        if idx = 0 then
+            idx := idx + 1;
+        elsif idx = 1 then
+            idx := idx + 2;
+        else
+            idx := 0;
+        end if;
+
+        for i in 0 to DEPTH - 1 loop
+            if i = 3 then
+                next;
+            end if;
+            if i = 5 then
+                exit;
+            end if;
+        end loop;
+
+        while idx < DEPTH loop
+            idx := idx + 1;
+        end loop;
+    end process;
+
 end architecture rtl;
 
 package fifo_pkg is

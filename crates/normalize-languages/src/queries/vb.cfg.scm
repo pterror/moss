@@ -1,24 +1,35 @@
 ; Visual Basic .NET CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium VB.NET grammar node types.
+; Verified against arborium VB.NET grammar node types using real fixtures.
+; Note: branch/loop bodies are plain `(statement)` children, not a `body:`
+; field. `if_statement` has no `else_clause`-wrapping-`body:` shape — the
+; then-body is a direct `(statement)` sibling and `elseif_clause`/
+; `else_clause` are separate sibling nodes. `for_statement` has no
+; `for_to_clause` wrapper (start/end are direct fields). The Do/Loop node is
+; `do_statement`, not `do_loop_statement`. Try/catch/finally use
+; `catch_block`/`finally_block`, not `*_clause`.
 
 ; ---------------------------------------------------------------------------
-; If / Else (branch)
+; If / ElseIf / Else (branch)
 ; ---------------------------------------------------------------------------
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_clause
-    body: (_) @cfg.branch.else)
+  (statement) @cfg.branch.then
+  .
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  .
-  ; no else clause
+  (statement) @cfg.branch.then
+  (elseif_clause) @cfg.branch.else
+) @cfg.branch
+
+(if_statement
+  condition: (_) @cfg.branch.condition
+  (statement) @cfg.branch.then
+  (else_clause) @cfg.branch.else
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -26,8 +37,13 @@
 ; ---------------------------------------------------------------------------
 
 (select_case_statement
-  expression: (_) @cfg.match.scrutinee
-  (case_clause) @cfg.match.arm
+  selector: (_) @cfg.match.scrutinee
+  (case_block) @cfg.match.arm
+) @cfg.match
+
+(select_case_statement
+  selector: (_) @cfg.match.scrutinee
+  (case_else_block) @cfg.match.arm
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
@@ -35,14 +51,14 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (for_to_clause
-    from: (_) @cfg.loop.condition)
-  body: (_) @cfg.loop.body
+  start: (_) @cfg.loop.condition
+  end: (_)
+  (statement) @cfg.loop.body
 ) @cfg.loop
 
 (for_each_statement
-  expression: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  collection: (_) @cfg.loop.condition
+  (statement) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -51,24 +67,22 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (statement) @cfg.loop.body
 ) @cfg.loop
 
-(do_loop_statement
-  body: (_) @cfg.loop.body
-) @cfg.loop
+(do_statement) @cfg.loop
 
 ; ---------------------------------------------------------------------------
 ; Try / Catch / Finally
 ; ---------------------------------------------------------------------------
 
 (try_statement
-  body: (_) @cfg.try.body
+  (statement) @cfg.try.body
 ) @cfg.try
 
-(catch_clause) @cfg.try.catch
+(catch_block) @cfg.try.catch
 
-(finally_clause) @cfg.try.finally
+(finally_block) @cfg.try.finally
 
 ; ---------------------------------------------------------------------------
 ; Exits

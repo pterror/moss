@@ -1,30 +1,44 @@
 ; Swift CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Swift grammar node types.
+; Verified against arborium Swift grammar node types using real fixtures:
+; `if_statement` has no `else_clause` wrapper — `condition` and the branch
+; bodies are direct/field children, and the else arm is introduced by a
+; named `else` node followed either by another `(statements)` block (final
+; else) or a nested `if_statement` (else-if chain). Loop/branch bodies are
+; plain `(statements)` nodes, not a `body:` field.
 
 ; ---------------------------------------------------------------------------
 ; if / guard / else (branch)
 ; ---------------------------------------------------------------------------
 
+; if ... else if ... (chain continues via nested if_statement)
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_clause
-    body: (_) @cfg.branch.else)
+  (statements) @cfg.branch.then
+  (else)
+  (if_statement) @cfg.branch.else
 ) @cfg.branch
 
+; if ... else { ... } (terminal else)
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (statements) @cfg.branch.then
+  (else)
+  (statements) @cfg.branch.else
+) @cfg.branch
+
+; if ... (no else)
+(if_statement
+  condition: (_) @cfg.branch.condition
+  (statements) @cfg.branch.then
   .
-  ; no else clause
 ) @cfg.branch
 
 ; guard (early exit — condition must be true to continue)
 (guard_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (statements) @cfg.branch.then
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -41,8 +55,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (for_in_sequence) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  collection: (_) @cfg.loop.condition
+  (statements) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -51,7 +65,7 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (statements) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -59,7 +73,7 @@
 ; ---------------------------------------------------------------------------
 
 (repeat_while_statement
-  body: (_) @cfg.loop.body
+  (statements) @cfg.loop.body
   condition: (_) @cfg.loop.condition
 ) @cfg.loop
 
@@ -68,19 +82,23 @@
 ; ---------------------------------------------------------------------------
 
 (do_statement
-  body: (_) @cfg.try.body
+  (statements) @cfg.try.body
 ) @cfg.try
 
 (catch_block) @cfg.try.catch
 
 ; ---------------------------------------------------------------------------
 ; Exits
+;
+; return/break/continue are anonymous tokens (not their own statement node
+; types); throw is the named node `throw_keyword`. All are wrapped in a
+; `control_transfer_statement`.
 ; ---------------------------------------------------------------------------
 
-(return_statement) @cfg.exit.return
+(control_transfer_statement "return" @cfg.exit.return)
 
-(break_statement) @cfg.exit.break
+(control_transfer_statement "break" @cfg.exit.break)
 
-(continue_statement) @cfg.exit.continue
+(control_transfer_statement "continue" @cfg.exit.continue)
 
-(throw_statement) @cfg.exit.throw
+(control_transfer_statement (throw_keyword) @cfg.exit.throw)

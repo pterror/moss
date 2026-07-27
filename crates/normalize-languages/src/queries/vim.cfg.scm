@@ -1,7 +1,10 @@
 ; Vim script CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Vim grammar node types.
+; Verified against arborium Vim grammar node types using real fixtures.
+; Note: the branch/loop body is a named `(body)` node, not a `body:` field.
+; `for_loop`'s iterable is the `iter:` field, not `variable:` (that field
+; holds the loop variable itself).
 
 ; ---------------------------------------------------------------------------
 ; if / elseif / else (branch)
@@ -9,20 +12,20 @@
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (body) @cfg.branch.then
   (elseif_statement) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (body) @cfg.branch.then
   (else_statement
-    body: (_) @cfg.branch.else)
+    (body) @cfg.branch.else)
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (body) @cfg.branch.then
   .
 ) @cfg.branch
 
@@ -31,8 +34,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_loop
-  variable: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  iter: (_) @cfg.loop.condition
+  (body) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@
 
 (while_loop
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (body) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -49,7 +52,7 @@
 ; ---------------------------------------------------------------------------
 
 (try_statement
-  body: (_) @cfg.try.body
+  (body) @cfg.try.body
 ) @cfg.try
 
 (catch_statement) @cfg.try.catch

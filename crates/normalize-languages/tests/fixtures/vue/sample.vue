@@ -2,6 +2,7 @@
   <div class="user-profile">
     <h1>{{ user.name }}</h1>
     <p v-if="user.bio">{{ user.bio }}</p>
+    <p v-else-if="loading">Loading bio...</p>
     <p v-else>No bio provided.</p>
 
     <ul>

@@ -12,7 +12,7 @@
 ; ---------------------------------------------------------------------------
 
 (if_then_else
-  predicate: (_) @cfg.branch.condition
+  if: (_) @cfg.branch.condition
   then: (_) @cfg.branch.then
   else: (_) @cfg.branch.else
 ) @cfg.branch
@@ -23,4 +23,8 @@
 
 (case
   (case_arm) @cfg.match.arm
+) @cfg.match
+
+(case
+  (other_arm) @cfg.match.arm
 ) @cfg.match

@@ -70,3 +70,27 @@ module reg_file #(
             regs[waddr] <= wdata;
     end
 endmodule
+
+// Countdown function exercising loop/jump control flow
+module counter;
+    function integer countdown(input integer n);
+        integer i;
+        begin
+            for (i = 0; i < n; i = i + 1) begin
+                if (i == 5)
+                    break;
+                if (i == 3)
+                    continue;
+            end
+            while (n > 0) begin
+                n = n - 1;
+            end
+            countdown = n;
+            return countdown;
+        end
+    endfunction
+
+    initial begin
+        disable counter;
+    end
+endmodule

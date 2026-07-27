@@ -44,6 +44,49 @@ function! s:LookupCache(key)
     return get(s:cache, a:key, '')
 endfunction
 
+" Classify a count relative to a threshold, exercising elseif
+function! s:ClassifyCount(n, threshold)
+    if a:n < 0
+        return 'negative'
+    elseif a:n < a:threshold
+        return 'below'
+    else
+        return 'at-or-above'
+    endif
+endfunction
+
+" Walk a list, exercising for/while/try/throw/continue/break
+function! s:ProcessList(items)
+    let l:total = 0
+    for l:item in a:items
+        if l:item < 0
+            continue
+        endif
+        if l:item > 1000
+            break
+        endif
+        let l:total += l:item
+    endfor
+
+    let l:i = 0
+    while l:i < len(a:items)
+        let l:i += 1
+    endwhile
+
+    try
+        if l:total < 0
+            throw 'negative total'
+        endif
+        call s:LookupCache('total')
+    catch /negative/
+        echo 'caught negative total'
+    finally
+        echo 'processing complete'
+    endtry
+
+    return l:total
+endfunction
+
 augroup MyPlugin
     autocmd!
     autocmd BufWritePre *.rs call FormatBuffer()

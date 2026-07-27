@@ -55,6 +55,18 @@ Safety == counter <= MaxCount
 (* Liveness: system eventually becomes inactive *)
 Liveness == <>(active = FALSE)
 
+(* Classify counter relative to MaxCount *)
+Classify ==
+    IF counter >= MaxCount
+    THEN "full"
+    ELSE "not-full"
+
+(* Describe counter with a CASE expression *)
+Describe ==
+    CASE counter = 0 -> "empty"
+      [] counter = MaxCount -> "full"
+      [] OTHER -> "partial"
+
 Spec == Init /\ [][Next]_<<counter, stack, active>>
 
 ====

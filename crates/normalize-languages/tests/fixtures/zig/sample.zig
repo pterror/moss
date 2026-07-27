@@ -48,6 +48,24 @@ pub fn fibonacci(n: u32) u32 {
     return b;
 }
 
+/// Describe a digit using a switch expression, exercising SwitchExpr.
+pub fn describeDigit(n: u8) []const u8 {
+    switch (n) {
+        0 => return "zero",
+        1, 2 => return "small",
+        else => return "other",
+    }
+}
+
+/// Parse a number, exercising the catch error-handling suffix.
+pub fn parseOrDefault(s: []const u8) i32 {
+    const value = std.fmt.parseInt(i32, s, 10) catch |err| {
+        std.debug.print("parse error: {}\n", .{err});
+        return -1;
+    };
+    return value;
+}
+
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     const p = Point.origin();
