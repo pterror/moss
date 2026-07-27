@@ -96,6 +96,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from `node-types.json` alone. Added fixtures for Caddy and Dockerfile
   (previously untested) and extraction-correctness tests (not just
   "compiles") for all ten languages.
+- **CFG extraction restored for Ada, Agda, Awk, Bash, C#, CMake, D, Dart,
+  Elixir, and Elm** — the same guardrail test extended to `.cfg.scm` files
+  found 46 broken control-flow-graph queries (same bug class as the Lua fix
+  above: `Query::new` failed on a nonexistent node type or field name, so
+  `GrammarLoader::get_cfg()` silently returned `None` and `normalize cfg`
+  produced no graph, with no error surfaced). This is the first batch of 10;
+  36 languages remain broken and are tracked in `TODO.md`. Notable causes:
+  Ada's `if_statement` has no `else_statement_item` node (else is a plain
+  `else_statements:` field) and no bare `sequence_of_statements`/
+  `return_statement` node types (`_sequence_of_statements` is hidden and
+  inlines into fielded children; only `simple_return_statement`/
+  `extended_return_statement` exist). Awk's `if`/`while`/`for`/`do` bodies
+  are entirely unfielded, so `body`/`consequence`/`alternative` field
+  queries never matched; rewritten to match `(block)` by type. Bash has no
+  `return`/`break`/`continue` statement node types at all — they're plain
+  `command` nodes with `command_name` "return"/"break"/"continue", matched
+  via `#eq?` predicates (same technique already used for Elisp). C#'s
+  `switch_expression` has no `switch_expression_body` node (hidden rule
+  inlines arms directly) and `foreach_statement` uses `left`/`right` fields,
+  not `expression:`. CMake's `if_condition`/`foreach_loop`/`while_loop` are
+  flat: `if_command`, `body`, `elseif_command`, `body`, ... are unfielded
+  siblings with no nesting, and `break`/`continue`/`return` are ordinary
+  case-insensitive `normal_command` calls, not dedicated statement types.
+  D's `if_statement` has no `body`/`thenStatement` fields, but `then_statement`/
+  `else_statement` are themselves real (non-hidden) node types usable
+  directly; most other D statements (`for`/`while`/`switch`/`try`) are
+  entirely unfielded and matched positionally with anchors. Dart's
+  `if_statement` has no `condition:` field (only `consequence:`/
+  `alternative:`); the condition is unfielded and anchored to the literal
+  `"if"` token, and `for_statement`'s `condition:`/`value:` fields live one
+  level down inside the (visible) `for_loop_parts` node, not directly on
+  `for_statement`. Elixir's `if`/`case`/`cond`/`for`/`try` are call-macros
+  (matched on `target: (identifier)` + `#eq?`, already the existing
+  pattern), but `try`'s rescue/catch/after clauses are `rescue_block`/
+  `catch_block`/`after_block` node types, not `rescue_clause`/
+  `catch_clause`, and sit as siblings inside the same `do_block` as the try
+  body. Elm's `if_else_expr` has no `expr`-typed children (condition/then/
+  else are all `exprList:`-fielded, flat and repeated for `else if` chains,
+  matched positionally with anchors), and `case_of_expr` uses `expr:`/
+  `branch:` fields, not bare `(expr)` children. All verified against real
+  CST output via `normalize syntax query`/`normalize syntax ast`, with
+  fixtures extended (Bash, C#, D, Dart, Elixir) where the existing sample
+  lacked the control-flow constructs needed to exercise the fix.
 
 ### Fixed (internal)
 

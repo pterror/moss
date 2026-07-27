@@ -7,16 +7,21 @@
 ; if / else (branch)
 ; ---------------------------------------------------------------------------
 
+; awk's if/while/for/do-while bodies are *unfielded* — the grammar allows
+; `choice($.block, $._statement, ';')` with no field name, so a bare
+; statement body can't be distinguished from a following `else_clause` or
+; stray `comment` node via a field lookup. We match the `(block)` form
+; (the idiomatic, and only form used in real-world awk scripts in our
+; fixtures) explicitly by type instead.
+
 (if_statement
   condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
-  alternative: (_) @cfg.branch.else
+  (block) @cfg.branch.then
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
-  .
+  (else_clause) @cfg.branch.else
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -24,13 +29,14 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  init: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  condition: (_) @cfg.loop.condition
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 (for_in_statement
-  (expression) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  left: (_) @cfg.loop.condition
+  right: (_) @cfg.loop.condition
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -39,7 +45,7 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -47,7 +53,7 @@
 ; ---------------------------------------------------------------------------
 
 (do_while_statement
-  body: (_) @cfg.loop.body
+  (block) @cfg.loop.body
   condition: (_) @cfg.loop.condition
 ) @cfg.loop
 

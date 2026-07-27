@@ -22,6 +22,34 @@ defmodule MathUtils do
   end
 end
 
+defmodule ControlFlowDemo do
+  def describe(n) do
+    if n < 0 do
+      :negative
+    else
+      :positive
+    end
+  end
+
+  def doubled_positives(list) do
+    for x <- list, x > 0 do
+      x * 2
+    end
+  end
+
+  def safe_div(a, b) do
+    try do
+      a / b
+    rescue
+      ArithmeticError -> :error
+    catch
+      :exit, _ -> :exited
+    after
+      :ok
+    end
+  end
+end
+
 defmodule Stack do
   import Enum, only: [reverse: 1]
 

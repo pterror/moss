@@ -3,9 +3,12 @@
 ; See normalize-cfg for the full capture vocabulary.
 ; Verified against arborium Elixir grammar node types.
 ;
-; In Elixir's tree-sitter grammar, if/case/cond/with/for/unless are
-; represented as call nodes — they are macros, not special forms.
-; We match on the specific call names for precision.
+; In Elixir's tree-sitter grammar, if/case/cond/with/for/unless/try are
+; represented as call nodes — they are macros, not special forms. We match
+; on the specific call names for precision. `try`'s rescue/catch/after
+; clauses are `rescue_block`/`catch_block`/`after_block` node types (not
+; `rescue_clause`/`catch_clause`), and they sit as siblings *inside* the
+; same `do_block` as the try body, not as separate call arguments.
 
 ; ---------------------------------------------------------------------------
 ; if / unless (branch)
@@ -13,16 +16,22 @@
 
 (call
   target: (identifier) @_fn
+  (arguments . (_) @cfg.branch.condition)
   (do_block
-    (stab_clause) @cfg.branch.then
+    .
+    (_) @cfg.branch.then
+    (else_block . (_) @cfg.branch.else)?
   )
   (#eq? @_fn "if")
 ) @cfg.branch
 
 (call
   target: (identifier) @_fn
+  (arguments . (_) @cfg.branch.condition)
   (do_block
-    (stab_clause) @cfg.branch.then
+    .
+    (_) @cfg.branch.then
+    (else_block . (_) @cfg.branch.else)?
   )
   (#eq? @_fn "unless")
 ) @cfg.branch
@@ -33,7 +42,7 @@
 
 (call
   target: (identifier) @_fn
-  (arguments ((_) @cfg.match.scrutinee . (_)*))
+  (arguments . (_) @cfg.match.scrutinee)
   (do_block
     (stab_clause) @cfg.match.arm
   )
@@ -58,8 +67,8 @@
 
 (call
   target: (identifier) @_fn
-  (arguments ((_) @cfg.loop.condition . (_)*))
-  (do_block (_) @cfg.loop.body)
+  (arguments . (_) @cfg.loop.condition)
+  (do_block . (_) @cfg.loop.body)
   (#eq? @_fn "for")
 ) @cfg.loop
 
@@ -69,15 +78,15 @@
 
 (call
   target: (identifier) @_fn
-  (do_block) @cfg.try.body
+  (do_block . (_) @cfg.try.body)
   (#eq? @_fn "try")
 ) @cfg.try
 
-(rescue_clause) @cfg.try.catch
+(rescue_block) @cfg.try.catch
 
-(catch_clause) @cfg.try.catch
+(catch_block) @cfg.try.catch
 
-(after_clause) @cfg.try.finally
+(after_block) @cfg.try.finally
 
 ; ---------------------------------------------------------------------------
 ; Exits

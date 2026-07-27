@@ -76,6 +76,10 @@ cache/
 !**/tests/fixtures/**/expected/*.txt
 # ...except embedded help text included via include_str!
 !**/src/**/help.txt
+# ...except CMake's canonical fixture filename (CMakeLists.txt is not
+# optional — it's the only filename CMake recognizes), which the blanket
+# *.txt rule above silently swallowed
+!**/tests/fixtures/cmake/CMakeLists.txt
 
 *.cpuprofile
 

@@ -55,6 +55,42 @@ int sumEvens(List<int> numbers) {
   return total;
 }
 
+String describe(int n) {
+  switch (n) {
+    case 0:
+      return 'zero';
+    case 1:
+      return 'one';
+    default:
+      break;
+  }
+
+  for (var i = 0; i < n; i++) {
+    if (i == 2) {
+      continue;
+    }
+  }
+
+  var j = 0;
+  while (j < n) {
+    j++;
+  }
+
+  do {
+    j--;
+  } while (j > 0);
+
+  try {
+    throw Exception('boom');
+  } catch (e) {
+    j = -1;
+  } finally {
+    j += 1;
+  }
+
+  return j.toString();
+}
+
 void main() {
   final stack = Stack<int>();
   stack.push(10);

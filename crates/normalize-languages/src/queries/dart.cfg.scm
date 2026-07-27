@@ -2,22 +2,34 @@
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
 ; Verified against arborium Dart grammar node types.
+;
+; `if_statement` has no `condition:` field — only `consequence:`/
+; `alternative:` are fielded; the condition is an unfielded child anchored
+; right after the literal "if" token. `for_statement`'s `condition:`/
+; `value:` fields live one level down, inside the (named, non-hidden)
+; `for_loop_parts` node — not directly on `for_statement` itself.
 
 ; ---------------------------------------------------------------------------
 ; if / else (branch)
 ; ---------------------------------------------------------------------------
 
 (if_statement
-  condition: (_) @cfg.branch.condition
+  .
+  "if"
+  .
+  (_) @cfg.branch.condition
+  .
   consequence: (_) @cfg.branch.then
   alternative: (_) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
-  condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
   .
-  ; no alternative
+  "if"
+  .
+  (_) @cfg.branch.condition
+  .
+  consequence: (_) @cfg.branch.then
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -36,11 +48,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
-) @cfg.loop
-
-(for_statement
+  (for_loop_parts
+    condition: (_) @cfg.loop.condition)
   body: (_) @cfg.loop.body
 ) @cfg.loop
 
@@ -49,7 +58,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (initialized_variable_definition) @cfg.loop.condition
+  (for_loop_parts
+    value: (_) @cfg.loop.condition)
   body: (_) @cfg.loop.body
 ) @cfg.loop
 

@@ -58,6 +58,42 @@ int sumEvens(int[] values) {
     return total;
 }
 
+int describe(int n) {
+    switch (n) {
+        case 0:
+            return 0;
+        case 1:
+            return 1;
+        default:
+            break;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (i == 2) {
+            continue;
+        }
+    }
+
+    int j = 0;
+    while (j < n) {
+        j++;
+    }
+
+    do {
+        j--;
+    } while (j > 0);
+
+    try {
+        throw new Exception("boom");
+    } catch (Exception e) {
+        j = -1;
+    } finally {
+        j += 1;
+    }
+
+    return j;
+}
+
 void main() {
     auto p1 = Point(3.0, 4.0);
     auto p2 = Point(0.0, 0.0);

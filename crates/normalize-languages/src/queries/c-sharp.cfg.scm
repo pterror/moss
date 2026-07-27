@@ -31,12 +31,17 @@
   )
 ) @cfg.match
 
-; switch expression (C# 8+)
+; switch expression (C# 8+): `expr switch { arm, arm, ... }` — the scrutinee
+; is an unfielded direct expression child, and the arms are inlined
+; directly under `switch_expression` (there's no `switch_expression_body`
+; node — `_switch_expression_body` is a hidden grammar rule). The `expression`
+; supertype name itself is rejected here ("impossible pattern" — the parse
+; tables for this position don't admit the full supertype set), so match
+; the leading child generically instead and anchor it to the front.
 (switch_expression
-  value: (_) @cfg.match.scrutinee
-  body: (switch_expression_body
-    (switch_expression_arm) @cfg.match.arm
-  )
+  .
+  (_) @cfg.match.scrutinee
+  (switch_expression_arm) @cfg.match.arm
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
@@ -57,7 +62,7 @@
 ; ---------------------------------------------------------------------------
 
 (foreach_statement
-  expression: (_) @cfg.loop.condition
+  right: (_) @cfg.loop.condition
   body: (_) @cfg.loop.body
 ) @cfg.loop
 

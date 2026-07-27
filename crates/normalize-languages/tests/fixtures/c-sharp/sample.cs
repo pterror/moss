@@ -62,6 +62,54 @@ namespace SampleApp
         }
     }
 
+    public static class SwitchDemo
+    {
+        public static string Describe(int n)
+        {
+            switch (n)
+            {
+                case 0:
+                    return "zero";
+                case 1:
+                    return "one";
+                default:
+                    break;
+            }
+
+            string label = n switch
+            {
+                < 0 => "negative",
+                0 => "zero",
+                _ => "positive",
+            };
+
+            int i = 0;
+            while (i < n)
+            {
+                i++;
+                if (i == 3)
+                {
+                    continue;
+                }
+            }
+
+            try
+            {
+                throw new InvalidOperationException("boom");
+            }
+            catch (InvalidOperationException ex)
+            {
+                label += ex.Message;
+            }
+            finally
+            {
+                label += "!";
+            }
+
+            return label;
+        }
+    }
+
     class Program
     {
         static void Main(string[] args)

@@ -7,23 +7,22 @@
 ; if / elif / else (branch)
 ; ---------------------------------------------------------------------------
 
+; if_statement's "then" branch is unfielded (`optional($._terminated_statement)`
+; directly after the anonymous "then" token) — no `body:` field exists on this
+; node. The anchor below binds to the statement immediately following the
+; condition, skipping over the anonymous "then" keyword token.
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_clause
-    body: (_) @cfg.branch.else)
-) @cfg.branch
-
-(if_statement
-  condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (elif_clause) @cfg.branch.else
-) @cfg.branch
-
-(if_statement
-  condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
   .
+  (_) @cfg.branch.then
+) @cfg.branch
+
+(if_statement
+  (else_clause) @cfg.branch.else
+) @cfg.branch
+
+(if_statement
+  (elif_clause) @cfg.branch.else
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -66,8 +65,20 @@
 ; Exits
 ; ---------------------------------------------------------------------------
 
-(return) @cfg.exit.return
+; Bash has no dedicated return/break/continue statement node types — they're
+; ordinary builtin commands (`command` with `command_name: "return"`, etc).
 
-(break) @cfg.exit.break
+(command
+  name: (command_name) @_cmd
+  (#eq? @_cmd "return")
+) @cfg.exit.return
 
-(continue) @cfg.exit.continue
+(command
+  name: (command_name) @_cmd
+  (#eq? @_cmd "break")
+) @cfg.exit.break
+
+(command
+  name: (command_name) @_cmd
+  (#eq? @_cmd "continue")
+) @cfg.exit.continue

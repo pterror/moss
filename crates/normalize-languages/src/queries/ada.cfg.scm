@@ -10,19 +10,17 @@
 (if_statement
   condition: (_) @cfg.branch.condition
   statements: (_) @cfg.branch.then
-  (elsif_statement_item) @cfg.branch.else
+  else_statements: (_) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
   statements: (_) @cfg.branch.then
-  (else_statement_item) @cfg.branch.else
 ) @cfg.branch
 
-(if_statement
+(elsif_statement_item
   condition: (_) @cfg.branch.condition
   statements: (_) @cfg.branch.then
-  .
 ) @cfg.branch
 
 ; if expression (Ada 2012+)
@@ -33,12 +31,12 @@
 ; ---------------------------------------------------------------------------
 
 (case_statement
-  expression: (_) @cfg.match.scrutinee
+  (expression) @cfg.match.scrutinee
   (case_statement_alternative) @cfg.match.arm
 ) @cfg.match
 
 (case_expression
-  expression: (_) @cfg.match.scrutinee
+  (expression) @cfg.match.scrutinee
   (case_expression_alternative) @cfg.match.arm
 ) @cfg.match
 
@@ -47,17 +45,12 @@
 ; ---------------------------------------------------------------------------
 
 (loop_statement
-  (loop_parameter_specification) @cfg.loop.condition
-  (sequence_of_statements) @cfg.loop.body
-) @cfg.loop
-
-(loop_statement
   (iteration_scheme) @cfg.loop.condition
-  (sequence_of_statements) @cfg.loop.body
+  statements: (_) @cfg.loop.body
 ) @cfg.loop
 
 (loop_statement
-  (sequence_of_statements) @cfg.loop.body
+  statements: (_) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -65,7 +58,6 @@
 ; ---------------------------------------------------------------------------
 
 (handled_sequence_of_statements
-  (sequence_of_statements) @cfg.try.body
   (exception_handler) @cfg.try.catch
 ) @cfg.try
 
@@ -75,7 +67,9 @@
 ; Exits
 ; ---------------------------------------------------------------------------
 
-(return_statement) @cfg.exit.return
+(simple_return_statement) @cfg.exit.return
+
+(extended_return_statement) @cfg.exit.return
 
 (exit_statement) @cfg.exit.break
 

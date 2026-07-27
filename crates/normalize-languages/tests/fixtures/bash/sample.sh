@@ -56,4 +56,22 @@ main() {
     setup_environment "/tmp/test_env"
 }
 
+scan() {
+    local -a items=("$@")
+    local i=0
+    for item in "${items[@]}"; do
+        if [[ "$item" == "skip" ]]; then
+            continue
+        fi
+        if [[ "$item" == "stop" ]]; then
+            break
+        fi
+        if [[ -z "$item" ]]; then
+            return 1
+        fi
+        echo "$item"
+    done
+    return 0
+}
+
 main "$@"
