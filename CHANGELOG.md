@@ -73,6 +73,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Rust extraction gaps: turbofish calls, generic/path-qualified impls, `self`-imports, and bare wildcard imports were all silently dropped.**
+  Cross-referencing `rust.{tags,calls,imports}.scm` against arborium-rust's
+  `node-types.json` field-by-field (same completeness methodology as the
+  59-query remediation above, now written up at
+  `docs/query-testing-methodology.md`) found four real, previously-silent
+  gaps, all verified against real parse output and confirmed common in this
+  repo's own source before fixing:
+  - `call_expression.function` allows a `generic_function` wrapper for any
+    turbofish call (`func::<T>()`, `obj.method::<T>()`); neither
+    `rust.calls.scm` nor `rust.tags.scm` handled it, so every turbofish call
+    site (380+ plain, 326+ method-form in this repo alone) was invisible to
+    both the call graph and symbol tags.
+  - `impl_item.type`/`impl_item.trait` allow `generic_type` (`impl<T>
+    Foo<T>`) and `scoped_type_identifier` (`impl std::fmt::Display for
+    Foo`) in addition to plain `type_identifier`; `rust.tags.scm` only
+    handled the plain form, so methods inside a generic or path-qualified
+    impl block lost their container (47 generic impls, 131+ path-qualified
+    impls affected in this repo alone).
+  - `use path::{self, Other};` — a `self`-import bringing the module itself
+    into scope — was never matched by `rust.imports.scm`, including in the
+    pre-existing test fixture's own `use std::fmt::{self, Display};` line;
+    the shallow prior test never caught it because it only asserted
+    `HashMap` was present.
+  - Bare wildcard imports (`use path::*;`, the common form) were unmatched
+    because the query only handled the rarer braced form (`use
+    path::{*};`) — the two parse to structurally different trees.
+  - Scoped calls (`Type::method()`, `module::func()`) were missing from
+    `rust.tags.scm`'s `@reference.call` (present in `rust.calls.scm` but
+    never ported over).
 - **Lua symbol extraction now recognizes `function Table.method()` and
   `function Table:method()` declarations.** The tags query only matched
   `function_declaration` nodes whose `name` field was a plain `(identifier)`,

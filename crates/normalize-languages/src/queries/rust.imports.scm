@@ -59,18 +59,33 @@
     path: (identifier) @import.name
     alias: (identifier) @import.alias)) @import
 
-; Wildcard: use path::*;
+; Braced wildcard: use path::{*};
 (use_declaration
   argument: (scoped_use_list
     path: (_) @import.path
     list: (use_list (use_wildcard) @import.glob))) @import
 
-; Wildcard re-export: pub use path::*;
+; Braced wildcard re-export: pub use path::{*};
 (use_declaration
   (visibility_modifier) @import.reexport
   argument: (scoped_use_list
     path: (_) @import.path
     list: (use_list (use_wildcard) @import.glob))) @import
+
+; Bare wildcard: use path::*;
+; This is the far more common form in real Rust code (the braced form above
+; is a distinct, much rarer grammar production: `use_wildcard` here is the
+; use_declaration's whole argument, with the module path as its own
+; anonymous child, not nested inside a `scoped_use_list`/`use_list`.
+(use_declaration
+  argument: (use_wildcard
+    (_) @import.path) @import.glob) @import
+
+; Bare wildcard re-export: pub use path::*;
+(use_declaration
+  (visibility_modifier) @import.reexport
+  argument: (use_wildcard
+    (_) @import.path) @import.glob) @import
 
 ; Multi-name: use path::{A, B, C};
 (use_declaration
@@ -104,4 +119,39 @@
     list: (use_list
       (use_as_clause
         path: (identifier) @import.name
+        alias: (identifier) @import.alias)))) @import
+
+; Self-import: use path::{self, A, B};
+; Brings the module named by `path` itself into scope alongside its members.
+(use_declaration
+  argument: (scoped_use_list
+    path: (_) @import.path
+    list: (use_list
+      (self) @import.name))) @import
+
+; Self-import re-export: pub use path::{self, A, B};
+(use_declaration
+  (visibility_modifier) @import.reexport
+  argument: (scoped_use_list
+    path: (_) @import.path
+    list: (use_list
+      (self) @import.name))) @import
+
+; Aliased self-import: use path::{self as Alias};
+(use_declaration
+  argument: (scoped_use_list
+    path: (_) @import.path
+    list: (use_list
+      (use_as_clause
+        path: (self) @import.name
+        alias: (identifier) @import.alias)))) @import
+
+; Aliased self-import re-export: pub use path::{self as Alias};
+(use_declaration
+  (visibility_modifier) @import.reexport
+  argument: (scoped_use_list
+    path: (_) @import.path
+    list: (use_list
+      (use_as_clause
+        path: (self) @import.name
         alias: (identifier) @import.alias)))) @import

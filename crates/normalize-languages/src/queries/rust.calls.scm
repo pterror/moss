@@ -19,6 +19,25 @@
     value: (_) @call.qualifier
     field: (field_identifier) @call))
 
+; Turbofish call: func::<T>()
+(call_expression
+  function: (generic_function
+    function: (identifier) @call))
+
+; Turbofish scoped call: module::func::<T>()
+(call_expression
+  function: (generic_function
+    function: (scoped_identifier
+      path: (_) @call.qualifier
+      name: (identifier) @call)))
+
+; Turbofish method call: obj.method::<T>()
+(call_expression
+  function: (generic_function
+    function: (field_expression
+      value: (_) @call.qualifier
+      field: (field_identifier) @call)))
+
 ; Write-context: result of call assigned to a variable or field
 ; e.g. `bar = baz()`, `*ptr = foo()`, `obj.field = get_val()`
 ; The @call.write capture replaces @call for these patterns so the
@@ -43,6 +62,28 @@
       value: (_) @call.qualifier
       field: (field_identifier) @call.write)))
 
+; Turbofish assignment RHS: bar = func::<T>()
+(assignment_expression
+  right: (call_expression
+    function: (generic_function
+      function: (identifier) @call.write)))
+
+; Turbofish scoped assignment RHS: bar = module::func::<T>()
+(assignment_expression
+  right: (call_expression
+    function: (generic_function
+      function: (scoped_identifier
+        path: (_) @call.qualifier
+        name: (identifier) @call.write))))
+
+; Turbofish method assignment RHS: bar = obj.method::<T>()
+(assignment_expression
+  right: (call_expression
+    function: (generic_function
+      function: (field_expression
+        value: (_) @call.qualifier
+        field: (field_identifier) @call.write))))
+
 ; Compound assignment RHS: x += func(), x -= func()
 (compound_assignment_expr
   right: (call_expression
@@ -59,3 +100,22 @@
     function: (field_expression
       value: (_) @call.qualifier
       field: (field_identifier) @call.write)))
+
+(compound_assignment_expr
+  right: (call_expression
+    function: (generic_function
+      function: (identifier) @call.write)))
+
+(compound_assignment_expr
+  right: (call_expression
+    function: (generic_function
+      function: (scoped_identifier
+        path: (_) @call.qualifier
+        name: (identifier) @call.write))))
+
+(compound_assignment_expr
+  right: (call_expression
+    function: (generic_function
+      function: (field_expression
+        value: (_) @call.qualifier
+        field: (field_identifier) @call.write))))
