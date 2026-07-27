@@ -143,6 +143,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Scoped calls (`Type::method()`, `module::func()`) were missing from
     `rust.tags.scm`'s `@reference.call` (present in `rust.calls.scm` but
     never ported over).
+- **Python `@definition.constant` tag rule matched zero module-level
+  constants, ever, in any file.** Applying the same query-testing
+  methodology to `python.{tags,calls,types}.scm` found that
+  `expression_statement` is a grammar *supertype alias* for `assignment` in
+  this position, not a real wrapping tree node — this grammar never
+  materializes a separate `expression_statement` node for a bare top-level
+  assignment (confirmed via direct `tree_sitter::Query` testing, not
+  `node-types.json` alone). The old rule nested a pattern through it
+  (`(module (expression_statement (assignment ...)))`), which can never
+  match anything since there's no real containment relationship to satisfy
+  — every module-level constant (`X = 5`, `__all__ = [...]`, etc.) was
+  silently invisible to symbol tags. Fixed by matching `(module (assignment
+  ...))` directly, and extended to cover tuple/list-unpacking constants
+  (`A, B = 1, 2`), which the prior rule never handled either.
+- **Python subscript-dispatched calls (`handlers[event]()`, the
+  command/event-routing idiom) were entirely unmatched** in both
+  `python.calls.scm` and `python.tags.scm` — `call.function` allows a
+  `subscript` variant alongside `identifier`/`attribute`, which neither
+  query handled.
+- **Python type annotations: generics, unions, and multi-segment dotted
+  names were largely unmatched.** `python.types.scm` only handled bare and
+  single-level-dotted identifiers, missing the PEP 585/604/612/646/695
+  idioms that dominate modern typed Python:
+  - `generic_type` (`List[int]`, `Optional[str]`, `Dict[str, int]`, PEP 695
+    `Box[T]`) — the base name is a bare `identifier` child, not wrapped in
+    another `type` node, so it was invisible to every existing rule.
+  - Dotted-module generics (`typing.List[int]`) parse as `subscript`, not
+    `generic_type` — a distinct, previously unhandled shape.
+  - PEP 604 unions (`int | str`, `int | str | None`) parse as
+    `binary_operator`, not the `union_type` node `node-types.json` lists —
+    confirmed via real parse output, not the schema alone; added a rule
+    scoped to `(type (binary_operator ...))` so it doesn't misfire on
+    ordinary runtime bitwise-or (`flag1 | flag2`).
+  - PEP 695/646/612 variadic/paramspec type parameters (`def f[*Ts]`,
+    `def f[**P]`) and `Callable[[int, str], bool]` argument-list generics
+    were unhandled.
+  - Multi-segment dotted annotations (`os.path.Kind`, 3+ segments) were
+    unmatched — `attribute.object` nests as another `attribute`, not
+    `identifier`, past the first segment.
 - **Lua symbol extraction now recognizes `function Table.method()` and
   `function Table:method()` declarations.** The tags query only matched
   `function_declaration` nodes whose `name` field was a plain `(identifier)`,
