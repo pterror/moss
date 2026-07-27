@@ -34,6 +34,17 @@ def shapeArea : Shape -> Float
   | Shape.circle r => circleArea r
   | Shape.rectangle w h => w * h
 
+def shapeName (s : Shape) : String :=
+  match s with
+  | Shape.circle _ => "circle"
+  | Shape.rectangle _ _ => "rectangle"
+
+def sumList (xs : List Int) : IO Int := do
+  let mut total := 0
+  for x in xs do
+    total := total + x
+  return total
+
 def main : IO Unit := do
   let p1 : Point := { x := 3.0, y := 4.0 }
   let p2 : Point := { x := 0.0, y := 0.0 }

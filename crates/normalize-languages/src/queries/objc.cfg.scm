@@ -1,8 +1,24 @@
 ; Objective-C CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Objective-C grammar node types.
+; Verified against arborium Objective-C grammar node types and against
+; crates/normalize-languages/tests/fixtures/objc/sample.m via
+;   normalize syntax query <query> -p <file> --show-source
 ; Shares C's grammar base with @try/@catch/@finally additions.
+;
+; try_statement/catch_clause have NO fields — their (compound_statement)
+; body is an unnamed child, matched positionally.
+;
+; Fast enumeration ("for (Type *x in collection) { ... }") has no
+; dedicated node type in this grammar (no "for_in_statement" — that
+; was a fabricated guess). Probing it directly shows the parser
+; accepts the syntax but does NOT populate for_statement's normal
+; initializer/condition/update/body fields for it — the type
+; specifier, declarator, collection expression and body all come back
+; as flat, field-less children. This construct is not reliably
+; distinguishable from a malformed C for-loop in this grammar, so it
+; is left uncaptured rather than fabricating a pattern that would
+; either never match or match nonsense.
 
 ; ---------------------------------------------------------------------------
 ; if / else (branch)
@@ -18,7 +34,6 @@
   condition: (_) @cfg.branch.condition
   consequence: (_) @cfg.branch.then
   .
-  ; no alternative
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -45,12 +60,6 @@
   body: (_) @cfg.loop.body
 ) @cfg.loop
 
-; for-in (fast enumeration)
-(for_in_statement
-  object: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
-) @cfg.loop
-
 ; ---------------------------------------------------------------------------
 ; while (loop with condition)
 ; ---------------------------------------------------------------------------
@@ -74,7 +83,7 @@
 ; ---------------------------------------------------------------------------
 
 (try_statement
-  body: (_) @cfg.try.body
+  (compound_statement) @cfg.try.body
 ) @cfg.try
 
 (catch_clause) @cfg.try.catch

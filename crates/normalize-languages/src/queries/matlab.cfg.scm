@@ -1,7 +1,17 @@
 ; MATLAB CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium MATLAB grammar node types.
+; Verified against arborium MATLAB grammar node types and against
+; crates/normalize-languages/tests/fixtures/matlab/sample.m via the
+; GrammarLoader directly (NOT `normalize syntax ast/query -p <file>` —
+; MATLAB's ".m" extension collides with Objective-C's, and the CLI's
+; extension-based language detection resolves fixtures/matlab/sample.m
+; to the objc grammar; see TODO.md for that pre-existing bug).
+;
+; if_statement has a "condition" field but no "body" field — the
+; then-branch is an unnamed (block) child, with optional unnamed
+; (elseif_clause)/(else_clause) siblings. for_statement has no fields
+; at all: its unnamed children are (iterator) and (block).
 
 ; ---------------------------------------------------------------------------
 ; if / elseif / else (branch)
@@ -9,20 +19,19 @@
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (block) @cfg.branch.then
   (elseif_clause) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
-  (else_clause
-    body: (_) @cfg.branch.else)
+  (block) @cfg.branch.then
+  (else_clause) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  body: (_) @cfg.branch.then
+  (block) @cfg.branch.then
   .
 ) @cfg.branch
 
@@ -40,12 +49,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (assignment) @cfg.loop.condition
-  body: (_) @cfg.loop.body
-) @cfg.loop
-
-(for_statement
-  body: (_) @cfg.loop.body
+  (iterator) @cfg.loop.condition
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -54,7 +59,7 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -62,7 +67,7 @@
 ; ---------------------------------------------------------------------------
 
 (try_statement
-  body: (_) @cfg.try.body
+  (block) @cfg.try.body
 ) @cfg.try
 
 (catch_clause) @cfg.try.catch

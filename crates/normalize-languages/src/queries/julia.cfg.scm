@@ -1,7 +1,17 @@
 ; Julia CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Julia grammar node types.
+; Verified against arborium Julia grammar node types and against
+; crates/normalize-languages/tests/fixtures/julia/sample.jl via
+;   normalize syntax query <query> -p <file> --show-source
+;
+; if_statement has a "condition" field but no "consequence" field —
+; the then-branch is an unnamed (block) child. "alternative" (multiple,
+; optional) holds else_clause / elseif_clause. for_statement and
+; try_statement have no named fields at all: their children (block,
+; for_binding) / (block, catch_clause, else_clause, finally_clause) are
+; unnamed and matched positionally/by type. call_expression likewise has
+; no "function" field — the callee is the first unnamed child.
 
 ; ---------------------------------------------------------------------------
 ; if / elseif / else (branch)
@@ -9,20 +19,20 @@
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
-  alternative: (_) @cfg.branch.else
+  (block) @cfg.branch.then
+  alternative: (else_clause) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement
   condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
+  (block) @cfg.branch.then
   .
 ) @cfg.branch
 
 ; elseif clause (branch within if chain)
 (elseif_clause
   condition: (_) @cfg.branch.condition
-  consequence: (_) @cfg.branch.then
+  (block) @cfg.branch.then
 ) @cfg.branch
 
 ; ---------------------------------------------------------------------------
@@ -30,13 +40,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (assignment
-    lhs: (_) @cfg.loop.condition)
-  body: (_) @cfg.loop.body
-) @cfg.loop
-
-(for_statement
-  body: (_) @cfg.loop.body
+  (for_binding) @cfg.loop.condition
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -45,7 +50,7 @@
 
 (while_statement
   condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (block) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -53,7 +58,7 @@
 ; ---------------------------------------------------------------------------
 
 (try_statement
-  body: (_) @cfg.try.body
+  (block) @cfg.try.body
 ) @cfg.try
 
 (catch_clause) @cfg.try.catch
@@ -72,6 +77,6 @@
 
 ; throw() is the throw equivalent in Julia
 (call_expression
-  function: (identifier) @_fn
+  (identifier) @_fn
   (#match? @_fn "^(throw|error|rethrow)$")
 ) @cfg.exit.throw

@@ -180,6 +180,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   CST output via `normalize syntax query`/`normalize syntax ast`, with
   fixtures extended (all nine languages) where the existing sample lacked
   the control-flow constructs needed to exercise the fix.
+- **CFG extraction restored for Idris, Julia, Kotlin, Lean, Lua, MATLAB,
+  Meson, Objective-C, and OCaml** — third batch of the `.cfg.scm`
+  remediation; 18 languages remain broken and are tracked in `TODO.md`.
+  Notable causes: Idris's `exp_if` has `if:`/`then:`/`else:` fields where
+  `if:` is a flat, repeated field holding the condition tokens (no wrapper
+  node) while `then:`/`else:` wrap `exp_then`/`exp_else`, and `exp_case`
+  uses `condition:` (flat scrutinee tokens) plus an unnamed `alts` wrapper
+  around `(alt)` arms — there is no bare `exp` node type. Julia's
+  `if_statement` has a `condition:` field but no `consequence:` field (the
+  then-branch is an unfielded `(block)` child), and `for_statement`/
+  `try_statement`/`call_expression` have no fields at all. Kotlin's
+  `for_statement`/`while_statement`/`do_while_statement` are entirely
+  unfielded (no `loop_range`), and return/break/continue/throw are not
+  separate node types — all four are `(jump_expression <keyword>)`,
+  matched via anonymous-token patterns. Lean's `if_then_else` has no
+  fields at all (flat, anchored on the `"if"`/`"then"`/`"else"` keyword
+  tokens); the grammar has no while-loop node type and no break/continue/
+  throw nodes, only `do_return` — documented as absent rather than
+  fabricated. Lua has no `function_call_statement` node (a bare call
+  statement is just `(function_call)` directly), and the existing if/elseif
+  patterns over-matched across sibling clauses because their then-bodies
+  are `(block)` nodes, not bare wildcards — fixed by anchoring on the
+  literal keyword tokens. MATLAB's `if_statement`/`switch_statement` have a
+  `condition:` field but no `body:` field (body is an unfielded `(block)`
+  child); verified via a scratch `GrammarLoader`-based probe test instead
+  of the CLI, because MATLAB's `.m` extension collides with Objective-C's
+  and the CLI resolves MATLAB fixtures to the objc grammar (newly flagged,
+  not fixed — see `TODO.md`). Meson's `if_command`/`elseif_command` have no
+  fields (condition is the first flat child, anchored with a leading `.`),
+  and there is no dedicated break/continue statement type — the grammar
+  uses `(keyword_break)`/`(keyword_continue)` leaf nodes; `foreach_command`
+  has `item:`/`array:` fields but the loop body is still flat unfielded
+  children, so `array:` must be consumed unconditionally or it gets swept
+  into the body capture. Objective-C's `try_statement`/`catch_clause` have
+  no fields (unfielded `(compound_statement)` body); Objective-C fast
+  enumeration (`for (T *x in xs)`) parses but does not populate
+  `for_statement`'s normal fields for it, so it is left uncaptured rather
+  than guessed. OCaml's `if_expression`/`while_expression` have a
+  `condition:` field but no `consequence:` field (`then_clause`/
+  `else_clause`/`do_clause` are unfielded children), `for_expression` uses
+  `name:`/`from:`/`to:` fields, and `try_expression`'s `expression:` field
+  is the protected body, not the scrutinee. All verified against real CST
+  output via `normalize syntax query`/`normalize syntax ast` (or the
+  scratch probe test for MATLAB), with fixtures extended (Idris, Lean,
+  Meson) where the existing sample lacked the control-flow constructs
+  needed to exercise the fix.
 
 ### Fixed (internal)
 

@@ -1,10 +1,19 @@
 ; Kotlin CFG query
 ; Captures control flow nodes for CFG construction.
 ; See normalize-cfg for the full capture vocabulary.
-; Verified against arborium Kotlin grammar node types.
+; Verified against arborium Kotlin grammar node types and against
+; crates/normalize-languages/tests/fixtures/kotlin/sample.kt via
+;   normalize syntax query <query> -p <file> --show-source
 ;
-; Note: Kotlin uses if_expression (not if_statement) and when_expression
-; for conditional branching. when replaces switch.
+; Kotlin uses if_expression (has condition/consequence/alternative
+; fields, all "control_structure_body") and when_expression for
+; conditional branching. for_statement / while_statement /
+; do_while_statement have NO named fields at all — children (loop
+; variable, iterable, (control_structure_body) body) are flat and
+; unnamed; there is no "loop_range" node type. return/break/continue/
+; throw are not separate node types either — they are all
+; (jump_expression) wrapping a literal keyword token as its first
+; child, matched here via anonymous-token patterns.
 
 ; ---------------------------------------------------------------------------
 ; if / else (branch) — expression in Kotlin
@@ -42,8 +51,8 @@
 ; ---------------------------------------------------------------------------
 
 (for_statement
-  (loop_range) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (variable_declaration) @cfg.loop.condition
+  (control_structure_body) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -51,8 +60,7 @@
 ; ---------------------------------------------------------------------------
 
 (while_statement
-  condition: (_) @cfg.loop.condition
-  body: (_) @cfg.loop.body
+  (control_structure_body) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -60,8 +68,7 @@
 ; ---------------------------------------------------------------------------
 
 (do_while_statement
-  body: (_) @cfg.loop.body
-  condition: (_) @cfg.loop.condition
+  (control_structure_body) @cfg.loop.body
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
@@ -69,7 +76,7 @@
 ; ---------------------------------------------------------------------------
 
 (try_expression
-  block: (_) @cfg.try.body
+  (statements) @cfg.try.body
 ) @cfg.try
 
 (catch_block) @cfg.try.catch
@@ -77,16 +84,13 @@
 (finally_block) @cfg.try.finally
 
 ; ---------------------------------------------------------------------------
-; Exits
+; Exits — all are (jump_expression <keyword>), no dedicated node types
 ; ---------------------------------------------------------------------------
 
-(return_at) @cfg.exit.return
-(return) @cfg.exit.return
+(jump_expression "return") @cfg.exit.return
 
-(break_at) @cfg.exit.break
-(break) @cfg.exit.break
+(jump_expression "break") @cfg.exit.break
 
-(continue_at) @cfg.exit.continue
-(continue) @cfg.exit.continue
+(jump_expression "continue") @cfg.exit.continue
 
-(throw) @cfg.exit.throw
+(jump_expression "throw") @cfg.exit.throw

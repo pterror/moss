@@ -41,6 +41,13 @@ sumEvens (x :: xs) =
     then x + sumEvens xs
     else sumEvens xs
 
+describeShape : Shape -> String
+describeShape shape =
+  case shape of
+       Circle r => "circle"
+       Rectangle w h => "rectangle"
+       Triangle a b c => "triangle"
+
 main : IO ()
 main = do
   let p1 = MkPoint 3.0 4.0

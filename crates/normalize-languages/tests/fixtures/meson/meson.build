@@ -51,4 +51,18 @@ executable('myapp',
 
 if get_option('tests')
   subdir('tests')
+elif get_option('examples')
+  subdir('examples')
+else
+  message('skipping tests and examples')
 endif
+
+foreach src : lib_sources
+  if src == ''
+    continue
+  endif
+  message(src)
+  if src == 'stop'
+    break
+  endif
+endforeach
