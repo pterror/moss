@@ -16,10 +16,33 @@ use crate::ca_cache;
 use crate::parsers;
 use normalize_facts_core::InterfaceResolver;
 use normalize_facts_core::SymbolKind;
-use normalize_languages::{Language, Symbol, Visibility, support_for_path};
+use normalize_languages::{Language, Symbol, Visibility, known_broken_grammar, support_for_path};
+use std::collections::HashSet;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 use streaming_iterator::StreamingIterator;
 use tree_sitter;
+
+/// Print a one-time-per-process stderr warning when extracting from a grammar
+/// on the [`known_broken_grammar`] list, instead of silently handing back
+/// empty/unreliable results (per CLAUDE.md: "never silently return empty
+/// results"). Cached so a broken grammar warns once per process, not once per
+/// file — a `structure rebuild` touching hundreds of `.zsh` files should not
+/// spam stderr hundreds of times.
+fn warn_if_known_broken_grammar(grammar_name: &str) {
+    let Some(reason) = known_broken_grammar(grammar_name) else {
+        return;
+    };
+    static WARNED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let warned = WARNED.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut warned = warned.lock().unwrap_or_else(|e| e.into_inner());
+    if warned.insert(grammar_name.to_string()) {
+        eprintln!(
+            "warning: '{grammar_name}' grammar is known-broken — extraction results \
+             (symbols/imports/calls/complexity) will be empty or unreliable: {reason}"
+        );
+    }
+}
 
 /// Result of extracting symbols from a file.
 pub struct ExtractResult {
@@ -281,6 +304,7 @@ impl Extractor {
         current_file: &str,
     ) -> Vec<Symbol> {
         let grammar_name = support.grammar_name();
+        warn_if_known_broken_grammar(grammar_name);
 
         // Cache version encodes the extraction schema and include_private flag.
         // Bump this string whenever the Symbol struct, post-processing, or query

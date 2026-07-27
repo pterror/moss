@@ -2,6 +2,22 @@
 
 Skeleton extraction support status. Arborium provides 70+ tree-sitter grammars.
 
+## Known Issues
+
+**Zsh — blocked on upstream, do not re-investigate.** `lang-zsh` is implemented
+(`crates/normalize-languages/src/zsh.rs` + all `.scm` query types) but produces
+empty or unreliable results on real zsh source: the vendored `arborium-zsh`
+grammar (2.17.0 and 2.18.1, byte-identical) ships `"externals": []` and no
+`scanner.c`, while upstream `tree-sitter-zsh` has a ~92KB hand-written scanner
+required for keyword/word/argument disambiguation. Even `echo hi` fails to
+parse as a `command` node. This is a packaging defect in `bearcove/arborium`,
+confirmed by diffing both published versions against the exact upstream commit
+they claim to package — not something fixable by a query rewrite or grammar
+pin change in this repo. See `TODO.md` for the full investigation and a draft
+upstream issue report, and `normalize_languages::known_broken_grammar()` for
+the runtime-facing surface (surfaced via `normalize grammars list`, `normalize
+syntax ast`, and a one-time warning during symbol/CFG extraction).
+
 ## Currently Supported (20)
 
 | Language | Skeleton | Notes |
@@ -116,7 +132,7 @@ Query languages:
 
 Shells:
 - Fish (`lang-fish`)
-- Zsh (`lang-zsh`)
+- Zsh (`lang-zsh`) — implemented but **blocked on upstream grammar defect**, see "Known Issues" above
 - PowerShell (`lang-powershell`)
 - Batch (`lang-batch`)
 

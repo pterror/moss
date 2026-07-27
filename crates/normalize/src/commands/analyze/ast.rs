@@ -267,6 +267,14 @@ pub fn build_ast_output(
         )
     })?;
 
+    if let Some(reason) = normalize_languages::known_broken_grammar(lang.grammar_name()) {
+        eprintln!(
+            "warning: '{}' grammar is known-broken — the AST below reflects the actual \
+             (broken) parse, it is not a display bug: {reason}",
+            lang.grammar_name()
+        );
+    }
+
     let loader = grammar_loader();
     let grammar = loader
         .get(lang.grammar_name())
