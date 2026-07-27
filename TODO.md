@@ -6,6 +6,20 @@ See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
 > *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
+## Abandoned-branch review (2026-07-28)
+
+Reviewed `worktree-agent-a279f98025bdaec11` (single commit `07f35b22`, "B0 guide-link
+regression test + guide staleness fixes + CLAUDE.md crate count") from a prior abandoned
+session. Finding: **fully superseded, nothing merged from it.** The same commit (identical
+message/timestamp) had already landed on master as `18b963c7`, and master evolved further
+past it (`7d7dcf3e`, B12 shim removal) — the guide's `analyze <X>` examples the branch fixed
+have since moved again to `rank`/`view`/`architecture`/`graph`/`history`/`overview`/`similarity`
+verbs, and the 10 `SUMMARY.md` files it touched no longer exist (per-crate `SUMMARY.md` was
+replaced by `docs/crates.md`, see Architecture section of CLAUDE.md). Only new finding: the
+crate count was stale *again* (master said 45+3, actual workspace is 49 published + 4
+`publish = false` — `normalize-semantic-facts` had been added since and wasn't accounted for).
+Fixed CLAUDE.md's Publishing line accordingly; branch/worktree deleted.
+
 ## Active open threads (advisory)
 
 Three live threads from the 2026-06-29/07-01 session — verify state before acting:
@@ -950,9 +964,11 @@ gain `cli` feature (graph, architecture, code-similarity, facts, semantic); 6+ c
 migrated to normalize-git; ~20 commands re-pathed (~12% of ~165); ~5 renames.
 
 Implementation order (each batch: build + `cargo test -q` green; docs synced same commit):
-- [ ] **B0 — gates + server-less prereq:** guide/help regression test (parse guide bodies,
-  assert every `normalize …` example resolves) + cli-snapshot topic test; fix CLAUDE.md
-  "38 crates"→"47"; add `#[cli(alias = "...")]` to server-less + publish + bump dep.
+- [x] **B0 — gates + server-less prereq (guide-regression + crate-count parts):** guide/help
+  regression test (`crates/normalize/tests/guide_links.rs`) + CLAUDE.md crate-count fix landed
+  as 18b963c7, later evolved further by 7d7dcf3e (B12 shim removal updated the test's example
+  paths). The `#[cli(alias = "...")]` server-less prereq is still PENDING (separate task, see
+  advisory note above).
 - [x] **B1 — `normalize-git`:** extract `git_utils.rs` as new crate; migrate ALL dependents
   (budget, ratchet, semantic, main crate); budget/ratchet git_ops.rs → thin re-export wrappers;
   semantic git_staleness.rs uses normalize_git::open_repo; main git_utils.rs → pub use normalize_git::*.
