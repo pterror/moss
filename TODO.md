@@ -2796,6 +2796,18 @@ global measures need a new value type on `Metric::measure_all`.
 - Jinja2 grammar publish: NOT via arborium (they vendor their own); publish as our own crate (`tree-sitter-jinja2` name taken — pick another). Update normalize-grammars dep. Local `grammars/jinja2/` + `find_local_grammars()` in xtask is sufficient for now.
 - view: directory output shows dir name as first line (tree style) - intentional?
 
+### VCS abstraction layer
+
+Unstarted idea. Goal: an abstraction layer over different version control systems (git, jj, mercurial, or others) to make normalize's VCS-touching functionality not git-specific. Currently `normalize-graph`, budget metrics, and other VCS operations shell out to `git` or use `git2`; this abstraction would unify them.
+
+Related infrastructure: `git2` crate already in use for direct VCS operations.
+
+### Composite tooling: `normalize sessions blame` — session provenance tracking
+
+Unstarted idea. Observation: `git blame` tracks the provenance of a line of code by commit and author; `normalize sessions blame` would track the same line's provenance *through AI/coding sessions* (which session introduced or changed the line, when, what the conversation was). This is composite tooling — it requires cross-referencing session data (`normalize-sessions`, `normalize-chat-sessions`) with VCS line history (via `git blame` / `git2`).
+
+Related infrastructure: `normalize-sessions` and `normalize-chat-sessions` crates provide session log parsing; `git2` provides VCS operations. No new infrastructure required to pursue this idea.
+
 ## Implementation Notes
 
 ### Self-update (`normalize update`)
