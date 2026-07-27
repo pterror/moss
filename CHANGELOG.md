@@ -13,9 +13,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   queries fine but produce unreliable parses of real source. Zsh is the first (and so
   far only) entry: the vendored `arborium-zsh` grammar ships `"externals": []` and no
   `scanner.c`, so real zsh source parses into error-laden trees instead of proper
-  `command`/`if_statement`/etc. nodes — a packaging defect in `bearcove/arborium`, not
-  fixable in this repo (see TODO.md for the full investigation and a draft upstream
-  issue report). This is now surfaced instead of silently returning empty results:
+  `command`/`if_statement`/etc. nodes — a packaging defect in `bearcove/arborium` (filed
+  at https://github.com/bearcove/arborium/issues/213), not fixable in this repo (see
+  TODO.md for the full investigation). This is now surfaced instead of silently returning empty results:
   `normalize grammars list` shows a "Known issues" section (and a `known_issue` field
   on each JSON entry); symbol/import/call/complexity extraction (`view`, `structure
   rebuild`, `analyze`, etc.) prints a one-time-per-process stderr warning; `normalize cfg`

@@ -31,8 +31,8 @@
 ; empirically-verified bash.cfg.scm construct), so this file compiles
 ; cleanly against the grammar. Whether it ever CAPTURES anything from real
 ; zsh source is unverified and, per current evidence, unlikely until the
-; upstream grammar/scanner defect is fixed. Tracked in TODO.md rather than
-; silently declared "done".
+; upstream grammar/scanner defect is fixed. Tracked in TODO.md and filed at
+; https://github.com/bearcove/arborium/issues/213.
 ;
 ; Zsh's grammar has no C-style `for ((i=0; i<n; i++))` node type at all
 ; (unlike Bash's `c_style_for_statement`) — genuine grammar gap, not

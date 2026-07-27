@@ -6,8 +6,8 @@
 ; grammar ships "externals": [] and no scanner.c (upstream tree-sitter-zsh has
 ; a ~92KB hand-written one), so real zsh source parses into ERROR-laden trees
 ; rather than proper if/for/while/case nodes. This is a packaging defect in
-; bearcove/arborium, not fixable by a query rewrite here. See zsh.cfg.scm's
-; header and TODO.md for the full investigation, and
+; bearcove/arborium (https://github.com/bearcove/arborium/issues/213), not
+; fixable by a query rewrite here. See TODO.md for the full investigation and
 ; `normalize_languages::known_broken_grammar("zsh")` for the runtime-facing
 ; surface of this fact.
 ;
