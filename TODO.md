@@ -20,6 +20,14 @@ crate count was stale *again* (master said 45+3, actual workspace is 49 publishe
 `publish = false` — `normalize-semantic-facts` had been added since and wasn't accounted for).
 Fixed CLAUDE.md's Publishing line accordingly; branch/worktree deleted.
 
+Reviewed `worktree-agent-ac628c38cdffd34dd` (single commit `6d586be9`, "feat(sync):
+incremental sync — skip unchanged files by mtime+size" reworking `commands/sync.rs` and
+`service/mod.rs`). Finding: **fully superseded, nothing merged from it.** An
+identical-content commit (`7e37f0f3`, same message/timestamp/diff — byte-identical
+`sync.rs`/`service/mod.rs`) is already an ancestor of master. No correctness review of the
+mtime+size heuristic was needed since there was nothing left to merge; branch/worktree
+deleted.
+
 ## Active open threads (advisory)
 
 Three live threads from the 2026-06-29/07-01 session — verify state before acting:
