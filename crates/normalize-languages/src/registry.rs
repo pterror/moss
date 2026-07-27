@@ -895,8 +895,7 @@ mod resolver_tests {
 
     #[test]
     fn config_override_glob_matches_by_path_pattern() {
-        let overrides =
-            LanguageOverrides::new([("src/**/*.pl".to_string(), "prolog".to_string())]);
+        let overrides = LanguageOverrides::new([("src/**/*.pl".to_string(), "prolog".to_string())]);
         let result = resolve_language(
             Path::new("src/rules/facts.pl"),
             Some("use strict;\nmy $x = 1;\n"),
@@ -969,7 +968,10 @@ mod resolver_tests {
             &LanguageOverrides::empty(),
         );
         assert_eq!(result.reason, ResolutionReason::AmbiguousDefault);
-        assert!(result.language.is_some(), "documented fallback still picks a language");
+        assert!(
+            result.language.is_some(),
+            "documented fallback still picks a language"
+        );
         let names: Vec<&str> = result
             .ambiguous_candidates
             .iter()
@@ -1010,12 +1012,8 @@ mod resolver_tests {
             let legacy = support_for_path(Path::new(path)).map(|l| l.grammar_name());
             assert_eq!(legacy, Some(*expected), "legacy winner changed for {path}");
 
-            let resolved = resolve_language(
-                Path::new(path),
-                None,
-                None,
-                &LanguageOverrides::empty(),
-            );
+            let resolved =
+                resolve_language(Path::new(path), None, None, &LanguageOverrides::empty());
             assert_eq!(
                 resolved.language.map(|l| l.grammar_name()),
                 Some(*expected),
