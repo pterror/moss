@@ -184,6 +184,18 @@ non-zero code. Never silently return empty results.
 - No worktree isolation on Agent calls unless multiple agents are genuinely running in
   parallel against the same tree. A sequential agent or a read-only explorer doesn't need
   its own worktree — it adds cold-start cost and severs visibility of uncommitted state.
+  **When they ARE genuinely parallel, worktree isolation is not optional — it's the only
+  safe option.** `.git/index` is a single shared file. `git add <specific files>` followed
+  by `git commit` is NOT atomic: the pre-commit hook (`cargo fmt --check` + `cargo clippy
+  --all-targets --all-features`, often tens of seconds) runs *before* git snapshots the
+  index into a tree, and holds no lock on the index while it runs. Any `git add` from a
+  concurrent agent in the same working tree during that window gets swept into the first
+  agent's commit, even though that agent staged only its own files and never ran `git add
+  -A`/`.`. Confirmed by direct reproduction (scratch repo, slow hook, concurrent `git add`
+  mid-hook — the resulting commit contained both agents' changes despite each `git add`
+  targeting only its own file) — see commit fixing this note for the test. This is
+  inherent git behavior, not a bug in this repo's hook; the only fix is giving each
+  concurrent agent its own worktree (`EnterWorktree`) so each has its own `.git/index`.
 
 ## Disposition
 
