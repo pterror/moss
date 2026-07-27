@@ -8,6 +8,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Language-detection disambiguation for ambiguous extensions.** Five extensions are
+  registered by two languages each — `.m` (MATLAB/Objective-C), `.pl` (Perl/Prolog),
+  `.s`/`.S`/`.asm` (GNU-asm/x86asm), and `.conf` (INI/Nginx) — and previously resolved
+  silently to whichever language happened to register last (`support_for_path` still does,
+  unchanged, for backward compatibility). `normalize_languages::resolve_language` now
+  layers: explicit language name → `.normalize/config.toml` `[languages]` glob overrides
+  (`"*.m" = "matlab"`) → content sniffing (shebang line, then weighted keyword heuristics)
+  → the documented deterministic fallback, printed via `tracing::info!` whenever the
+  extension was actually ambiguous (`"resolved .m to matlab via --lang"`, `"... via
+  .normalize/config.toml [languages] override"`, `"... via shebang"`, `"... via content
+  heuristics"`, or `"...: ambiguous with objc, no override configured, defaulting per
+  registration order"`). Genuinely inconclusive content (e.g. a near-empty file) is never
+  silently guessed — the resolver falls back to the documented default and reports every
+  candidate that was in contention. `normalize syntax ast` gained a `--lang <name>` flag as
+  the first concrete integration point; other single-file commands still resolve via the
+  unchanged `support_for_path`/`support_for_extension` and are candidates for the same
+  `--lang` treatment as follow-up work (see TODO.md).
 - **Dev-workflow warning for stale `~/.config/normalize/grammars/`.** When
   `NORMALIZE_GRAMMAR_PATH` is unset and a `./target/grammars/` directory exists (i.e. a
   workspace checkout where `cargo xtask build-grammars` was run) with `.so`/`.dylib`/`.dll`

@@ -17,6 +17,22 @@ impl Language for ObjC {
         "objc"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        crate::SniffHints {
+            shebang_patterns: &[],
+            content_signals: &[
+                ("#import", 3),
+                ("@interface", 3),
+                ("@implementation", 3),
+                ("@property", 2),
+                ("@end", 2),
+                ("NSString", 1),
+                ("endfunction", -3),
+                ("function [", -2),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

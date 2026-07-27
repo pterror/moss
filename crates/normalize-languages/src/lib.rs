@@ -248,14 +248,16 @@ pub use grammar_loader::{GrammarLoadError, GrammarLoader};
 pub use normalize_facts_core::Export;
 pub use query_predicates::satisfies_predicates;
 pub use registry::{
-    is_programming_language, is_test_path, register, support_for_extension, support_for_grammar,
-    support_for_path, supported_languages, test_file_globs_for_path, validate_unused_kinds_audit,
+    LanguageOverrides, LanguageResolutionResult, ResolutionReason, ambiguous_extensions,
+    candidates_for_extension, is_programming_language, is_test_path, register, resolve_language,
+    support_for_extension, support_for_grammar, support_for_path, supported_languages,
+    test_file_globs_for_path, validate_unused_kinds_audit,
 };
 pub use traits::{
     CallSiteSpec, ContainerBody, EmbeddedBlock, ExtractedFnSpec, GenParam, GenReturn,
     ImplementsInfo, Import, ImportSpec, InterfaceResolver, Language, LanguageEmbedded,
-    LanguageSymbols, ModuleId, ModuleResolver, RefactorCodeGen, Resolution, ResolverConfig, Symbol,
-    SymbolKind, Visibility, simple_function_symbol, simple_symbol,
+    LanguageSymbols, ModuleId, ModuleResolver, RefactorCodeGen, Resolution, ResolverConfig,
+    SniffHints, Symbol, SymbolKind, Visibility, simple_function_symbol, simple_symbol,
 };
 
 // Re-export language structs (feature-gated)

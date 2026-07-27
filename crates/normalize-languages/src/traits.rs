@@ -46,6 +46,28 @@ pub enum Resolution {
     NotApplicable,
 }
 
+/// Heuristics for disambiguating this language from others when a file
+/// extension is registered by more than one [`Language`] impl (e.g. `.m` for
+/// both MATLAB and Objective-C).
+///
+/// Consulted by [`crate::registry::resolve_language`] only when the extension
+/// alone is ambiguous. Both fields default to empty, meaning "this language
+/// contributes no sniffing signal" — most languages never need to set this
+/// because their extensions are unique.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SniffHints {
+    /// Substrings that, if found on a file's first `#!` line, unambiguously
+    /// identify this language (e.g. `"perl"` matches `#!/usr/bin/perl` and
+    /// `#!/usr/bin/env perl`). Checked before `content_signals`; a shebang
+    /// match is treated as high confidence and short-circuits sniffing.
+    pub shebang_patterns: &'static [&'static str],
+    /// Weighted content substrings scanned when no shebang decides the
+    /// question. Each match adds `weight` to this language's score; the
+    /// candidate with the uniquely highest positive score above threshold
+    /// wins at low confidence. Ties or all-zero scores are left ambiguous.
+    pub content_signals: &'static [(&'static str, i32)],
+}
+
 /// Per-language module resolver.
 ///
 /// Implements the Rust/TS/Python/etc-specific logic for turning an import
@@ -411,6 +433,13 @@ pub trait Language: Send + Sync {
     /// Return `&[]` for languages with no dedicated test files (e.g. those using only inline tests).
     fn test_file_globs(&self) -> &'static [&'static str] {
         &[]
+    }
+
+    /// Heuristics for disambiguating this language from others that share one
+    /// of its extensions. Default: no signals (only languages actually
+    /// involved in an extension collision need to override this).
+    fn sniff_hints(&self) -> SniffHints {
+        SniffHints::default()
     }
 
     /// Capability query: returns `Some(self)` if this language can contain embedded blocks

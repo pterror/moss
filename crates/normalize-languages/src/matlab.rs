@@ -22,6 +22,22 @@ impl Language for Matlab {
         "matlab"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        crate::SniffHints {
+            shebang_patterns: &["matlab"],
+            content_signals: &[
+                ("endfunction", 3),
+                ("end\n", 1),
+                ("function [", 2),
+                ("%{", 1),
+                ("...\n", 2),
+                ("#import", -3),
+                ("@interface", -3),
+                ("@implementation", -3),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

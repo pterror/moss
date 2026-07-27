@@ -85,6 +85,13 @@ Not: `--list` flag (inconsistent with above).
 `--json`, `--pretty`, `--compact` - output format
 `--root` - working directory
 `--exclude`, `--only` - filtering
+`--lang` - force a single-file command's language detection, overriding
+extension/`.normalize/config.toml`/content-sniffing resolution (distinct from
+`--language`, which *filters* a multi-file command like `rules list` by
+target language — see "Filters compose" below). Introduced on `normalize
+syntax ast`; relevant to any single-file command whose extension is one of
+the five collisions (`.m`, `.pl`, `.s`/`.S`/`.asm`, `.conf`) — see
+`normalize_languages::resolve_language`.
 
 ### 7. `--dry-run` on every mutating command
 

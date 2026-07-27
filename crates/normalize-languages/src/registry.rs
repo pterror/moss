@@ -242,6 +242,58 @@ fn extension_map() -> &'static HashMap<&'static str, &'static dyn Language> {
     })
 }
 
+/// Cached extension → *all* registered languages for that extension, in
+/// registration order. Unlike [`extension_map`] (which keeps only the
+/// last-registered "winner"), this preserves every candidate so ambiguous
+/// extensions (`.m`, `.pl`, `.s`/`.S`/`.asm`, `.conf`, `.scm`, ...) can be
+/// disambiguated by [`resolve_language`] instead of silently picking one.
+static EXTENSION_CANDIDATES: OnceLock<HashMap<&'static str, Vec<&'static dyn Language>>> =
+    OnceLock::new();
+
+fn extension_candidates_map() -> &'static HashMap<&'static str, Vec<&'static dyn Language>> {
+    init_builtin();
+    EXTENSION_CANDIDATES.get_or_init(|| {
+        let mut map: HashMap<&'static str, Vec<&'static dyn Language>> = HashMap::new();
+        let langs = LANGUAGES.read().unwrap_or_else(|e| e.into_inner());
+        for lang in langs.iter() {
+            for ext in lang.extensions() {
+                map.entry(*ext).or_default().push(*lang);
+            }
+        }
+        map
+    })
+}
+
+/// All languages registered for a given extension, in registration order.
+///
+/// Empty if the extension isn't recognized. Length 1 for the overwhelming
+/// majority of extensions; length > 1 marks a genuine collision (two
+/// languages both claim the extension) that [`resolve_language`] must
+/// disambiguate rather than silently picking the last-registered one.
+pub fn candidates_for_extension(ext: &str) -> Vec<&'static dyn Language> {
+    extension_candidates_map()
+        .get(ext)
+        .or_else(|| extension_candidates_map().get(ext.to_lowercase().as_str()))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// All extensions that currently resolve to more than one registered
+/// language — i.e. the set of collisions `support_for_path` silently
+/// resolves via last-registration-wins. Derived from live registration data
+/// so a newly added language that collides with an existing extension shows
+/// up here automatically instead of requiring a hardcoded list to be kept in
+/// sync by hand.
+pub fn ambiguous_extensions() -> Vec<&'static str> {
+    let mut exts: Vec<&'static str> = extension_candidates_map()
+        .iter()
+        .filter(|(_, langs)| langs.len() > 1)
+        .map(|(ext, _)| *ext)
+        .collect();
+    exts.sort_unstable();
+    exts
+}
+
 fn grammar_map() -> &'static HashMap<&'static str, &'static dyn Language> {
     init_builtin();
     GRAMMAR_MAP.get_or_init(|| {
@@ -279,6 +331,298 @@ pub fn support_for_path(path: &Path) -> Option<&'static dyn Language> {
     path.extension()
         .and_then(|e| e.to_str())
         .and_then(support_for_extension)
+}
+
+/// Project-level extension-to-language overrides (`.normalize/config.toml`
+/// `[languages]` table), consulted by [`resolve_language`] before content
+/// sniffing. Patterns are gitignore/glob-style (`*.m`, `src/**/*.pl`,
+/// matched against the path as given to [`resolve_language`]) and are tried
+/// in the order supplied; the first match wins.
+pub struct LanguageOverrides {
+    patterns: Vec<(globset::GlobMatcher, String)>,
+}
+
+impl LanguageOverrides {
+    /// Build from an ordered list of `(glob pattern, language name or
+    /// grammar name)` pairs, e.g. as loaded from `.normalize/config.toml`'s
+    /// `[languages]` table. Invalid glob patterns are skipped rather than
+    /// erroring the whole set, since one bad entry in a project config
+    /// shouldn't break language detection for every other file.
+    pub fn new(patterns: impl IntoIterator<Item = (String, String)>) -> Self {
+        let compiled = patterns
+            .into_iter()
+            .filter_map(|(pattern, lang)| {
+                globset::Glob::new(&pattern)
+                    .ok()
+                    .map(|g| (g.compile_matcher(), lang))
+            })
+            .collect();
+        Self { patterns: compiled }
+    }
+
+    /// No overrides configured.
+    pub fn empty() -> Self {
+        Self {
+            patterns: Vec::new(),
+        }
+    }
+
+    /// The configured language name for `path`, if any override glob
+    /// matches (first match in configured order wins).
+    pub fn resolve(&self, path: &Path) -> Option<&str> {
+        self.patterns
+            .iter()
+            .find(|(matcher, _)| matcher.is_match(path))
+            .map(|(_, lang)| lang.as_str())
+    }
+}
+
+/// Why [`resolve_language`] settled on (or failed to settle on) a language.
+/// Carried alongside the result so callers can log/print an explanation
+/// rather than silently picking a winner for an ambiguous extension.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolutionReason {
+    /// Caller passed an explicit `--lang`/`--language` name; used outright.
+    ExplicitFlag,
+    /// `--lang` named a language `resolve_language` doesn't recognize.
+    ExplicitFlagUnknown,
+    /// `.normalize/config.toml` `[languages]` glob matched.
+    ConfigOverride,
+    /// `.normalize/config.toml` `[languages]` glob matched but named an
+    /// unrecognized language.
+    ConfigOverrideUnknown,
+    /// Only one language is registered for this extension — no ambiguity.
+    Unambiguous,
+    /// A `#!` shebang line unambiguously named one candidate.
+    ShebangSniff,
+    /// No shebang; keyword/syntax heuristics unambiguously favored one
+    /// candidate.
+    HeuristicSniff,
+    /// Multiple candidates registered for this extension and neither a
+    /// shebang nor heuristics could decide; fell back to the deterministic
+    /// (last-registered-wins) default.
+    AmbiguousDefault,
+    /// Extension not recognized by any registered language.
+    NotFound,
+}
+
+/// Result of [`resolve_language`]: the chosen language (if any), why it was
+/// chosen, and — for the ambiguous case — the full set of candidates that
+/// were in contention, so a caller can surface them (e.g. "could be MATLAB
+/// or Objective-C; pass --lang or set .normalize/config.toml").
+#[derive(Clone)]
+pub struct LanguageResolutionResult {
+    pub language: Option<&'static dyn Language>,
+    pub reason: ResolutionReason,
+    /// Non-empty only when `reason == AmbiguousDefault`: every candidate
+    /// that was in contention for this extension.
+    pub ambiguous_candidates: Vec<&'static dyn Language>,
+}
+
+impl LanguageResolutionResult {
+    /// Human-readable explanation suitable for a log line or stderr note,
+    /// e.g. `"resolved .m to matlab via --lang"` or `"resolved .conf to
+    /// nginx: ambiguous with ini, no override configured, defaulting per
+    /// registration order — set --lang or .normalize/config.toml to
+    /// override"`.
+    pub fn describe(&self, ext: &str) -> String {
+        let lang_name = self.language.map(|l| l.grammar_name());
+        match self.reason {
+            ResolutionReason::ExplicitFlag => {
+                format!("resolved .{ext} to {} via --lang", lang_name.unwrap_or("?"))
+            }
+            ResolutionReason::ExplicitFlagUnknown => {
+                "--lang named a language that isn't registered".to_string()
+            }
+            ResolutionReason::ConfigOverride => format!(
+                "resolved .{ext} to {} via .normalize/config.toml [languages] override",
+                lang_name.unwrap_or("?")
+            ),
+            ResolutionReason::ConfigOverrideUnknown => {
+                ".normalize/config.toml [languages] override named a language that isn't registered"
+                    .to_string()
+            }
+            ResolutionReason::Unambiguous => {
+                format!("resolved .{ext} to {}", lang_name.unwrap_or("?"))
+            }
+            ResolutionReason::ShebangSniff => format!(
+                "resolved .{ext} to {} via shebang",
+                lang_name.unwrap_or("?")
+            ),
+            ResolutionReason::HeuristicSniff => format!(
+                "resolved .{ext} to {} via content heuristics",
+                lang_name.unwrap_or("?")
+            ),
+            ResolutionReason::AmbiguousDefault => {
+                let others: Vec<&str> = self
+                    .ambiguous_candidates
+                    .iter()
+                    .map(|l| l.grammar_name())
+                    .filter(|n| Some(*n) != lang_name)
+                    .collect();
+                format!(
+                    "resolved .{ext} to {}: ambiguous with {}, no override configured, defaulting per registration order — set --lang or .normalize/config.toml to override",
+                    lang_name.unwrap_or("?"),
+                    others.join(", ")
+                )
+            }
+            ResolutionReason::NotFound => format!("no language registered for .{ext}"),
+        }
+    }
+}
+
+fn lookup_by_name(name: &str) -> Option<&'static dyn Language> {
+    support_for_grammar(name).or_else(|| {
+        let langs = LANGUAGES.read().unwrap_or_else(|e| e.into_inner());
+        langs
+            .iter()
+            .find(|l| l.name().eq_ignore_ascii_case(name))
+            .copied()
+    })
+}
+
+/// Score a single candidate's [`crate::SniffHints::content_signals`] against
+/// `content`.
+fn heuristic_score(lang: &'static dyn Language, content: &str) -> i32 {
+    lang.sniff_hints()
+        .content_signals
+        .iter()
+        .filter(|(needle, _)| content.contains(needle))
+        .map(|(_, weight)| *weight)
+        .sum()
+}
+
+/// Layered language resolver: explicit `--lang` flag, then project config
+/// overrides, then (only if the extension is genuinely ambiguous) content
+/// sniffing via shebang and keyword heuristics, then the legacy
+/// deterministic default. See module docs / CLAUDE.md for the full design.
+///
+/// `content` is optional — pass `None` when only a path is available (e.g.
+/// batch-walking a tree without reading every file); sniffing is skipped and
+/// an ambiguous extension falls straight through to `AmbiguousDefault`.
+pub fn resolve_language(
+    path: &Path,
+    content: Option<&str>,
+    explicit_lang: Option<&str>,
+    overrides: &LanguageOverrides,
+) -> LanguageResolutionResult {
+    // 1. Explicit --lang flag wins outright.
+    if let Some(name) = explicit_lang {
+        return match lookup_by_name(name) {
+            Some(lang) => LanguageResolutionResult {
+                language: Some(lang),
+                reason: ResolutionReason::ExplicitFlag,
+                ambiguous_candidates: Vec::new(),
+            },
+            None => LanguageResolutionResult {
+                language: None,
+                reason: ResolutionReason::ExplicitFlagUnknown,
+                ambiguous_candidates: Vec::new(),
+            },
+        };
+    }
+
+    // 2. Project-level glob config override.
+    if let Some(name) = overrides.resolve(path) {
+        return match lookup_by_name(name) {
+            Some(lang) => LanguageResolutionResult {
+                language: Some(lang),
+                reason: ResolutionReason::ConfigOverride,
+                ambiguous_candidates: Vec::new(),
+            },
+            None => LanguageResolutionResult {
+                language: None,
+                reason: ResolutionReason::ConfigOverrideUnknown,
+                ambiguous_candidates: Vec::new(),
+            },
+        };
+    }
+
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return LanguageResolutionResult {
+            language: None,
+            reason: ResolutionReason::NotFound,
+            ambiguous_candidates: Vec::new(),
+        };
+    };
+    let candidates = candidates_for_extension(ext);
+
+    if candidates.is_empty() {
+        return LanguageResolutionResult {
+            language: None,
+            reason: ResolutionReason::NotFound,
+            ambiguous_candidates: Vec::new(),
+        };
+    }
+    if candidates.len() == 1 {
+        return LanguageResolutionResult {
+            language: Some(candidates[0]),
+            reason: ResolutionReason::Unambiguous,
+            ambiguous_candidates: Vec::new(),
+        };
+    }
+
+    // 3. Content sniffing — only reached for a genuinely ambiguous extension.
+    if let Some(content) = content {
+        // 3a. Shebang line: high confidence, decisive if it names exactly
+        // one candidate.
+        if let Some(first_line) = content.lines().next()
+            && let Some(shebang) = first_line.strip_prefix("#!")
+        {
+            let shebang_lower = shebang.to_lowercase();
+            let matches: Vec<&'static dyn Language> = candidates
+                .iter()
+                .filter(|l| {
+                    l.sniff_hints()
+                        .shebang_patterns
+                        .iter()
+                        .any(|p| shebang_lower.contains(&p.to_lowercase()))
+                })
+                .copied()
+                .collect();
+            if matches.len() == 1 {
+                return LanguageResolutionResult {
+                    language: Some(matches[0]),
+                    reason: ResolutionReason::ShebangSniff,
+                    ambiguous_candidates: Vec::new(),
+                };
+            }
+        }
+
+        // 3b. Low-confidence keyword/syntax heuristics. Only decisive when
+        // exactly one candidate has a uniquely-highest, strictly-positive
+        // score — a tie or all-zero scores means the heuristics genuinely
+        // couldn't decide, so we do NOT guess and fall through instead.
+        let scored: Vec<(i32, &'static dyn Language)> = candidates
+            .iter()
+            .copied()
+            .map(|l| (heuristic_score(l, content), l))
+            .collect();
+        let max_score = scored.iter().map(|(s, _)| *s).max().unwrap_or(0);
+        if max_score > 0 {
+            let winners: Vec<&'static dyn Language> = scored
+                .iter()
+                .filter(|(s, _)| *s == max_score)
+                .map(|(_, l)| *l)
+                .collect();
+            if winners.len() == 1 {
+                return LanguageResolutionResult {
+                    language: Some(winners[0]),
+                    reason: ResolutionReason::HeuristicSniff,
+                    ambiguous_candidates: Vec::new(),
+                };
+            }
+        }
+    }
+
+    // 4. Still ambiguous — documented deterministic fallback (matches
+    // legacy `support_for_path` behavior: last-registered candidate wins).
+    let default = candidates[candidates.len() - 1];
+    LanguageResolutionResult {
+        language: Some(default),
+        reason: ResolutionReason::AmbiguousDefault,
+        ambiguous_candidates: candidates,
+    }
 }
 
 /// Check if a file path is a dedicated test file for its language.
@@ -486,6 +830,198 @@ pub fn validate_unused_kinds_audit(
             errors.len(),
             errors.join("\n  - ")
         ))
+    }
+}
+
+#[cfg(test)]
+mod resolver_tests {
+    use super::*;
+    use std::path::Path;
+
+    /// The 5 documented extension collisions must still exist (i.e. this
+    /// test guards against someone "fixing" a collision by deleting an
+    /// extension, which would silently change behavior without going
+    /// through the resolver).
+    #[test]
+    fn known_collisions_are_still_ambiguous() {
+        let ambiguous = ambiguous_extensions();
+        for ext in ["m", "s", "S", "asm", "pl", "conf", "scm"] {
+            assert!(
+                ambiguous.contains(&ext),
+                "expected .{ext} to be an ambiguous extension, got {ambiguous:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unambiguous_extension_resolves_directly() {
+        let result = resolve_language(
+            Path::new("main.rs"),
+            None,
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::Unambiguous);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("rust"));
+    }
+
+    #[test]
+    fn explicit_lang_flag_wins_over_everything() {
+        let overrides = LanguageOverrides::new([("*.m".to_string(), "objc".to_string())]);
+        let result = resolve_language(
+            Path::new("script.m"),
+            Some("function y = f(x)\nend\n"),
+            Some("matlab"),
+            &overrides,
+        );
+        assert_eq!(result.reason, ResolutionReason::ExplicitFlag);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("matlab"));
+    }
+
+    #[test]
+    fn config_override_wins_over_sniffing() {
+        // Content strongly suggests Objective-C, but the config override
+        // for this glob names MATLAB — override must win.
+        let overrides = LanguageOverrides::new([("*.m".to_string(), "matlab".to_string())]);
+        let result = resolve_language(
+            Path::new("widget.m"),
+            Some("#import <Foundation/Foundation.h>\n@interface Foo\n@end\n"),
+            None,
+            &overrides,
+        );
+        assert_eq!(result.reason, ResolutionReason::ConfigOverride);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("matlab"));
+    }
+
+    #[test]
+    fn config_override_glob_matches_by_path_pattern() {
+        let overrides =
+            LanguageOverrides::new([("src/**/*.pl".to_string(), "prolog".to_string())]);
+        let result = resolve_language(
+            Path::new("src/rules/facts.pl"),
+            Some("use strict;\nmy $x = 1;\n"),
+            None,
+            &overrides,
+        );
+        assert_eq!(result.reason, ResolutionReason::ConfigOverride);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("prolog"));
+    }
+
+    #[test]
+    fn shebang_resolves_perl_over_prolog() {
+        let result = resolve_language(
+            Path::new("script.pl"),
+            Some("#!/usr/bin/perl\nuse strict;\n"),
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::ShebangSniff);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("perl"));
+    }
+
+    #[test]
+    fn shebang_resolves_prolog_over_perl() {
+        let result = resolve_language(
+            Path::new("rules.pl"),
+            Some("#!/usr/bin/env swipl\n:- initialization(main).\n"),
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::ShebangSniff);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("prolog"));
+    }
+
+    #[test]
+    fn heuristic_resolves_matlab_without_shebang() {
+        let result = resolve_language(
+            Path::new("solve.m"),
+            Some("function y = solve(x)\n  y = x + 1;\nendfunction\n"),
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::HeuristicSniff);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("matlab"));
+    }
+
+    #[test]
+    fn heuristic_resolves_objc_without_shebang() {
+        let result = resolve_language(
+            Path::new("Widget.m"),
+            Some("#import <Foundation/Foundation.h>\n@interface Widget : NSObject\n@end\n"),
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::HeuristicSniff);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("objc"));
+    }
+
+    /// An empty/near-empty file gives no shebang and no heuristic signal —
+    /// the resolver must NOT silently guess one of the two candidates. It
+    /// falls back to the documented deterministic default and reports
+    /// `AmbiguousDefault` with every candidate that was in contention, so a
+    /// caller can surface the ambiguity instead of trusting a blind pick.
+    #[test]
+    fn genuinely_ambiguous_content_does_not_silently_guess() {
+        let result = resolve_language(
+            Path::new("mystery.m"),
+            Some("\n\n"),
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::AmbiguousDefault);
+        assert!(result.language.is_some(), "documented fallback still picks a language");
+        let names: Vec<&str> = result
+            .ambiguous_candidates
+            .iter()
+            .map(|l| l.grammar_name())
+            .collect();
+        assert!(names.contains(&"matlab") && names.contains(&"objc"));
+        // The message must name the ambiguity, not just assert a language.
+        let msg = result.describe("m");
+        assert!(msg.contains("ambiguous"));
+    }
+
+    #[test]
+    fn no_content_available_falls_back_to_ambiguous_default() {
+        let result = resolve_language(
+            Path::new("legacy.conf"),
+            None,
+            None,
+            &LanguageOverrides::empty(),
+        );
+        assert_eq!(result.reason, ResolutionReason::AmbiguousDefault);
+        assert_eq!(result.language.map(|l| l.grammar_name()), Some("nginx"));
+    }
+
+    #[test]
+    fn ambiguous_default_matches_legacy_support_for_path_for_documented_pairs() {
+        // The 5 documented collisions must keep resolving to the same
+        // "winner" as the old last-registered-wins `support_for_path`, so
+        // the fallback path is a behavior-preserving default, not a
+        // silent regression, for callers that don't opt into the resolver.
+        let cases: &[(&str, &str)] = &[
+            ("foo.m", "objc"),
+            ("foo.s", "x86asm"),
+            ("foo.S", "x86asm"),
+            ("foo.pl", "prolog"),
+            ("foo.conf", "nginx"),
+        ];
+        for (path, expected) in cases {
+            let legacy = support_for_path(Path::new(path)).map(|l| l.grammar_name());
+            assert_eq!(legacy, Some(*expected), "legacy winner changed for {path}");
+
+            let resolved = resolve_language(
+                Path::new(path),
+                None,
+                None,
+                &LanguageOverrides::empty(),
+            );
+            assert_eq!(
+                resolved.language.map(|l| l.grammar_name()),
+                Some(*expected),
+                "resolver fallback diverged from legacy for {path}"
+            );
+        }
     }
 }
 

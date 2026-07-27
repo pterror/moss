@@ -230,21 +230,38 @@ fn node_at_line_to_string(source: &str, root: tree_sitter::Node, line: usize, bu
 /// Build AST output as (json_value, text_string).
 /// `depth`: -1 = unlimited, 0 = root only, N = N levels deep.
 /// `compact`: if true, produce an outline without source text instead of the full tree dump.
+/// `lang_override`: explicit `--lang` value (language or grammar name), if the
+/// caller passed one. Takes priority over `.normalize/config.toml` `[languages]`
+/// overrides and content sniffing — see [`normalize_languages::resolve_language`].
 pub fn build_ast_output(
     file: &std::path::Path,
     at_line: Option<usize>,
     sexp: bool,
     depth: i32,
     compact: bool,
+    lang_override: Option<&str>,
 ) -> Result<(serde_json::Value, String), String> {
     use crate::parsers::grammar_loader;
-    use normalize_languages::support_for_path;
 
     let content = std::fs::read_to_string(file)
         .map_err(|e| format!("Failed to read {}: {}", file.display(), e))?;
 
-    let lang =
-        support_for_path(file).ok_or_else(|| format!("Unknown file type: {}", file.display()))?;
+    let root_dir = std::env::current_dir().unwrap_or_default();
+    let overrides = crate::config::NormalizeConfig::load(&root_dir)
+        .languages
+        .to_overrides();
+    let resolution =
+        normalize_languages::resolve_language(file, Some(&content), lang_override, &overrides);
+    let ext = file
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default();
+    if resolution.reason != normalize_languages::ResolutionReason::Unambiguous {
+        tracing::info!("{}", resolution.describe(ext));
+    }
+    let lang = resolution
+        .language
+        .ok_or_else(|| format!("Unknown file type: {} ({})", file.display(), resolution.describe(ext)))?;
 
     let loader = grammar_loader();
     let grammar = loader

@@ -16,6 +16,25 @@ impl Language for X86Asm {
         "x86asm"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        // NASM/MASM use Intel syntax: unprefixed registers, `[bits N]`,
+        // `section .text` without GAS-only directives.
+        crate::SniffHints {
+            shebang_patterns: &[],
+            content_signals: &[
+                ("[bits ", 3),
+                ("[BITS ", 3),
+                ("global _start", 2),
+                ("section .text", 1),
+                (".globl ", -3),
+                (".type ", -2),
+                ("%rip", -3),
+                ("%rax", -2),
+                ("%eax", -2),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

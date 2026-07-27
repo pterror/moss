@@ -100,13 +100,22 @@ impl SyntaxService {
         )]
         depth: Option<i32>,
         compact: bool,
+        #[param(
+            help = "Force a specific language (name or grammar name), skipping extension/config/sniffing resolution — for ambiguous extensions like .m, .pl, .s/.S/.asm, .conf"
+        )]
+        lang: Option<String>,
     ) -> Result<serde_json::Value, String> {
         let depth_val = depth.unwrap_or(5);
         self.compact.set(compact);
 
         let file_path = PathBuf::from(&file);
         let (json, text) = crate::commands::analyze::ast::build_ast_output(
-            &file_path, at_line, sexp, depth_val, compact,
+            &file_path,
+            at_line,
+            sexp,
+            depth_val,
+            compact,
+            lang.as_deref(),
         )?;
         *self.ast_text.borrow_mut() = text;
         Ok(json)

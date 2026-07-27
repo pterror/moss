@@ -17,6 +17,25 @@ impl Language for Asm {
         "asm"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        // GNU `as` uses AT&T syntax by convention: `%`-prefixed registers,
+        // `$`-prefixed immediates, and GAS-only directives like `.globl`/`.type`.
+        crate::SniffHints {
+            shebang_patterns: &[],
+            content_signals: &[
+                (".globl ", 3),
+                (".type ", 2),
+                (".size ", 2),
+                ("%rip", 3),
+                ("%rax", 2),
+                ("%eax", 2),
+                ("[bits ", -3),
+                ("[BITS ", -3),
+                ("global _start", -2),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

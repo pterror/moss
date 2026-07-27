@@ -22,6 +22,21 @@ impl Language for Prolog {
         "prolog"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        crate::SniffHints {
+            shebang_patterns: &["swipl", "prolog", "gprolog"],
+            content_signals: &[
+                (":-", 3),
+                (":- module", 3),
+                (":- initialization", 3),
+                ("use strict", -3),
+                ("use warnings", -3),
+                ("my $", -2),
+                ("sub ", -1),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

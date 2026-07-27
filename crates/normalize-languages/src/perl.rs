@@ -19,6 +19,22 @@ impl Language for Perl {
         "perl"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        crate::SniffHints {
+            shebang_patterns: &["perl"],
+            content_signals: &[
+                ("use strict", 3),
+                ("use warnings", 3),
+                ("my $", 2),
+                ("sub ", 1),
+                ("$self->", 2),
+                ("package ", 2),
+                (":-", -3),
+                (":- module", -3),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }

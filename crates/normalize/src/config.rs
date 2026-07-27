@@ -67,6 +67,10 @@
 //! [walk]
 //! ignore_files = [".gitignore"]  # gitignore-format files to respect (default: [".gitignore"])
 //! exclude = [".git"]             # directory names to always skip (default: [".git"])
+//!
+//! [languages]
+//! "*.m" = "matlab"              # resolve ambiguous extensions (.m, .pl, .s/.S/.asm, .conf)
+//! "src/**/*.pl" = "prolog"      # glob patterns, matched against the file path
 //! ```
 
 use crate::commands::analyze::AnalyzeConfig;
@@ -98,6 +102,37 @@ use std::path::Path;
 #[derive(Debug, Clone, Deserialize, Serialize, Default, JsonSchema)]
 #[serde(transparent)]
 pub struct RuleTagsConfig(pub std::collections::HashMap<String, Vec<String>>);
+
+/// Project-level extension/glob → language overrides (`[languages]` section).
+///
+/// Resolves extension collisions where two languages register the same
+/// extension (`.m` MATLAB/Objective-C, `.pl` Perl/Prolog, `.s`/`.S`/`.asm`
+/// GNU-asm/x86asm, `.conf` INI/Nginx) without requiring `--lang` on every
+/// invocation. Keys are glob patterns matched against the file path; values
+/// are language names or grammar names (case-insensitive), e.g. `"matlab"`,
+/// `"prolog"`. Checked before content sniffing — see
+/// [`normalize_languages::resolve_language`]. If more than one pattern
+/// matches the same path, which one wins is unspecified (patterns are
+/// stored in a table, not an ordered list); keep patterns non-overlapping.
+///
+/// Example:
+/// ```toml
+/// [languages]
+/// "*.m" = "matlab"
+/// "src/**/*.pl" = "prolog"
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize, Default, JsonSchema)]
+#[serde(transparent)]
+pub struct LanguagesConfig(pub std::collections::HashMap<String, String>);
+
+impl LanguagesConfig {
+    /// Convert to the resolver's runtime override set.
+    pub fn to_overrides(&self) -> normalize_languages::LanguageOverrides {
+        normalize_languages::LanguageOverrides::new(
+            self.0.iter().map(|(pattern, lang)| (pattern.clone(), lang.clone())),
+        )
+    }
+}
 
 /// Root configuration structure.
 #[derive(Debug, Clone, Deserialize, Serialize, Default, JsonSchema, server_less::Config)]
@@ -139,6 +174,10 @@ pub struct NormalizeConfig {
     /// Walk configuration for directory traversal (`[walk]` section).
     #[param(nested, serde)]
     pub walk: normalize_rules_config::WalkConfig,
+    /// Extension/glob → language overrides (`[languages]` section), used to
+    /// resolve ambiguous extensions like `.m`, `.pl`, `.s`/`.S`/`.asm`, `.conf`.
+    #[param(nested, serde)]
+    pub languages: LanguagesConfig,
 }
 
 impl NormalizeConfig {

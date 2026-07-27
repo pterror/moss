@@ -17,6 +17,20 @@ impl Language for Ini {
         "ini"
     }
 
+    fn sniff_hints(&self) -> crate::SniffHints {
+        crate::SniffHints {
+            shebang_patterns: &[],
+            content_signals: &[
+                ("=", 1),
+                ("server {", -3),
+                ("location ", -2),
+                ("listen ", -2),
+                ("proxy_pass", -3),
+                (";\n", -1),
+            ],
+        }
+    }
+
     fn as_symbols(&self) -> Option<&dyn LanguageSymbols> {
         Some(self)
     }
