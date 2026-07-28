@@ -20,8 +20,8 @@ use crate::embedder::{Embedder, encode_vector};
 use crate::git_staleness::compute_staleness_batch;
 use crate::store;
 use crate::vec_ext::VecConnection;
-use gix::bstr::ByteSlice as _;
 use libsql::Connection;
+use normalize_vcs::{GitBackend, Vcs};
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
@@ -589,7 +589,7 @@ pub async fn populate_context_blocks(
 
 /// Embed recent git commit messages.
 ///
-/// Walks up to `max_commits` commits from HEAD (using `gix`) and embeds each
+/// Walks up to `max_commits` commits from HEAD (via `normalize_vcs::Vcs`) and embeds each
 /// commit's subject + body as a `commit` source chunk, keyed by the short hash.
 ///
 /// Commits already present in the embeddings table (same hash) are skipped so
@@ -698,73 +698,26 @@ struct CommitInfo {
     body: String,
 }
 
-/// Walk up to `max_commits` commits from HEAD using `gix` and return their info.
+/// Walk up to `max_commits` commits from HEAD via the VCS trait and return their info.
 fn load_recent_commits(root: &Path, max_commits: usize) -> Vec<CommitInfo> {
-    let repo = match gix::discover(root) {
-        Ok(r) => r.into_sync().to_thread_local(),
-        Err(_) => return Vec::new(),
-    };
-
-    let head_id = match repo.head_id() {
-        Ok(id) => id,
-        Err(_) => return Vec::new(),
-    };
-
-    let walk = match head_id
-        .ancestors()
-        .sorting(gix::revision::walk::Sorting::ByCommitTime(
-            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
-        ))
-        .all()
-    {
-        Ok(w) => w,
-        Err(_) => return Vec::new(),
-    };
-
-    let mut commits = Vec::new();
-
-    for info in walk.take(max_commits) {
-        let Ok(info) = info else { continue };
-        let Ok(commit_obj) = info.object() else {
-            continue;
-        };
-        let Ok(commit) = commit_obj.decode() else {
-            continue;
-        };
-
-        let hash = info.id().to_string();
-        let short_hash = if hash.len() >= 12 {
-            hash[..12].to_string()
-        } else {
-            hash.clone()
-        };
-
-        // commit.time() returns Result<Time, Error>; fall back to 0 on decode error.
-        let timestamp = commit.time().map(|t| t.seconds).unwrap_or(0);
-        let date = epoch_to_date(timestamp);
-
-        // commit.message is &BStr; ByteSlice::to_str_lossy for UTF-8 conversion.
-        let full_message = commit.message.to_str_lossy().into_owned();
-        let msg_ref = commit.message();
-        let subject = msg_ref.summary().to_str_lossy().trim().to_string();
-        let body = full_message
-            .trim_start_matches(subject.as_str())
-            .trim()
-            .to_string();
-
-        if subject.is_empty() {
-            continue;
-        }
-
-        commits.push(CommitInfo {
-            hash: short_hash,
-            date,
-            subject,
-            body,
-        });
-    }
-
-    commits
+    GitBackend
+        .recent_commit_messages(root, max_commits)
+        .into_iter()
+        .filter(|c| !c.subject.is_empty())
+        .map(|c| {
+            let short_hash = if c.hash.len() >= 12 {
+                c.hash[..12].to_string()
+            } else {
+                c.hash.clone()
+            };
+            CommitInfo {
+                hash: short_hash,
+                date: epoch_to_date(c.timestamp),
+                subject: c.subject,
+                body: c.body,
+            }
+        })
+        .collect()
 }
 
 /// Convert Unix epoch seconds to a `YYYY-MM-DD` string (UTC, approximate).

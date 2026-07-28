@@ -213,29 +213,7 @@ fn resolve_full_hash(root: &Path, short: &str) -> Option<String> {
 
 /// Per-file blame: commit hash → line count.
 fn blame_file(root: &Path, path: &str) -> Option<HashMap<String, usize>> {
-    let repo = git_utils::open_repo(root)?;
-    let head_id = repo.head_id().ok()?;
-    let path_bstr: &gix::bstr::BStr = path.as_bytes().into();
-    let outcome = repo
-        .blame_file(
-            path_bstr,
-            head_id.detach(),
-            gix::repository::blame_file::Options::default(),
-        )
-        .ok()?;
-
-    // Accumulate per-commit line counts from blame entries.
-    let mut commit_lines: HashMap<String, usize> = HashMap::new();
-    for entry in &outcome.entries {
-        let hash = entry.commit_id.to_hex().to_string();
-        *commit_lines.entry(hash).or_default() += entry.len.get() as usize;
-    }
-
-    if commit_lines.is_empty() {
-        None
-    } else {
-        Some(commit_lines)
-    }
+    git_utils::blame_line_counts_by_commit(root, path)
 }
 
 /// Collect git-tracked source files, optionally scoped to a target.

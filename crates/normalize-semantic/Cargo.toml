@@ -13,7 +13,7 @@ cli = ["dep:server-less", "dep:schemars"]
 embeddings = ["dep:fastembed"]
 
 [dependencies]
-normalize-git = { workspace = true }
+normalize-vcs = { workspace = true }
 normalize-facts = { path = "../normalize-facts", version = "0.3.2" }
 normalize-output = { path = "../normalize-output", version = "0.3.2" }
 
@@ -34,9 +34,6 @@ sqlite-vec = "0.1.9-alpha.1"
 
 # Database (already in workspace)
 libsql = { workspace = true }
-
-# Git history for staleness computation
-gix = { workspace = true }
 
 # Service framework (CLI surface)
 server-less = { workspace = true, optional = true }

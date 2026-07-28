@@ -1,7 +1,7 @@
 //! Line-level diff metric using gix.
 
 use super::{DiffMeasurement, DiffMetric};
-use crate::git_ops::{self, FileChangeKind};
+use crate::git_ops::{self, ChangeKind};
 use std::path::Path;
 
 /// Line-level diff per file.
@@ -17,29 +17,20 @@ impl DiffMetric for LineDeltaMetric {
     }
 
     fn measure_diff(&self, root: &Path, base_ref: &str) -> anyhow::Result<Vec<DiffMeasurement>> {
-        let repo = git_ops::open_repo(root)?;
         let changes = git_ops::diff_base_to_head(root, base_ref)?;
 
         let mut results = Vec::new();
 
         for change in changes {
-            let old_lines = change
-                .old_id
-                .and_then(|id| git_ops::read_blob_bytes(&repo, id))
-                .map(|b| count_lines(&b))
-                .unwrap_or(0);
+            let old_lines = change.old_content.as_deref().map(count_lines).unwrap_or(0);
 
-            let new_lines = change
-                .new_id
-                .and_then(|id| git_ops::read_blob_bytes(&repo, id))
-                .map(|b| count_lines(&b))
-                .unwrap_or(0);
+            let new_lines = change.new_content.as_deref().map(count_lines).unwrap_or(0);
 
             let added = new_lines.saturating_sub(old_lines) as f64;
             let removed = old_lines.saturating_sub(new_lines) as f64;
 
             // Skip files where nothing changed in terms of line count
-            if added == 0.0 && removed == 0.0 && change.kind == FileChangeKind::Modified {
+            if added == 0.0 && removed == 0.0 && change.kind == ChangeKind::Modified {
                 continue;
             }
 

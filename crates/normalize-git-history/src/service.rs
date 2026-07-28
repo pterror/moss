@@ -338,10 +338,10 @@ impl HistoryService {
         let lim = limit.unwrap_or(20);
         let mut report = crate::coupling::analyze_coupling(&root_path, min, lim, &merged_exclude)?;
         if let Some(ref diff_ref) = diff {
-            use normalize_git::{resolve_ref, run_in_worktree};
             use normalize_rank::ranked::compute_ranked_diff;
-            let hash = resolve_ref(&root_path, diff_ref)?;
-            let baseline = run_in_worktree(&root_path, &hash, |wt| {
+            use normalize_vcs::{GitBackend, Vcs};
+            let hash = GitBackend.resolve_ref(&root_path, diff_ref)?;
+            let baseline = GitBackend.run_in_worktree(&root_path, &hash, |wt| {
                 crate::coupling::analyze_coupling(wt, min, usize::MAX, &merged_exclude)
             })?;
             compute_ranked_diff(&mut report.pairs, &baseline.pairs);
@@ -413,10 +413,10 @@ impl HistoryService {
         }
         let mut report = crate::ownership::analyze_ownership(&root_path, lim, &merged_exclude)?;
         if let Some(ref diff_ref) = diff {
-            use normalize_git::{resolve_ref, run_in_worktree};
             use normalize_rank::ranked::compute_ranked_diff;
-            let hash = resolve_ref(&root_path, diff_ref)?;
-            let baseline = run_in_worktree(&root_path, &hash, |wt| {
+            use normalize_vcs::{GitBackend, Vcs};
+            let hash = GitBackend.resolve_ref(&root_path, diff_ref)?;
+            let baseline = GitBackend.run_in_worktree(&root_path, &hash, |wt| {
                 crate::ownership::analyze_ownership(wt, usize::MAX, &merged_exclude)
             })?;
             compute_ranked_diff(&mut report.files, &baseline.files);

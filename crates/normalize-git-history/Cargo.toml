@@ -26,7 +26,6 @@ cli = [
 ]
 
 [dependencies]
-normalize-git = { workspace = true }
 normalize-vcs = { workspace = true }
 normalize-output = { path = "../normalize-output", version = "0.3.2", optional = true }
 nu-ansi-term = { version = "0.50", optional = true }
@@ -39,7 +38,6 @@ glob = "0.3.3"
 rayon.workspace = true
 serde.workspace = true
 schemars = "1"
-gix = { workspace = true }
 tracing = "0.1"
 tree-sitter = "0.26"
 streaming-iterator = "0.1"

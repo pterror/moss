@@ -2837,19 +2837,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "git2"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b903b73e45dc0c6c596f2d37eccece7c1c8bb6e4407b001096387c63d0d93724"
-dependencies = [
- "bitflags 2.11.1",
- "libc",
- "libgit2-sys",
- "log",
- "url",
-]
-
-[[package]]
 name = "gix"
 version = "0.81.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4708,18 +4695,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
-name = "libgit2-sys"
-version = "0.17.0+1.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10472326a8a6477c3c20a64547b0059e4b0d086869eee31e6d7da728a8eb7224"
-dependencies = [
- "cc",
- "libc",
- "libz-sys",
- "pkg-config",
-]
-
-[[package]]
 name = "libloading"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4878,18 +4853,6 @@ dependencies = [
  "tracing",
  "uuid",
  "zerocopy 0.7.35",
-]
-
-[[package]]
-name = "libz-sys"
-version = "1.1.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3a226e576f50782b3305c5ccf458698f92798987f551c6a02efe8276721e22"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
 ]
 
 [[package]]
@@ -5175,8 +5138,6 @@ dependencies = [
  "dirs 5.0.1",
  "dotenvy",
  "flate2",
- "git2",
- "gix",
  "glob",
  "grep",
  "grep-matcher",
@@ -5209,7 +5170,6 @@ dependencies = [
  "normalize-facts-rules-api",
  "normalize-facts-rules-interpret",
  "normalize-filter",
- "normalize-git",
  "normalize-git-history",
  "normalize-graph",
  "normalize-index",
@@ -5233,6 +5193,7 @@ dependencies = [
  "normalize-syntax-rules",
  "normalize-tools",
  "normalize-typegen",
+ "normalize-vcs",
  "notify",
  "nu-ansi-term",
  "nucleo-matcher",
@@ -5275,13 +5236,13 @@ dependencies = [
  "indicatif 0.17.11",
  "libsql",
  "normalize-config-paths",
- "normalize-git",
  "normalize-graph",
  "normalize-index",
  "normalize-languages",
  "normalize-output",
  "normalize-rank",
  "normalize-rules-config",
+ "normalize-vcs",
  "nu-ansi-term",
  "schemars",
  "serde",
@@ -5305,14 +5266,13 @@ name = "normalize-budget"
 version = "0.3.2"
 dependencies = [
  "anyhow",
- "gix",
  "normalize-config-paths",
  "normalize-facts",
- "normalize-git",
  "normalize-languages",
  "normalize-metrics",
  "normalize-output",
  "normalize-path-resolve",
+ "normalize-vcs",
  "rayon",
  "schemars",
  "serde",
@@ -5480,7 +5440,6 @@ dependencies = [
  "blake3",
  "chrono",
  "dirs 5.0.1",
- "gix",
  "ignore",
  "indicatif 0.17.11",
  "libsql",
@@ -5488,12 +5447,12 @@ dependencies = [
  "normalize-config-paths",
  "normalize-facts-core",
  "normalize-filter",
- "normalize-git",
  "normalize-languages",
  "normalize-local-deps",
  "normalize-manifest",
  "normalize-output",
  "normalize-rules-config",
+ "normalize-vcs",
  "rayon",
  "schemars",
  "serde",
@@ -5574,13 +5533,11 @@ dependencies = [
 name = "normalize-git-history"
 version = "0.3.2"
 dependencies = [
- "gix",
  "glob",
  "normalize-code-similarity",
  "normalize-config-paths",
  "normalize-ecosystems",
  "normalize-facts",
- "normalize-git",
  "normalize-index",
  "normalize-languages",
  "normalize-output",
@@ -5902,14 +5859,13 @@ name = "normalize-ratchet"
 version = "0.3.2"
 dependencies = [
  "anyhow",
- "gix",
  "normalize-config-paths",
  "normalize-facts",
- "normalize-git",
  "normalize-languages",
  "normalize-metrics",
  "normalize-output",
  "normalize-path-resolve",
+ "normalize-vcs",
  "rayon",
  "schemars",
  "serde",
@@ -5997,11 +5953,10 @@ version = "0.3.2"
 dependencies = [
  "anyhow",
  "fastembed",
- "gix",
  "libsql",
  "normalize-facts",
- "normalize-git",
  "normalize-output",
+ "normalize-vcs",
  "schemars",
  "serde",
  "serde_json",
@@ -6137,6 +6092,7 @@ dependencies = [
 name = "normalize-vcs"
 version = "0.3.2"
 dependencies = [
+ "anyhow",
  "gix",
  "normalize-git",
 ]
@@ -8587,12 +8543,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "vcpkg"
-version = "0.2.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"

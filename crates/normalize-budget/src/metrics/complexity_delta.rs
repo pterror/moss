@@ -67,15 +67,14 @@ impl DiffMetric for ComplexityDeltaMetric {
 ///
 /// Uses gix to read file blobs directly from the object store — no filesystem checkout.
 fn collect_complexity_at_ref(root: &Path, git_ref: &str) -> anyhow::Result<HashMap<String, f64>> {
-    let repo = git_ops::open_repo(root)?;
     let mut map = HashMap::new();
 
-    git_ops::walk_tree_at_ref(root, git_ref, |rel_path, blob_id| {
+    git_ops::read_files_at_ref(root, git_ref, |rel_path, content| {
         let abs_path = root.join(rel_path);
         let Some(support) = support_for_path(&abs_path) else {
             return;
         };
-        let Some(content) = git_ops::read_blob_text(&repo, blob_id) else {
+        let Some(content) = content else {
             return;
         };
         if let Some(entries) = analyze_file_complexity(&abs_path, rel_path, &content, support) {

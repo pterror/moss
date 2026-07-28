@@ -1,16 +1,16 @@
-//! Git operations for the ratchet crate — thin re-exports from `normalize_git`.
+//! Git operations for the ratchet crate — thin wrappers over `normalize_vcs::Vcs`.
 //!
-//! `read_blob_text` and `walk_tree_at_ref` are re-exported directly.
-//!
-//! `open_repo` is wrapped to return `anyhow::Result` (matching the existing call
-//! sites in this crate that use `.map_err(|e| e.to_string())?`).
-pub use normalize_git::{read_blob_text, walk_tree_at_ref};
+//! Goes through the VCS trait boundary (no direct `gix` types) so this crate works
+//! unchanged if a non-git backend is ever added.
+use normalize_vcs::{GitBackend, Vcs};
+use std::path::Path;
 
-/// Open the git repository at or containing `path`.
-///
-/// Thin wrapper around `normalize_git::open_repo` that converts `None` into an
-/// `anyhow::Error` for callers that need to propagate the error.
-pub fn open_repo(path: &std::path::Path) -> anyhow::Result<gix::Repository> {
-    normalize_git::open_repo(path)
-        .ok_or_else(|| anyhow::anyhow!("not a git repository: {}", path.display()))
+/// Read every file (blob) in the tree at `git_ref`, calling `visitor` with its
+/// repo-relative path and decoded text content (`None` if not valid UTF-8).
+pub fn read_files_at_ref(
+    root: &Path,
+    git_ref: &str,
+    visitor: impl FnMut(&str, Option<String>),
+) -> anyhow::Result<()> {
+    GitBackend.read_files_at_ref(root, git_ref, visitor)
 }

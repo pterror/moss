@@ -3,6 +3,7 @@
 use crate::is_source_file;
 use glob::Pattern;
 use normalize_rank::ranked::{Column, DiffableRankEntry, RankEntry, format_delta};
+use normalize_vcs::Vcs;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -161,8 +162,8 @@ pub fn analyze_coupling(
         .filter_map(|p| Pattern::new(p).ok())
         .collect();
 
-    // Get per-commit file lists via gix — no PATH dependency on git binary.
-    let raw_commits = normalize_git::git_per_commit_files(root);
+    // Get per-commit file lists via `normalize_vcs::Vcs` — no PATH dependency on git binary.
+    let raw_commits = normalize_vcs::GitBackend.walk_commit_history(root, None);
     if raw_commits.is_empty() {
         return Err("Not a git repository or no commit history".to_string());
     }
@@ -170,9 +171,11 @@ pub fn analyze_coupling(
     // Filter each commit's file list to source files that still exist on disk.
     let commits: Vec<Vec<String>> = raw_commits
         .into_iter()
-        .map(|files| {
-            files
+        .map(|entry| {
+            entry
+                .files
                 .into_iter()
+                .map(|f| f.path)
                 .filter(|f| {
                     let p = Path::new(f.as_str());
                     is_source_file(p)

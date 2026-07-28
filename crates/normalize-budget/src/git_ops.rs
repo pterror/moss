@@ -1,20 +1,22 @@
-//! Git operations for the budget crate — thin re-exports from `normalize_git`.
+//! Git operations for the budget crate — thin wrappers over `normalize_vcs::Vcs`.
 //!
-//! Low-level gix helpers (`read_blob_text`, `read_blob_bytes`, `walk_tree_at_ref`,
-//! `diff_base_to_head`, `FileChangeKind`, `FileChange`) are re-exported directly.
-//!
-//! `open_repo` is wrapped to return `anyhow::Result` (matching the existing call
-//! sites in this crate that propagate errors via `?`).
-pub use normalize_git::{
-    FileChange, FileChangeKind, diff_base_to_head, read_blob_bytes, read_blob_text,
-    walk_tree_at_ref,
-};
+//! All metric collection goes through the VCS trait boundary (no direct `gix` types)
+//! so this crate works unchanged if a non-git backend is ever added.
+pub use normalize_vcs::{ChangeKind, FileContentChange};
+use normalize_vcs::{GitBackend, Vcs};
+use std::path::Path;
 
-/// Open the git repository at or containing `path`.
-///
-/// Thin wrapper around `normalize_git::open_repo` that converts `None` into an
-/// `anyhow::Error` for callers that need to propagate the error.
-pub fn open_repo(path: &std::path::Path) -> anyhow::Result<gix::Repository> {
-    normalize_git::open_repo(path)
-        .ok_or_else(|| anyhow::anyhow!("not a git repository: {}", path.display()))
+/// Diff between `base_ref` and HEAD, including old/new content for every changed file.
+pub fn diff_base_to_head(root: &Path, base_ref: &str) -> anyhow::Result<Vec<FileContentChange>> {
+    GitBackend.diff_file_contents(root, base_ref)
+}
+
+/// Read every file (blob) in the tree at `git_ref`, calling `visitor` with its
+/// repo-relative path and decoded text content (`None` if not valid UTF-8).
+pub fn read_files_at_ref(
+    root: &Path,
+    git_ref: &str,
+    visitor: impl FnMut(&str, Option<String>),
+) -> anyhow::Result<()> {
+    GitBackend.read_files_at_ref(root, git_ref, visitor)
 }

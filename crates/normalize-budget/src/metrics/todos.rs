@@ -16,23 +16,14 @@ impl DiffMetric for TodoDeltaMetric {
     }
 
     fn measure_diff(&self, root: &Path, base_ref: &str) -> anyhow::Result<Vec<DiffMeasurement>> {
-        let repo = git_ops::open_repo(root)?;
         let changes = git_ops::diff_base_to_head(root, base_ref)?;
 
         let mut results = Vec::new();
 
         for change in changes {
-            let old_count = change
-                .old_id
-                .and_then(|id| git_ops::read_blob_text(&repo, id))
-                .map(|c| count_todos(&c))
-                .unwrap_or(0);
+            let old_count = change.old_text().map(|c| count_todos(&c)).unwrap_or(0);
 
-            let new_count = change
-                .new_id
-                .and_then(|id| git_ops::read_blob_text(&repo, id))
-                .map(|c| count_todos(&c))
-                .unwrap_or(0);
+            let new_count = change.new_text().map(|c| count_todos(&c)).unwrap_or(0);
 
             let added = new_count.saturating_sub(old_count) as f64;
             let removed = old_count.saturating_sub(new_count) as f64;

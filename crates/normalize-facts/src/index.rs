@@ -3965,27 +3965,25 @@ impl FileIndex {
         &self,
         since_commit: Option<&str>,
     ) -> Result<usize, libsql::Error> {
+        use normalize_vcs::Vcs;
         use std::collections::HashMap;
 
         let root = &self.root;
 
-        // Open gix repository. If not a git repo, silently skip (not an error).
-        let repo = match open_gix_repo(root) {
-            Some(r) => r,
-            None => {
-                tracing::debug!("co-change: no git repository found at {:?}, skipping", root);
-                return Ok(0);
-            }
-        };
+        // If not a git repo, silently skip (not an error).
+        if !normalize_vcs::GitBackend.repo_exists(root) {
+            tracing::debug!("co-change: no git repository found at {:?}, skipping", root);
+            return Ok(0);
+        }
 
-        let head_sha = match repo.head_id() {
-            Ok(id) => id.to_string(),
+        let head_sha = match normalize_vcs::GitBackend.resolve_ref(root, "HEAD") {
+            Ok(sha) => sha,
             Err(_) => return Ok(0),
         };
 
         // Walk commits once, collecting per-commit file lists (co-change) and
         // per-file churn stats (commit count, last-changed, line churn) together.
-        let walk_data = walk_commits_for_co_change(&repo, since_commit);
+        let walk_data = walk_commits_for_co_change(root, since_commit);
         let commit_files = walk_data.commit_files;
         let new_churn = walk_data.churn;
 
@@ -4608,13 +4606,6 @@ fn build_cfg_data_for_file(
 // Co-change helpers (not on FileIndex — free functions to keep impl clean)
 // =============================================================================
 
-/// Open a gix repository at or containing `root`.
-fn open_gix_repo(root: &std::path::Path) -> Option<gix::Repository> {
-    gix::discover(root)
-        .ok()
-        .map(|r| r.into_sync().to_thread_local())
-}
-
 /// Per-file churn accumulated across a single `walk_commits_for_co_change` pass.
 #[derive(Default, Clone)]
 struct FileChurnAcc {
@@ -4636,118 +4627,44 @@ struct CoChangeWalkData {
     churn: std::collections::HashMap<String, FileChurnAcc>,
 }
 
-/// Walk commits via gix, returning per-commit lists of *source* files changed
-/// (for co-change pairing) and per-file churn stats (commit count, last-changed
-/// timestamp, line churn) in the same pass.
+/// Walk commits via `normalize_vcs::Vcs`, returning per-commit lists of *source* files
+/// changed (for co-change pairing) and per-file churn stats (commit count, last-changed
+/// timestamp, line churn) derived from the same walk.
 ///
 /// If `since_commit` is `Some(sha)`, only commits after (exclusive) that SHA are returned.
-/// Commits are yielded newest-first from the HEAD ancestry (explicit `ByCommitTime` sort —
-/// required so `info.commit_time` is populated for the churn `last_changed` timestamp;
-/// the default topological order leaves it `None`).
+/// `Vcs::walk_commit_history` already yields commits newest-first with per-file line
+/// churn computed, so this is now a pure filter/aggregate pass over plain data — no `gix`
+/// types cross this boundary.
 fn walk_commits_for_co_change(
-    repo: &gix::Repository,
+    root: &std::path::Path,
     since_commit: Option<&str>,
 ) -> CoChangeWalkData {
-    let head_id = match repo.head_id() {
-        Ok(id) => id,
-        Err(_) => {
-            return CoChangeWalkData {
-                commit_files: Vec::new(),
-                churn: std::collections::HashMap::new(),
-            };
-        }
-    };
-    let walk = match head_id
-        .ancestors()
-        .sorting(gix::revision::walk::Sorting::ByCommitTime(
-            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
-        ))
-        .all()
-    {
-        Ok(w) => w,
-        Err(_) => {
-            return CoChangeWalkData {
-                commit_files: Vec::new(),
-                churn: std::collections::HashMap::new(),
-            };
-        }
-    };
-
-    // If since_commit is specified, resolve it to an ObjectId for fast comparison.
-    let stop_id: Option<gix::hash::ObjectId> = since_commit.and_then(|sha| sha.parse().ok());
+    use normalize_vcs::{GitBackend, Vcs};
 
     let mut commit_files = Vec::new();
     let mut churn: std::collections::HashMap<String, FileChurnAcc> =
         std::collections::HashMap::new();
 
-    for info in walk {
-        let Ok(info) = info else { continue };
-        let commit_id = info.id();
-
-        // Stop when we hit the commit we already processed.
-        if let Some(ref stop) = stop_id
-            && commit_id == *stop
-        {
-            break;
-        }
-
-        let Ok(commit) = info.object() else { continue };
-        let Ok(tree) = commit.tree() else { continue };
-        let commit_time = info.commit_time.unwrap_or(0) as u64;
-
-        let parent_tree = info
-            .parent_ids()
-            .next()
-            .and_then(|pid| pid.object().ok())
-            .and_then(|obj| obj.into_commit().tree().ok());
-
-        let changes = match repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
+    for entry in GitBackend.walk_commit_history(root, since_commit) {
         let mut files: Vec<String> = Vec::new();
-        for change in changes {
-            use gix::object::tree::diff::ChangeDetached;
-            let (location, old_id, new_id) = match &change {
-                ChangeDetached::Addition { location, id, .. } => {
-                    (location.clone(), None, Some(*id))
-                }
-                ChangeDetached::Deletion { location, id, .. } => {
-                    (location.clone(), Some(*id), None)
-                }
-                ChangeDetached::Modification {
-                    location,
-                    previous_id,
-                    id,
-                    ..
-                } => (location.clone(), Some(*previous_id), Some(*id)),
-                ChangeDetached::Rewrite {
-                    source_location,
-                    source_id,
-                    id,
-                    ..
-                } => (source_location.clone(), Some(*source_id), Some(*id)),
-            };
-            let path_str = String::from_utf8_lossy(&location).into_owned();
+        for change in entry.files {
             // Only include source files (those with a supported language extension) —
             // matches the scope of the rest of the index (symbols, calls, imports).
-            if !is_source_file(&path_str) {
+            if !is_source_file(&change.path) {
                 continue;
             }
 
             // Churn: accumulated for every commit touching this file, independent of
             // the >= 2 files co-change threshold below.
-            let diff = normalize_git::count_diff_lines(repo, old_id, new_id);
-            let acc = churn.entry(path_str.clone()).or_default();
+            let acc = churn.entry(change.path.clone()).or_default();
             acc.commit_count += 1;
-            acc.lines_added += diff.added;
-            acc.lines_deleted += diff.deleted;
-            if commit_time > acc.last_changed {
-                acc.last_changed = commit_time;
+            acc.lines_added += change.lines_added;
+            acc.lines_deleted += change.lines_deleted;
+            if entry.timestamp > acc.last_changed {
+                acc.last_changed = entry.timestamp;
             }
 
-            files.push(path_str);
+            files.push(change.path);
         }
 
         if files.len() >= 2 {

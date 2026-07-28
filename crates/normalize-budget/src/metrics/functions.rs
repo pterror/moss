@@ -32,12 +32,11 @@ fn collect_symbols_at_ref(
     git_ref: &str,
     kinds: &[&str],
 ) -> anyhow::Result<HashMap<String, ()>> {
-    let repo = git_ops::open_repo(root)?;
     let extractor = Extractor::new();
     let mut map = HashMap::new();
 
-    git_ops::walk_tree_at_ref(root, git_ref, |rel_path, blob_id| {
-        let Some(content) = git_ops::read_blob_text(&repo, blob_id) else {
+    git_ops::read_files_at_ref(root, git_ref, |rel_path, content| {
+        let Some(content) = content else {
             return;
         };
         // Build a fake absolute path for language detection; content is from the blob.

@@ -1,6 +1,7 @@
 //! Cross-repo contributor analysis — author breadth, repo bus factor, overlap.
 
 use normalize_rank::ranked::{Column, RankEntry};
+use normalize_vcs::Vcs;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
@@ -184,11 +185,11 @@ struct RepoShortlog {
     authors: HashMap<String, (String, usize)>, // email -> (name, commits)
 }
 
-/// Collect per-author commit counts for one repo via gix.
+/// Collect per-author commit counts for one repo via `normalize_vcs::Vcs`.
 fn shortlog(repo: &Path) -> Option<RepoShortlog> {
     let repo_name = repo.file_name()?.to_str()?.to_string();
 
-    let counts = normalize_git::git_author_commit_counts(repo);
+    let counts = normalize_vcs::GitBackend.author_commit_counts(repo);
     if counts.is_empty() {
         return None;
     }

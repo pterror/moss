@@ -42,8 +42,7 @@ tree-sitter = "0.26"
 streaming-iterator = "0.1"
 
 # Git history (for co-change edge index)
-gix = { workspace = true }
-normalize-git = { workspace = true }
+normalize-vcs = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
 # Database

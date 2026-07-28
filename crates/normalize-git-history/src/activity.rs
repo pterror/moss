@@ -284,22 +284,28 @@ struct RawRepoData {
 }
 
 fn gather_repo_data(repo: &Path) -> Option<RawRepoData> {
+    use normalize_vcs::{GitBackend, Vcs};
+
     let name = repo.file_name()?.to_str()?.to_string();
 
-    let raw = normalize_git::git_activity_commits(repo);
+    let raw = GitBackend.walk_commit_history(repo, None);
     if raw.is_empty() {
         return None;
     }
 
     let commits = raw
         .into_iter()
-        .map(|c| CommitInfo {
-            timestamp: c.timestamp,
-            author: c.author_email,
-            file_stats: vec![FileStat {
-                insertions: c.insertions,
-                deletions: c.deletions,
-            }],
+        .map(|c| {
+            let insertions = c.files.iter().map(|f| f.lines_added).sum();
+            let deletions = c.files.iter().map(|f| f.lines_deleted).sum();
+            CommitInfo {
+                timestamp: c.timestamp,
+                author: c.author_email,
+                file_stats: vec![FileStat {
+                    insertions,
+                    deletions,
+                }],
+            }
         })
         .collect();
 

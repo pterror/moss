@@ -1,7 +1,7 @@
 //! Module/file added or removed metric.
 
 use super::{DiffMeasurement, DiffMetric};
-use crate::git_ops::{self, FileChangeKind};
+use crate::git_ops::{self, ChangeKind};
 use std::path::Path;
 
 /// Modules (files) added or removed.
@@ -23,17 +23,17 @@ impl DiffMetric for ModuleDeltaMetric {
 
         for change in changes {
             match change.kind {
-                FileChangeKind::Added => results.push(DiffMeasurement {
+                ChangeKind::Added => results.push(DiffMeasurement {
                     key: change.path,
                     added: 1.0,
                     removed: 0.0,
                 }),
-                FileChangeKind::Deleted => results.push(DiffMeasurement {
+                ChangeKind::Deleted => results.push(DiffMeasurement {
                     key: change.path,
                     added: 0.0,
                     removed: 1.0,
                 }),
-                FileChangeKind::Modified => {} // not a module addition/removal
+                ChangeKind::Modified => {} // not a module addition/removal
             }
         }
 

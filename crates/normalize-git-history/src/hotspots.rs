@@ -240,30 +240,31 @@ impl ChurnStats {
     }
 }
 
-/// Build per-file churn stats via gix (no PATH dependency).
+/// Build per-file churn stats via `normalize_vcs::Vcs` (no PATH dependency on `git`).
 fn parse_git_churn(root: &Path) -> Result<HashMap<String, ChurnStats>, String> {
-    let raw = normalize_git::git_file_churn_stats(root);
-    if raw.is_empty() {
-        // Check whether this is a genuine "no history" case or "not a repo" case.
-        if !normalize_vcs::GitBackend.repo_exists(root) {
-            return Err("Not a git repository".to_string());
-        }
+    if !normalize_vcs::GitBackend.repo_exists(root) {
+        return Err("Not a git repository".to_string());
+    }
+    let walked = normalize_vcs::GitBackend.walk_commit_history(root, None);
+    if walked.is_empty() {
         return Err("git log failed or no history found".to_string());
     }
-    let stats = raw
-        .into_iter()
-        .map(|(path, entries)| {
-            let commits = entries
-                .into_iter()
-                .map(|e| CommitChurn {
-                    added: e.added,
-                    deleted: e.deleted,
-                    timestamp: e.timestamp,
+    let mut stats: HashMap<String, ChurnStats> = HashMap::new();
+    for entry in walked {
+        for change in entry.files {
+            stats
+                .entry(change.path)
+                .or_insert_with(|| ChurnStats {
+                    commits: Vec::new(),
                 })
-                .collect();
-            (path, ChurnStats { commits })
-        })
-        .collect();
+                .commits
+                .push(CommitChurn {
+                    added: change.lines_added,
+                    deleted: change.lines_deleted,
+                    timestamp: entry.timestamp,
+                });
+        }
+    }
     Ok(stats)
 }
 

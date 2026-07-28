@@ -65,7 +65,7 @@ blake3.workspace = true
 tree-sitter = "0.26"
 streaming-iterator = "0.1"
 dirs = "5"
-normalize-git = { workspace = true }
+normalize-vcs = { workspace = true }
 normalize-git-history = { workspace = true, features = ["cli"] }
 normalize-core = { path = "../normalize-core", version = "0.3.2" }
 normalize-output = { path = "../normalize-output", version = "0.3.2" }
@@ -141,8 +141,6 @@ jsonschema = { workspace = true }
 rmcp = { version = "0.12", features = ["server", "macros", "schemars", "transport-io"], optional = true }
 schemars = "1"
 tower-lsp = { version = "0.20", optional = true }
-git2 = { version = "0.19", default-features = false }
-gix = { workspace = true }
 glob = "0.3.3"
 nu-ansi-term = "0.50"
 dotenvy = "0.15.7"

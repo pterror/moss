@@ -1,6 +1,7 @@
 //! Cross-repo coupling analysis — dependency graph + temporal coupling signals.
 
 use normalize_ecosystems::{DepSource, detect_all_ecosystems};
+use normalize_vcs::Vcs;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -275,11 +276,11 @@ fn gather_repo_data(repo: &Path) -> Option<RepoData> {
 }
 
 fn get_commit_timestamps(repo: &Path) -> Vec<u64> {
-    normalize_git::git_commit_timestamps(repo)
+    normalize_vcs::GitBackend.commit_timestamps(repo)
 }
 
 fn get_remote_url(repo: &Path) -> Option<String> {
-    normalize_git::git_remote_origin_url(repo)
+    normalize_vcs::GitBackend.remote_origin_url(repo)
 }
 
 fn build_dep_graph(repos: &[RepoData]) -> Vec<DepEdge> {

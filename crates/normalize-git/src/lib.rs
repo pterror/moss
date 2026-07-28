@@ -1,5 +1,14 @@
 //! Pure-Rust read-only git operations using `gix` — no PATH dependency on the git binary.
 //!
+//! **Deprecated for in-workspace use — depend on [`normalize-vcs`](https://crates.io/crates/normalize-vcs)
+//! instead.** As of the "fully subsume normalize-git into normalize-vcs" migration, every
+//! in-workspace crate that needs git data goes through `normalize_vcs::Vcs` (implemented by
+//! `normalize_vcs::GitBackend`, which wraps this crate internally) rather than calling this
+//! crate's `gix`-typed functions directly. This crate remains published and its API is left
+//! intact for external consumers who depend on it directly as a low-level gix wrapper —
+//! nothing here has been removed as a breaking change — but new in-workspace code should not
+//! add a direct dependency on `normalize-git`.
+//!
 //! All operations are read-only. Functions degrade gracefully (returning `None`
 //! or empty results) if the repository cannot be opened.
 //!
@@ -1063,11 +1072,265 @@ pub fn format_unix_date(ts: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+// ── Commit messages ──────────────────────────────────────────────────────────
+
+/// One commit's hash, timestamp, and decoded message (subject/body split at the first
+/// blank line, matching `git log`'s convention).
+pub struct CommitMessage {
+    pub hash: String,
+    pub timestamp: i64,
+    pub subject: String,
+    pub body: String,
+}
+
+/// Walk up to `max_commits` commits from HEAD (newest first) and return their hash,
+/// timestamp, and message. Used for commit-message embedding (semantic search over
+/// commit history).
+pub fn recent_commit_messages(root: &Path, max_commits: usize) -> Vec<CommitMessage> {
+    use gix::bstr::ByteSlice as _;
+
+    let Some(repo) = open_repo(root) else {
+        return Vec::new();
+    };
+    let Ok(head_id) = repo.head_id() else {
+        return Vec::new();
+    };
+    let Ok(walk) = head_id
+        .ancestors()
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
+        ))
+        .all()
+    else {
+        return Vec::new();
+    };
+
+    let mut commits = Vec::new();
+
+    for info in walk.take(max_commits) {
+        let Ok(info) = info else { continue };
+        let Ok(commit_obj) = info.object() else {
+            continue;
+        };
+        let Ok(commit) = commit_obj.decode() else {
+            continue;
+        };
+
+        let hash = info.id().to_string();
+        let timestamp = commit.time().map(|t| t.seconds).unwrap_or(0);
+
+        let full_message = commit.message.to_str_lossy().into_owned();
+        let msg_ref = commit.message();
+        let subject = msg_ref.summary().to_str_lossy().trim().to_string();
+        let body = full_message
+            .trim_start_matches(subject.as_str())
+            .trim()
+            .to_string();
+
+        if subject.is_empty() {
+            continue;
+        }
+
+        commits.push(CommitMessage {
+            hash,
+            timestamp,
+            subject,
+            body,
+        });
+    }
+
+    commits
+}
+
 // ── Worktree helpers (still shell-out, write ops not supported by gix) ───────
 
 /// Resolve a git ref to a full commit hash via gix.
 pub fn resolve_ref_shellout(root: &Path, git_ref: &str) -> Result<String, String> {
     resolve_ref(root, git_ref)
+}
+
+// ── Combined commit walk (files + churn + author in one pass) ───────────────
+
+/// One file changed within a commit, as visited by [`walk_commits`].
+pub struct CommitChange {
+    pub path: String,
+    /// Object id of the file in the parent tree (`None` for added files).
+    pub old_id: Option<gix::hash::ObjectId>,
+    /// Object id of the file in this commit's tree (`None` for deleted files).
+    pub new_id: Option<gix::hash::ObjectId>,
+}
+
+/// One commit visited by [`walk_commits`]: id, timestamp, author, and per-file changes.
+pub struct WalkedCommit {
+    pub id: String,
+    pub timestamp: u64,
+    pub author_email: String,
+    pub changes: Vec<CommitChange>,
+}
+
+/// Walk commit history from HEAD (newest first), stopping (exclusive) at `since_commit`
+/// if given, returning per-commit file changes plus author/timestamp in one traversal.
+///
+/// Combines what would otherwise be separate walks for per-commit file lists
+/// (`git_per_commit_files`), churn stats (`git_file_churn_stats`), and activity logs
+/// (`git_activity_commits`) — a caller needing files, churn, and author data together
+/// (e.g. `normalize-vcs`'s `Vcs::walk_commit_history`, or an incremental co-change index
+/// build that wants to stop early at a previously-seen commit) gets it all for the cost of
+/// one `diff_tree_to_tree` per commit instead of two or three separate walks.
+pub fn walk_commits(root: &Path, since_commit: Option<&str>) -> Vec<WalkedCommit> {
+    let Some(repo) = open_repo(root) else {
+        return Vec::new();
+    };
+    let Ok(head_id) = repo.head_id() else {
+        return Vec::new();
+    };
+    let Ok(walk) = head_id
+        .ancestors()
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
+        ))
+        .all()
+    else {
+        return Vec::new();
+    };
+
+    let stop_id: Option<gix::hash::ObjectId> = since_commit.and_then(|s| s.parse().ok());
+
+    let mut result = Vec::new();
+
+    for info in walk {
+        let Ok(info) = info else { continue };
+        let commit_id = info.id();
+
+        if let Some(stop) = stop_id
+            && commit_id == stop
+        {
+            break;
+        }
+
+        let timestamp = info.commit_time.unwrap_or(0) as u64;
+        let Ok(commit) = info.object() else { continue };
+        let author_email = commit
+            .author()
+            .ok()
+            .map(|a| String::from_utf8_lossy(a.email).into_owned())
+            .unwrap_or_default();
+        let Ok(tree) = commit.tree() else { continue };
+
+        let parent_tree = info
+            .parent_ids()
+            .next()
+            .and_then(|pid| pid.object().ok())
+            .and_then(|obj| obj.into_commit().tree().ok());
+
+        let changes = match repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let file_changes: Vec<CommitChange> = changes
+            .into_iter()
+            .map(|change| {
+                use gix::object::tree::diff::ChangeDetached;
+                match change {
+                    ChangeDetached::Addition { location, id, .. } => CommitChange {
+                        path: String::from_utf8_lossy(&location).into_owned(),
+                        old_id: None,
+                        new_id: Some(id),
+                    },
+                    ChangeDetached::Deletion { location, id, .. } => CommitChange {
+                        path: String::from_utf8_lossy(&location).into_owned(),
+                        old_id: Some(id),
+                        new_id: None,
+                    },
+                    ChangeDetached::Modification {
+                        location,
+                        previous_id,
+                        id,
+                        ..
+                    } => CommitChange {
+                        path: String::from_utf8_lossy(&location).into_owned(),
+                        old_id: Some(previous_id),
+                        new_id: Some(id),
+                    },
+                    ChangeDetached::Rewrite {
+                        source_location,
+                        source_id,
+                        id,
+                        ..
+                    } => CommitChange {
+                        path: String::from_utf8_lossy(&source_location).into_owned(),
+                        old_id: Some(source_id),
+                        new_id: Some(id),
+                    },
+                }
+            })
+            .collect();
+
+        result.push(WalkedCommit {
+            id: commit_id.to_hex().to_string(),
+            timestamp,
+            author_email,
+            changes: file_changes,
+        });
+    }
+
+    result
+}
+
+/// Count commits (newest-first from HEAD) before the most recent commit that touched
+/// `rel_path`. Returns `None` if no commit ever touched the path, or the repo/history
+/// can't be opened or walked.
+pub fn commits_since_last_touch(root: &Path, rel_path: &str) -> Option<usize> {
+    let repo = open_repo(root)?;
+    let head_id = repo.head_id().ok()?;
+    let walk = head_id
+        .ancestors()
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
+        ))
+        .all()
+        .ok()?;
+
+    let mut commits_before_last_touch = 0usize;
+
+    for info in walk {
+        let Ok(info) = info else { continue };
+        let Ok(commit) = info.object() else { continue };
+        let Ok(tree) = commit.tree() else { continue };
+
+        let parent_tree = info
+            .parent_ids()
+            .next()
+            .and_then(|pid| pid.object().ok())
+            .and_then(|obj| obj.into_commit().tree().ok());
+
+        let changes = match repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let touches = changes.iter().any(|change| {
+            use gix::object::tree::diff::ChangeDetached;
+            let loc = match change {
+                ChangeDetached::Addition { location, .. }
+                | ChangeDetached::Deletion { location, .. }
+                | ChangeDetached::Modification { location, .. } => location.as_slice(),
+                ChangeDetached::Rewrite {
+                    source_location, ..
+                } => source_location.as_slice(),
+            };
+            loc == rel_path.as_bytes()
+        });
+
+        if touches {
+            return Some(commits_before_last_touch);
+        }
+
+        commits_before_last_touch += 1;
+    }
+
+    None
 }
 
 /// Create a detached worktree at `hash`, run `callback`, then remove the worktree.

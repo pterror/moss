@@ -877,10 +877,8 @@ fn checkout_ref_to_tempdir(root: &Path, base_ref: &str) -> Result<tempfile::Temp
     let tmp = tempfile::tempdir().map_err(|e| format!("failed to create temp dir: {e}"))?;
     let tmp_path = tmp.path().to_owned();
 
-    let repo = git_ops::open_repo(root).map_err(|e| e.to_string())?;
-
-    git_ops::walk_tree_at_ref(root, base_ref, |rel_path, blob_id| {
-        let Some(content) = git_ops::read_blob_text(&repo, blob_id) else {
+    git_ops::read_files_at_ref(root, base_ref, |rel_path, content| {
+        let Some(content) = content else {
             return;
         };
         let dest = tmp_path.join(rel_path);

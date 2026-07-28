@@ -195,7 +195,7 @@ fn blame_file(root: &Path, path: &str) -> Option<FileOwnership> {
 
 /// Collect source files from the git index (tracked files).
 fn git_tracked_files(root: &Path) -> Vec<String> {
-    normalize_git::git_ls_files(root)
+    normalize_vcs::GitBackend.ls_files(root)
 }
 
 /// Analyze file ownership via git blame, returning the report.

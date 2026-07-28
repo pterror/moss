@@ -9,3 +9,4 @@ description = "VCS-agnostic trait boundary (domain types, not gix types) with a 
 [dependencies]
 normalize-git = { workspace = true }
 gix = { workspace = true }
+anyhow = "1"

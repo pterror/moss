@@ -201,10 +201,10 @@ impl ArchitectureService {
             .await
             .map_err(|e| format!("Depth map analysis failed: {}", e))?;
         if let Some(ref diff_ref) = diff {
-            use normalize_git::{resolve_ref, run_in_worktree};
             use normalize_rank::ranked::compute_ranked_diff;
-            let hash = resolve_ref(&root_path, diff_ref)?;
-            let baseline = run_in_worktree(&root_path, &hash, |wt| {
+            use normalize_vcs::{GitBackend, Vcs};
+            let hash = GitBackend.resolve_ref(&root_path, diff_ref)?;
+            let baseline = GitBackend.run_in_worktree(&root_path, &hash, |wt| {
                 let handle = tokio::runtime::Handle::current();
                 tokio::task::block_in_place(|| {
                     handle.block_on(async {
@@ -264,10 +264,10 @@ impl ArchitectureService {
             .await
             .map_err(|e| format!("Layering analysis failed: {}", e))?;
         if let Some(ref diff_ref) = diff {
-            use normalize_git::{resolve_ref, run_in_worktree};
             use normalize_rank::ranked::compute_ranked_diff;
-            let hash = resolve_ref(&root_path, diff_ref)?;
-            let baseline = run_in_worktree(&root_path, &hash, |wt| {
+            use normalize_vcs::{GitBackend, Vcs};
+            let hash = GitBackend.resolve_ref(&root_path, diff_ref)?;
+            let baseline = GitBackend.run_in_worktree(&root_path, &hash, |wt| {
                 let handle = tokio::runtime::Handle::current();
                 tokio::task::block_in_place(|| {
                     handle.block_on(async {
