@@ -3018,6 +3018,18 @@ global measures need a new value type on `Metric::measure_all`.
 
 ### VCS abstraction layer
 
+**Settled 2026-07-28 (user decision, not re-open):** VCS-agnosticism is a real, non-speculative product principle — "normalize should Just Work no matter what the user's tooling is." The crate exists now even though git is the only backend implemented today; it does not wait for a concrete jj/Mercurial consumer. Crate placement: new `normalize-vcs` crate (created, not folded into `normalize-git-history`).
+
+**Done:** `crates/normalize-vcs` scaffolded — a `Vcs` trait with domain types (`CommitId`, `BlameLine`; no `gix` types in the public API) and a `GitBackend` implementation wrapping `normalize-git`, converting `gix` types to domain types at the boundary. Scope is deliberately narrow (boundary extraction, not green-field design): only the operations that actually crossed a `gix`-typed boundary in current consumers are covered — `blame`, `repo_exists`, `commit_count`. Most of `normalize-git`'s API (churn stats, per-commit file lists, author counts, ref resolution, diff name-status) already returned plain `String`/`HashMap`/custom structs and didn't need wrapping.
+
+**Migrated:** `normalize-git-history`'s blame/ownership path (`ownership.rs::blame_file`) now calls `normalize_vcs::GitBackend::blame` instead of raw `gix::Repository::blame_file` + manual commit/author lookup. Also migrated: `hotspots.rs`'s repo-exists check and `service.rs`'s coupling-clusters commit-count auto-scale, both now going through `normalize_vcs::GitBackend`.
+
+**Not migrated (documented, not silently left partial):** `normalize-git-history`'s `activity.rs`, `contributors.rs`, `coupling.rs`, `repo_coupling.rs` call `normalize-git` functions (`git_activity_commits`, `git_author_commit_counts`, `git_per_commit_files`, `git_commit_timestamps`, `git_remote_origin_url`) that already return domain types (not `gix` types), so there was no boundary to extract there. `service.rs`'s `resolve_ref`/`run_in_worktree` calls are untouched for the same reason (String in/out already). Outside `normalize-git-history`: `normalize-ratchet`, `normalize-budget`, `normalize-facts`, and `normalize-semantic` still call `normalize-git`'s `gix`-typed functions directly (`open_repo`, `read_blob_text`, `walk_tree_at_ref`, `count_diff_lines`) — out of scope for this pass, left as future migration work if/when those crates need the `Vcs` boundary.
+
+**Remaining scope:** jj/Mercurial backends are not implemented — future work, triggered by a real second-backend need.
+
+<details><summary>Original unstarted-idea writeup (superseded by the settled decision above; kept for context)</summary>
+
 Unstarted idea. Goal: an abstraction layer over different version control systems (git, jj, mercurial, or others) to make normalize's VCS-touching functionality not git-specific.
 
 **Settled analysis (verified against source 2026-07-28):**
@@ -3028,9 +3040,9 @@ Unstarted idea. Goal: an abstraction layer over different version control system
 - `docs/architecture-decisions.md`'s runtime-vs-compile-time dispatch guidance (the "When to Use Runtime Dispatch" / "When to Use Compile-Time Dispatch" sections) also cuts against a trait+registry crate here: VCS backends are heavyweight deps (gix vs jj-lib vs hg bindings), which is exactly the profile that guidance assigns to feature flags, not a runtime trait+registry — absent an actual runtime-extensibility need (user swapping backends at runtime), which doesn't exist yet.
 - jj's data model (working-copy-as-commit, change-id vs commit-id, no staging area/index) doesn't map cleanly onto git's rev-parse/staged-unstaged concepts that `normalize-git`'s current API is built around (e.g. `is_staged`/`is_unstaged`, `git_diff_name_status` against a base ref). Generalizing that boundary is the hardest part of this idea, not a minor detail — an abstraction layer would need to define VCS-neutral concepts (working-copy state, change identity) before either backend fits it.
 
-**Open questions for the user (not decided here):**
-- Is there an actual concrete jj or Mercurial need driving this today, or is it speculative? The crate-existence test above says wait for a real second-backend consumer.
-- If/when a second backend becomes real, should the trait live in a new `normalize-vcs` crate, or inside `normalize-git-history` until a second concrete dependent shows up?
+**Open questions above are now settled** — see the top of this section. VCS-agnosticism is a real product principle, not speculative; `normalize-vcs` is the crate, created now.
+
+</details>
 
 ### Composite tooling: `normalize sessions blame` — session provenance tracking
 
@@ -3042,8 +3054,7 @@ Unstarted idea. Observation: `git blame` tracks the provenance of a line of code
 - The genuinely hard, undone part is the correlation heuristic — matching a session's edits to the specific commit/hunk/lines that resulted from them — not new infrastructure. Both halves (session tool-call log parsing, git line-blame) already exist; nothing new needs to be built to have data to correlate.
 - No cyclic-dependency concern either direction: `normalize-sessions` currently depends on `normalize-chat-sessions` (not on `normalize-git-history` or `normalize-git`), and `normalize-git-history` depends on `normalize-git` only (not on `normalize-sessions` or `normalize-chat-sessions`). Wiring `normalize-sessions` → `normalize-git-history` (the natural direction, since blame is a git-history concern) introduces no cycle.
 
-**Open questions for the user (not decided here):**
-- How should session edits correlate to commits — by timestamp proximity (session edit time vs. commit time), by matching `old_string`/`new_string` content against blame hunks, or some other heuristic? This is a design call for whoever implements it, not something to settle in TODO.md.
+**Settled 2026-07-28 (user decision):** Correlation approach is direct content matching — a session edit's `old_string`/`new_string` matched against git blame hunks — NOT timestamp-proximity heuristics. The user needs "100% reliable provenance"; no fuzzy/best-effort fallback is acceptable for this feature. This is a settled design decision, not yet implemented — still unstarted idea otherwise (correlation code, `sessions blame` command surface, etc. all remain to be built).
 
 ## Implementation Notes
 
