@@ -896,6 +896,7 @@ fn bundled_tags_query(name: &str) -> Option<&'static str> {
         "thrift" => Some(include_str!("queries/thrift.tags.scm")),
         "dockerfile" => Some(include_str!("queries/dockerfile.tags.scm")),
         "caddy" => Some(include_str!("queries/caddy.tags.scm")),
+        "kdl" => Some(include_str!("queries/kdl.tags.scm")),
         _ => None,
     }
 }
