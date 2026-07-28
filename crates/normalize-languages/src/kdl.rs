@@ -22,14 +22,10 @@ impl Language for Kdl {
     }
 
     fn container_body<'a>(&self, node: &'a Node<'a>) -> Option<Node<'a>> {
-        // KDL: node → node_no_terminator → children field (node_children: "{ ... }")
-        let mut c = node.walk();
-        for child in node.children(&mut c) {
-            if child.kind() == "node_no_terminator" {
-                return child.child_by_field_name("children");
-            }
-        }
-        None
+        // KDL: node → children field directly (node_children: "{ ... }").
+        // (There is no intermediate `node_no_terminator` wrapper in the
+        // current grammar — verified via `normalize syntax ast`.)
+        node.child_by_field_name("children")
     }
 
     fn analyze_container_body(
@@ -66,8 +62,6 @@ mod tests {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[
             "annotation_type",       // Type annotations
-            "identifier_string",     // Identifiers as strings
-            "multi_line_string_body", // Multi-line string content
             "type",                  // Type annotations
         ];
         validate_unused_kinds_audit(&Kdl, documented_unused)
