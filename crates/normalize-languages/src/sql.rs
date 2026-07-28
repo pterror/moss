@@ -53,7 +53,7 @@ mod tests {
             "keyword_before", "keyword_case", "keyword_else", "keyword_enum",
             "keyword_except", "keyword_for", "keyword_force", "keyword_force_not_null",
             "keyword_force_null", "keyword_force_quote", "keyword_foreign",
-            "keyword_format", "keyword_function", "keyword_geometry", "keyword_if",
+            "keyword_format", "keyword_geometry", "keyword_if",
             "keyword_match", "keyword_matched", "keyword_modify", "keyword_regclass",
             "keyword_regtype", "keyword_return", "keyword_returning", "keyword_returns",
             "keyword_statement", "keyword_type", "keyword_while", "keyword_with",

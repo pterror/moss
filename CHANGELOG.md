@@ -462,6 +462,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     generic-function instantiation calls (`Sum[int](args)`) do not parse as
     `call_expression` at all in this grammar version — a tree-sitter-go
     parsing ambiguity with generic-type conversion, not fixable via query.
+- **SQL query completeness gaps found applying the query-testing methodology
+  to `sql.{tags,calls,complexity,types}.scm`** (arborium-sql 2.17.0 has no
+  separate `imports.scm`/`cfg.scm` for SQL). Cross-referenced against
+  node-types.json field-by-field and verified via `normalize syntax
+  query`/`normalize syntax ast`:
+  - **`CASE ... WHEN ... END` branches contributed zero complexity, ever, in
+    any SQL file.** The original `(when_clause) @complexity` was wrong from
+    the start: `when_clause` is exclusively the node type for MERGE
+    statement's `WHEN MATCHED`/`WHEN NOT MATCHED` clauses — a scalar CASE
+    expression's `case` node has no `when_clause` child at all (confirmed via
+    real parse). Fixed by matching `keyword_when` directly, which correctly
+    counts one branch per WHEN in both CASE expressions and MERGE statements.
+  - **`EXTRACT(field FROM source)` (e.g. `EXTRACT(YEAR FROM ordered_at)`)
+    produced two spurious function calls instead of one.** `invocation`'s
+    `unit` field (the date-part keyword, e.g. `YEAR`) is also an
+    unconstrained `object_reference`, and both `sql.calls.scm` and
+    `sql.tags.scm`'s `@reference.call` matched it as if it were a second
+    function call. Fixed by anchoring to the first child of `invocation`.
+  - **`CREATE FUNCTION ... RETURNS <custom_type>` and `CREATE SCHEMA ...
+    AUTHORIZATION <role>` each produced a second, spurious definition** — the
+    custom return type and the authorization role are both represented as
+    unconstrained siblings of the real name (`object_reference`/`identifier`
+    respectively) inside `create_function`/`create_schema`, and the
+    unanchored queries matched both. Fixed by anchoring each to the position
+    immediately after `keyword_function`/`keyword_schema`.
+  - **`CREATE TRIGGER`, `CREATE INDEX`, `CREATE SEQUENCE`, and `CREATE
+    MATERIALIZED VIEW` were entirely unmatched** in `sql.tags.scm` — no
+    definitions were ever produced for any of these common DDL statements.
+  - **`sql.tags.scm` had no `@reference.call` at all** — SQL function calls
+    never appeared as references in the tags-based symbol view, even though
+    `sql.calls.scm` matched them correctly.
+  - **Function/procedure parameter types and `DECLARE`d procedural variable
+    types were entirely unmatched** in `sql.types.scm` — only column
+    definition types were captured. Unlike `column_definition`, neither
+    `function_argument` nor `function_declaration` has a `type` field for
+    builtin types in this grammar; fixed by enumerating the concrete builtin
+    type node kinds directly (an adjacency-based `identifier . type` query
+    was tried and rejected: it silently misses unnamed parameters, which are
+    grammar-legal, e.g. `CREATE FUNCTION f(INTEGER, TEXT)`).
+  - **`CAST(expr AS type)` and `CREATE SEQUENCE ... AS type` target types
+    were entirely unmatched** in `sql.types.scm`.
+  - **`sql.complexity.scm` had no handling for `UNION`/`INTERSECT`/`EXCEPT`
+    set operations, `EXISTS` subquery predicates, or CTE (`WITH`) nesting** —
+    all added as `@complexity`/`@nesting` respectively.
+  - Documented (not fixed, since the grammar genuinely cannot parse it): a
+    *named* `CONSTRAINT fk_name FOREIGN KEY ...` table constraint produces an
+    `ERROR` node in arborium-sql 2.17.0 (the unnamed `FOREIGN KEY ...`
+    form parses cleanly); PL/pgSQL's `IF ... THEN ... ELSE ... END IF;`
+    procedural control flow inside a function body also produces `ERROR`
+    nodes (the grammar has no model for it at all — `CASE WHEN` is the
+    closest constrained form that parses).
 
 ### Added (internal)
 
