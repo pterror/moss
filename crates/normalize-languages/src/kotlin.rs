@@ -545,9 +545,7 @@ mod tests {
             "class_body",              // class body
             "class_modifier",          // class modifiers
             "class_parameter",         // class param
-            "constructor_delegation_call", // this(), super()  // constructor call
             "control_structure_body",  // control body
-            "delegation_specifier",    // delegation              // enum value
             "function_body",           // function body
             "function_modifier",       // fun modifiers
             "function_type_parameters",// (T) -> U params

@@ -43,7 +43,46 @@
     (navigation_suffix
       (simple_identifier) @name))) @reference.call
 
-; Constructor invocations (class references)
-(constructor_invocation
+; Explicit constructor delegation: `this(...)` / `super(...)` inside a
+; secondary constructor. `constructor_delegation_call` is a distinct node
+; kind (its only named child is `value_arguments`; "this"/"super" are
+; anonymous keyword tokens) — entirely unmatched before, silently dropping
+; every secondary-constructor delegation from call extraction.
+(constructor_delegation_call
+  ("this") @name) @reference.call
+
+(constructor_delegation_call
+  ("super") @name) @reference.call
+
+; Constructor invocations (superclass call with args, or an annotation
+; usage with args — `@Deprecated("old")`). Restricted to the
+; `delegation_specifier` context: `constructor_invocation` is also a legal
+; child of `annotation`/`file_annotation`, and an unconstrained pattern
+; here previously misclassified every argument-carrying annotation usage
+; (e.g. `@Suppress("unused")`) as a @reference.class.
+(delegation_specifier
+  (constructor_invocation
+    (user_type
+      (type_identifier) @name))) @reference.class
+
+; Superclass/interface reference with no invocation (no parens) — by far
+; the most common Kotlin idiom for implementing an interface, e.g.
+; `class Person(...) : Greeter { ... }`. This is a distinct shape from the
+; constructor_invocation case above (`delegation_specifier`'s `user_type`
+; child directly, not wrapped) and was entirely unmatched: the grammar
+; cannot syntactically distinguish "extends" from "implements" here (both
+; use the same bare `: Type` form), so — consistent with tags.scm not
+; fabricating a distinction the CST doesn't support — both map to the same
+; @reference.class capture as the constructor_invocation form above.
+(delegation_specifier
   (user_type
     (type_identifier) @name)) @reference.class
+
+; Interface delegation (`by`): `class Derived(b: Base) : Base by b`. The
+; delegate type lives two levels deep (delegation_specifier ->
+; explicit_delegation -> user_type), not a direct delegation_specifier
+; child like the two forms above, so it needs its own pattern.
+(delegation_specifier
+  (explicit_delegation
+    (user_type
+      (type_identifier) @name))) @reference.class
