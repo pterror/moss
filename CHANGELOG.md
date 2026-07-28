@@ -272,6 +272,53 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     correctly and is unaffected); C's preprocessor conditionals
     (`#ifdef`/`#ifndef`) are deliberately not counted toward cyclomatic
     complexity (compile-time, not runtime, branching).
+- **TypeScript/JavaScript extraction gaps: `namespace` declarations, private
+  methods, namespaced constructors, class extends/implements, and several
+  import forms were all silently dropped.** Applying
+  `docs/query-testing-methodology.md` to `typescript.{tags,calls,imports,types}.scm`
+  and `javascript.{tags,calls,imports}.scm` (cross-referenced against
+  arborium-typescript/arborium-javascript's `node-types.json`) found:
+  - **`namespace Foo {}` / `namespace Foo.Bar {}` — the standard, far more
+    common TypeScript namespace keyword — parses as a distinct `internal_module`
+    node, not `module`; `typescript.tags.scm` only handled the legacy `module
+    Foo {}` keyword form, so essentially every real-world namespace declaration
+    was invisible to tags. Also added `module`/`internal_module.name`'s
+    `nested_identifier` (`module Foo.Bar {}`) and `string` (`declare module
+    "foo" {}`) variants.
+  - **Private class methods (`#foo() {}`) and computed method names
+    (`[key]() {}`) were dropped from both languages' tags and calls.**
+    `method_definition`/`method_signature`/`abstract_method_signature.name`
+    and `member_expression.property` allow `private_property_identifier`/
+    `computed_property_name` in addition to plain `property_identifier`;
+    neither was handled, so private methods and their call sites
+    (`this.#foo()`) vanished entirely from symbol tags and the call graph.
+  - **Namespaced/qualified constructors (`new ns.Foo()`) were dropped from
+    TypeScript tags.** `new_expression.constructor` allows `member_expression`
+    in addition to plain `identifier`; only the plain form was handled — 4+
+    call sites in this repo's own `editors/vscode/src/diagnostics.ts` use this
+    idiom (`new vscode.Range(...)`, `new vscode.Position(...)`).
+  - **Class `extends`/`implements` had no reference captures at all in
+    TypeScript** (`class_heritage`'s `extends_clause`/`implements_clause` were
+    unhandled in both `typescript.tags.scm` and `typescript.types.scm`), and
+    **JavaScript's `extends` had no reference capture in tags** (`class_heritage`
+    unhandled in `javascript.tags.scm`, including the common `extends
+    Mixin(Base)` call-expression mixin pattern).
+  - **`import { default as alias }` / `export { default as alias } from` (and
+    the bare `export { default } from` form) produced zero import captures at
+    all** in both languages — `default` is an anonymous grammar token, not a
+    named `(identifier)` node, so the existing field constraint silently
+    failed to match the entire `import_specifier`/`export_specifier`.
+  - **`import X = require(...)` (TS import-equals) and `import(...)` (dynamic
+    import expression, both languages) were entirely unhandled** by
+    `imports.scm`.
+  - Additional `call_expression.function` completeness gaps in both
+    languages' `calls.scm`: `subscript_expression` (`obj[key]()`),
+    `parenthesized_expression` (`(foo)()`), and chained/curried calls
+    (`connect(mapStateToProps)(Component)`); TypeScript also gained
+    `non_null_expression` (`foo!()`).
+  - Removed a dead, byte-for-byte-redundant `import type { Foo } from`
+    clause in `typescript.imports.scm` — the plain named-import clause
+    already matched it (the `type` keyword doesn't change the field shape).
 - **Lua symbol extraction now recognizes `function Table.method()` and
   `function Table:method()` declarations.** The tags query only matched
   `function_declaration` nodes whose `name` field was a plain `(identifier)`,

@@ -70,3 +70,74 @@ console.log(sumArray([1, 2, 3, 4, 5]));
 console.log(fibonacci(10));
 const resolved = path.resolve('./sample.js');
 console.log(resolved);
+
+// Mixin pattern: `extends Mixin(Base)` — a call_expression as the superclass
+// expression, common in the class-mixin idiom.
+function Serializable(Base) {
+    return class extends Base {
+        serialize() {
+            return JSON.stringify(this);
+        }
+    };
+}
+
+class SerializableStack extends Serializable(Stack) {
+    // Private method (# syntax) — must be found as a class member, and its
+    // call site (this.#peek()) must be found with @call.qualifier, same as
+    // a public method call.
+    #peek() {
+        return this.#items[this.#items.length - 1];
+    }
+
+    // Computed method name — the key expression, not a plain identifier.
+    ['top']() {
+        return this.#peek();
+    }
+
+    // Static method — still a plain property_identifier name.
+    static create(name) {
+        return new SerializableStack(name);
+    }
+
+    // Getter/setter — property_identifier names, same shape as a method.
+    get topValue() {
+        return this.#peek();
+    }
+}
+
+// Generator function.
+function* range(start, end) {
+    for (let i = start; i < end; i++) {
+        yield i;
+    }
+}
+
+// async/await + promise chain.
+async function loadAndSum(urls) {
+    const values = await Promise.all(urls.map((u) => fetch(u)));
+    return values
+        .reduce((acc, v) => acc + v, 0);
+}
+
+// Destructuring in parameters (object + array + defaults).
+function describeEntry({ name, count = 0 }, [first, ...rest]) {
+    return `${name}:${count}:${first}:${rest.length}`;
+}
+
+// Tagged template literal — a call_expression whose `arguments` field is a
+// bare template_string, not the usual `arguments` node.
+function html(strings, ...values) {
+    return strings.reduce((acc, s, i) => acc + s + (values[i] ?? ''), '');
+}
+const page = html`<h1>${resolved}</h1>`;
+
+// CommonJS interop still supported alongside ES modules in real JS codebases.
+const { statSync } = require('fs');
+
+// Computed/bracket call — dynamic method dispatch by name.
+const dispatch = { classify };
+dispatch['classify'](0);
+
+for (const n of range(0, 3)) {
+    console.log(n);
+}
