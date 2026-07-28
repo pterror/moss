@@ -6002,6 +6002,7 @@ dependencies = [
  "normalize-chat-sessions",
  "normalize-output",
  "normalize-session-analysis",
+ "normalize-vcs",
  "nu-ansi-term",
  "nucleo-matcher",
  "regex",

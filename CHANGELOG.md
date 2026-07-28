@@ -8,6 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`normalize sessions blame`** — traces a file's line provenance through AI/coding
+  sessions, not just commits. An analog of `git blame` that goes one hop further: for
+  each blamed commit, it attempts to identify which session's `Edit`/`Write` tool call
+  actually produced that content, by matching the tool call's recorded `old_string`/
+  `new_string` against the commit's actual change to the file — content matching, not
+  timestamp proximity. Reports each chunk of lines as matched (with session ID, agent,
+  and tool), ambiguous (multiple candidates, listed rather than guessed between), or
+  unattributed (no session correlation found), since a single commit routinely bundles
+  edits from multiple sessions or from a session plus manual touch-ups. See
+  `docs/cli/sessions.md` and TODO.md's "sessions blame" entry for the full algorithm and
+  its known limitations.
 - **Known-broken-grammar visibility for Zsh.** `normalize_languages::known_broken_grammar`
   is a new `grammar name -> reason` registry flagging grammars that load and compile
   queries fine but produce unreliable parses of real source. Zsh is the first (and so

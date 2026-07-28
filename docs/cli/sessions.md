@@ -18,6 +18,7 @@ normalize sessions <SUBCOMMAND> [OPTIONS]
 | `messages` | Extract all messages across sessions into a flat, queryable form |
 | `patterns` | Analyze tool call sequence patterns using Markov chain transition matrices |
 | `plans` | List and view agent plans |
+| `blame` | Trace a file's line provenance through AI/coding sessions, not just commits |
 
 ### list
 
@@ -138,6 +139,38 @@ Arguments:
 
 Options:
 - `-n, --limit <N>` — Maximum number of plans
+
+### blame
+
+Trace a file's line provenance through AI/coding sessions — an analog of `git
+blame` that goes one hop further, attributing each blamed commit's content to
+the specific session `Edit`/`Write` tool call that produced it (by matching
+recorded `old_string`/`new_string` content against the commit's actual change,
+not by timestamp proximity):
+
+```bash
+normalize sessions blame src/lib.rs                        # whole-file session provenance
+normalize sessions blame src/lib.rs --start-line 10 --end-line 40
+normalize sessions blame src/lib.rs --days 30               # only consider sessions from the last 30 days
+normalize sessions blame src/lib.rs --all-projects          # search sessions across all projects
+```
+
+Arguments:
+- `[PATH]` — File path to trace (repo-relative)
+
+Options:
+- `--start-line <N>` / `--end-line <N>` — Restrict to a 1-based inclusive line range
+- Plus the same session filtering options as `list` (`--format`, `--grep`, `--days`, `--since`, `--until`, `--project`, `--all-projects`, `-n`, `--mode`, `--agent-type`)
+
+Each line is attributed one of three ways:
+- **Matched** — exactly one session edit's recorded content matches the commit's change; reports session ID, agent, and tool.
+- **Ambiguous** — more than one session edit matches (e.g. two sessions made byte-identical changes); all candidates are listed rather than guessed between.
+- **Unattributed** — no session edit matches (manual commit, pre-instrumentation history, a non-Edit/Write tool, a human touch-up after the last session edit, or content too short/generic to trust a match).
+
+This is intentionally conservative: a human edit made after the last matching
+session edit but before commit is a known false negative (correctly reported
+unattributed rather than misattributed). See `normalize_sessions::blame`'s
+module docs for the full algorithm and its limitations.
 
 ## Formats
 

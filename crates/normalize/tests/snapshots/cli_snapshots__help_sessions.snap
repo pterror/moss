@@ -1,5 +1,6 @@
 ---
 source: crates/normalize/tests/cli_snapshots.rs
+assertion_line: 97
 expression: "snapshot_help(&[\"sessions\"])"
 ---
 Review AI agent session logs. Use to check cost, duration, and tool usage across coding sessions.
@@ -17,6 +18,7 @@ Commands:
   patterns         Analyze tool call sequence patterns across sessions using Markov chain transition matrices
   parallelization  Show sequential independent tool calls that could be parallelized
   heatmap          Show which files were read and edited most (heatmap)
+  blame            Trace a file's line provenance through AI/coding sessions, not just commits
   cost             Show token cost breakdown with cache savings per turn
   plans            List and view agent plans
   mark             Mark a session as reviewed (stores ID in `.normalize/sessions-reviewed`)

@@ -6,6 +6,7 @@
 //! mounts [`service::SessionsService`] and does nothing else.
 
 pub mod analyze;
+pub mod blame;
 pub mod cost;
 pub mod heatmap;
 pub mod list;
@@ -76,6 +77,7 @@ fn load_pretty_config(root: &std::path::Path) -> normalize_output::PrettyConfig 
     cfg
 }
 
+pub use blame::{BlameSessionFilter, SessionsBlameReport, build_blame_report};
 pub use cost::{CostReport, build_cost_report, build_cost_report_for_session};
 pub use heatmap::{HeatmapReport, build_heatmap_report, build_heatmap_report_for_session};
 pub use list::{SessionListReport, build_session_list};

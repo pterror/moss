@@ -1,11 +1,12 @@
 //! Sessions management service for server-less CLI.
 
+use crate::blame::BlameSessionFilter;
 use crate::output::OutputFormatter;
 use crate::sessions::SessionAnalysisReport;
 use crate::{
     CostReport, HeatmapReport, MarkReport, MessagesReport, NgramRole, NgramsReport,
     ParallelizationReport, PatternsReport, PlanContent, PlansListReport, SessionListReport,
-    SessionMode, SessionShowReport, SubagentsReport,
+    SessionMode, SessionShowReport, SessionsBlameReport, SubagentsReport,
 };
 use server_less::cli;
 use std::cell::Cell;
@@ -794,6 +795,72 @@ impl SessionsService {
                 top,
             )
         }
+    }
+
+    /// Trace a file's line provenance through AI/coding sessions, not just commits
+    ///
+    /// Analogous to `git blame`, but the last hop goes further: for each blamed
+    /// commit, attempts to identify which session's Edit/Write tool call actually
+    /// produced that content, by matching the tool call's recorded old/new text
+    /// against the commit's actual change to the file (not timestamp proximity).
+    /// A commit that bundles edits from multiple sessions (or session + manual
+    /// edits) is handled per-chunk, not per-commit. Reports "ambiguous" or
+    /// "no session correlation" rather than guessing when content can't be
+    /// confidently matched — see the module docs on `normalize_sessions::blame`
+    /// for the full algorithm and its known false-negative/false-positive modes.
+    ///
+    /// Examples:
+    ///   normalize sessions blame src/lib.rs                    # whole-file session provenance
+    ///   normalize sessions blame src/lib.rs --start-line 10 --end-line 40
+    ///   normalize sessions blame src/lib.rs --days 30          # only consider sessions from the last 30 days
+    ///   normalize sessions blame src/lib.rs --all-projects     # search sessions across all projects
+    #[cli(display_with = "display_output")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn blame(
+        &self,
+        #[param(positional, help = "File path to trace (repo-relative)")] path: String,
+        #[param(help = "First line to attribute (1-based, inclusive)")] start_line: Option<usize>,
+        #[param(help = "Last line to attribute (1-based, inclusive)")] end_line: Option<usize>,
+        #[param(short = 'r', help = "Root directory (defaults to current directory)")] root: Option<
+            String,
+        >,
+        #[param(help = "Filter by specific project path")] project: Option<String>,
+        #[param(help = "Search sessions across all projects")] all_projects: bool,
+        #[param(help = "Force specific format: claude, codex, gemini, normalize")] format: Option<
+            String,
+        >,
+        #[param(help = "Filter sessions by grep pattern")] grep: Option<String>,
+        #[param(help = "Only consider sessions from the last N days")] days: Option<u32>,
+        #[param(help = "Only consider sessions since date (YYYY-MM-DD)")] since: Option<String>,
+        #[param(help = "Only consider sessions until date (YYYY-MM-DD)")] until: Option<String>,
+        #[param(help = "Session mode: interactive (default), subagent, or all")] mode: Option<
+            SessionMode,
+        >,
+        #[param(help = "Filter by agent type (e.g. Explore, general-purpose, Plan)")]
+        agent_type: Option<String>,
+        #[param(
+            short = 'n',
+            help = "Maximum number of sessions to scan (0 = all, default: all)"
+        )]
+        limit: Option<usize>,
+    ) -> Result<SessionsBlameReport, String> {
+        let root_path = root.as_deref().map(std::path::Path::new);
+        let project_path = project.as_deref().map(std::path::Path::new);
+        let resolved_root = root_path.unwrap_or(std::path::Path::new("."));
+        self.resolve_format(resolved_root);
+        let filter = BlameSessionFilter {
+            format_name: format.as_deref(),
+            grep: grep.as_deref(),
+            days,
+            since: since.as_deref(),
+            until: until.as_deref(),
+            project: project_path,
+            all_projects,
+            mode: mode.unwrap_or_default(),
+            agent_type: agent_type.as_deref(),
+            session_limit: limit.unwrap_or(0),
+        };
+        crate::build_blame_report(resolved_root, &path, start_line, end_line, &filter)
     }
 
     /// Show token cost breakdown with cache savings per turn

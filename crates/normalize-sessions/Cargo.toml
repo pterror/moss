@@ -16,6 +16,7 @@ sessions-web = ["dep:axum", "dep:tokio"]
 normalize-chat-sessions = { path = "../normalize-chat-sessions", version = "0.3.2", features = ["schema"] }
 normalize-session-analysis = { path = "../normalize-session-analysis", version = "0.3.2" }
 normalize-output = { path = "../normalize-output", version = "0.3.2" }
+normalize-vcs = { workspace = true }
 server-less = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true

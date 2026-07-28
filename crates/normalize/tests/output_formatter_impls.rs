@@ -54,6 +54,7 @@ fn test_output_formatter_implementations() {
     use normalize_output::diagnostics::DiagnosticsReport;
     use normalize_session_analysis::SessionAnalysisReport;
     use normalize_sessions::SessionShowReport;
+    use normalize_sessions::SessionsBlameReport;
     use normalize_sessions::SubagentsReport;
     use normalize_sessions::list::SessionListReport;
     use normalize_sessions::messages::MessagesReport;
@@ -105,6 +106,7 @@ fn test_output_formatter_implementations() {
     assert_output_formatter::<SessionAnalysisReport>();
     assert_output_formatter::<SessionListReport>();
     assert_output_formatter::<SessionShowReport>();
+    assert_output_formatter::<SessionsBlameReport>();
     assert_output_formatter::<SubagentsReport>();
     use normalize_sessions::ngrams::NgramsReport;
     assert_output_formatter::<NgramsReport>();
