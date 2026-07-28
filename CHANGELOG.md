@@ -75,6 +75,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Elixir query correctness and completeness gaps found applying the
+  query-testing methodology (`docs/query-testing-methodology.md`) to
+  `elixir.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced
+  against arborium-elixir 2.17.0's node-types.json field-by-field and
+  verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Complexity massively overcounted every function.** The previous
+    `elixir.complexity.scm` matched a blanket `(call) @complexity` and
+    `(binary_operator) @complexity`, treating literally every function call
+    (`IO.puts`, `Enum.reduce`, even `def`/`defmodule` themselves) and every
+    arithmetic/comparison operator (`+`, `-`, `==`) as a decision point —
+    since Elixir represents control flow as macro calls rather than
+    dedicated AST nodes, this made the complexity metric essentially
+    meaningless (proportional to how much code a function calls, not how
+    much it branches). Rescoped to the specific branching macros
+    (if/unless/case/cond/with/for/try/receive), each independent
+    `stab_clause` branch arm (so a `case`/`cond` with N arms scores N, not
+    1), and only the boolean short-circuit operators (`&&`, `||`, `and`,
+    `or`).
+  - **Guarded function/macro heads were entirely unmatched by
+    `elixir.tags.scm`.** `def name(x) when guard do ... end` puts a
+    `binary_operator` (operator `when`) directly under `arguments`, not the
+    `call`/`identifier` the four existing def/defp/defmacro/defmacrop
+    patterns required — silently dropping every guarded function, one of
+    the most common idioms in real Elixir code. Also added `defguard`/
+    `defguardp` (structurally identical, always guarded) and `defdelegate`,
+    neither previously recognized at all.
+  - **Anonymous-function invocation (`fun.(args)`) was unmatched by
+    `elixir.calls.scm`.** `dot.right` is optional in this grammar and is
+    absent for this form; the existing remote-call pattern required
+    `right: (identifier)` and never fires. Also added a best-effort capture
+    for dynamic/macro-generated call targets (`unquote(name)(1, 2)` inside a
+    `quote` block, where `call.target` is itself a `call`).
+  - **Multi-alias form (`alias Foo.{Bar, Baz}`) was unmatched by
+    `elixir.imports.scm`.** This extremely common idiom parses as `dot
+    right: (tuple (alias) ...)`, not a bare `(alias)` under `arguments`; the
+    four existing alias/import/use/require patterns never matched it. Also
+    added the dot-qualified single form (`alias __MODULE__.Sub`).
+  - Documented (not changed, since it is already the tested contract) that
+    `elixir.types.scm`'s `(alias) @type.reference` is intentionally broad —
+    Elixir has no separate type namespace from module names, and the query
+    engine (`query_predicates.rs`) supports no ancestor-aware predicate that
+    would let it scope narrowly to `@spec`/`@type` bodies without also
+    dropping legitimate module-as-type references elsewhere.
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
