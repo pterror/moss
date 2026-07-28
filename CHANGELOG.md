@@ -75,6 +75,64 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Haskell query completeness gaps and extraction bugs found applying the
+  query-testing methodology (`docs/query-testing-methodology.md`) to
+  `haskell.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced
+  against arborium-haskell 2.17.0's node-types.json field-by-field and
+  verified via `normalize syntax query`/`normalize syntax ast`/`normalize
+  rank complexity`:
+  - **Every Haskell function's cyclomatic complexity was inflated, in every
+    file, unconditionally.** `haskell.complexity.scm` had `(match) @complexity`,
+    but every function equation body (even a zero-branch `f x = x + 1`) and
+    every case/lambda_case arm body is wrapped in its own `match` node — so
+    the equation-body wrapper itself was miscounted as a decision point.
+    Confirmed via `normalize rank complexity`: a trivial one-line function
+    reported complexity 2 instead of 1, and a plain 4-arm, no-guard `case`
+    reported complexity 7 instead of the correct 5 (base 1 + case 1 + one per
+    arm). Fixed by removing `(match) @complexity` and adding `(alternative)
+    @complexity` (one decision point per case/lambda_case/lambda_cases arm,
+    mirroring `match_arm` in `rust.complexity.scm`).
+  - **`multi_way_if`/`lambda_case`/`lambda_cases` (MultiWayIf/LambdaCase
+    extensions, in pervasive real-world use) contributed zero complexity**
+    regardless of branch count — entirely absent from the query.
+  - **Two of Haskell's most common top-level definition shapes were entirely
+    absent from tags:** zero-argument/point-free bindings (`main = do ...`,
+    `frequencyMap = foldr (...) Map.empty`) use a `bind` node, not
+    `function` (which requires ≥1 pattern argument) — `main` itself, and any
+    point-free-style definition, never appeared as a symbol.
+  - **`where`-bound local helper functions leaked into top-level symbols**
+    (confirmed on a `where`-clause fixture: local helpers appeared as
+    top-level functions). `function`/`bind` are also the node types used for
+    local `let`/`where` bindings; fixed by scoping both tags patterns to
+    `(declarations (function|bind ...))` — direct top-level children only.
+  - **Multiple `instance` declarations of the same typeclass for different
+    types collapsed into one symbol.** `instance.name` holds the *typeclass*
+    name (not the instantiated type), so `instance Shape Rectangle` and
+    `instance Shape Count` both produced a symbol named "Shape"; a
+    kind-unscoped post-processing dedup pass (`dedup_haskell_functions` in
+    `haskell.rs`, meant only for multi-equation function collapsing) removed
+    every instance after the first with the same class name. Scoped the
+    dedup to `Function`/`Method` kinds only.
+  - **Custom-operator definitions (`(+++) xs ys = ...`) were unmatched** for
+    functions, data types, newtypes, type synonyms, typeclasses, and
+    instances alike — all six `name`-field constraints allow `prefix_id` (the
+    parenthesized-operator form) in addition to the plain form.
+  - **Operator-section-as-prefix-function calls were entirely unmatched in
+    `haskell.calls.scm`** — `($) f x`, `(+) 1 2`, `(Prelude.+) 1 2`.
+    `apply.function` allows `prefix_id` wrapping a bare or qualified
+    operator; `($)` applied directly (e.g. `foldr ($) x fs`) is a pervasive
+    point-free idiom. Also added parens-wrapped plain/qualified identifiers
+    used as a call target (`(f) 1`, `(Map.lookup) k m`).
+  - **Named imports were never extracted at all** — `haskell.imports.scm` had
+    no `@import.name` capture whatsoever, silently dropping every name from
+    `import Data.List (sort, nub)` and every `hiding (...)` clause.
+  - Documented (not fixed) two confirmed-real but vanishingly-rare grammar
+    edge cases rather than fabricating error-prone patterns: unparenthesized
+    infix type/data declarations (`data a :+: b = ...`) and custom infix
+    *type* operators used as a type constructor (`x :: Int :+: String`) — the
+    latter would require scoping to type-level `infix` nodes specifically,
+    since the same node shape is also used for ordinary value-level operators.
+
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
