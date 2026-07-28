@@ -317,6 +317,65 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     already established for `python.complexity.scm`/`ruby.complexity.scm`.
     Matched via `binary_expression`'s `operator` field (PHP's single generic
     binary-operator node) rather than a dedicated node kind.
+- **Scala query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `scala.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-scala 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **Scala 3 `enum` definitions were entirely unmatched** by `scala.tags.scm`
+    — `enum Color { case Red, Green, Blue }` produced no symbol at all, despite
+    enums being a headline Scala 3 feature that replaces the old
+    sealed-trait-ADT pattern. Now tagged as `definition.enum` (a container, so
+    methods inside the enum body nest correctly).
+  - **Operator-method definitions (`def +(other: Point): Point = ...`) were
+    unmatched.** `function_definition.name` allows `operator_identifier` in
+    addition to `identifier`; only the latter was handled, silently dropping
+    every arithmetic/comparison operator overload on a case class — one of the
+    most common reasons to define an operator method in Scala.
+  - **`scala.tags.scm` had no `@reference.*` captures at all** (calls, `new`
+    instantiation, `extends`/`with` supertypes), unlike the other JVM
+    languages already swept (Java, batch 1). Added `@reference.call` (ported
+    from `scala.calls.scm`, including the two new call-shape fixes below),
+    `@reference.class` for object instantiation (`new Foo()`, `new
+    Stack[Int]()`, `new java.util.Date()`, `new java.util.HashMap[String,
+    Int]()`), and `@reference.implementation` for `extends`/`with` supertypes.
+  - **`with`-mixin traits were invisible to any supertype query.**
+    `extends_clause.type` is declared `multiple: true` in node-types.json, but
+    in practice only the *first* type after `extends` actually carries the
+    `type` field — every subsequent `with X` mixin trait is an unfielded
+    direct child. A field-constrained query alone would have silently dropped
+    every mixin after the first; fixed by matching unconstrained children,
+    which is exactly the "field declared but not populated for every
+    occurrence" trap the methodology doc warns about.
+  - **Explicit operator-method calls (`obj.+(x)`, `this.n.+(1)`) were
+    unmatched** in both `scala.calls.scm` and the new `scala.tags.scm`
+    references — `field_expression.field` allows `operator_identifier` in
+    addition to `identifier`.
+  - **Parenthesized call targets (`(f)(x)`) were unmatched** —
+    `call_expression.function` allows `parenthesized_expression` directly
+    (mirrors the existing `typescript.calls.scm` treatment of the same shape).
+  - **`scala.types.scm` double-counted every qualified type reference.** A
+    redundant `(stable_type_identifier (type_identifier))` clause matched the
+    same node a plain unconstrained `(type_identifier)` clause already
+    covered (tree-sitter queries match nodes anywhere in the tree regardless
+    of parent kind), so `java.util.Date` produced two `@type.reference`
+    captures for "Date" instead of one. Removed the redundant clause.
+  - **`Scala::extract_imports` left raw rename-arrow text in parsed import
+    names.** `import scala.util.{Try, Success => S, Failure}` (Scala 2
+    `=>` rename) and `import java.util.{List as JList}` (Scala 3 `as`
+    rename) — both extremely common idioms for avoiding name clashes — stored
+    the literal `"Success => S"` in the parsed `names` list instead of the
+    plain name `"Success"`. Now strips the rename suffix from every name, and
+    recovers the alias when the braces contain exactly one name (the `Import`
+    struct has one whole-statement `alias` field, so per-name aliases in a
+    multi-name brace import can't be fully represented). Also fixed brace
+    wildcard detection (`{_}`/`{*}`) from a substring `.contains('_')` check
+    — which would misfire on any plain snake_case-ish name — to an exact-token
+    check.
+  - `(enum_definition)` added to `scala.complexity.scm`'s nesting set,
+    matching the existing treatment of class/object/trait definitions now
+    that enums are extracted as symbols.
+
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field

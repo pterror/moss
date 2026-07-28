@@ -24,4 +24,5 @@
 (class_definition) @nesting
 (object_definition) @nesting
 (trait_definition) @nesting
+(enum_definition) @nesting
 (block) @nesting
