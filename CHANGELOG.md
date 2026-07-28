@@ -47,6 +47,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   accumulated per turn. Sync-over-async bridge reuses the `block_on` / `spawn_scoped`
   pattern from `normalize-facts/src/ca_cache.rs`.
 
+### Fixed
+
+- **Persistent extraction cache now invalidates when a built-in `.scm` query file changes.**
+  Previously the content-addressed cache backing `normalize view`, `normalize rank`,
+  `structure rebuild`, and incremental reindexing was keyed only on
+  `(file content hash, a manually-bumped version constant, grammar name)` — it never
+  looked at the actual `tags`/`complexity`/`calls`/`imports`/`types` query text. Fixing a
+  broken or incomplete `.scm` query and shipping a new `normalize` release did not
+  invalidate existing users' caches, so they kept getting the old (wrong) symbols, calls,
+  imports, or complexity scores until they manually deleted
+  `~/.config/normalize/ca-cache.sqlite`. Confirmed via a reproduction: cache a result,
+  edit a query, rebuild, and observe the stale result returned. Cache keys now fold in a
+  per-grammar fingerprint of the loaded query content, so a query change invalidates only
+  the affected grammar's cached entries automatically, without a version bump. The
+  extraction cache version was also bumped (one-time) to clear caches already poisoned by
+  today's `.scm` fixes across 17+ languages.
+
 ### Fixed (internal)
 
 - **Codex session parser rewritten for current rollout protocol (Phase 2b).** The prior

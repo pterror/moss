@@ -121,13 +121,33 @@ struct CachedFileData {
 // Not yet public - just delete .normalize/index.sqlite on schema changes
 const SCHEMA_VERSION: i64 = 17;
 
-/// Bump when extraction logic changes to invalidate cached results.
+/// Bump when Rust-side extraction/post-processing logic changes in a way that
+/// invalidates cached results (struct shape, serialization layout, algorithm
+/// changes not driven by a `.scm` query file).
 /// Bumped to "2" (2026-04-27): purge CA cache entries that may have been poisoned
 /// by the old bug where rebuilds without grammars loaded cached empty results.
 /// Bumped to "3" (2026-07-15): `ParsedSymbol`/`CachedFileData` gained a `complexity`
 /// field; old bincode-serialized cache entries have a different byte layout and
 /// must not be deserialized against the new struct shape.
-const EXTRACTOR_VERSION: &str = "3";
+/// Bumped to "4" (2026-07-28): one-time invalidation for the many `.scm` query
+/// fixes landed this session (59 broken query files, plus completeness bugs
+/// across 17 languages) that predate per-grammar query-content fingerprinting
+/// (see `ca_cache::query_fingerprint`) — those fixes were silently masked by
+/// stale cache entries keyed only on this constant + grammar name, with no
+/// dependency on query content. Going forward, `.scm` edits invalidate
+/// automatically via the fingerprint; this constant only needs bumping again
+/// for genuine Rust-side extraction/schema changes.
+const EXTRACTOR_VERSION: &str = "4";
+
+/// Cache key version for a grammar: `EXTRACTOR_VERSION` plus a fingerprint of
+/// that grammar's `.scm` query content, so editing any query file for a
+/// grammar automatically invalidates every persisted cache entry for it.
+fn extr_ver_for_grammar(grammar: &str) -> String {
+    format!(
+        "{EXTRACTOR_VERSION}-{}",
+        crate::ca_cache::query_fingerprint(grammar)
+    )
+}
 
 /// Check if a file path has a supported source extension.
 fn is_source_file(path: &str) -> bool {
@@ -2882,7 +2902,8 @@ impl FileIndex {
             };
             let hash = blake3::hash(&bytes);
             if let Some(ca) = &self.ca_cache {
-                match ca.get::<CachedFileData>(hash.as_bytes(), EXTRACTOR_VERSION, &grammar) {
+                let extr_ver = extr_ver_for_grammar(&grammar);
+                match ca.get::<CachedFileData>(hash.as_bytes(), &extr_ver, &grammar) {
                     Ok(Some(cached)) => {
                         ca_cached_files.push(file_path.clone());
                         cached_data.push(ParsedFileData {
@@ -3045,7 +3066,8 @@ impl FileIndex {
                         type_methods: type_methods.clone(),
                         type_refs: type_refs.clone(),
                     };
-                    if let Err(e) = ca.put(hash.as_bytes(), EXTRACTOR_VERSION, &grammar, &cached) {
+                    let extr_ver = extr_ver_for_grammar(&grammar);
+                    if let Err(e) = ca.put(hash.as_bytes(), &extr_ver, &grammar, &cached) {
                         tracing::warn!("normalize-facts: CA cache put error: {}", e);
                     }
                 }
@@ -3412,9 +3434,10 @@ impl FileIndex {
             let hash = blake3::hash(&bytes);
 
             // Try CA cache first (best-effort)
+            let extr_ver = extr_ver_for_grammar(&grammar);
             let cached: Option<CachedFileData> = if !grammar.is_empty() {
                 self.ca_cache.as_ref().and_then(|ca| {
-                    ca.get::<CachedFileData>(hash.as_bytes(), EXTRACTOR_VERSION, &grammar)
+                    ca.get::<CachedFileData>(hash.as_bytes(), &extr_ver, &grammar)
                         .unwrap_or_else(|e| {
                             tracing::warn!("normalize-facts: CA cache get error: {}", e);
                             None
@@ -3501,9 +3524,7 @@ impl FileIndex {
                         type_methods: Vec::new(), // type_methods not extracted in incremental path
                         type_refs: type_refs.clone(),
                     };
-                    if let Err(e) =
-                        ca.put(hash.as_bytes(), EXTRACTOR_VERSION, &grammar, &cached_store)
-                    {
+                    if let Err(e) = ca.put(hash.as_bytes(), &extr_ver, &grammar, &cached_store) {
                         tracing::warn!("normalize-facts: CA cache put error: {}", e);
                     }
                 }
