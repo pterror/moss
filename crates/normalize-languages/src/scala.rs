@@ -119,21 +119,63 @@ impl Language for Scala {
             let has_selectors = rest.contains('{');
 
             if has_selectors {
-                // import pkg.{A, B, C}
+                // import pkg.{A, B, C} — also handles per-name renames
+                // (`{Map => MutableMap}` Scala 2, `{List as JList}` Scala 3)
+                // and brace wildcards (`{_}` Scala 2, `{*}` Scala 3).
                 if let Some(brace) = rest.find('{') {
                     let module = rest[..brace].trim_end_matches('.').to_string();
                     let inner = &rest[brace + 1..];
                     let inner = inner.strip_suffix('}').unwrap_or(inner);
-                    let names: Vec<String> = inner
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty() && s != "_")
-                        .collect();
+
+                    let mut is_wildcard = false;
+                    let mut single_rename_alias: Option<String> = None;
+                    let raw_entries: Vec<&str> = inner.split(',').map(str::trim).collect();
+                    let mut names: Vec<String> = Vec::new();
+                    for entry in &raw_entries {
+                        if entry.is_empty() {
+                            continue;
+                        }
+                        // Bare wildcard marker: `_` (Scala 2) or `*` (Scala 3).
+                        // Checked as an exact token, not a substring match —
+                        // a renamed/plain name that merely *contains* '_' or
+                        // '*' (e.g. `my_var`) must not be mistaken for one.
+                        if *entry == "_" || *entry == "*" {
+                            is_wildcard = true;
+                            continue;
+                        }
+                        // Strip a per-name rename suffix: `X => Y` (Scala 2)
+                        // or `X as Y` (Scala 3). Only the left-hand original
+                        // name belongs in `names`; the Import struct has a
+                        // single whole-statement `alias`, so a per-name alias
+                        // is only recoverable when this is the *only* name in
+                        // the braces.
+                        let (name, alias) = if let Some(idx) = entry.find("=>") {
+                            (entry[..idx].trim(), Some(entry[idx + 2..].trim()))
+                        } else if let Some(idx) = entry.find(" as ") {
+                            (entry[..idx].trim(), Some(entry[idx + 4..].trim()))
+                        } else {
+                            (*entry, None)
+                        };
+                        if name == "_" || name == "*" {
+                            is_wildcard = true;
+                            continue;
+                        }
+                        if let Some(a) = alias {
+                            single_rename_alias = Some(a.to_string());
+                        }
+                        names.push(name.to_string());
+                    }
+                    let alias = if names.len() == 1 {
+                        single_rename_alias
+                    } else {
+                        None
+                    };
+
                     return vec![Import {
                         module,
                         names,
-                        alias: None,
-                        is_wildcard: inner.contains('_'),
+                        alias,
+                        is_wildcard,
                         is_relative: false,
                         line,
                     }];
@@ -510,10 +552,10 @@ mod tests {
             "access_qualifier", "arrow_renamed_identifier",
             "as_renamed_identifier", "block_comment", "case_block", "case_class_pattern",
             "class_parameter", "class_parameters", "derives_clause", "enum_body",
-            "enum_case_definitions", "enum_definition", "enumerator", "enumerators",
-            "export_declaration", "extends_clause", "extension_definition", "field_expression",
+            "enum_case_definitions", "enumerator", "enumerators",
+            "export_declaration", "extension_definition", "field_expression",
             "full_enum_case", "identifier", "identifiers", "indented_block", "indented_cases",
-            "infix_modifier", "inline_modifier", "instance_expression", "into_modifier",
+            "infix_modifier", "inline_modifier", "into_modifier",
             "macro_body", "modifiers", "name_and_type", "opaque_modifier", "open_modifier",
             "operator_identifier", "package_clause", "package_identifier", "self_type",
             "simple_enum_case", "template_body", "tracked_modifier", "transparent_modifier",
@@ -522,17 +564,17 @@ mod tests {
             // CLAUSE
             "finally_clause", "type_case_clause",
             // EXPRESSION
-            "ascription_expression", "assignment_expression", "call_expression",
+            "ascription_expression", "assignment_expression",
             "generic_function", "interpolated_string_expression", "parenthesized_expression",
             "postfix_expression", "prefix_expression", "quote_expression", "splice_expression",
             "tuple_expression",
             // TYPE
             "annotated_type", "applied_constructor_type", "compound_type",
             "contravariant_type_parameter", "covariant_type_parameter", "function_declaration",
-            "function_type", "generic_type", "given_definition", "infix_type", "lazy_parameter_type",
+            "function_type", "given_definition", "infix_type", "lazy_parameter_type",
             "literal_type", "match_type", "named_tuple_type", "parameter_types",
             "projected_type", "repeated_parameter_type", "singleton_type", "stable_identifier",
-            "stable_type_identifier", "structural_type", "tuple_type", "type_arguments", "type_identifier", "type_lambda", "type_parameters", "typed_pattern",
+            "structural_type", "tuple_type", "type_arguments", "type_lambda", "type_parameters", "typed_pattern",
             // control flow — not extracted as symbols
             "while_expression",
             "match_expression",
