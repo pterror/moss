@@ -1,6 +1,6 @@
 # Normalize Roadmap
 
-Last triaged: 2026-07-01
+Last triaged: 2026-07-28
 
 See `CHANGELOG.md` for completed work. See `docs/` for design docs.
 
@@ -29,6 +29,12 @@ mtime+size heuristic was needed since there was nothing left to merge; branch/wo
 deleted.
 
 ## Active open threads (advisory)
+
+- **Query-testing methodology sweep — incomplete, ~82 of 99 grammars remaining** (verify this count against the "Remaining for future batches" list further down before continuing — it was accurate as of batch 2). `docs/query-testing-methodology.md` was validated on Rust, then applied in two batches (batch 1: python/typescript/javascript/go/java/c/cpp/ruby; batch 2: c-sharp/php/swift/kotlin/scala/haskell/elixir/sql). Why it matters: every single language examined so far had real, previously-silent extraction bugs, several severe (C#'s `@type.reference` matching every identifier in the file; Haskell/Elixir complexity wildly inflated or wrong for every function; Python's `@definition.constant` matching nothing at all). Open question: whether to continue a full sweep across all 99 grammars or stop at a high-value subset — the user chose "full sweep" earlier, but that predates knowing each batch costs roughly 3-4M tokens (2 batches of 8 languages each have been run so far). Next session should confirm this tradeoff is still the user's preference before committing to more batches.
+
+- **`extract_fixtures` fail-fast masks multi-failure situations — not yet fixed.** The `normalize-facts` fixture test panics on the first mismatch it finds (`find_fixture_cases()` sorts alphabetically, so whichever language sorts first eats the panic), so a single run reports one failure when many may exist. This caused real misdiagnosis twice this cycle: an apparent "ada bug" turned out to be all 40 fixture languages having a stale `SUMMARY.md`-derived expectation (ada merely happened to sort first alphabetically), and separately, fixing `c/add_numbers`'s header-guard bug unmasked four more already-stale fixtures that had never been reached by the test before. Collecting and reporting all mismatches (instead of stopping at the first) would make the blast radius of a shared-fixture regression visible immediately, at what's probably low implementation cost — but nobody has actually confirmed how invasive that change would be to `crates/normalize-facts/src/extract.rs`'s test harness. Might be worth doing before the next big fixture-touching sweep.
+
+- **Grammar-drift as a general bug class — detection half is still open.** Several cases this cycle involved code or `.scm` queries referencing tree-sitter node types that no longer exist in the currently-vendored arborium grammars (KDL's `documented_unused` list had two stale entries; `Kdl::container_body` silently returned `None` because a wrapper node it walked for no longer exists; various `.cfg.scm` files referenced node types the current grammar dropped). Grammars are declared `= "*"` (unpinned) in `crates/normalize-grammars/Cargo.toml`, so this can recur silently on any rebuild that picks up a new grammar version. The cache-key half is now addressed (a grammar/query rebuild fully invalidates the CA-cache — see the CA-cache entry below), but the *detection* half — proactively flagging queries/code that reference node types absent from the current grammar's `node-types.json`, analogous to how `all_registered_queries_compile` catches non-compiling queries — doesn't exist yet. Open question: is a generic guardrail like that feasible across all 99 grammars, or does each language's node-type surface need bespoke handling?
 
 - **✅ DONE (2026-07-28): Orphaned `git stash` triage — all 3 entries verified obsolete via content-tracing and dropped with user approval.** `git stash list` is now empty. Historical record of what each contained:
   - `stash@{0}` → shipped as `3e1e5847` (feat(view): --chunk N and --around pattern for large file navigation)
@@ -106,32 +112,9 @@ Note: `normalize-cfg`'s `java_cfg`/`lua_cfg` snapshot tests and `normalize-facts
 
   **Remaining for future batches (82 of 99 registered grammars)**: ada, agda, asciidoc, asm, awk, bash, batch, caddy, capnp, clojure, cmake, commonlisp, css, d, dart, devicetree, diff, dockerfile, dot, elisp, elm, erlang, fish, fsharp, gleam, glsl, graphql, groovy, hcl, hlsl, html, idris, ini, jinja2, jq, jsdoc, json, julia, kdl, lean, lua, markdown, matlab, meson, nginx, ninja, nix, objc, ocaml, perl, postscript, powershell, prolog, query, r, rescript, ron, scheme, scss, sparql, ssh-config, starlark, svelte, textproto, thrift, tlaplus, toml, tsx, typst, uiua, vb, verilog, vhdl, vim, vue, wit, x86asm, xml, yaml, yuri, zig, zsh. (Done so far: rust [prototype], python, typescript, javascript, go, java, c, cpp, ruby [batch 1]; c-sharp, php, swift, kotlin, scala, haskell, elixir, sql [batch 2].) Batch 3 should pick the next highest-value tier — config/markup languages with heavy real-world usage (json, yaml, toml, html, css) plus a scripting tier (bash, lua) not yet covered by this methodology (only their `.cfg.scm` files were touched in the earlier CFG remediation, which is a different, narrower pass) — and follow the same parallel-worktree-agent + sequential-merge pattern used here, since the shared `query_fixtures.rs`/`CHANGELOG.md` edits from concurrent language agents reliably produce mechanical (not semantic) merge conflicts.
 
-  **Flagged during batch 2 (Haskell sub-agent), not yet investigated**: `normalize view`/`normalize rank complexity` (and presumably other CA-cache-backed commands) key their persistent cache (`~/.config/normalize/ca-cache.sqlite`) by file-content hash + a static schema-version string only — with no dependency on the `.scm` query files' own content/mtime. During this sweep's dev iteration, re-running a command against byte-identical source after editing a `.scm` file silently returned stale pre-fix output until the cache was manually cleared. This is a cross-cutting caching-architecture question (affects every language, not just Haskell) — whoever owns the CA-cache design (see the "Content-addressed indexer (CA store)" section elsewhere in this file) should decide whether the cache key needs to fold in query-file hashes, or whether some other invalidation signal (grammar/query build version bump) is the intended mechanism.
+  **✅ FIXED (2026-07-28): CA-cache key now folds in query-file content.** `normalize-facts/src/ca_cache.rs`'s `query_fingerprint(grammar_name)` (a per-grammar blake3 hash of the loaded `.scm` query content) is now folded as a suffix into the cache-version string at every get/put call site in `extract.rs`/`index.rs`, so editing a query file invalidates only that grammar's cached entries automatically — no manual cache-clear needed. `EXTRACTOR_VERSION` was bumped once (3→4) to clear caches already poisoned before the fix. Grammar (`.so`) content/version is deliberately *not* folded into this key — a separate design tradeoff, written up in the "Content-addressed indexer (CA store)" section below.
 
-- **Known pre-existing test failures (confirmed 2026-07-28, unrelated to cache-key fix below)**:
-  reproduced on a clean checkout (stashed the cache-key changes and reran) before attributing
-  any of these — none are caused by the cache-key fix.
-  - `normalize-facts::extract_fixtures` fails at `ada/add_numbers` (stale `SUMMARY.md`-derived
-    heading expectation; likely the same drift class as the `c/add_numbers` MATH_H failure
-    another agent is already working — the SUMMARY.md convention was removed but golden
-    fixtures weren't regenerated).
-  - `normalize-cfg`'s `go_cfg` tests fail with `QueryCompile("Query error at 27:4. Invalid node
-    type \"expression_case_clause\"")` — a CFG query referencing a node type the current Go
-    grammar doesn't have.
-  - `normalize-languages` fails to *compile* its `query_fixtures` integration test:
-    `crates/normalize-languages/tests/fixtures/cmake/CMakeLists.txt` is `include_str!`-referenced
-    by `cmake_tags_finds_functions_and_macros`/`cmake_calls_finds_command_calls`/
-    `cmake_complexity_finds_control_flow` but was never committed. Needs a real CMake sample
-    exercising functions/macros, command calls (`find_package`/`add_library`/
-    `target_link_libraries`), and control flow — not fabricated here per the "don't guess"
-    rule, since the exact expected symbol names are asserted in the test.
-  - `normalize-languages::kdl::tests::unused_node_kinds_audit` fails: `identifier_string` and
-    `multi_line_string_body` are documented but don't exist in the current grammar, and
-    `identifier` exists but is undocumented/unused — the exact "grammar version drift" failure
-    mode called out when auditing the cache-key fix's scope (see the CA-cache entry above);
-    presumably from an in-flight kdl grammar bump in another worktree.
-  All four block a clean `NORMALIZE_REQUIRE_GRAMMARS=1 cargo test -q --workspace`; verified
-  clean otherwise (401+ passing tests across all other workspace crates with grammars built).
+  **Note on test-suite state (verified 2026-07-28 via `NORMALIZE_REQUIRE_GRAMMARS=1 cargo test -q --workspace`): fully green.** Earlier same-day notes about `go_cfg` QueryCompile failures, a missing `cmake` fixture, `kdl::unused_node_kinds_audit`, and `ada/add_numbers` `extract_fixtures` staleness were all resolved by concurrent work the same day (cmake fixture re-added during the batch-1 merge; kdl audit fixed in the "KDL `unused_node_kinds_audit` fix" section below; ada fixed in the "C/C++ header guard misclassification fix" section below; go_cfg untraced further since it's currently passing). If a future session hits grammar-drift test failures again, treat them as fresh occurrences of the same bug class (see "Grammar-drift as a general bug class" below), not a reopening of these specific ones.
 
 ---
 
