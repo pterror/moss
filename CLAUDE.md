@@ -111,6 +111,8 @@ When unsure of syntax: `normalize <cmd> --help`. Fall back to Read only for exac
 
 **Maintain CHANGELOG.md.** User-facing changes go in `CHANGELOG.md` (Keep a Changelog format) as they land — not in a batch at release time. Add entries under `## [Unreleased]` when committing the feature. At release, rename `[Unreleased]` to the version and add a new empty `[Unreleased]` section. The release workflow body should link to or excerpt the changelog rather than duplicating install instructions as the primary content.
 
+**Long-running builds block in foreground.** `cargo xtask build-grammars` and the pre-commit hook (full-workspace `cargo clippy --all-targets --all-features`) are slow (many minutes, especially cold). Run them in foreground with long timeout (600000ms / 10 minutes) rather than backgrounding and yielding — backgrounding to "wait for done" burns an orchestrator round-trip with zero progress. Real blockers (repeated hard error) justify stopping; waiting is not.
+
 ## Commit Convention
 
 Conventional commits: `type(scope): message`. Scope recommended for multi-crate changes.
