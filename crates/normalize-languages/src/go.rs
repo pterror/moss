@@ -573,7 +573,6 @@ mod tests {
             "expression_statement",    // expr
             "inc_statement",           // x++
             "short_var_declaration",   // x := y
-            "type_alias",              // type X = Y        // type X struct{}         // var x int
 
             // CONTROL FLOW DETAILS
             "empty_statement",         // ;
