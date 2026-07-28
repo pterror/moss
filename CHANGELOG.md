@@ -245,6 +245,78 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     would produce query matches that silently vanish downstream (no symbol
     emitted), so they are intentionally left uncaptured with the reasoning
     recorded in the query file.
+- **PHP query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `php.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-php 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast` (this is a separate, wider
+  sweep than the earlier CFG-only remediation of `php.cfg.scm`):
+  - **`php.tags.scm` had no `@reference.*` captures at all.** Every function
+    call, method call, `new` expression, `extends`, and `implements` was
+    entirely invisible to tags — only definitions were ever captured. Added
+    `@reference.call` (function/static/instance/nullsafe method calls),
+    `@reference.class` (constructor invocation, `extends`), and
+    `@reference.implementation` (`implements`), mirroring the coverage
+    java.tags.scm/ruby.tags.scm already have for the same construct
+    categories.
+  - **`require`/`require_once` were entirely unmatched in `php.imports.scm`**
+    — a distinct grammar node from `include`/`include_once`, not a variant of
+    it. Since `require` is the more common file-inclusion form in real PHP
+    (fatals instead of warning on failure), this silently dropped the
+    majority of file-inclusion imports in a typical codebase.
+  - **Single-segment `use ClassName;` (no namespace separator) was entirely
+    unmatched in `php.imports.scm`** — the query only ever matched
+    `qualified_name`; a bare `use Exception;`/`use Throwable;` parses as
+    `name`. Very common for global/built-in classes.
+  - **Grouped `use App\{Foo, Bar};` was entirely unmatched.** Each grouped
+    member nests one level deeper (inside `namespace_use_group`) than the
+    plain form; tree-sitter query nesting requires a direct-child match, so
+    none of the existing direct-child patterns ever matched a grouped
+    member.
+  - **Trait composition (`use TraitA, TraitB;` inside a class/trait body)
+    was entirely unmatched** — a distinct node kind (`use_declaration`) from
+    the namespace-import `namespace_use_declaration`. Added to
+    `php.imports.scm` (mirroring how `ruby.imports.scm` treats
+    `include`/`extend`/`prepend`), not `php.tags.scm`.
+  - **Aliased imports were double-counted**: `use X as Y;` produced two
+    identical `@import.path` captures (one from the base pattern, one from
+    the alias-specific pattern, both unconditionally matching). Fixed with
+    tree-sitter's `!field` negation so the base pattern only fires when no
+    alias is present.
+  - **Union type members were double-counted in `php.types.scm`**: a
+    redundant `union_type`-specific pattern duplicated every match the
+    already-unanchored `named_type` pattern produced (e.g. `Foo|Bar` yielded
+    two captures per member). Removed the redundant pattern.
+  - **`named_type`'s `relative_name` variant** (`namespace\LocalType`) was
+    unmatched in `php.types.scm`.
+  - **Constructor invocation (`new Foo()`) was entirely unmatched in
+    `php.calls.scm`** as well as invisible in tags (see above) — not treated
+    as a call anywhere. Deliberately kept out of `calls.scm` (matching
+    java.calls.scm's precedent that `new` is a class reference, not an
+    invocation) but added to `php.tags.scm`'s new `@reference.class`.
+  - **Namespaced function calls** (`\Ns\func()`, `Ns\func()`) and several
+    computed-callee forms (IIFEs, callable-array syntax, subscript-indexed
+    callables, chained call/`new` results) were unmatched in
+    `php.calls.scm` — `function_call_expression.function` allows 17 node
+    variants; only 2 were handled.
+  - **Dynamic static/instance method calls** (`Class::$method()`,
+    `$obj->$method()`, `$obj->{$expr}()`) were unmatched in both
+    `php.calls.scm` and the new `php.tags.scm` reference patterns —
+    `scoped_call_expression`/`member_call_expression`/
+    `nullsafe_member_call_expression`'s `name` field allows
+    `variable_name`/`dynamic_variable_name`/`expression` in addition to the
+    only-handled plain `name`.
+  - **PHP 8's `match` expression arms (`match_conditional_expression`) were
+    entirely uncounted in `php.complexity.scm`** — the same "distinct node
+    type from what the query checks" bug class the CFG remediation found for
+    `match_condition_list` nesting. `match_default_expression` is
+    deliberately left uncounted, mirroring `switch`'s existing
+    `default_statement` exclusion.
+  - **Short-circuit boolean operators (`&&`, `||`, `and`, `or`, `xor`) were
+    uncounted in `php.complexity.scm`**, unlike the `and`/`or` precedent
+    already established for `python.complexity.scm`/`ruby.complexity.scm`.
+    Matched via `binary_expression`'s `operator` field (PHP's single generic
+    binary-operator node) rather than a dedicated node kind.
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
