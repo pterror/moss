@@ -252,7 +252,7 @@ mod tests {
             "preproc_elifdef",         // #elifdef
             "preproc_else",            // #else
             "preproc_if",              // #if
-            "preproc_ifdef",           // #ifdef
+            // preproc_ifdef used by tags.scm's header-guard @_suppress pattern
 
             // OTHER
             "alignas_qualifier",       // alignas

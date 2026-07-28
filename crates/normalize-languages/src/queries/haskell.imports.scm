@@ -25,18 +25,40 @@
 ; qualified re-export inside the list (`qualified`), a type/class name
 ; (`name`/`qualified`), or an operator (`prefix_id`, e.g. `(<|>)`). This
 ; capture was entirely absent before: named imports were never extracted.
-(import_name
-  variable: (variable) @import.name)
-(import_name
-  variable: (qualified
-    id: (variable) @import.name))
-(import_name
-  type: (name) @import.name)
-(import_name
-  type: (qualified
-    id: (name) @import.name))
-(import_name
-  operator: (prefix_id) @import.name)
+;
+; Each pattern is anchored at the enclosing `import` node (not bare
+; `import_name`) so `@import` is present in the same match — without it,
+; `collect_imports_with_compiled_query`'s `stmt_line` has no `@import`
+; capture to read the line from and silently defaults to 0. Verified via
+; `normalize syntax query` that `import_list` is reachable as a plain
+; (unnamed-field) child of `import`, alongside its `module:` field.
+(import
+  module: (module (module_id) @import.path)
+  (import_list
+    (import_name
+      variable: (variable) @import.name))) @import
+(import
+  module: (module (module_id) @import.path)
+  (import_list
+    (import_name
+      variable: (qualified
+        id: (variable) @import.name)))) @import
+(import
+  module: (module (module_id) @import.path)
+  (import_list
+    (import_name
+      type: (name) @import.name))) @import
+(import
+  module: (module (module_id) @import.path)
+  (import_list
+    (import_name
+      type: (qualified
+        id: (name) @import.name)))) @import
+(import
+  module: (module (module_id) @import.path)
+  (import_list
+    (import_name
+      operator: (prefix_id) @import.name))) @import
 
 ; import Data.Set hiding (map, filter) / import Prelude hiding (lookup)
 ; `hiding` imports use the same `import_list`/`import_name` shape as normal

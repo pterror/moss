@@ -21,6 +21,27 @@
 (preproc_def name: (identifier) @name) @definition.macro
 (preproc_function_def name: (identifier) @name) @definition.macro
 
+; Header guards (`#ifndef FOO_H` / `#define FOO_H` with no value / `#endif`)
+; are structural noise, not meaningful symbols — a user reading `normalize
+; view --types-only` on a header wants its real declarations, not the guard
+; token. This is a structural pattern (a valueless `preproc_def` whose name
+; matches the enclosing `preproc_ifdef`'s condition), not a naming-convention
+; hack: `#eq?` compares the guard condition to the macro name, and `!value`
+; requires the define to carry no value, so a *meaningful* macro that
+; happens to share its ifdef's name (`#ifndef DEBUG` / `#define DEBUG 1`,
+; verified via `normalize syntax query` to still match the plain macro
+; pattern above since it has a value) is not affected. `@_suppress` is a
+; generic capture convention (see `collect_symbols_from_tags` in
+; normalize-facts): any node captured `@_suppress` by any pattern in this
+; query has its `@definition.*` capture (from this or any other pattern)
+; dropped, so it never becomes a symbol.
+(preproc_ifdef
+  name: (identifier) @_guard.cond
+  (preproc_def
+    name: (identifier) @_guard.name
+    !value) @_suppress
+  (#eq? @_guard.cond @_guard.name))
+
 (type_definition declarator: (type_identifier) @name) @definition.type
 
 ; Typedef'd function pointer: `typedef int (*FuncPtr)(int, int);` — the
