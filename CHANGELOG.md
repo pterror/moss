@@ -210,6 +210,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Multi-segment dotted annotations (`os.path.Kind`, 3+ segments) were
     unmatched — `attribute.object` nests as another `attribute`, not
     `identifier`, past the first segment.
+- **C/C++ extraction gaps: union definitions, macros, destructors, operator
+  overloads, namespaces, template specializations, and template-argument
+  calls were all silently dropped.** Applying the same query-testing
+  methodology (`docs/query-testing-methodology.md`) to `c.{tags,calls,imports}.scm`
+  and `cpp.{tags,calls,imports}.scm`, cross-referenced field-by-field against
+  arborium-c/arborium-cpp's `node-types.json` and verified against real parse
+  output via `normalize syntax query`/`normalize syntax ast`, found real gaps
+  in both languages — more than Rust's four:
+  - **Union definitions were asymmetric with struct definitions in both
+    languages.** The query only matched `declaration type: (union_specifier
+    ...)`, which fires on a *bodyless* union-typed variable declaration (a
+    usage, mislabeled `@definition.class`) while missing every real
+    definition — bare (`union Foo { ... };`) and typedef'd
+    (`typedef union Baz { ... } BazT;`) unions both parse as a top-level
+    `union_specifier`, exactly like `struct_specifier`. Fixed to match
+    struct's own pattern shape.
+  - **Object-like and function-like macros (`#define NAME ...`,
+    `#define NAME(args) ...`) had zero tags coverage** in either language —
+    `preproc_def`/`preproc_function_def` were never queried at all. Added as
+    `@definition.macro`.
+  - **Typedef'd function pointers** (`typedef int (*FuncPtr)(int, int);`, a
+    ubiquitous C callback-type idiom) **lost their alias name** — the
+    grammar nests it three levels deep
+    (function_declarator > parenthesized_declarator > pointer_declarator >
+    type_identifier), not as a direct `type_definition.declarator` child.
+  - **C++ destructors and operator overloads were completely untagged**,
+    inline and out-of-line — `function_declarator.declarator` allows
+    `destructor_name`/`operator_name` in addition to `identifier`/
+    `field_identifier`, and the out-of-line qualified forms
+    (`Class::~Class()`, `Class::operator=(...)`) need the same
+    `name:` variants under `qualified_identifier`.
+  - **C++ namespaces had zero tags coverage at all** (plain and nested-path
+    `namespace a::b::c { ... }` forms), so every symbol inside one lost its
+    enclosing container — the same class of bug as Rust's generic/path-qualified
+    `impl` gap.
+  - **C++ explicit template specializations** (`template <> class Box<int> {};`)
+    **lost their class tag** — `class_specifier.name` is wrapped in
+    `template_type` for a specialization, not a bare `type_identifier`.
+  - **C++ out-of-line methods of a template class** (`template <typename T> T
+    Box<T>::get() {}`) **lost their container** — the qualifier before `::`
+    is `template_type` (carries the template arguments), not
+    `namespace_identifier`.
+  - **C++ template-argument calls were entirely unmatched** — plain
+    (`identity<int>(5)`), scoped (`std::get<0>(x)`, `ns::helper<int>()`),
+    template-method (`obj.method<T>()`), explicit-destructor
+    (`obj.~Foo()`), and explicit-base-qualified (`obj.Base::method()`) call
+    forms were all silently dropped from `cpp.calls.scm` — the direct C++
+    analogue of Rust's turbofish gap.
+  - **C++ `using` declarations/directives/aliases had zero imports coverage**
+    — only `#include` was tracked; `using namespace X;`, `using X::Y;`,
+    `using Alias = Type;`, and `namespace alias = X;` (single- and
+    nested-segment) are now recognized, precedented by `c-sharp.imports.scm`'s
+    handling of the analogous C# `using_directive`.
+  - Investigated and confirmed *not* bugs (documented in the `.scm` files/
+    fixtures rather than silently worked around): `Type::~Type() = default;`
+    at namespace scope is a genuine `arborium-cpp`/`tree-sitter-cpp` grammar
+    ambiguity (parses as an `expression_statement` — a call to
+    `Type::~Type` assigned to an identifier named "default" — not a
+    `function_definition`; a real body, e.g. `Type::~Type() {}`, parses
+    correctly and is unaffected); C's preprocessor conditionals
+    (`#ifdef`/`#ifndef`) are deliberately not counted toward cyclomatic
+    complexity (compile-time, not runtime, branching).
 - **Lua symbol extraction now recognizes `function Table.method()` and
   `function Table:method()` declarations.** The tags query only matched
   `function_declaration` nodes whose `name` field was a plain `(identifier)`,

@@ -287,6 +287,11 @@ mod tests {
             "destructor_name",         // ~Foo
             "enumerator",              // enum value
             "enumerator_list",         // enum body
+            "declaration",             // plain var decl (no body) — a bodyless
+                                        // `union Foo instance;`/forward
+                                        // reference is deliberately NOT tagged
+                                        // as a definition; see cpp.tags.scm's
+                                        // union pattern (same fix as C's).
             "field_declaration",       // struct field
             "field_declaration_list",  // struct body
             "field_expression",        // foo.bar
@@ -312,8 +317,9 @@ mod tests {
             "type_identifier",         // type name
             "type_parameter_declaration", // template param
             "type_qualifier",          // const, volatile
-            "union_specifier",         // union
-            "using_declaration",       // using ns::name
+            "using_declaration",       // using ns::name — used in imports.scm,
+                                        // not tags.scm, which is all this
+                                        // audit inspects
             "variadic_parameter_declaration", // T...
             "variadic_type_parameter_declaration", // typename...
             "virtual_specifier",       // override, final
@@ -391,7 +397,6 @@ mod tests {
             "preproc_elif",            // #elif
             "preproc_elifdef",         // #elifdef
             "preproc_else",            // #else
-            "preproc_function_def",    // function macro
             "preproc_if",              // #if
             "preproc_ifdef",           // #ifdef
 
@@ -448,7 +453,6 @@ mod tests {
             "return_statement",
             "break_statement",
             "compound_statement",
-            "namespace_definition",
             "goto_statement",
             "for_statement",
         ];
