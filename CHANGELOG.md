@@ -73,6 +73,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   aliases are validated against the full clap `Command` tree — unknown subcommands and
   invalid flags are caught early with warnings.
 
+### Fixed
+
+- **Go query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
+  and verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Type aliases (`type MyInt = int`) were entirely unhandled** in both
+    `go.tags.scm` and `go.types.scm`. `type_alias` is a distinct grammar node
+    from `type_spec` (no `=` in a `type_spec`); only `type_spec` was matched,
+    silently dropping every type-alias definition.
+  - **Multi-name `const` declarations lost every name after the first**
+    (`const (A, B = iota, iota)` — only `A` was found). tree-sitter-go only
+    tags the *first* identifier in a comma-separated const_spec name list
+    with the `name` field; later names are unfielded children. Fixed by
+    matching positionally instead of by field.
+  - **Raw-string-literal import paths** (`` import `pkg` ``, grammar-legal
+    but rare) were unmatched — only `interpreted_string_literal` paths were
+    handled in all four `import_spec` forms (plain/aliased/dot/blank).
+  - Documented (not fixed, since there is no stable callee name to
+    capture) three `call_expression.function` variants deliberately excluded
+    from `go.calls.scm`/`go.tags.scm`'s `@call`/`@reference.call`:
+    immediately-invoked closures (`go func(){}()`, `defer func(){}()` — the
+    idiomatic Go concurrency pattern), curried calls (`adder(1)(2)`), and
+    dispatch-table calls (`funcs[0]()`). Also documented that explicit
+    generic-function instantiation calls (`Sum[int](args)`) do not parse as
+    `call_expression` at all in this grammar version — a tree-sitter-go
+    parsing ambiguity with generic-type conversion, not fixable via query.
+
 ### Added (internal)
 
 - **OpenCode session source via libsql (Phase 2c).** `normalize-chat-sessions` now ships
@@ -143,6 +171,154 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Scoped calls (`Type::method()`, `module::func()`) were missing from
     `rust.tags.scm`'s `@reference.call` (present in `rust.calls.scm` but
     never ported over).
+- **Python `@definition.constant` tag rule matched zero module-level
+  constants, ever, in any file.** Applying the same query-testing
+  methodology to `python.{tags,calls,types}.scm` found that
+  `expression_statement` is a grammar *supertype alias* for `assignment` in
+  this position, not a real wrapping tree node — this grammar never
+  materializes a separate `expression_statement` node for a bare top-level
+  assignment (confirmed via direct `tree_sitter::Query` testing, not
+  `node-types.json` alone). The old rule nested a pattern through it
+  (`(module (expression_statement (assignment ...)))`), which can never
+  match anything since there's no real containment relationship to satisfy
+  — every module-level constant (`X = 5`, `__all__ = [...]`, etc.) was
+  silently invisible to symbol tags. Fixed by matching `(module (assignment
+  ...))` directly, and extended to cover tuple/list-unpacking constants
+  (`A, B = 1, 2`), which the prior rule never handled either.
+- **Python subscript-dispatched calls (`handlers[event]()`, the
+  command/event-routing idiom) were entirely unmatched** in both
+  `python.calls.scm` and `python.tags.scm` — `call.function` allows a
+  `subscript` variant alongside `identifier`/`attribute`, which neither
+  query handled.
+- **Python type annotations: generics, unions, and multi-segment dotted
+  names were largely unmatched.** `python.types.scm` only handled bare and
+  single-level-dotted identifiers, missing the PEP 585/604/612/646/695
+  idioms that dominate modern typed Python:
+  - `generic_type` (`List[int]`, `Optional[str]`, `Dict[str, int]`, PEP 695
+    `Box[T]`) — the base name is a bare `identifier` child, not wrapped in
+    another `type` node, so it was invisible to every existing rule.
+  - Dotted-module generics (`typing.List[int]`) parse as `subscript`, not
+    `generic_type` — a distinct, previously unhandled shape.
+  - PEP 604 unions (`int | str`, `int | str | None`) parse as
+    `binary_operator`, not the `union_type` node `node-types.json` lists —
+    confirmed via real parse output, not the schema alone; added a rule
+    scoped to `(type (binary_operator ...))` so it doesn't misfire on
+    ordinary runtime bitwise-or (`flag1 | flag2`).
+  - PEP 695/646/612 variadic/paramspec type parameters (`def f[*Ts]`,
+    `def f[**P]`) and `Callable[[int, str], bool]` argument-list generics
+    were unhandled.
+  - Multi-segment dotted annotations (`os.path.Kind`, 3+ segments) were
+    unmatched — `attribute.object` nests as another `attribute`, not
+    `identifier`, past the first segment.
+- **C/C++ extraction gaps: union definitions, macros, destructors, operator
+  overloads, namespaces, template specializations, and template-argument
+  calls were all silently dropped.** Applying the same query-testing
+  methodology (`docs/query-testing-methodology.md`) to `c.{tags,calls,imports}.scm`
+  and `cpp.{tags,calls,imports}.scm`, cross-referenced field-by-field against
+  arborium-c/arborium-cpp's `node-types.json` and verified against real parse
+  output via `normalize syntax query`/`normalize syntax ast`, found real gaps
+  in both languages — more than Rust's four:
+  - **Union definitions were asymmetric with struct definitions in both
+    languages.** The query only matched `declaration type: (union_specifier
+    ...)`, which fires on a *bodyless* union-typed variable declaration (a
+    usage, mislabeled `@definition.class`) while missing every real
+    definition — bare (`union Foo { ... };`) and typedef'd
+    (`typedef union Baz { ... } BazT;`) unions both parse as a top-level
+    `union_specifier`, exactly like `struct_specifier`. Fixed to match
+    struct's own pattern shape.
+  - **Object-like and function-like macros (`#define NAME ...`,
+    `#define NAME(args) ...`) had zero tags coverage** in either language —
+    `preproc_def`/`preproc_function_def` were never queried at all. Added as
+    `@definition.macro`.
+  - **Typedef'd function pointers** (`typedef int (*FuncPtr)(int, int);`, a
+    ubiquitous C callback-type idiom) **lost their alias name** — the
+    grammar nests it three levels deep
+    (function_declarator > parenthesized_declarator > pointer_declarator >
+    type_identifier), not as a direct `type_definition.declarator` child.
+  - **C++ destructors and operator overloads were completely untagged**,
+    inline and out-of-line — `function_declarator.declarator` allows
+    `destructor_name`/`operator_name` in addition to `identifier`/
+    `field_identifier`, and the out-of-line qualified forms
+    (`Class::~Class()`, `Class::operator=(...)`) need the same
+    `name:` variants under `qualified_identifier`.
+  - **C++ namespaces had zero tags coverage at all** (plain and nested-path
+    `namespace a::b::c { ... }` forms), so every symbol inside one lost its
+    enclosing container — the same class of bug as Rust's generic/path-qualified
+    `impl` gap.
+  - **C++ explicit template specializations** (`template <> class Box<int> {};`)
+    **lost their class tag** — `class_specifier.name` is wrapped in
+    `template_type` for a specialization, not a bare `type_identifier`.
+  - **C++ out-of-line methods of a template class** (`template <typename T> T
+    Box<T>::get() {}`) **lost their container** — the qualifier before `::`
+    is `template_type` (carries the template arguments), not
+    `namespace_identifier`.
+  - **C++ template-argument calls were entirely unmatched** — plain
+    (`identity<int>(5)`), scoped (`std::get<0>(x)`, `ns::helper<int>()`),
+    template-method (`obj.method<T>()`), explicit-destructor
+    (`obj.~Foo()`), and explicit-base-qualified (`obj.Base::method()`) call
+    forms were all silently dropped from `cpp.calls.scm` — the direct C++
+    analogue of Rust's turbofish gap.
+  - **C++ `using` declarations/directives/aliases had zero imports coverage**
+    — only `#include` was tracked; `using namespace X;`, `using X::Y;`,
+    `using Alias = Type;`, and `namespace alias = X;` (single- and
+    nested-segment) are now recognized, precedented by `c-sharp.imports.scm`'s
+    handling of the analogous C# `using_directive`.
+  - Investigated and confirmed *not* bugs (documented in the `.scm` files/
+    fixtures rather than silently worked around): `Type::~Type() = default;`
+    at namespace scope is a genuine `arborium-cpp`/`tree-sitter-cpp` grammar
+    ambiguity (parses as an `expression_statement` — a call to
+    `Type::~Type` assigned to an identifier named "default" — not a
+    `function_definition`; a real body, e.g. `Type::~Type() {}`, parses
+    correctly and is unaffected); C's preprocessor conditionals
+    (`#ifdef`/`#ifndef`) are deliberately not counted toward cyclomatic
+    complexity (compile-time, not runtime, branching).
+- **TypeScript/JavaScript extraction gaps: `namespace` declarations, private
+  methods, namespaced constructors, class extends/implements, and several
+  import forms were all silently dropped.** Applying
+  `docs/query-testing-methodology.md` to `typescript.{tags,calls,imports,types}.scm`
+  and `javascript.{tags,calls,imports}.scm` (cross-referenced against
+  arborium-typescript/arborium-javascript's `node-types.json`) found:
+  - **`namespace Foo {}` / `namespace Foo.Bar {}` — the standard, far more
+    common TypeScript namespace keyword — parses as a distinct `internal_module`
+    node, not `module`; `typescript.tags.scm` only handled the legacy `module
+    Foo {}` keyword form, so essentially every real-world namespace declaration
+    was invisible to tags. Also added `module`/`internal_module.name`'s
+    `nested_identifier` (`module Foo.Bar {}`) and `string` (`declare module
+    "foo" {}`) variants.
+  - **Private class methods (`#foo() {}`) and computed method names
+    (`[key]() {}`) were dropped from both languages' tags and calls.**
+    `method_definition`/`method_signature`/`abstract_method_signature.name`
+    and `member_expression.property` allow `private_property_identifier`/
+    `computed_property_name` in addition to plain `property_identifier`;
+    neither was handled, so private methods and their call sites
+    (`this.#foo()`) vanished entirely from symbol tags and the call graph.
+  - **Namespaced/qualified constructors (`new ns.Foo()`) were dropped from
+    TypeScript tags.** `new_expression.constructor` allows `member_expression`
+    in addition to plain `identifier`; only the plain form was handled — 4+
+    call sites in this repo's own `editors/vscode/src/diagnostics.ts` use this
+    idiom (`new vscode.Range(...)`, `new vscode.Position(...)`).
+  - **Class `extends`/`implements` had no reference captures at all in
+    TypeScript** (`class_heritage`'s `extends_clause`/`implements_clause` were
+    unhandled in both `typescript.tags.scm` and `typescript.types.scm`), and
+    **JavaScript's `extends` had no reference capture in tags** (`class_heritage`
+    unhandled in `javascript.tags.scm`, including the common `extends
+    Mixin(Base)` call-expression mixin pattern).
+  - **`import { default as alias }` / `export { default as alias } from` (and
+    the bare `export { default } from` form) produced zero import captures at
+    all** in both languages — `default` is an anonymous grammar token, not a
+    named `(identifier)` node, so the existing field constraint silently
+    failed to match the entire `import_specifier`/`export_specifier`.
+  - **`import X = require(...)` (TS import-equals) and `import(...)` (dynamic
+    import expression, both languages) were entirely unhandled** by
+    `imports.scm`.
+  - Additional `call_expression.function` completeness gaps in both
+    languages' `calls.scm`: `subscript_expression` (`obj[key]()`),
+    `parenthesized_expression` (`(foo)()`), and chained/curried calls
+    (`connect(mapStateToProps)(Component)`); TypeScript also gained
+    `non_null_expression` (`foo!()`).
+  - Removed a dead, byte-for-byte-redundant `import type { Foo } from`
+    clause in `typescript.imports.scm` — the plain named-import clause
+    already matched it (the `type` keyword doesn't change the field shape).
 - **Lua symbol extraction now recognizes `function Table.method()` and
   `function Table:method()` declarations.** The tags query only matched
   `function_declaration` nodes whose `name` field was a plain `(identifier)`,
@@ -413,6 +589,85 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed (internal)
 
+- **Java query completeness gaps repaired, applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `java.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-java 2.17.0's node-types.json field-by-field and
+  verified against real parse output via `normalize syntax query`/`normalize syntax ast`.
+  Found and fixed:
+  - `new ArrayList<>()`/`new HashMap<>()` (generic constructor targets) and
+    `new java.util.Date()` (path-qualified constructor targets) entirely unmatched in
+    `java.tags.scm`'s `@reference.class` — only the plain `type_identifier` form of
+    `object_creation_expression.type` was handled, silently dropping one of the most
+    common Java idioms.
+  - `extends AbstractList<String>` / `extends java.util.AbstractList` (generic and
+    path-qualified superclasses) and `implements Comparable<Foo>` /
+    `implements java.io.Serializable` (generic and path-qualified interfaces) losing
+    their `@reference.class`/`@reference.implementation` tags for the same reason.
+  - `record` (Java 16+) and `@interface` (annotation type) declarations entirely
+    unhandled in `java.tags.scm` and `java.types.scm` — no `@definition`/`@definition.type`
+    at all. Mapped to the closest existing kind (`class`/`interface` respectively,
+    matching how the JVM spec compiles them) rather than inventing a new capture kind.
+  - `super(...)`/`this(...)` explicit constructor-invocation calls (a distinct
+    `explicit_constructor_invocation` node, not `method_invocation`) entirely unmatched
+    in both `java.calls.scm` and `java.tags.scm` — every subclass constructor delegating
+    to its superclass silently disappeared from call extraction.
+  - Bare single-segment imports (`import Foo;`, no package) silently dropped by
+    `java.imports.scm`'s scoped-identifier-only patterns.
+  - A latent duplicate-match bug in `java.imports.scm`: the plain-import pattern was
+    unconstrained and also matched every wildcard and `static` import (since `static`-ness
+    and wildcard-ness don't change which child holds the path), producing 2-4x duplicate
+    `@import` captures per statement. Fixed with a `.` anchor and removal of the redundant
+    now-unnecessary `static`-specific pattern variants.
+  Extended `sample.java` with real-world idioms (generics, iterator-chain pipelines,
+  nested/anonymous classes, lambdas, method references, enums with constructors, records,
+  interface default/static methods) and added a `variants.java` completeness-matrix
+  fixture. New `java_*_completeness_*`/`java_*_negative_*` tests in `query_fixtures.rs`
+  assert capture kind (not just text) via a new `collect_captures_full`/`collect_tag_pairs`
+  helper pair, exact counts, and zero false positives.
+
+- **Ruby query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `ruby.{tags,calls,imports,complexity,types}.scm`.**
+  All verified against real parse output via `normalize syntax query`/`normalize
+  syntax ast`, cross-referenced against arborium-ruby 2.17.0's node-types.json:
+  - `ruby.complexity.scm` never matched statement-modifier forms (`stmt if cond`,
+    `unless`, `while`, `until` — distinct node types from the block forms, not a
+    different field layout), inline `rescue` modifiers (`x = risky rescue nil`),
+    each independent `elsif` branch in an if/elsif chain (previously only the
+    outer `if` counted, undercounting multi-branch chains), and Ruby 2.7+
+    pattern-matching `case ... in ...` (`case_match`/`in_clause`, entirely
+    distinct from `case`/`when`) — all extremely common idioms, now covered.
+  - `ruby.tags.scm`/`ruby.calls.scm` never matched bare Kernel-style calls whose
+    callee name is a constant rather than an identifier (`Integer(x)`,
+    `Array(x)`, `String(x)`).
+  - `ruby.calls.scm`'s receiver-qualified call pattern re-captured `@call` on
+    top of the always-firing receiver-less pattern, silently double-counting
+    every receiver-qualified method call (found via the negative-case test
+    added alongside these fixes; fixed by capturing `@call.qualifier` only).
+  - `ruby.imports.scm` never matched `load 'file'`, `using Module` (refinement
+    activation), or namespaced `include`/`extend`/`prepend` arguments
+    (`include ActiveSupport::Concern`-style — the argument is a
+    `scope_resolution`, not a bare `constant`; this is the common case in
+    Rails-style codebases).
+  - `ruby.types.scm` never matched dynamic/computed superclasses
+    (`class Foo < Struct.new(:x, :y)`) — now captures the call's receiver
+    constant as a best-effort partial reference (there's no static name for
+    the resulting anonymous class).
+  - `class << self` singleton-class reopening was investigated and left
+    uncaptured as a definition: its `value` field is the bare `self` keyword
+    with no name text, so there is no honest name to report; methods defined
+    inside still parse as plain `method` nodes and are captured normally.
+    Documented in `ruby.tags.scm` rather than silently dropped or fabricated.
+- **Missing `cmake` fixture (`crates/normalize-languages/tests/fixtures/cmake/CMakeLists.txt`)
+  broke compilation of the entire `query_fixtures` test binary.** Root cause:
+  `.gitignore`'s blanket `*.txt` rule only carved out an exception for
+  `tests/fixtures/**/expected/*.txt`, so `git add` silently dropped the
+  `CMakeLists.txt` fixture (a `.txt`-suffixed file outside any `expected/`
+  directory) while its `SUMMARY.md` sibling was committed fine — the file
+  was never actually added in the commit that introduced its tests, and no
+  one noticed because CI's `NORMALIZE_REQUIRE_GRAMMARS` compile-guardrail
+  test didn't exist yet on the branch that landed it. Widened the
+  `.gitignore` exception to `tests/fixtures/**/*.txt` (any fixture input or
+  output, not just `expected/`) and added the missing fixture file.
 - **Codex session parser rewritten for current rollout protocol (Phase 2b).** The prior
   `format-codex` parser targeted a stale format. It now correctly parses
   `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` rollout files: reads line 1

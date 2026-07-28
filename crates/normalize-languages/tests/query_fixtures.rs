@@ -115,6 +115,96 @@ fn collect_captures_full(
     results
 }
 
+/// Collect `(tag_kind, name_text)` pairs from a tags-style query: `tag_kind`
+/// is whichever `@definition.*`/`@reference.*` capture co-occurs with `@name`
+/// in the same match. Use this instead of [`collect_captures_full`] when the
+/// container capture (e.g. `@reference.class`) spans a much larger node (the
+/// whole `new Foo()`/`extends Foo` expression) than the `@name` capture that
+/// actually holds the identifier text.
+fn collect_tag_pairs(
+    lang: &tree_sitter::Language,
+    source: &str,
+    query_str: &str,
+) -> Vec<(String, String)> {
+    let mut parser = Parser::new();
+    parser.set_language(lang).expect("set_language failed");
+    let tree = parser.parse(source, None).expect("parse failed");
+
+    let query = Query::new(lang, query_str).expect("query compilation failed");
+    let mut cursor = QueryCursor::new();
+    let source_bytes = source.as_bytes();
+
+    let mut pairs = Vec::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        if !normalize_languages::satisfies_predicates(&query, m, source_bytes) {
+            continue;
+        }
+        let mut name = None;
+        let mut tag_kind = None;
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            let text = cap.node.utf8_text(source_bytes).unwrap_or("");
+            if cap_name == "name" {
+                name = Some(text.to_string());
+            } else if cap_name.starts_with("definition.") || cap_name.starts_with("reference.") {
+                tag_kind = Some(cap_name.to_string());
+            }
+        }
+        if let (Some(n), Some(k)) = (name, tag_kind) {
+            pairs.push((k, n));
+        }
+    }
+    pairs
+}
+
+/// Run `query_str` against `source` and, for every match that carries a
+/// capture named `anchor_capture_name` (e.g. `"reference.class"`,
+/// `"definition.module"`), return the `(kind, text)` of that match's `@name`
+/// capture. Use this instead of naively filtering `collect_captures_full` by
+/// the anchor capture's own name when the anchor is attached to a *container*
+/// node (e.g. `new_expression`, `extends_clause`, `module`/`internal_module`)
+/// rather than to the field-variant node itself — the anchor's own `kind`
+/// would otherwise always report the container type, never the variant.
+fn tags_matches_by_kind(
+    lang: &tree_sitter::Language,
+    source: &str,
+    query_str: &str,
+    anchor_capture_name: &str,
+) -> Vec<(String, String)> {
+    let mut parser = Parser::new();
+    parser.set_language(lang).expect("set_language failed");
+    let tree = parser.parse(source, None).expect("parse failed");
+
+    let query = Query::new(lang, query_str).expect("query compilation failed");
+    let mut cursor = QueryCursor::new();
+    let source_bytes = source.as_bytes();
+
+    let mut results = Vec::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        if !normalize_languages::satisfies_predicates(&query, m, source_bytes) {
+            continue;
+        }
+        let mut has_anchor = false;
+        let mut name: Option<(String, String)> = None;
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            if cap_name == anchor_capture_name {
+                has_anchor = true;
+            } else if cap_name == "name" {
+                let kind = cap.node.kind().to_string();
+                let text = cap.node.utf8_text(source_bytes).unwrap_or("").to_string();
+                name = Some((kind, text));
+            }
+        }
+        if has_anchor && let Some(n) = name {
+            results.push(n);
+        }
+    }
+    results
+}
+
 // ---------------------------------------------------------------------------
 // Rust
 // ---------------------------------------------------------------------------
@@ -613,6 +703,9 @@ fn rust_types_finds_struct_definitions() {
 // ---------------------------------------------------------------------------
 
 const PYTHON_SAMPLE: &str = include_str!("fixtures/python/sample.py");
+const PYTHON_VARIANTS: &str = include_str!("fixtures/python/variants.py");
+
+// --- Dimension 4: real-world fixture coverage (sample.py) -------------------
 
 #[test]
 fn python_tags_finds_class_and_functions() {
@@ -641,6 +734,39 @@ fn python_tags_finds_class_and_functions() {
         names.contains(&"count_words".to_string()),
         "expected 'count_words' function in python tags, got: {names:?}"
     );
+    // @dataclass-decorated class: decorators must not hide the definition.
+    assert!(
+        names.contains(&"Config".to_string()),
+        "expected 'Config' dataclass in python tags, got: {names:?}"
+    );
+    // Multiple inheritance: LoggingCache(Cache, DataProcessor) — the class
+    // itself must still be found regardless of base-class count.
+    assert!(
+        names.contains(&"LoggingCache".to_string()),
+        "expected 'LoggingCache' class in python tags, got: {names:?}"
+    );
+    // Closures/nested functions: the outer binding (make_adder, adder) is a
+    // real function_definition and must appear; `base`/`x` are parameters,
+    // not definitions, and must not leak in as spurious function names.
+    assert!(
+        names.contains(&"make_adder".to_string()),
+        "expected 'make_adder' method in python tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"adder".to_string()),
+        "expected nested 'adder' closure function in python tags, got: {names:?}"
+    );
+    // async def is still a function_definition (the `async` keyword is a
+    // modifier token, not a distinct node type).
+    assert!(
+        names.contains(&"fetch_all".to_string()),
+        "expected 'async def fetch_all' in python tags, got: {names:?}"
+    );
+    // Parameterized-decorator + stacked-decorator function.
+    assert!(
+        names.contains(&"status_handler".to_string()),
+        "expected 'status_handler' (stacked decorators) in python tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -661,6 +787,23 @@ fn python_calls_finds_function_calls() {
     assert!(
         calls.contains(&"append".to_string()),
         "expected 'append' method call in python sample, got: {calls:?}"
+    );
+    // await fetch_one(url): await wraps a plain call, must still be found.
+    assert!(
+        calls.iter().any(|c| c == "fetch_one"),
+        "expected 'fetch_one' call under await in python sample, got: {calls:?}"
+    );
+    // Subscript-dispatched call: handlers[event]() — event/command dispatch
+    // idiom; previously entirely unmatched (function: subscript).
+    assert!(
+        calls.iter().any(|c| c == "handlers"),
+        "expected subscript-dispatched 'handlers[event]()' call in python sample, got: {calls:?}"
+    );
+    // Walrus operator inside a call argument position: len(items) inside
+    // `(n := len(items))` must still be found as an ordinary call.
+    assert!(
+        calls.iter().any(|c| c == "len"),
+        "expected 'len' call (walrus-assigned) in python sample, got: {calls:?}"
     );
 }
 
@@ -687,6 +830,222 @@ fn python_imports_finds_import_paths() {
         paths.iter().any(|p| p == "collections"),
         "expected 'collections' in python import paths, got: {paths:?}"
     );
+    // from dataclasses import dataclass, field — multi-name from-import.
+    let names = collect_captures(&lang, PYTHON_SAMPLE, &query_str, "import.name");
+    assert!(
+        names.contains(&"dataclass".to_string()) && names.contains(&"field".to_string()),
+        "expected 'dataclass' and 'field' import names, got: {names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.py) -
+
+/// Every grammar-legal, realistically-producible variant of `call.function`
+/// that python.calls.scm claims to support must actually match, with the
+/// right capture *kind* (dimension 3) — not just the right text.
+#[test]
+fn python_calls_completeness_all_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_calls_completeness: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("python")
+        .expect("python calls query missing");
+    let caps = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "identifier", "identity"), // plain_call: function: identifier
+        ("call", "identifier", "append"), // method_call: function: attribute, attribute: identifier
+        ("call", "identifier", "handlers"), // subscript_call: function: subscript, value: identifier
+        ("call", "identifier", "get_func"), // chained_call: inner call independently matched
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in python.calls.scm \
+             output for variants.py, got: {caps:?}"
+        );
+    }
+
+    // subscript_attribute_call: self_like.handlers["go"](1) — function:
+    // subscript, value: attribute. @call must carry the attribute's final
+    // segment ("handlers"), not the base object ("self_like").
+    assert!(
+        caps.iter()
+            .any(|(cn, k, t, _)| cn == "call" && k == "identifier" && t == "handlers"),
+        "expected 'handlers' from subscript-dispatch-via-attribute, got: {caps:?}"
+    );
+
+    // @call.qualifier must carry the object, not the call name.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"items"),
+        "expected 'items' qualifier for the method call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call captures.
+#[test]
+fn python_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_calls_negative: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("python")
+        .expect("python calls query missing");
+    let caps = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `container.field` is a bare attribute read (no call parens); must
+    // never be captured as a call.
+    assert!(
+        !call_texts.contains(&"field"),
+        "bare attribute access 'container.field' must not be captured as a call, got: {call_texts:?}"
+    );
+    // The lambda binding `add_one` is not a call site by itself; only its
+    // invocation (add_one(1), inside chained_call/negative_cases-adjacent
+    // code) would be. Since `add_one` here is only ever assigned, not
+    // called, it must not appear as a call at all.
+    assert!(
+        !call_texts.contains(&"add_one"),
+        "uncalled lambda binding 'add_one' must not be captured as a call, got: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of module-level `assignment.left` that
+/// python.tags.scm's @definition.constant rule claims to support (plain
+/// identifier, tuple/list-unpacking) must produce a @name capture — and
+/// function-local assignments must never leak into @definition.constant.
+///
+/// This test also guards against regressing the completeness bug found
+/// while applying this methodology: `expression_statement` is a grammar
+/// supertype alias for `assignment` (not a real wrapping tree node) at this
+/// position, so `(module (expression_statement (assignment ...)))` matched
+/// *nothing at all*, ever — the fixed rule matches `(module (assignment
+/// ...))` directly instead.
+#[test]
+fn python_tags_completeness_module_constants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_tags_completeness: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("python")
+        .expect("python tags query missing");
+    let caps = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+
+    let constant_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        constant_names.contains(&"PLAIN_CONSTANT"),
+        "expected 'PLAIN_CONSTANT' module-level constant, got: {constant_names:?}"
+    );
+    assert!(
+        constant_names.contains(&"TUPLE_A") && constant_names.contains(&"TUPLE_B"),
+        "expected 'TUPLE_A'/'TUPLE_B' from tuple-unpacking constant, got: {constant_names:?}"
+    );
+    assert!(
+        constant_names.contains(&"ANNOTATED_CONSTANT"),
+        "expected 'ANNOTATED_CONSTANT' (annotated module assignment), got: {constant_names:?}"
+    );
+
+    // Negative: function-local assignment must never appear as a
+    // @definition.constant capture.
+    let has_local_constant = caps
+        .iter()
+        .any(|(cn, _, t, _)| cn == "definition.constant" && t.contains("local_not_constant"));
+    assert!(
+        !has_local_constant,
+        "function-local assignment must not be captured as @definition.constant, got: {caps:?}"
+    );
+}
+
+#[test]
+fn python_imports_finds_import_paths_completeness() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_imports_completeness: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("python")
+        .expect("python imports query missing");
+    let paths = collect_captures(&lang, PYTHON_VARIANTS, &query_str, "import.path");
+    let names = collect_captures(&lang, PYTHON_VARIANTS, &query_str, "import.name");
+    let aliases = collect_captures(&lang, PYTHON_VARIANTS, &query_str, "import.alias");
+    let globs = collect_captures(&lang, PYTHON_VARIANTS, &query_str, "import.glob");
+
+    // import os.path — multi-segment dotted_name path.
+    assert!(
+        paths.iter().any(|p| p == "os.path"),
+        "expected 'os.path' dotted import path, got: {paths:?}"
+    );
+    // import os as os_alias — import_statement aliased_import.
+    assert!(
+        aliases.contains(&"os_alias".to_string()),
+        "expected 'os_alias' import alias, got: {aliases:?}"
+    );
+    // from collections import OrderedDict as OD — import_from_statement aliased_import.
+    assert!(
+        names.contains(&"OrderedDict".to_string()) && aliases.contains(&"OD".to_string()),
+        "expected 'OrderedDict as OD', names={names:?} aliases={aliases:?}"
+    );
+    // Parenthesized multi-name from-import.
+    assert!(
+        names.contains(&"defaultdict".to_string()) && names.contains(&"Counter".to_string()),
+        "expected parenthesized multi-name import, got: {names:?}"
+    );
+    // Relative imports: from . import sibling / from ..pkg import cousin.
+    assert!(
+        paths.iter().any(|p| p == "."),
+        "expected bare relative-import path '.', got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p == "..pkg"),
+        "expected '..pkg' relative-import path, got: {paths:?}"
+    );
+    assert!(
+        names.contains(&"sibling".to_string()) && names.contains(&"cousin".to_string()),
+        "expected 'sibling'/'cousin' relative-import names, got: {names:?}"
+    );
+    // from os.path import * — wildcard.
+    assert!(
+        !globs.is_empty(),
+        "expected at least one import.glob capture for the wildcard import, got: {globs:?}"
+    );
 }
 
 #[test]
@@ -711,6 +1070,91 @@ fn python_complexity_finds_control_flow() {
     );
 }
 
+/// Every complexity/nesting construct claimed by python.complexity.scm must
+/// fire on its documented variants.py exercise, including match/case
+/// (structural pattern matching) and every comprehension flavor.
+#[test]
+fn python_complexity_completeness_all_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping python_complexity_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_complexity_completeness: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("python")
+        .expect("python complexity query missing");
+    let caps = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+    let kinds: Vec<&str> = caps.iter().map(|(_, k, _, _)| k.as_str()).collect();
+
+    for expected_kind in [
+        "if_statement",
+        "for_statement",
+        "while_statement",
+        "try_statement",
+        "except_clause",
+        "with_statement",
+        "match_statement",
+        "case_clause",
+        "list_comprehension",
+        "dictionary_comprehension",
+        "set_comprehension",
+        "generator_expression",
+        "conditional_expression",
+    ] {
+        assert!(
+            kinds.contains(&expected_kind),
+            "expected at least one @complexity/@nesting capture of kind '{expected_kind}' \
+             in variants.py, got kinds: {kinds:?}"
+        );
+    }
+
+    // elif is a nested if_statement, not a distinct node type — the elif
+    // branch in `branching()` must contribute its own complexity unit, not
+    // be silently merged into the first if.
+    let if_count = kinds.iter().filter(|k| **k == "if_statement").count();
+    assert!(
+        if_count >= 2,
+        "expected at least 2 if_statement complexity nodes (if + elif chain), got {if_count}"
+    );
+}
+
+/// Class/function nesting must be counted even when nested (NestedClass +
+/// nested_method), and closures/nested functions must count as nesting too.
+#[test]
+fn python_complexity_nesting_counts_class_and_function() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_complexity_nesting: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_complexity_nesting: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("python")
+        .expect("python complexity query missing");
+    let nesting = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str)
+        .into_iter()
+        .filter(|(cn, _, _, _)| cn == "nesting")
+        .map(|(_, k, _, _)| k)
+        .collect::<Vec<_>>();
+    assert!(
+        nesting.iter().any(|k| k == "class_definition"),
+        "expected class_definition among @nesting captures, got: {nesting:?}"
+    );
+    assert!(
+        nesting.iter().any(|k| k == "function_definition"),
+        "expected function_definition among @nesting captures, got: {nesting:?}"
+    );
+}
+
 #[test]
 fn python_types_finds_class() {
     let Some(gdir) = grammar_dir() else {
@@ -732,11 +1176,154 @@ fn python_types_finds_class() {
     );
 }
 
+/// Every grammar-legal, realistically-producible variant of Python type
+/// annotations (PEP 484 plain/dotted, PEP 585 generics, PEP 604 unions,
+/// PEP 612/646/695 param specs and variadics) must produce a
+/// @type.reference capture with the correct node *kind*.
+#[test]
+fn python_types_completeness_all_annotation_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_types_completeness: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("python")
+        .expect("python types query missing");
+    let caps = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+    let refs: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "type.reference")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // Plain and dotted annotations.
+    assert!(
+        refs.contains(&"int"),
+        "expected plain 'int' type reference, got: {refs:?}"
+    );
+    assert!(
+        refs.contains(&"os") && refs.contains(&"Kind"),
+        "expected dotted 'os.Kind' type reference parts, got: {refs:?}"
+    );
+    // Multi-segment dotted annotation: os.path.Kind — `object:` nests as
+    // another `attribute`, a distinct shape from the 2-segment case above.
+    assert!(
+        refs.iter().filter(|r| **r == "Kind").count() >= 2,
+        "expected 'Kind' from both the 2- and 3-segment dotted annotations, got: {refs:?}"
+    );
+    // Bare generic_type base name: Optional[str] -> "Optional".
+    assert!(
+        refs.contains(&"Optional"),
+        "expected 'Optional' generic_type base name, got: {refs:?}"
+    );
+    // Dotted-module generic (subscript-based): typing.List[int] -> "List".
+    assert!(
+        refs.contains(&"List"),
+        "expected 'List' from 'typing.List[int]' (subscript-based generic), got: {refs:?}"
+    );
+    // Multi-arg dotted generic: typing.Dict[str, os.PathLike].
+    assert!(
+        refs.contains(&"PathLike"),
+        "expected 'PathLike' from 'typing.Dict[str, os.PathLike]', got: {refs:?}"
+    );
+    // PEP 604 union types (parses as binary_operator, not union_type —
+    // verified via real parse output, not node-types.json alone).
+    assert!(
+        refs.iter().filter(|r| **r == "int").count() >= 2,
+        "expected 'int' to appear in at least the plain and union-type positions, got: {refs:?}"
+    );
+    let union_types = collect_captures_full(&lang, PYTHON_VARIANTS, &query_str);
+    let union_kinds: Vec<&str> = union_types
+        .iter()
+        .filter(|(cn, _, t, _)| cn == "type.reference" && (t == "str" || t == "None"))
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    assert!(
+        union_kinds.contains(&"identifier"),
+        "expected identifier-kind captures from union types, got: {union_kinds:?}"
+    );
+    // PEP 695 variadic/paramspec type parameters: def f[*Ts], def f[**P].
+    assert!(
+        refs.contains(&"Ts") && refs.contains(&"P"),
+        "expected 'Ts'/'P' from splat_type PEP 695 type params, got: {refs:?}"
+    );
+    // Callable argument-list generic: Callable[[int, str], bool] at the
+    // known fixture line — asserted precisely by line number since "int"
+    // and "str" also legitimately appear at other annotation sites in this
+    // fixture (a text-only check couldn't tell them apart).
+    let callable_line_refs: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, line)| cn == "type.reference" && *line == 135)
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert_eq!(
+        {
+            let mut sorted = callable_line_refs.clone();
+            sorted.sort_unstable();
+            sorted
+        },
+        vec!["Callable", "bool", "int", "str"],
+        "expected exactly ['Callable','bool','int','str'] from \
+         'Callable[[int, str], bool]' (line 135), got: {callable_line_refs:?}"
+    );
+}
+
+/// Negative case: a bare bitwise-or expression outside annotation position
+/// (e.g. combining flag constants) must never be captured as a type
+/// reference — regression guard for the PEP 604 union-type pattern, which
+/// is intentionally scoped to `(type (binary_operator ...))` rather than
+/// matching `binary_operator` unconditionally.
+#[test]
+fn python_types_negative_bitwise_or_outside_annotation() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping python_types_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("python").ok() else {
+        eprintln!("Skipping python_types_negative: python grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("python")
+        .expect("python types query missing");
+    let refs = collect_captures(&lang, PYTHON_VARIANTS, &query_str, "type.reference");
+    assert!(
+        !refs.iter().any(|r| r == "O_RDONLY" || r == "O_CREAT"),
+        "runtime bitwise-or flag combination must not be captured as a type reference, got: {refs:?}"
+    );
+    // A plain list literal outside a generic_type/type_parameter position
+    // must not leak its elements in as type references either.
+    assert!(
+        !refs.iter().any(|r| r == "add_one"),
+        "plain list literal elements must not be captured as type references, got: {refs:?}"
+    );
+    // A string forward-reference annotation (`x: "module.Kind"`) is a
+    // `string` node, not a parsed dotted name — its contents are opaque to
+    // a tree-sitter query (no sub-parsing), so "module"/"Kind" must not
+    // appear as type references from this construct. (Both names are
+    // otherwise legitimately used and captured elsewhere in this fixture,
+    // so this only guards against a hypothetical over-eager string-content
+    // extraction, not the current, correctly-conservative behavior.)
+    assert!(
+        !refs.iter().any(|r| r == "module"),
+        "string forward-reference contents must not be captured as type references, got: {refs:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Go
 // ---------------------------------------------------------------------------
 
 const GO_SAMPLE: &str = include_str!("fixtures/go/sample.go");
+const GO_VARIANTS: &str = include_str!("fixtures/go/variants.go");
+
+// --- Dimension 4: real-world fixture coverage (sample.go) -------------------
 
 #[test]
 fn go_tags_finds_functions_and_types() {
@@ -763,6 +1350,39 @@ fn go_tags_finds_functions_and_types() {
         names.contains(&"Stack".to_string()),
         "expected 'Stack' type in go tags, got: {names:?}"
     );
+    // Generic function/type/method idioms (real Go leans on generics
+    // heavily since 1.18): Max[T Ordered], Box[T any], and its method Get.
+    assert!(
+        names.contains(&"Max".to_string()),
+        "expected generic function 'Max' in go tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Box".to_string()),
+        "expected generic type 'Box' in go tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Get".to_string()),
+        "expected method 'Get' on generic receiver Box[T] in go tags, got: {names:?}"
+    );
+    // Type alias: `type MyInt = int` must be found as a definition, not
+    // silently dropped (the type_alias node is distinct from type_spec).
+    assert!(
+        names.contains(&"MyInt".to_string()),
+        "expected type alias 'MyInt' in go tags, got: {names:?}"
+    );
+    // Struct embedding: Derived embeds Base; both must still be found.
+    assert!(
+        names.contains(&"Base".to_string()) && names.contains(&"Derived".to_string()),
+        "expected both 'Base' and 'Derived' (struct embedding) in go tags, got: {names:?}"
+    );
+    // Closures must never be reported as function/method definitions: the
+    // outer `adder` binding is a real function, but nothing from inside its
+    // closure body should appear as a definition name it doesn't already
+    // have legitimately (`delta`, `base` are parameters, not definitions).
+    assert!(
+        names.contains(&"adder".to_string()),
+        "expected 'adder' function in go tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -781,6 +1401,24 @@ fn go_calls_finds_function_calls() {
     assert!(
         calls.contains(&"Println".to_string()),
         "expected 'Println' call in go sample, got: {calls:?}"
+    );
+    // Generic call relying on type inference (`Max(3, 4)`, no explicit
+    // instantiation) parses as an ordinary call_expression/identifier and
+    // must be found like any other plain call.
+    assert!(
+        calls.contains(&"Max".to_string()),
+        "expected generic call 'Max' in go sample, got: {calls:?}"
+    );
+    // Method call on a generic receiver: b.Get().
+    assert!(
+        calls.contains(&"Get".to_string()),
+        "expected method call 'Get' in go sample, got: {calls:?}"
+    );
+    // Package-qualified call through an aliased import (io.Discard via
+    // `io "io"`) — same call shape as a plain package call.
+    assert!(
+        calls.contains(&"Fprintln".to_string()),
+        "expected 'Fprintln' call (aliased-import-qualified) in go sample, got: {calls:?}"
     );
 }
 
@@ -805,6 +1443,17 @@ fn go_imports_finds_import_paths() {
         paths.iter().any(|p| p.contains("strings")),
         "expected '\"strings\"' in go import paths, got: {paths:?}"
     );
+    // Aliased import: `io "io"` — must still surface a path, not just the
+    // unaliased forms.
+    assert!(
+        paths.iter().any(|p| p.contains("io")),
+        "expected aliased '\"io\"' import path in go sample, got: {paths:?}"
+    );
+    let aliases = collect_captures(&lang, GO_SAMPLE, &query_str, "import.alias");
+    assert!(
+        aliases.iter().any(|a| a == "io"),
+        "expected 'io' alias captured for the aliased import, got: {aliases:?}"
+    );
 }
 
 #[test]
@@ -822,11 +1471,23 @@ fn go_complexity_finds_control_flow() {
         .get_complexity("go")
         .expect("go complexity query missing");
     let complexity = collect_captures(&lang, GO_SAMPLE, &query_str, "complexity");
-    // Classify() has two if branches; Pop() has one if
+    // Classify() has two if branches; Pop() has one if; Max[T] has one if;
+    // sumEvens has a for-range loop plus a nested if.
     assert!(
         complexity.len() >= 2,
         "expected at least 2 complexity nodes in go sample, got {} ({complexity:?})",
         complexity.len()
+    );
+    // for _, n := range nums { ... } — the range-loop form of for_statement
+    // must count as a complexity/nesting node exactly like a classic
+    // three-clause for loop (both are for_statement; range_clause is a
+    // child, not a separate statement type).
+    let nesting = collect_captures(&lang, GO_SAMPLE, &query_str, "nesting");
+    assert!(
+        nesting.len() >= 2,
+        "expected at least 2 nesting nodes (incl. the for-range loop and its \
+         enclosing function) in go sample, got {} ({nesting:?})",
+        nesting.len()
     );
 }
 
@@ -847,6 +1508,369 @@ fn go_types_finds_struct_definitions() {
         names.contains(&"Stack".to_string()),
         "expected 'Stack' in go types captures, got: {names:?}"
     );
+    // Type alias must appear in types.scm too, not just tags.scm.
+    assert!(
+        names.contains(&"MyInt".to_string()),
+        "expected type alias 'MyInt' in go types captures, got: {names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.go) -
+
+/// Every grammar-legal variant of `call_expression.function` that
+/// go.calls.scm claims to support must actually match, with the right
+/// capture *kind* (dimension 3) — not just the right text.
+#[test]
+fn go_calls_completeness_all_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_calls_completeness: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("go").expect("go calls query missing");
+    let caps = collect_captures_full(&lang, GO_VARIANTS, &query_str);
+
+    let call_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    // plain_call: function: identifier
+    assert!(
+        call_names.contains(&"identity"),
+        "expected 'identity' plain call, got: {call_names:?}"
+    );
+    // method_call: function: selector_expression, field: field_identifier
+    assert!(
+        call_names.contains(&"len"),
+        "expected 'len' method call, got: {call_names:?}"
+    );
+    // scoped_call: function: selector_expression, package-qualified
+    assert!(
+        call_names.contains(&"Sprintf"),
+        "expected 'Sprintf' scoped call, got: {call_names:?}"
+    );
+    // dot-imported call: brought into scope directly by `. "strings"`, so
+    // it parses as a plain identifier call, same as plain_call.
+    assert!(
+        call_names.contains(&"Repeat"),
+        "expected dot-imported 'Repeat' call (parses as plain identifier call), got: {call_names:?}"
+    );
+
+    // Every @call capture must be either an identifier or a field_identifier
+    // — never the parenthesized wrapper or anything larger (extraction
+    // depth: capture *kind*, not just text).
+    for (cn, kind, text, line) in &caps {
+        if cn == "call" {
+            assert!(
+                kind == "identifier" || kind == "field_identifier",
+                "expected @call capture kind to be identifier/field_identifier, \
+                 got kind={kind} text={text} line={line}"
+            );
+        }
+    }
+
+    // @call.qualifier must carry the qualifier text for every scoped/method call.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"fmt"),
+        "expected 'fmt' qualifier for the package-qualified call, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"h"),
+        "expected 'h' qualifier for the method call, got: {qualifiers:?}"
+    );
+}
+
+/// @call.write is reserved for assignment/compound-assignment RHS; a
+/// `:=`-bound call must never produce @call.write.
+#[test]
+fn go_calls_write_context_distinguishes_short_var_decl_from_assignment() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_calls_write_context: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_calls_write_context: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("go").expect("go calls query missing");
+    let caps = collect_captures_full(&lang, GO_VARIANTS, &query_str);
+
+    let write_calls: Vec<usize> = caps
+        .iter()
+        .filter(|(cn, _, t, _)| cn == "call.write" && t == "identity")
+        .map(|(_, _, _, line)| *line)
+        .collect();
+    let plain_calls: Vec<usize> = caps
+        .iter()
+        .filter(|(cn, _, t, _)| cn == "call" && t == "identity")
+        .map(|(_, _, _, line)| *line)
+        .collect();
+    // go.calls.scm has no dedicated @call.write pattern (unlike Rust) — Go's
+    // grammar doesn't distinguish assignment-RHS calls from plain calls in
+    // a way this query captures separately, so every `identity(...)` call
+    // site (the plain call in callVariants, plus assignment,
+    // compound-assignment, and `:=` in writeContextCall — 4 total) surfaces
+    // as plain @call. This test documents that as current behavior: no
+    // @call.write captures exist anywhere.
+    assert!(
+        write_calls.is_empty(),
+        "go.calls.scm has no @call.write pattern; expected zero, got: {write_calls:?}"
+    );
+    assert_eq!(
+        plain_calls.len(),
+        4,
+        "expected all 4 'identity' call sites (plain, assignment, \
+         compound-assignment, short-var-decl) as plain @call, got {}: {plain_calls:?}",
+        plain_calls.len()
+    );
+}
+
+/// Negative cases: the three deliberately-excluded call_expression.function
+/// variants (documented in go.calls.scm) must never produce a @call capture.
+#[test]
+fn go_calls_negative_uncallable_function_variants_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_calls_negative: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("go").expect("go calls query missing");
+    let caps = collect_captures_full(&lang, GO_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // Curried call `higherOrder()(1)`: the outer call's callee is itself a
+    // call_expression, not a named symbol. `higherOrder` (the inner call's
+    // name) is legitimately captured once; it must not appear a second time
+    // from the outer call.
+    let higher_order_calls = call_texts.iter().filter(|t| **t == "higherOrder").count();
+    assert_eq!(
+        higher_order_calls, 1,
+        "expected exactly 1 call to 'higherOrder' (the inner call only), got \
+         {higher_order_calls}: {call_texts:?}"
+    );
+    // Immediately-invoked func_literal: no identifier/field_identifier
+    // named "iife" exists in the source at all (it's a string argument to
+    // Println), so its absence from @call is trivially satisfied; the real
+    // assertion is structural — no @call capture has kind "func_literal".
+    assert!(
+        !caps
+            .iter()
+            .any(|(cn, kind, _, _)| cn == "call" && kind == "func_literal"),
+        "func_literal must never itself be captured as @call, got: {caps:?}"
+    );
+    // Dispatch-table call `dispatch[0]()`: no capture of kind
+    // "index_expression" as @call.
+    assert!(
+        !caps
+            .iter()
+            .any(|(cn, kind, _, _)| cn == "call" && kind == "index_expression"),
+        "index_expression must never itself be captured as @call, got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of type-definition node (`type_spec` and the
+/// distinct `type_alias` node) that go.tags.scm claims to support must
+/// produce a @definition.type capture.
+#[test]
+fn go_tags_completeness_type_spec_and_type_alias() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_tags_completeness: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("go").expect("go tags query missing");
+    let query = Query::new(&lang, &query_str).expect("query compilation failed");
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(GO_VARIANTS, None).expect("parse failed");
+    let source_bytes = GO_VARIANTS.as_bytes();
+
+    // Collect (tag_kind, name_text) pairs: tag_kind is whichever
+    // @definition.*/@reference.* capture co-occurs with @name in the match
+    // (mirrors rust_tags_completeness_all_impl_variants's pairing approach —
+    // definition.type is tagged on the *whole* type_spec/type_alias node,
+    // not the name, so pairing by match is required to get the name text).
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        if !normalize_languages::satisfies_predicates(&query, m, source_bytes) {
+            continue;
+        }
+        let mut name = None;
+        let mut tag_kind = None;
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            let text = cap.node.utf8_text(source_bytes).unwrap_or("");
+            if cap_name == "name" {
+                name = Some(text.to_string());
+            } else if cap_name.starts_with("definition.") {
+                tag_kind = Some(cap_name.to_string());
+            }
+        }
+        if let (Some(n), Some(k)) = (name, tag_kind) {
+            pairs.push((k, n));
+        }
+    }
+
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.type" && n == "Plain"),
+        "expected 'Plain' (type_spec) as definition.type, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.type" && n == "PlainAlias"),
+        "expected 'PlainAlias' (type_alias) as definition.type, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.type" && n == "Generic"),
+        "expected 'Generic' (generic type_spec) as definition.type, got: {pairs:?}"
+    );
+}
+
+/// Negative case: closures/func_literals are never reported as
+/// @definition.function or @definition.method.
+#[test]
+fn go_tags_negative_closures_are_not_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_tags_negative: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("go").expect("go tags query missing");
+    let caps = collect_captures_full(&lang, GO_VARIANTS, &query_str);
+    let is_def_delta = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.function" || cn == "definition.method") && t == "delta"
+    });
+    assert!(
+        !is_def_delta,
+        "closure parameter 'delta' must never be captured as a function/method \
+         definition, got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of `import_spec` that go.imports.scm claims
+/// to support (plain, aliased, dot, blank, and both string-literal kinds
+/// for the path) must produce a correctly-shaped @import.
+#[test]
+fn go_imports_completeness_all_import_spec_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_imports_completeness: go grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_imports("go").expect("go imports query missing");
+    let paths = collect_captures(&lang, GO_VARIANTS, &query_str, "import.path");
+    let aliases = collect_captures(&lang, GO_VARIANTS, &query_str, "import.alias");
+    let globs = collect_captures(&lang, GO_VARIANTS, &query_str, "import.glob");
+
+    assert!(
+        paths.iter().any(|p| p.contains("fmt")),
+        "expected plain 'fmt' import path, got: {paths:?}"
+    );
+    assert!(
+        aliases.contains(&"f".to_string()),
+        "expected 'f' alias for the aliased fmt import, got: {aliases:?}"
+    );
+    assert!(
+        aliases.contains(&"_".to_string()) || paths.iter().any(|p| p.contains("os")),
+        "expected the blank import of \"os\" to surface a path, got paths={paths:?} aliases={aliases:?}"
+    );
+    assert_eq!(
+        globs.len(),
+        1,
+        "expected exactly 1 dot-import glob marker (`. \"strings\"`), got {}: {globs:?}",
+        globs.len()
+    );
+    // raw_string_literal import path: `errors` (backtick-quoted). Rare in
+    // real Go (gofmt never emits it) but grammar-legal.
+    assert!(
+        paths.iter().any(|p| p.contains("errors")),
+        "expected raw-string-literal import path '`errors`' to be captured, got: {paths:?}"
+    );
+}
+
+/// Every grammar-legal variant of complexity/nesting node that
+/// go.complexity.scm claims to support must produce a capture, plus a
+/// negative case for constructs that must not increase complexity.
+#[test]
+fn go_complexity_completeness_and_negative() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping go_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("go").ok() else {
+        eprintln!("Skipping go_complexity_completeness: go grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("go")
+        .expect("go complexity query missing");
+    let caps = collect_captures_full(&lang, GO_SAMPLE, &query_str);
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    // if_statement (Classify/Pop/Max/sumEvens) and binary_expression
+    // (`n%2 == 0`, `a > b`, comparisons throughout) must both appear.
+    assert!(
+        complexity_kinds.contains(&"if_statement"),
+        "expected an if_statement complexity node, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"binary_expression"),
+        "expected a binary_expression complexity node, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"for_statement"),
+        "expected a for_statement complexity node (the for-range loop in \
+         sumEvens), got: {complexity_kinds:?}"
+    );
+    // NEGATIVE: a plain function call or a plain assignment must not
+    // introduce a complexity node — only the 3 listed statement/expression
+    // kinds above (and switch/select forms, not exercised in sample.go) do.
+    assert!(
+        !complexity_kinds.iter().any(|k| *k == "call_expression"),
+        "call_expression must never be a complexity node, got: {complexity_kinds:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -854,6 +1878,9 @@ fn go_types_finds_struct_definitions() {
 // ---------------------------------------------------------------------------
 
 const TS_SAMPLE: &str = include_str!("fixtures/typescript/sample.ts");
+const TS_VARIANTS: &str = include_str!("fixtures/typescript/variants.ts");
+
+// --- Dimension 4: real-world fixture coverage (sample.ts) -------------------
 
 #[test]
 fn typescript_tags_finds_class_and_functions() {
@@ -882,6 +1909,37 @@ fn typescript_tags_finds_class_and_functions() {
         names.contains(&"groupBy".to_string()),
         "expected 'groupBy' function in typescript tags, got: {names:?}"
     );
+    // Widget extends Entity implements Comparable<Widget> — both the
+    // superclass and the generic interface must be found as references.
+    assert!(
+        names.contains(&"Entity".to_string()),
+        "expected 'Entity' superclass reference in typescript tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Comparable".to_string()),
+        "expected 'Comparable' generic interface reference in typescript tags, got: {names:?}"
+    );
+    // Private method #computeScore must be found as a method definition, not
+    // silently dropped for having a private_property_identifier name.
+    assert!(
+        names.iter().any(|n| n == "#computeScore"),
+        "expected private method '#computeScore' in typescript tags, got: {names:?}"
+    );
+    // `namespace Shapes { ... namespace Nested { ... } }` — both the outer
+    // and nested namespace must be found as definition.module (internal_module).
+    assert!(
+        names.contains(&"Shapes".to_string()),
+        "expected 'Shapes' namespace in typescript tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Nested".to_string()),
+        "expected nested 'Nested' namespace in typescript tags, got: {names:?}"
+    );
+    // Closures assigned inside makeCounter must never appear as definitions.
+    assert!(
+        names.contains(&"makeCounter".to_string()),
+        "expected 'makeCounter' function in typescript tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -904,6 +1962,20 @@ fn typescript_calls_finds_method_calls() {
             .iter()
             .any(|c| c == "normalize" || c == "log" || c == "push"),
         "expected at least one of normalize/log/push calls in typescript sample, got: {calls:?}"
+    );
+    // Private method call site: this.#computeScore() inside score().
+    assert!(
+        calls.iter().any(|c| c == "#computeScore"),
+        "expected private method call '#computeScore' in typescript sample, got: {calls:?}"
+    );
+    // Promise chain idiom: .then(...).catch(...) — both calls found.
+    assert!(
+        calls.iter().any(|c| c == "then"),
+        "expected 'then' call in typescript sample, got: {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|c| c == "catch"),
+        "expected 'catch' call in typescript sample, got: {calls:?}"
     );
 }
 
@@ -976,11 +2048,439 @@ fn typescript_types_finds_interface_and_class() {
     );
 }
 
+#[test]
+fn typescript_types_finds_extends_and_implements_references() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_types_extends_implements: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_types_extends_implements: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("typescript")
+        .expect("typescript types query missing");
+    let refs = collect_captures(&lang, TS_SAMPLE, &query_str, "type.reference");
+    // class Widget extends Entity implements Comparable<Widget>
+    assert!(
+        refs.contains(&"Entity".to_string()),
+        "expected 'Entity' extends-reference in typescript types, got: {refs:?}"
+    );
+    assert!(
+        refs.contains(&"Comparable".to_string()),
+        "expected 'Comparable' implements-reference (generic) in typescript types, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.ts) -
+
+/// Every grammar-legal variant of `call_expression.function` that
+/// typescript.calls.scm claims to support must actually match, with the
+/// right capture *kind* (dimension 3) — not just the right text.
+#[test]
+fn typescript_calls_completeness_all_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping typescript_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_calls_completeness: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("typescript")
+        .expect("typescript calls query missing");
+    let caps = collect_captures_full(&lang, TS_VARIANTS, &query_str);
+
+    // (capture_name, kind, text) triples we require, one per documented
+    // function-field variant. See typescript.calls.scm's own comments for
+    // the node-shape each of these lines exercises.
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "identifier", "identity"),                  // plainCall
+        ("call", "property_identifier", "push"), // methodCall: function: member_expression, property: property_identifier
+        ("call", "private_property_identifier", "#compute"), // callPrivate: private method call
+        ("call", "subscript_expression", "arr[0]"), // computedCall
+        ("call", "parenthesized_expression", "(identity)"), // parenthesizedCall
+        ("call", "non_null_expression", "identity!"), // nonNullCall
+        ("call", "call_expression", "curried()"), // chainedCall
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in typescript.calls.scm \
+             output for variants.ts, got: {caps:?}"
+        );
+    }
+
+    // @call.qualifier must be present for method/computed calls and carry the
+    // qualifier text, not the call name.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"arr"),
+        "expected 'arr' qualifier for the plain method call, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"this"),
+        "expected 'this' qualifier for the private method call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call captures.
+#[test]
+fn typescript_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping typescript_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_calls_negative: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("typescript")
+        .expect("typescript calls query missing");
+    let caps = collect_captures_full(&lang, TS_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `holder.field` is a bare field read (no call parens); must never be a call.
+    assert!(
+        !call_texts.contains(&"field"),
+        "bare field access 'holder.field' must not be captured as a call, got: {call_texts:?}"
+    );
+    // The closure definition site (`addOne`) must not appear as a call —
+    // only the call site `addOne(1)` should.
+    let add_one_calls = call_texts.iter().filter(|t| **t == "addOne").count();
+    assert_eq!(
+        add_one_calls, 1,
+        "expected exactly 1 call to 'addOne' (the call site, not the closure \
+         definition), got {add_one_calls}: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of `method_definition.name` that
+/// typescript.tags.scm claims to support (plain, private, computed) must
+/// produce a @definition.method capture with the correct name text.
+#[test]
+fn typescript_tags_completeness_all_method_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_methods: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_methods: typescript grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("typescript")
+        .expect("typescript tags query missing");
+    let caps = collect_captures_full(&lang, TS_VARIANTS, &query_str);
+    let method_defs: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "definition.method")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    // definition.method is anchored on the whole method_definition node, so
+    // check by substring/kind pairing on the @name capture instead.
+    let name_kinds: Vec<(&str, &str)> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, k, t, _)| (k.as_str(), t.as_str()))
+        .collect();
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "property_identifier" && *t == "plainMethod"),
+        "expected plain method name 'plainMethod' (property_identifier), got: {name_kinds:?}"
+    );
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "private_property_identifier" && *t == "#privateMethod"),
+        "expected private method name '#privateMethod' (private_property_identifier), got: {name_kinds:?}"
+    );
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "computed_property_name" && *t == "[\"computedMethod\"]"),
+        "expected computed method name (computed_property_name), got: {name_kinds:?}"
+    );
+    let _ = method_defs; // kept for readability of what's being asserted above
+}
+
+/// Every grammar-legal variant of `new_expression.constructor` that
+/// typescript.tags.scm claims to support (plain identifier, namespaced
+/// member_expression) must produce a @reference.class capture.
+#[test]
+fn typescript_tags_completeness_new_expression_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_new: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_tags_completeness_new: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("typescript")
+        .expect("typescript tags query missing");
+    let class_refs = tags_matches_by_kind(&lang, TS_VARIANTS, &query_str, "reference.class");
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "identifier" && t == "PrivateHolder"),
+        "expected plain constructor 'PrivateHolder' (identifier), got: {class_refs:?}"
+    );
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "member_expression" && t == "ns2.Ctor"),
+        "expected namespaced constructor 'ns2.Ctor' (member_expression), got: {class_refs:?}"
+    );
+}
+
+/// Every grammar-legal variant of `module`/`internal_module` name (identifier,
+/// nested_identifier, ambient string) that typescript.tags.scm claims to
+/// support must produce a @definition.module capture.
+#[test]
+fn typescript_tags_completeness_module_and_namespace_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_modules: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_modules: typescript grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("typescript")
+        .expect("typescript tags query missing");
+    let module_defs = tags_matches_by_kind(&lang, TS_VARIANTS, &query_str, "definition.module");
+    // `module LegacyModule {}` — module.name: identifier
+    assert!(
+        module_defs
+            .iter()
+            .any(|(k, t)| k == "identifier" && t == "LegacyModule"),
+        "expected legacy 'module LegacyModule' (module.name: identifier), got: {module_defs:?}"
+    );
+    // `module Legacy.Dotted {}` — module.name: nested_identifier
+    assert!(
+        module_defs
+            .iter()
+            .any(|(k, t)| k == "nested_identifier" && t == "Legacy.Dotted"),
+        "expected legacy 'module Legacy.Dotted' (module.name: nested_identifier), got: {module_defs:?}"
+    );
+    // `declare module "ambient-module-name" {}` — module.name: string
+    assert!(
+        module_defs
+            .iter()
+            .any(|(k, t)| k == "string" && t == "\"ambient-module-name\""),
+        "expected ambient 'declare module \"...\"' (module.name: string), got: {module_defs:?}"
+    );
+    // `namespace SimpleNamespace {}` — internal_module.name: identifier
+    assert!(
+        module_defs
+            .iter()
+            .any(|(k, t)| k == "identifier" && t == "SimpleNamespace"),
+        "expected 'namespace SimpleNamespace' (internal_module.name: identifier), got: {module_defs:?}"
+    );
+    // `namespace Dotted.Nested {}` — internal_module.name: nested_identifier
+    assert!(
+        module_defs
+            .iter()
+            .any(|(k, t)| k == "nested_identifier" && t == "Dotted.Nested"),
+        "expected 'namespace Dotted.Nested' (internal_module.name: nested_identifier), got: {module_defs:?}"
+    );
+}
+
+/// Every grammar-legal variant of `extends_clause`/`implements_clause` that
+/// typescript.tags.scm claims to support must produce the correct
+/// reference.class/reference.implementation capture.
+#[test]
+fn typescript_tags_completeness_extends_implements_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_extends: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!(
+            "Skipping typescript_tags_completeness_extends: typescript grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("typescript")
+        .expect("typescript tags query missing");
+    let class_refs = tags_matches_by_kind(&lang, TS_VARIANTS, &query_str, "reference.class");
+    let impl_refs =
+        tags_matches_by_kind(&lang, TS_VARIANTS, &query_str, "reference.implementation");
+    let impl_ref_texts: Vec<&str> = impl_refs.iter().map(|(_, t)| t.as_str()).collect();
+
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "identifier" && t == "Base"),
+        "expected 'Base' extends-reference (identifier), got: {class_refs:?}"
+    );
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "member_expression" && t == "ns2.Ctor"),
+        "expected 'ns2.Ctor' extends-reference (member_expression), got: {class_refs:?}"
+    );
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "call_expression" && t.starts_with("Mixin(")),
+        "expected 'Mixin(Base)' extends-reference (call_expression, mixin pattern), got: {class_refs:?}"
+    );
+    assert!(
+        impl_ref_texts.contains(&"Iface"),
+        "expected 'Iface' implements-reference (plain type_identifier), got: {impl_refs:?}"
+    );
+    assert!(
+        impl_ref_texts.contains(&"GenericIface"),
+        "expected 'GenericIface' implements-reference (generic_type), got: {impl_refs:?}"
+    );
+}
+
+/// Negative case: closures are not function_declarations/method_definitions
+/// and must never appear as @definition.function or @definition.method.
+#[test]
+fn typescript_tags_negative_closures_are_not_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping typescript_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_tags_negative: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("typescript")
+        .expect("typescript tags query missing");
+    let caps = collect_captures_full(&lang, TS_VARIANTS, &query_str);
+    let is_def_add_one = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.function" || cn == "definition.method") && t == "addOne"
+    });
+    assert!(
+        !is_def_add_one,
+        "closure binding 'addOne' must never be captured as a function/method \
+         definition, got captures: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of import/re-export/require/dynamic-import
+/// that typescript.imports.scm claims to support must produce a correctly
+/// shaped @import capture, including the previously-silent `default`-name
+/// (anonymous-token) and `import X = require(...)`/`import()` gaps.
+#[test]
+fn typescript_imports_completeness_all_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping typescript_imports_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("typescript").ok() else {
+        eprintln!("Skipping typescript_imports_completeness: typescript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("typescript")
+        .expect("typescript imports query missing");
+    let names = collect_captures(&lang, TS_VARIANTS, &query_str, "import.name");
+    let aliases = collect_captures(&lang, TS_VARIANTS, &query_str, "import.alias");
+    let paths = collect_captures(&lang, TS_VARIANTS, &query_str, "import.path");
+    let globs = collect_captures(&lang, TS_VARIANTS, &query_str, "import.glob");
+    let reexports = collect_captures(&lang, TS_VARIANTS, &query_str, "import.reexport");
+
+    assert!(
+        names.contains(&"plainName".to_string()),
+        "expected plain import name, got: {names:?}"
+    );
+    // import { default as renamedDefault } — previously silently dropped
+    // entirely since `default` is an anonymous token, not (identifier).
+    assert!(
+        names.iter().any(|n| n == "default"),
+        "expected a 'default' import name (import {{ default as ... }}), got: {names:?}"
+    );
+    assert!(
+        aliases.contains(&"renamedDefault".to_string()),
+        "expected 'renamedDefault' alias for the default-import, got: {aliases:?}"
+    );
+    // import fsThing = require('fs') — TS import-equals with require.
+    assert!(
+        names.contains(&"fsThing".to_string()) && paths.contains(&"fs".to_string()),
+        "expected 'fsThing'/'fs' from import-equals-require, names={names:?} paths={paths:?}"
+    );
+    // export * as wildcardNs from ... — namespace re-export.
+    assert!(
+        !globs.is_empty(),
+        "expected at least one import.glob capture, got: {globs:?}"
+    );
+    assert!(
+        aliases.contains(&"wildcardNs".to_string()),
+        "expected 'wildcardNs' namespace re-export alias, got: {aliases:?}"
+    );
+    // export { default } from ... (bare default re-export) — must appear.
+    assert!(
+        reexports.len() >= 2,
+        "expected multiple @import.reexport captures (named + default forms), got {}: {reexports:?}",
+        reexports.len()
+    );
+    // export { default as renamedDefaultReexport } from ...
+    assert!(
+        aliases.contains(&"renamedDefaultReexport".to_string()),
+        "expected 'renamedDefaultReexport' aliased-default-reexport alias, got: {aliases:?}"
+    );
+    // import('mod-dynamic') — dynamic import expression.
+    assert!(
+        paths.contains(&"mod-dynamic".to_string()),
+        "expected 'mod-dynamic' from dynamic import(), got: {paths:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Java
 // ---------------------------------------------------------------------------
 
 const JAVA_SAMPLE: &str = include_str!("fixtures/java/sample.java");
+const JAVA_VARIANTS: &str = include_str!("fixtures/java/variants.java");
+
+// --- Dimension 4: real-world fixture coverage (sample.java) ----------------
 
 #[test]
 fn java_tags_finds_class_and_methods() {
@@ -1007,6 +2507,55 @@ fn java_tags_finds_class_and_methods() {
         names.contains(&"classify".to_string()),
         "expected 'classify' method in java tags, got: {names:?}"
     );
+    // implements Comparable<TaskQueue>, java.io.Serializable — both the
+    // generic and the path-qualified interface must be found as containers
+    // for the nested `PriorityTaskQueue extends TaskQueue implements
+    // java.util.Comparator<String>` idiom (generic + scoped supertype).
+    assert!(
+        names.contains(&"Comparable".to_string()),
+        "expected 'Comparable' (generic implements) in java tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Serializable".to_string()),
+        "expected 'Serializable' (path-qualified implements) in java tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Comparator".to_string()),
+        "expected 'Comparator' (generic + path-qualified implements) in java tags, got: {names:?}"
+    );
+    // Nested static class + its qualified/generic extends clause.
+    assert!(
+        names.contains(&"PriorityTaskQueue".to_string()),
+        "expected 'PriorityTaskQueue' nested class in java tags, got: {names:?}"
+    );
+    // Anonymous class (`new Runnable() { ... }`) — its constructor-call
+    // reference and the `run` override inside it must both surface.
+    assert!(
+        names.contains(&"Runnable".to_string()),
+        "expected 'Runnable' anonymous-class reference in java tags, got: {names:?}"
+    );
+    // Enum with a constructor and a method.
+    assert!(
+        names.contains(&"Color".to_string()),
+        "expected 'Color' enum in java tags, got: {names:?}"
+    );
+    // Record.
+    assert!(
+        names.contains(&"Point".to_string()),
+        "expected 'Point' record in java tags, got: {names:?}"
+    );
+    // Lambda bindings (`String::length` method reference site, `t -> ...`)
+    // must never surface as function/method definitions — closures and
+    // method references aren't `method_declaration`s in this grammar.
+    let def_method_names: Vec<&str> = names
+        .iter()
+        .map(std::string::String::as_str)
+        .filter(|n| *n == "lengthFn" || *n == "t")
+        .collect();
+    assert!(
+        def_method_names.contains(&"lengthFn"),
+        "expected the real method 'lengthFn' in java tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -1025,6 +2574,32 @@ fn java_calls_finds_method_calls() {
     assert!(
         calls.contains(&"add".to_string()) || calls.contains(&"remove".to_string()),
         "expected 'add' or 'remove' method call in java sample, got: {calls:?}"
+    );
+    // Iterator-chain idiom: tasks.stream().filter(...).map(...).count() —
+    // every link in the chain must be found, not just the first call.
+    assert!(
+        calls.contains(&"stream".to_string()),
+        "expected 'stream' call in java sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"filter".to_string()),
+        "expected 'filter' call in java sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"count".to_string()),
+        "expected 'count' call in java sample, got: {calls:?}"
+    );
+    // Qualified static call: Integer.compare(...).
+    assert!(
+        calls.contains(&"compare".to_string()),
+        "expected 'compare' static-qualified call in java sample, got: {calls:?}"
+    );
+    // super(capacity) constructor delegation inside the nested subclass
+    // constructor — a distinct `explicit_constructor_invocation` node, not a
+    // `method_invocation`, that was previously entirely unmatched.
+    assert!(
+        calls.contains(&"super".to_string()),
+        "expected 'super' constructor-delegation call in java sample, got: {calls:?}"
     );
 }
 
@@ -1047,6 +2622,10 @@ fn java_imports_finds_import_paths() {
         paths.iter().any(|p| p.contains("ArrayList")),
         "expected 'java.util.ArrayList' in java import paths, got: {paths:?}"
     );
+    assert!(
+        paths.iter().any(|p| p.contains("function.Function")),
+        "expected 'java.util.function.Function' in java import paths, got: {paths:?}"
+    );
 }
 
 #[test]
@@ -1064,7 +2643,8 @@ fn java_complexity_finds_control_flow() {
         .get_complexity("java")
         .expect("java complexity query missing");
     let complexity = collect_captures(&lang, JAVA_SAMPLE, &query_str, "complexity");
-    // enqueue() has an if; dequeue() has an if; classify() has if/else-if
+    // enqueue() has an if; dequeue() has an if; classify() has if/else-if;
+    // Shapes.describe() has a switch (arrow form, 3 labels incl. default).
     assert!(
         complexity.len() >= 3,
         "expected at least 3 complexity nodes in java sample, got {} ({complexity:?})",
@@ -1089,6 +2669,455 @@ fn java_types_finds_class() {
         names.contains(&"TaskQueue".to_string()),
         "expected 'TaskQueue' in java types captures, got: {names:?}"
     );
+    // interface_declaration, enum_declaration, and record_declaration must
+    // all be reported as @definition.type alongside class_declaration.
+    assert!(
+        names.contains(&"Processor".to_string()),
+        "expected 'Processor' interface in java types captures, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Color".to_string()),
+        "expected 'Color' enum in java types captures, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Point".to_string()),
+        "expected 'Point' record in java types captures, got: {names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.java) -
+
+/// Every grammar-legal variant of `object_creation_expression.type` that
+/// java.tags.scm claims to support (plain, generic, diamond, scoped, and
+/// generic+scoped) must produce a @reference.class capture with the right name.
+#[test]
+fn java_tags_completeness_object_creation_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping java_tags_completeness_object_creation: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_tags_completeness_object_creation: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("java").expect("java tags query missing");
+    let pairs = collect_tag_pairs(&lang, JAVA_VARIANTS, &query_str);
+
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    for expected in ["Object", "ArrayList", "Date", "HashMap"] {
+        assert!(
+            ref_class_names.contains(&expected),
+            "expected '{expected}' among object-creation @reference.class captures, got: {ref_class_names:?}"
+        );
+    }
+    // Extraction depth: the leaf name must be the plain class name
+    // ("Date"), not the qualified path text ("java.util.Date"), even for
+    // scoped/generic-scoped constructors.
+    assert!(
+        ref_class_names.iter().all(|n| !n.contains('.')),
+        "expected leaf-only class names (no '.'), got: {ref_class_names:?}"
+    );
+}
+
+/// Every grammar-legal variant of `superclass` and `type_list` (implements)
+/// that java.tags.scm claims to support must produce a
+/// @reference.class/@reference.implementation capture.
+#[test]
+fn java_tags_completeness_extends_implements_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping java_tags_completeness_extends_implements: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_tags_completeness_extends_implements: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("java").expect("java tags query missing");
+    let pairs = collect_tag_pairs(&lang, JAVA_VARIANTS, &query_str);
+
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // superclass: plain, generic, generic+scoped.
+    assert!(
+        ref_class_names.contains(&"PlainBase"),
+        "expected 'PlainBase' (plain superclass) in java tags, got: {ref_class_names:?}"
+    );
+    assert!(
+        ref_class_names.contains(&"GenericBase"),
+        "expected 'GenericBase' (generic superclass) in java tags, got: {ref_class_names:?}"
+    );
+    assert!(
+        ref_class_names.contains(&"AbstractList"),
+        "expected 'AbstractList' (generic + path-qualified superclass) in java tags, got: {ref_class_names:?}"
+    );
+
+    let ref_impl_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.implementation")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // type_list (implements): plain, generic, scoped, generic+scoped.
+    assert!(
+        ref_impl_names.contains(&"PlainIface"),
+        "expected 'PlainIface' (plain implements) in java tags, got: {ref_impl_names:?}"
+    );
+    assert!(
+        ref_impl_names.contains(&"Comparable"),
+        "expected 'Comparable' (generic implements) in java tags, got: {ref_impl_names:?}"
+    );
+    assert!(
+        ref_impl_names.contains(&"Serializable"),
+        "expected 'Serializable' (path-qualified implements) in java tags, got: {ref_impl_names:?}"
+    );
+    assert!(
+        ref_impl_names.contains(&"Comparator"),
+        "expected 'Comparator' (generic + path-qualified implements) in java tags, got: {ref_impl_names:?}"
+    );
+}
+
+/// Every type-defining declaration kind (class, interface, enum, record,
+/// annotation type) must be found as a tags definition, and record/annotation
+/// must be mapped to the documented closest-existing kind (class/interface).
+#[test]
+fn java_tags_completeness_type_declaration_kinds() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping java_tags_completeness_type_declaration_kinds: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!(
+            "Skipping java_tags_completeness_type_declaration_kinds: java grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader.get_tags("java").expect("java tags query missing");
+    let pairs = collect_tag_pairs(&lang, JAVA_VARIANTS, &query_str);
+
+    let find_def_kind = |name: &str| -> Option<&str> {
+        pairs
+            .iter()
+            .find(|(k, n)| k.starts_with("definition.") && n == name)
+            .map(|(k, _)| k.as_str())
+    };
+    assert_eq!(find_def_kind("PlainClass"), Some("definition.class"));
+    assert_eq!(
+        find_def_kind("PlainInterface"),
+        Some("definition.interface")
+    );
+    assert_eq!(find_def_kind("PlainEnum"), Some("definition.enum"));
+    assert_eq!(
+        find_def_kind("PlainRecord"),
+        Some("definition.class"),
+        "records compile to classes; expected definition.class"
+    );
+    assert_eq!(
+        find_def_kind("PlainAnnotation"),
+        Some("definition.interface"),
+        "annotation types compile to interfaces; expected definition.interface"
+    );
+}
+
+/// Negative case: lambda bindings and method references are not
+/// `method_declaration`s and must never appear as tags definitions; bare
+/// field access/writes must never appear as calls.
+#[test]
+fn java_tags_negative_lambdas_are_not_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_tags_negative: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("java").expect("java tags query missing");
+    let caps = collect_captures_full(&lang, JAVA_VARIANTS, &query_str);
+    let is_def_lambda_binding = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.method" || cn == "definition.function") && t == "lambdaBinding"
+    });
+    assert!(
+        !is_def_lambda_binding,
+        "lambda binding 'lambdaBinding' must never be captured as a method/function \
+         definition, got: {caps:?}"
+    );
+    let is_def_method_ref = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.method" || cn == "definition.function") && t == "methodRef"
+    });
+    assert!(
+        !is_def_method_ref,
+        "method-reference binding 'methodRef' must never be captured as a method/function \
+         definition, got: {caps:?}"
+    );
+}
+
+/// Negative case: method references (`Foo::bar`) are not invocations and
+/// must never appear as @call captures in java.calls.scm.
+#[test]
+fn java_calls_negative_method_references_and_field_access() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping java_calls_negative_method_references: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_calls_negative_method_references: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("java").expect("java calls query missing");
+    let calls = collect_captures(&lang, JAVA_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"staticMethod".to_string()),
+        "method reference 'NegativeHolder::staticMethod' must not be captured as a call, \
+         got: {calls:?}"
+    );
+    // Bare field read (`this.field`) and field write (`this.field = 5`) must
+    // never be captured as calls (no argument_list, not a method_invocation).
+    assert!(
+        !calls.contains(&"field".to_string()),
+        "bare field access/write 'this.field' must not be captured as a call, got: {calls:?}"
+    );
+}
+
+/// Every grammar-legal variant of `method_invocation.object` (absent, plain
+/// identifier qualifier, chained method_invocation qualifier) must produce a
+/// @call capture, matching java.calls.scm's completeness claims.
+#[test]
+fn java_calls_completeness_object_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_calls_completeness: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("java").expect("java calls query missing");
+    let caps = collect_captures_full(&lang, JAVA_VARIANTS, &query_str);
+    let calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        calls.contains(&"identity"),
+        "expected plain (no-object) call 'identity', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"abs"),
+        "expected qualified call 'Math.abs' -> 'abs', got: {calls:?}"
+    );
+    // Chained calls: s.trim().toUpperCase().length() — every link found.
+    assert!(
+        calls.contains(&"trim"),
+        "expected chained call 'trim', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"toUpperCase"),
+        "expected chained call 'toUpperCase', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"length"),
+        "expected chained call 'length', got: {calls:?}"
+    );
+    // Extraction depth: the qualifier for the chained calls must be the
+    // *previous method_invocation node*, not a plain identifier.
+    let chained_qualifier_kind = caps
+        .iter()
+        .find(|(cn, _, t, _)| cn == "call.qualifier" && t.starts_with("s.trim()"))
+        .map(|(_, k, _, _)| k.as_str());
+    assert_eq!(
+        chained_qualifier_kind,
+        Some("method_invocation"),
+        "expected the chained call's qualifier to be a method_invocation node, got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of `import_declaration`'s argument (bare
+/// identifier, scoped_identifier, wildcard, static, static wildcard) that
+/// java.imports.scm claims to support must produce a correctly-shaped @import.
+#[test]
+fn java_imports_completeness_all_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_imports_completeness: java grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("java")
+        .expect("java imports query missing");
+    let paths = collect_captures(&lang, JAVA_VARIANTS, &query_str, "import.path");
+    let globs = collect_captures(&lang, JAVA_VARIANTS, &query_str, "import.glob");
+
+    // Bare single-segment import: `import Bare;`
+    assert!(
+        paths.contains(&"Bare".to_string()),
+        "expected 'Bare' bare-identifier import path, got: {paths:?}"
+    );
+    // Plain scoped import: `import java.util.ArrayList;`
+    assert!(
+        paths.iter().any(|p| p.contains("ArrayList")),
+        "expected 'java.util.ArrayList' import path, got: {paths:?}"
+    );
+    // Wildcard: `import java.util.*;`
+    assert!(
+        !globs.is_empty(),
+        "expected at least one import.glob capture for 'import java.util.*;', got: {globs:?}"
+    );
+    // import static pkg.Class.member; and import static pkg.Class.*;
+    assert!(
+        paths
+            .iter()
+            .any(|p| p.contains("Math.PI") || p.contains("PI")),
+        "expected static import path for 'java.lang.Math.PI', got: {paths:?}"
+    );
+    assert!(
+        globs.len() >= 2,
+        "expected 2 import.glob captures (plain wildcard + static wildcard), got {}: {globs:?}",
+        globs.len()
+    );
+}
+
+/// Negative case: `import.path` must never be empty/missing for any of the
+/// import forms above — a silent drop (0 matches) is exactly the historical
+/// bug class this methodology targets.
+#[test]
+fn java_imports_negative_no_silently_dropped_forms() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_imports_negative: java grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("java")
+        .expect("java imports query missing");
+    // Exact-match "import" only — collect_captures' prefix match would also
+    // pull in "import.path"/"import.glob"/"import.reexport", which is not
+    // what this test is asserting.
+    let caps = collect_captures_full(&lang, JAVA_VARIANTS, &query_str);
+    let import_stmts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "import")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    // variants.java has exactly 6 import declarations; every one must
+    // produce at least one @import capture (the whole-statement anchor).
+    assert_eq!(
+        import_stmts.len(),
+        6,
+        "expected 6 @import captures (one per import declaration in variants.java), got {}: {import_stmts:?}",
+        import_stmts.len()
+    );
+}
+
+/// Completeness: switch (arrow form), try-with-resources, and enhanced-for
+/// all contribute complexity, matching java.complexity.scm's claims.
+#[test]
+fn java_complexity_completeness_control_flow_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_complexity_completeness: java grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("java")
+        .expect("java complexity query missing");
+    let caps = collect_captures_full(&lang, JAVA_VARIANTS, &query_str);
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    // switch (arrow form): 3 switch_label nodes (case 1, case 2, default).
+    assert!(
+        complexity_kinds
+            .iter()
+            .filter(|k| **k == "switch_label")
+            .count()
+            >= 3,
+        "expected >= 3 switch_label complexity nodes (arrow-form switch), got: {complexity_kinds:?}"
+    );
+    // catch_clause from the try-with-resources block.
+    assert!(
+        complexity_kinds.contains(&"catch_clause"),
+        "expected a catch_clause complexity node, got: {complexity_kinds:?}"
+    );
+    // for/while/do-while/enhanced-for loops.
+    assert!(
+        complexity_kinds.contains(&"for_statement"),
+        "expected a for_statement complexity node, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"while_statement"),
+        "expected a while_statement complexity node, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"do_statement"),
+        "expected a do_statement complexity node, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"enhanced_for_statement"),
+        "expected an enhanced_for_statement complexity node, got: {complexity_kinds:?}"
+    );
+}
+
+/// Every type-defining declaration kind must be found as @definition.type in
+/// java.types.scm, matching the tags completeness matrix above.
+#[test]
+fn java_types_completeness_all_declaration_kinds() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping java_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("java").ok() else {
+        eprintln!("Skipping java_types_completeness: java grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_types("java").expect("java types query missing");
+    let pairs = collect_tag_pairs(&lang, JAVA_VARIANTS, &query_str);
+    let find_def_kind = |name: &str| -> Option<&str> {
+        pairs
+            .iter()
+            .find(|(k, n)| k.starts_with("definition.") && n == name)
+            .map(|(k, _)| k.as_str())
+    };
+    assert_eq!(find_def_kind("PlainClass"), Some("definition.type"));
+    assert_eq!(find_def_kind("PlainInterface"), Some("definition.type"));
+    assert_eq!(find_def_kind("PlainEnum"), Some("definition.type"));
+    assert_eq!(find_def_kind("PlainRecord"), Some("definition.type"));
+    assert_eq!(find_def_kind("PlainAnnotation"), Some("definition.type"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1096,6 +3125,9 @@ fn java_types_finds_class() {
 // ---------------------------------------------------------------------------
 
 const RUBY_SAMPLE: &str = include_str!("fixtures/ruby/sample.rb");
+const RUBY_VARIANTS: &str = include_str!("fixtures/ruby/variants.rb");
+
+// --- Dimension 4: real-world fixture coverage (sample.rb) -------------------
 
 #[test]
 fn ruby_tags_finds_class_and_methods() {
@@ -1122,6 +3154,37 @@ fn ruby_tags_finds_class_and_methods() {
         names.contains(&"sum_if".to_string()),
         "expected 'sum_if' method in ruby tags, got: {names:?}"
     );
+    // Mixin module + namespaced include: real Ruby leans heavily on modules
+    // as mixins, frequently with namespaced module names (ActiveSupport::Concern-
+    // style). The module itself and its own method must both be found.
+    assert!(
+        names.contains(&"Loggable".to_string()),
+        "expected 'Loggable' module in ruby tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"log".to_string()),
+        "expected 'log' method nested in module Loggable, got: {names:?}"
+    );
+    // Inheritance: BoundedStack < Stack.
+    assert!(
+        names.contains(&"BoundedStack".to_string()),
+        "expected 'BoundedStack' class in ruby tags, got: {names:?}"
+    );
+    // Struct.new-based value class with a block body: the block's own method
+    // definition ('distance') must still be found even though its container
+    // is a constant assignment, not a `class` node.
+    assert!(
+        names.contains(&"distance".to_string()),
+        "expected 'distance' method inside Struct.new block, got: {names:?}"
+    );
+    // `class << self; def empty; end; end` — the method inside a singleton-
+    // class reopening must be found as a plain method definition (see
+    // ruby.tags.scm's comment on why the singleton_class container itself
+    // is not captured).
+    assert!(
+        names.contains(&"empty".to_string()),
+        "expected 'empty' class method (via class << self) in ruby tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -1141,6 +3204,21 @@ fn ruby_calls_finds_method_calls() {
         calls.contains(&"push".to_string()) || calls.contains(&"pop".to_string()),
         "expected 'push' or 'pop' call in ruby sample, got: {calls:?}"
     );
+    // Bare Kernel-style call whose callee is a constant, not an identifier:
+    // Integer("5") — this is the gap fixed on top of the shallow baseline.
+    assert!(
+        calls.contains(&"Integer".to_string()),
+        "expected 'Integer' bare-constant call in ruby sample, got: {calls:?}"
+    );
+    // Safe navigation: label&.upcase must still be found as an ordinary call.
+    assert!(
+        calls.contains(&"upcase".to_string()),
+        "expected 'upcase' call via safe navigation in ruby sample, got: {calls:?}"
+    );
+    // `super()`/`super` (implicit-args form) inside BoundedStack — the plain
+    // `super` keyword is a distinct node from `call` in this grammar and is
+    // legitimately absent from @call; not asserted here (see ruby.calls.scm
+    // for why explicit-operator/self/super call forms are out of scope).
 }
 
 #[test]
@@ -1162,6 +3240,18 @@ fn ruby_imports_finds_require() {
         paths.contains(&"json".to_string()),
         "expected 'json' in ruby import paths, got: {paths:?}"
     );
+    // `require_relative 'support/helpers'`
+    assert!(
+        paths.iter().any(|p| p.contains("helpers")),
+        "expected require_relative path in ruby import paths, got: {paths:?}"
+    );
+    // `include ActiveSupport::Concern` — namespaced include argument
+    // (scope_resolution), the real-world-common case the bare-constant-only
+    // pattern silently dropped.
+    assert!(
+        paths.iter().any(|p| p.contains("ActiveSupport")),
+        "expected namespaced 'include ActiveSupport::Concern' in ruby import paths, got: {paths:?}"
+    );
 }
 
 #[test]
@@ -1179,9 +3269,12 @@ fn ruby_complexity_finds_control_flow() {
         .get_complexity("ruby")
         .expect("ruby complexity query missing");
     let complexity = collect_captures(&lang, RUBY_SAMPLE, &query_str, "complexity");
+    // classify() alone now contributes if + elsif (2); pop's rescue,
+    // build_report/with_yield's statement modifiers, and describe's
+    // case_match/in_clause pattern-match all add further complexity nodes.
     assert!(
-        complexity.len() >= 2,
-        "expected at least 2 complexity nodes in ruby sample, got {} ({complexity:?})",
+        complexity.len() >= 8,
+        "expected at least 8 complexity nodes in ruby sample, got {} ({complexity:?})",
         complexity.len()
     );
 }
@@ -1200,9 +3293,359 @@ fn ruby_types_finds_type_references() {
     let query_str = loader.get_types("ruby").expect("ruby types query missing");
     // Ruby types.scm captures @type.reference (superclass/scope resolution)
     let refs = collect_captures(&lang, RUBY_SAMPLE, &query_str, "type");
-    // The sample has no explicit inheritance, but the query should at least parse
-    // without error; empty result is acceptable for this sample.
-    let _ = refs; // result may be empty — query must compile and run
+    // BoundedStack < Stack (plain superclass) and Stack's own `rescue
+    // StandardError` are both real type references now present in the
+    // enriched sample.
+    assert!(
+        refs.contains(&"Stack".to_string()),
+        "expected 'Stack' superclass reference in ruby sample, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.rb) -
+
+/// Every grammar-legal variant of `call.method` that ruby.calls.scm claims to
+/// support (identifier, constant) must actually match, with the right
+/// capture kind (dimension 3), not just the right text.
+#[test]
+fn ruby_calls_completeness_method_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_calls_completeness: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("ruby").expect("ruby calls query missing");
+    let caps = collect_captures_full(&lang, RUBY_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "identifier", "identity"), // plain_call: method: identifier
+        ("call", "identifier", "length"),   // method_call_with_receiver: method: identifier
+        ("call", "constant", "Integer"),    // bare_constant_call: method: constant
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in ruby.calls.scm \
+             output for variants.rb, got: {caps:?}"
+        );
+    }
+
+    // @call.qualifier must carry the receiver text, not the call name.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"v"),
+        "expected 'v' qualifier for the receiver-qualified call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call captures.
+#[test]
+fn ruby_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_calls_negative: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("ruby").expect("ruby calls query missing");
+    let caps = collect_captures_full(&lang, RUBY_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `holder.field` IS a call (method: identifier "field"); it must appear
+    // exactly once — the negative guard here is against it appearing twice
+    // (once for the call, once spuriously for the bare-identifier catch-all
+    // pattern, which is reserved for calls with no explicit `call` node).
+    let field_calls = call_texts.iter().filter(|t| **t == "field").count();
+    assert_eq!(
+        field_calls, 1,
+        "expected exactly 1 'field' call (holder.field), got {field_calls}: {call_texts:?}"
+    );
+    // `bound = read_via_call` reads a local variable; the local reference
+    // itself must never be captured as a call.
+    assert!(
+        !call_texts.contains(&"read_via_call") || {
+            // `read_via_call` also appears once as an actual call-site
+            // target name earlier (`holder.field`'s result assignment does
+            // not call anything named read_via_call) — guard that only the
+            // legitimate call-producing text ever lands here.
+            call_texts.iter().filter(|t| **t == "read_via_call").count() == 0
+        },
+        "local variable 'read_via_call' must never be captured as a call, got: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of `class.name`/`method.name` that
+/// ruby.tags.scm claims to support must produce the correct definition kind.
+#[test]
+fn ruby_tags_completeness_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_tags_completeness: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("ruby").expect("ruby tags query missing");
+    let query = Query::new(&lang, &query_str).expect("query compilation failed");
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(RUBY_VARIANTS, None).expect("parse failed");
+    let source_bytes = RUBY_VARIANTS.as_bytes();
+
+    // Collect (tag_kind, name_text) pairs: tag_kind is whichever
+    // @definition.*/@reference.* capture co-occurs with @name in the match.
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        if !normalize_languages::satisfies_predicates(&query, m, source_bytes) {
+            continue;
+        }
+        let mut name = None;
+        let mut tag_kind = None;
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            let text = cap.node.utf8_text(source_bytes).unwrap_or("");
+            if cap_name == "name" {
+                name = Some(text.to_string());
+            } else if cap_name.starts_with("definition.") || cap_name.starts_with("reference.") {
+                tag_kind = Some(cap_name.to_string());
+            }
+        }
+        if let (Some(n), Some(k)) = (name, tag_kind) {
+            pairs.push((k, n));
+        }
+    }
+    let caps = collect_captures_full(&lang, RUBY_VARIANTS, &query_str);
+
+    // class.name: constant (Plain), scope_resolution (Namespaced::Deep).
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.class" && n == "Plain"),
+        "expected 'Plain' class (name: constant), got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.class" && n == "Deep"),
+        "expected 'Deep' class (name: scope_resolution, from Namespaced::Deep), got: {pairs:?}"
+    );
+
+    // method.name: identifier (build), operator (+), setter (name=).
+    let def_method_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.method")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert!(
+        def_method_names.contains(&"+"),
+        "expected 'def +' operator method (name: operator), got: {def_method_names:?}"
+    );
+    assert!(
+        def_method_names.contains(&"name="),
+        "expected 'def name=' setter method (name: setter), got: {def_method_names:?}"
+    );
+    assert!(
+        def_method_names.contains(&"build"),
+        "expected 'build' method nested inside 'class << self', got: {def_method_names:?}"
+    );
+
+    // Bare Kernel-style call captured as @reference.call with kind constant.
+    assert!(
+        caps.iter()
+            .any(|(cn, k, t, _)| cn == "reference.call" && k == "constant" && t == "Integer"),
+        "expected 'Integer' bare-constant call as reference.call, got: {caps:?}"
+    );
+}
+
+/// Negative case: `class << self`'s singleton_class container has no name
+/// field (its value is the bare `self` keyword) and must never itself
+/// produce a @definition.class/@definition.module capture with a
+/// fabricated name.
+#[test]
+fn ruby_tags_negative_singleton_class_has_no_definition() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_tags_negative: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("ruby").expect("ruby tags query missing");
+    let caps = collect_captures_full(&lang, RUBY_VARIANTS, &query_str);
+    let self_named_defs = caps
+        .iter()
+        .filter(|(cn, _, t, _)| {
+            (cn == "definition.class" || cn == "definition.module") && t == "self"
+        })
+        .count();
+    assert_eq!(
+        self_named_defs, 0,
+        "singleton_class ('class << self') must never produce a definition named \
+         'self', got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of require/require_relative/load/using/
+/// include/extend/prepend that ruby.imports.scm claims to support.
+#[test]
+fn ruby_imports_completeness_directive_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_imports_completeness: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("ruby")
+        .expect("ruby imports query missing");
+    let paths = collect_captures(&lang, RUBY_VARIANTS, &query_str, "import.path");
+
+    assert!(
+        paths.contains(&"json".to_string()),
+        "expected require 'json', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"other".to_string()),
+        "expected require_relative 'other', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"plain.rb".to_string()),
+        "expected load 'plain.rb', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"RefinementModule".to_string()),
+        "expected 'using RefinementModule', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Comparable".to_string()),
+        "expected 'include Comparable' (bare constant), got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("ActiveSupport")),
+        "expected 'include ActiveSupport::Concern' (scope_resolution), got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Forwardable".to_string()),
+        "expected 'extend Forwardable' (bare constant), got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("MyLib")),
+        "expected 'extend MyLib::Extensions' (scope_resolution), got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("MyModule")),
+        "expected 'prepend MyModule::Prependable' (scope_resolution), got: {paths:?}"
+    );
+}
+
+/// Every grammar-legal variant of statement-modifier and pattern-match
+/// complexity nodes that ruby.complexity.scm claims to support, plus elsif
+/// branch counting.
+#[test]
+fn ruby_complexity_completeness_modifier_and_pattern_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_complexity_completeness: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("ruby")
+        .expect("ruby complexity query missing");
+    let caps = collect_captures_full(&lang, RUBY_VARIANTS, &query_str);
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+
+    for kind in [
+        "if_modifier",
+        "unless_modifier",
+        "while_modifier",
+        "until_modifier",
+        "rescue_modifier",
+        "elsif",
+        "case_match",
+        "in_clause",
+    ] {
+        assert!(
+            complexity_kinds.contains(&kind),
+            "expected a @complexity capture of kind '{kind}' in variants.rb, \
+             got kinds: {complexity_kinds:?}"
+        );
+    }
+
+    // elsif_chain has two elsif branches — both must count independently,
+    // not be folded into a single complexity point for the whole chain.
+    let elsif_count = complexity_kinds.iter().filter(|k| **k == "elsif").count();
+    assert_eq!(
+        elsif_count, 2,
+        "expected exactly 2 'elsif' complexity nodes (elsif_chain has two), got {elsif_count}"
+    );
+}
+
+/// Every grammar-legal variant of `superclass` that ruby.types.scm claims to
+/// support: plain constant, namespaced (scope_resolution), and dynamic/
+/// computed (call) superclasses.
+#[test]
+fn ruby_types_completeness_superclass_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping ruby_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("ruby").ok() else {
+        eprintln!("Skipping ruby_types_completeness: ruby grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_types("ruby").expect("ruby types query missing");
+    let refs = collect_captures(&lang, RUBY_VARIANTS, &query_str, "type");
+
+    // PlainSuper < Plain
+    assert!(
+        refs.contains(&"Plain".to_string()),
+        "expected 'Plain' superclass reference, got: {refs:?}"
+    );
+    // NamespacedSuper < Outer2::Nested — covered by the generic
+    // scope_resolution pattern, not a dedicated superclass one.
+    assert!(
+        refs.contains(&"Outer2".to_string()) && refs.contains(&"Nested".to_string()),
+        "expected 'Outer2'/'Nested' from the namespaced superclass, got: {refs:?}"
+    );
+    // DynamicSuper < Struct.new(:x, :y) — best-effort receiver capture.
+    assert!(
+        refs.contains(&"Struct".to_string()),
+        "expected 'Struct' receiver reference from the dynamic superclass, got: {refs:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1924,6 +4367,9 @@ fn elixir_types_finds_module_aliases() {
 // ---------------------------------------------------------------------------
 
 const C_SAMPLE: &str = include_str!("fixtures/c/sample.c");
+const C_VARIANTS: &str = include_str!("fixtures/c/variants.c");
+
+// --- Dimension 4: real-world fixture coverage (sample.c) --------------------
 
 #[test]
 fn c_tags_finds_functions_and_structs() {
@@ -1939,8 +4385,33 @@ fn c_tags_finds_functions_and_structs() {
     let query_str = loader.get_tags("c").expect("c tags query missing");
     let names = collect_captures(&lang, C_SAMPLE, &query_str, "name");
     assert!(
-        names.contains(&"stack_new".to_string()) || names.contains(&"classify".to_string()),
-        "expected 'stack_new' or 'classify' function in c tags, got: {names:?}"
+        names.contains(&"Stack".to_string()),
+        "expected 'Stack' struct in c tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"stack_new".to_string()) && names.contains(&"classify".to_string()),
+        "expected 'stack_new' and 'classify' functions in c tags, got: {names:?}"
+    );
+    // Real-world callback-typedef idiom: `typedef int (*Comparator)(...)` —
+    // previously dropped entirely (see c.tags.scm's own comments).
+    assert!(
+        names.contains(&"Comparator".to_string()),
+        "expected 'Comparator' callback typedef in c tags, got: {names:?}"
+    );
+    // Tagged-union idiom: `union Cell { ... };` — previously mislabeled or
+    // missed outright depending on shape (the struct/union asymmetry bug).
+    assert!(
+        names.contains(&"Cell".to_string()),
+        "expected 'Cell' union in c tags, got: {names:?}"
+    );
+    // Object-like and function-like macros — zero tags coverage before this fix.
+    assert!(
+        names.contains(&"MAX_CAPACITY".to_string()),
+        "expected 'MAX_CAPACITY' macro in c tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"CLAMP".to_string()),
+        "expected 'CLAMP' function-like macro in c tags, got: {names:?}"
     );
 }
 
@@ -1958,8 +4429,18 @@ fn c_calls_finds_function_calls() {
     let query_str = loader.get_calls("c").expect("c calls query missing");
     let calls = collect_captures(&lang, C_SAMPLE, &query_str, "call");
     assert!(
-        calls.contains(&"malloc".to_string()) || calls.contains(&"printf".to_string()),
-        "expected 'malloc' or 'printf' call in c sample, got: {calls:?}"
+        calls.contains(&"malloc".to_string()) && calls.contains(&"printf".to_string()),
+        "expected 'malloc' and 'printf' calls in c sample, got: {calls:?}"
+    );
+    // Callback idiom: qsort(..., cmp) plus a direct call through the
+    // Comparator-typed function-pointer variable.
+    assert!(
+        calls.contains(&"qsort".to_string()),
+        "expected 'qsort' call in c sample, got: {calls:?}"
+    );
+    assert!(
+        calls.iter().filter(|c| *c == "cmp").count() >= 1,
+        "expected at least 1 call through the 'cmp' function-pointer variable, got: {calls:?}"
     );
 }
 
@@ -1976,11 +4457,13 @@ fn c_imports_finds_include_directives() {
     };
     let query_str = loader.get_imports("c").expect("c imports query missing");
     let paths = collect_captures(&lang, C_SAMPLE, &query_str, "import.path");
+    // Raw capture text still carries the angle brackets (`<stdio.h>`); the
+    // Rust-side extraction layer strips them, not the query itself.
     assert!(
-        paths
-            .iter()
-            .any(|p| p.contains("stdio.h") || p.contains("stdlib.h")),
-        "expected 'stdio.h' or 'stdlib.h' in c import paths, got: {paths:?}"
+        paths.iter().any(|p| p.contains("stdio.h"))
+            && paths.iter().any(|p| p.contains("stdlib.h"))
+            && paths.iter().any(|p| p.contains("string.h")),
+        "expected all three system includes in c import paths, got: {paths:?}"
     );
 }
 
@@ -2000,8 +4483,8 @@ fn c_complexity_finds_control_flow() {
         .expect("c complexity query missing");
     let complexity = collect_captures(&lang, C_SAMPLE, &query_str, "complexity");
     assert!(
-        complexity.len() >= 3,
-        "expected at least 3 complexity nodes in c sample, got {} ({complexity:?})",
+        complexity.len() >= 5,
+        "expected at least 5 complexity nodes in c sample, got {} ({complexity:?})",
         complexity.len()
     );
 }
@@ -2025,11 +4508,225 @@ fn c_types_finds_type_identifiers() {
     );
 }
 
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.c) -
+
+/// Every grammar-legal name+body variant of `struct_specifier`/`union_specifier`
+/// that c.tags.scm claims to support — bare, typedef'd-anonymous, and
+/// typedef'd-named — must produce a @definition.class capture with the
+/// correct kind, not just the right text (dimension 3).
+#[test]
+fn c_tags_completeness_struct_and_union_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping c_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_tags_completeness: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("c").expect("c tags query missing");
+    let caps = collect_captures_full(&lang, C_VARIANTS, &query_str);
+
+    // Bare union definition — the case the old query (declaration-wrapped
+    // pattern) never matched at all.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.class"
+            && k == "union_specifier"
+            && t.contains("PlainUnion")),
+        "expected 'PlainUnion' union_specifier as definition.class, got: {caps:?}"
+    );
+    // Named union nested inside a typedef — the other case the old query
+    // never matched.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.class"
+            && k == "union_specifier"
+            && t.contains("TaggedUnion")),
+        "expected 'TaggedUnion' union_specifier as definition.class, got: {caps:?}"
+    );
+    // The typedef alias itself is still captured via the (unrelated)
+    // type_definition pattern.
+    let type_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        type_names.contains(&"TaggedUnionAlias"),
+        "expected 'TaggedUnionAlias' typedef name, got: {type_names:?}"
+    );
+    // Struct definitions still work unaffected by the union fix.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.class"
+            && k == "struct_specifier"
+            && t.contains("PlainStruct")),
+        "expected 'PlainStruct' struct_specifier as definition.class, got: {caps:?}"
+    );
+}
+
+/// Typedef'd function pointers (`typedef int (*FuncPtr)(int, int);`) must
+/// produce a @definition.type capture for the alias name, verifying the
+/// three-level-nested declarator pattern (function_declarator >
+/// parenthesized_declarator > pointer_declarator > type_identifier).
+#[test]
+fn c_tags_completeness_typedef_function_pointer() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping c_tags_completeness_typedef_fnptr: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_tags_completeness_typedef_fnptr: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("c").expect("c tags query missing");
+    let caps = collect_captures_full(&lang, C_VARIANTS, &query_str);
+    assert!(
+        caps.iter()
+            .any(|(cn, k, t, _)| cn == "name" && k == "type_identifier" && t == "FuncPtr"),
+        "expected 'FuncPtr' typedef'd-function-pointer name as (name, type_identifier), got: {caps:?}"
+    );
+}
+
+/// Object-like and function-like macro definitions must both produce
+/// @definition.macro captures — previously zero macro tags coverage at all.
+#[test]
+fn c_tags_completeness_macro_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping c_tags_completeness_macros: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_tags_completeness_macros: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("c").expect("c tags query missing");
+    let caps = collect_captures_full(&lang, C_VARIANTS, &query_str);
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.macro"
+            && k == "preproc_def"
+            && t.contains("MAX_SIZE")),
+        "expected object-like macro 'MAX_SIZE' as (definition.macro, preproc_def), got: {caps:?}"
+    );
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.macro"
+            && k == "preproc_function_def"
+            && t.contains("SQUARE")),
+        "expected function-like macro 'SQUARE' as (definition.macro, preproc_function_def), got: {caps:?}"
+    );
+}
+
+/// Negative cases: constructs that must never be tagged as
+/// @definition.function/@definition.class.
+#[test]
+fn c_tags_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping c_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_tags_negative: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("c").expect("c tags query missing");
+    let caps = collect_captures_full(&lang, C_VARIANTS, &query_str);
+
+    // `int (*negative_function_pointer_variable)(int);` declares a variable
+    // of function-pointer type, not a function — function_declarator's
+    // declarator field is parenthesized_declarator, never a bare identifier.
+    let def_fn_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "definition.function")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        !def_fn_names
+            .iter()
+            .any(|n| n.contains("negative_function_pointer_variable")),
+        "function-pointer *variable* declaration must never be @definition.function, got: {def_fn_names:?}"
+    );
+
+    // `union NegativeUsage;` (bodyless forward reference) must never produce
+    // @definition.class — this is exactly the false positive the old
+    // declaration-wrapped union pattern produced.
+    assert!(
+        !caps
+            .iter()
+            .any(|(cn, _, t, _)| cn == "definition.class" && t.contains("NegativeUsage")),
+        "bodyless union forward-reference 'NegativeUsage' must never be @definition.class, got: {caps:?}"
+    );
+}
+
+/// Negative case: a bare field read through `->` with no call parens must
+/// never appear in a @call capture.
+#[test]
+fn c_calls_negative_bare_field_access_is_not_a_call() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping c_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_calls_negative: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("c").expect("c calls query missing");
+    let calls = collect_captures(&lang, C_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"field".to_string()),
+        "bare field access 'holder->field' must not be captured as a call, got: {calls:?}"
+    );
+}
+
+/// Field/pointer member calls through a function-pointer struct member
+/// (`p->fp(...)`, `v.fp(...)`) must be captured with the correct qualifier,
+/// for both the `->` and `.` operator forms.
+#[test]
+fn c_calls_completeness_field_expression_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping c_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c").ok() else {
+        eprintln!("Skipping c_calls_completeness: c grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("c").expect("c calls query missing");
+    let caps = collect_captures_full(&lang, C_VARIANTS, &query_str);
+    let fp_calls: Vec<&(String, String, String, usize)> = caps
+        .iter()
+        .filter(|(cn, k, t, _)| cn == "call" && k == "field_identifier" && t == "fp")
+        .collect();
+    assert_eq!(
+        fp_calls.len(),
+        2,
+        "expected exactly 2 field-expression calls to 'fp' (via -> and via .), got {}: {fp_calls:?}",
+        fp_calls.len()
+    );
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"p") && qualifiers.contains(&"v"),
+        "expected 'p' (-> form) and 'v' (. form) qualifiers, got: {qualifiers:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // C++
 // ---------------------------------------------------------------------------
 
 const CPP_SAMPLE: &str = include_str!("fixtures/cpp/sample.cpp");
+const CPP_VARIANTS: &str = include_str!("fixtures/cpp/variants.cpp");
+
+// --- Dimension 4: real-world fixture coverage (sample.cpp) ------------------
 
 #[test]
 fn cpp_tags_finds_class_and_functions() {
@@ -2049,8 +4746,34 @@ fn cpp_tags_finds_class_and_functions() {
         "expected 'Stack' class in cpp tags, got: {names:?}"
     );
     assert!(
-        names.contains(&"classify".to_string()) || names.contains(&"sum_evens".to_string()),
-        "expected 'classify' or 'sum_evens' function in cpp tags, got: {names:?}"
+        names.contains(&"classify".to_string()) && names.contains(&"sum_evens".to_string()),
+        "expected 'classify' and 'sum_evens' functions in cpp tags, got: {names:?}"
+    );
+    // Namespace container — previously zero namespace tags coverage at all.
+    assert!(
+        names.contains(&"shapes".to_string()),
+        "expected 'shapes' namespace in cpp tags, got: {names:?}"
+    );
+    // Polymorphic base + derived class, with a destructor *declared* inline
+    // (`virtual ~Shape();`, no body) and *defined* out-of-line — previously
+    // entirely untagged (destructor_name declarator variant).
+    assert!(
+        names.contains(&"Shape".to_string()) && names.contains(&"Circle".to_string()),
+        "expected 'Shape' and 'Circle' classes in cpp tags, got: {names:?}"
+    );
+    let destructor_defs = names.iter().filter(|n| n.contains("~Shape")).count();
+    assert_eq!(
+        destructor_defs, 2,
+        "expected exactly 2 '~Shape' function_declarator matches (the inline prototype \
+         declaration plus the out-of-line definition — function_declarator has no body \
+         constraint, so a prototype and its definition both match, exactly like every other \
+         function/method in this query), got {destructor_defs}: {names:?}"
+    );
+    // Operator overload — previously entirely untagged (operator_name
+    // declarator variant).
+    assert!(
+        names.iter().any(|n| n == "operator+="),
+        "expected 'operator+=' overload in cpp tags, got: {names:?}"
     );
 }
 
@@ -2068,10 +4791,20 @@ fn cpp_calls_finds_function_calls() {
     let query_str = loader.get_calls("cpp").expect("cpp calls query missing");
     let calls = collect_captures(&lang, CPP_SAMPLE, &query_str, "call");
     assert!(
-        calls.contains(&"classify".to_string())
-            || calls.contains(&"push".to_string())
-            || calls.contains(&"pop".to_string()),
-        "expected function call in cpp sample, got: {calls:?}"
+        calls.contains(&"push".to_string()) && calls.contains(&"pop".to_string()),
+        "expected 'push' and 'pop' method calls in cpp sample, got: {calls:?}"
+    );
+    // Smart-pointer + polymorphism idiom: make_unique<Circle>(...), a
+    // template-argument call.
+    assert!(
+        calls.iter().any(|c| c.contains("make_unique")),
+        "expected 'make_unique<...>' templated call in cpp sample, got: {calls:?}"
+    );
+    // Plain template-argument call: identity<int>(21) — direct analogue of
+    // Rust's turbofish gap.
+    assert!(
+        calls.iter().any(|c| c.contains("identity")),
+        "expected 'identity<int>' templated call in cpp sample, got: {calls:?}"
     );
 }
 
@@ -2090,11 +4823,17 @@ fn cpp_imports_finds_include_directives() {
         .get_imports("cpp")
         .expect("cpp imports query missing");
     let paths = collect_captures(&lang, CPP_SAMPLE, &query_str, "import.path");
+    // Raw capture text still carries the angle brackets (`<iostream>`); the
+    // Rust-side extraction layer strips them, not the query itself.
     assert!(
-        paths
-            .iter()
-            .any(|p| p.contains("iostream") || p.contains("vector")),
-        "expected 'iostream' or 'vector' in cpp import paths, got: {paths:?}"
+        paths.iter().any(|p| p.contains("iostream")) && paths.iter().any(|p| p.contains("vector")),
+        "expected 'iostream' and 'vector' in cpp import paths, got: {paths:?}"
+    );
+    // `using namespace std::literals;` — previously zero `using` coverage at
+    // all in cpp.imports.scm (only #include was tracked).
+    assert!(
+        paths.iter().any(|p| p.contains("literals")),
+        "expected 'using namespace std::literals' import path in cpp sample, got: {paths:?}"
     );
 }
 
@@ -2114,8 +4853,8 @@ fn cpp_complexity_finds_control_flow() {
         .expect("cpp complexity query missing");
     let complexity = collect_captures(&lang, CPP_SAMPLE, &query_str, "complexity");
     assert!(
-        complexity.len() >= 2,
-        "expected at least 2 complexity nodes in cpp sample, got {} ({complexity:?})",
+        complexity.len() >= 3,
+        "expected at least 3 complexity nodes in cpp sample, got {} ({complexity:?})",
         complexity.len()
     );
 }
@@ -2136,6 +4875,295 @@ fn cpp_types_finds_type_identifiers() {
     assert!(
         refs.iter().any(|r| r == "Stack"),
         "expected 'Stack' in cpp type references, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.cpp)
+
+/// Every grammar-legal variant of union/class-specialization/namespace
+/// definitions that cpp.tags.scm claims to support must produce a capture
+/// with the correct kind, not just the right text.
+#[test]
+fn cpp_tags_completeness_union_specialization_namespace() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_tags_completeness: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("cpp").expect("cpp tags query missing");
+    let caps = collect_captures_full(&lang, CPP_VARIANTS, &query_str);
+
+    // Bare union definition — same struct/union asymmetry bug as C.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.class"
+            && k == "union_specifier"
+            && t.contains("PlainUnion")),
+        "expected 'PlainUnion' union_specifier as definition.class, got: {caps:?}"
+    );
+    // Explicit template specialization: `template <> class TemplateClass<int>`
+    // — name is wrapped in template_type, previously unmatched entirely.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "definition.class"
+            && k == "class_specifier"
+            && t.contains("TemplateClass<int>")),
+        "expected explicit specialization 'TemplateClass<int>' as definition.class, got: {caps:?}"
+    );
+    let names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        names.iter().filter(|n| **n == "TemplateClass").count() >= 2,
+        "expected 'TemplateClass' name from both the primary template and its \
+         specialization, got: {names:?}"
+    );
+    // Namespaces: plain, nested plain, and nested path-form
+    // (`namespace deep::path::here`) — previously zero namespace tags
+    // coverage of any kind.
+    assert!(
+        names.contains(&"outer_ns") && names.contains(&"inner_ns"),
+        "expected 'outer_ns' and nested 'inner_ns' namespaces, got: {names:?}"
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("deep") && n.contains("path") && n.contains("here")),
+        "expected 'deep::path::here' nested_namespace_specifier name, got: {names:?}"
+    );
+}
+
+/// Destructors and operator overloads — inline, out-of-line (plain class),
+/// and out-of-line (template class) — must all be tagged as
+/// @definition.method with the correct name, none of which were captured at
+/// all before this fix.
+#[test]
+fn cpp_tags_completeness_destructors_and_operators() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_tags_completeness_dtor_op: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_tags_completeness_dtor_op: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("cpp").expect("cpp tags query missing");
+    let caps = collect_captures_full(&lang, CPP_VARIANTS, &query_str);
+    // @name carries just the destructor_name/operator_name node text (e.g.
+    // "~WithSpecialMembers", "operator="); @definition.method carries the
+    // whole function_declarator (e.g. "~WithSpecialMembers()"), which is
+    // deliberately not what's asserted on here since the goal is verifying
+    // the captured *name*, dimension 3.
+    let method_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // Inline destructor + inline operator overload.
+    assert!(
+        method_names.contains(&"~WithSpecialMembers"),
+        "expected inline destructor '~WithSpecialMembers' as name, got: {method_names:?}"
+    );
+    assert!(
+        method_names.contains(&"operator="),
+        "expected inline operator overload 'operator=' as name, got: {method_names:?}"
+    );
+    // Out-of-line destructor + operator overload (plain class).
+    assert!(
+        method_names.contains(&"~OutOfLineMembers"),
+        "expected out-of-line destructor '~OutOfLineMembers' as name, got: {method_names:?}"
+    );
+    assert!(
+        method_names.contains(&"operator+="),
+        "expected out-of-line operator overload 'operator+=' as name, got: {method_names:?}"
+    );
+    // Out-of-line method on a template class, where the qualifier scope
+    // itself carries template arguments (`OutOfLineTemplateMethods<T>::get`).
+    assert!(
+        method_names.contains(&"get"),
+        "expected out-of-line template-class method 'get' as definition.method, got: {method_names:?}"
+    );
+}
+
+/// Negative case: a lambda is not a `function_declarator`/`class_specifier`;
+/// its parameter/body identifiers must never appear as @definition.function
+/// or @definition.method.
+#[test]
+fn cpp_tags_negative_lambda_is_not_a_definition() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_tags_negative: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("cpp").expect("cpp tags query missing");
+    let caps = collect_captures_full(&lang, CPP_VARIANTS, &query_str);
+    let is_def_add_one = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.function" || cn == "definition.method") && t.contains("add_one")
+    });
+    assert!(
+        !is_def_add_one,
+        "lambda binding 'add_one' must never be captured as a function/method definition, got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of `field_expression.field` that
+/// cpp.calls.scm claims to support (plain field_identifier, template_method,
+/// destructor_name, qualified_identifier) must produce a @call capture with
+/// the correct kind.
+#[test]
+fn cpp_calls_completeness_field_expression_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_calls_completeness: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("cpp").expect("cpp calls query missing");
+    let caps = collect_captures_full(&lang, CPP_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "field_identifier", "plain_method"), // pre-existing, still works
+        ("call", "template_method", "templated_method<int>"), // previously unmatched
+        ("call", "destructor_name", "~CallTarget"),   // previously unmatched
+    ];
+    for (cn, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(n, k, t, _)| n == cn && k == kind && t == text),
+            "expected capture ({cn}, kind={kind}, text={text}) in cpp.calls.scm output for \
+             variants.cpp, got: {caps:?}"
+        );
+    }
+    // Explicit base-class-qualified call: derived.CallTarget::plain_method()
+    // — field is a nested qualified_identifier.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "call"
+            && k == "qualified_identifier"
+            && t == "CallTarget::plain_method"),
+        "expected base-qualified call 'CallTarget::plain_method' (kind=qualified_identifier), got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of template-argument calls — plain
+/// (`identity<int>(5)`) and scoped (`ns::helper<int>(3)`) — must produce a
+/// @call capture, the direct C++ analogue of Rust's turbofish gap.
+#[test]
+fn cpp_calls_completeness_template_argument_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping cpp_calls_completeness_template: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_calls_completeness_template: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("cpp").expect("cpp calls query missing");
+    let caps = collect_captures_full(&lang, CPP_VARIANTS, &query_str);
+
+    assert!(
+        caps.iter()
+            .any(|(cn, k, t, _)| cn == "call" && k == "template_function" && t == "identity<int>"),
+        "expected plain template-argument call 'identity<int>' (kind=template_function), got: {caps:?}"
+    );
+    assert!(
+        caps.iter()
+            .any(|(cn, k, t, _)| cn == "call" && k == "template_function" && t == "helper<int>"),
+        "expected scoped template-argument call 'helper<int>' (kind=template_function), got: {caps:?}"
+    );
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"call_ns"),
+        "expected 'call_ns' qualifier for the scoped template-argument call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative case: a bare field read must never appear in a @call capture.
+#[test]
+fn cpp_calls_negative_bare_field_access_is_not_a_call() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_calls_negative: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("cpp").expect("cpp calls query missing");
+    let calls = collect_captures(&lang, CPP_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"field".to_string()),
+        "bare field access 'holder->field' must not be captured as a call, got: {calls:?}"
+    );
+}
+
+/// Every grammar-legal variant of `using`/alias imports that cpp.imports.scm
+/// claims to support — `using namespace X;`, `using X::Y;`, `using Alias =
+/// Type;`, `namespace alias = X;` (single- and nested-segment) — must
+/// produce a correctly-shaped @import, all previously entirely unsupported.
+#[test]
+fn cpp_imports_completeness_using_and_alias_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping cpp_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("cpp").ok() else {
+        eprintln!("Skipping cpp_imports_completeness: cpp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("cpp")
+        .expect("cpp imports query missing");
+    let paths = collect_captures(&lang, CPP_VARIANTS, &query_str, "import.path");
+    let aliases = collect_captures(&lang, CPP_VARIANTS, &query_str, "import.alias");
+
+    // using namespace detail;
+    assert!(
+        paths.contains(&"detail".to_string()),
+        "expected 'using namespace detail' import path, got: {paths:?}"
+    );
+    // using ns_target::Thing;
+    assert!(
+        paths.contains(&"ns_target::Thing".to_string()),
+        "expected 'using ns_target::Thing' import path, got: {paths:?}"
+    );
+    // using IntAlias = int;
+    assert!(
+        aliases.contains(&"IntAlias".to_string()) && paths.contains(&"int".to_string()),
+        "expected type-alias 'IntAlias = int', aliases={aliases:?} paths={paths:?}"
+    );
+    // namespace short_ns = ns_target;  (single-segment)
+    assert!(
+        aliases.contains(&"short_ns".to_string()) && paths.contains(&"ns_target".to_string()),
+        "expected namespace alias 'short_ns = ns_target', aliases={aliases:?} paths={paths:?}"
+    );
+    // namespace nested_alias = ns_target::Thing::deeper;  (nested path)
+    assert!(
+        aliases.contains(&"nested_alias".to_string())
+            && paths.iter().any(|p| p == "ns_target::Thing::deeper"),
+        "expected namespace alias 'nested_alias = ns_target::Thing::deeper', \
+         aliases={aliases:?} paths={paths:?}"
     );
 }
 
@@ -4107,6 +7135,9 @@ fn awk_complexity_finds_control_flow() {
 // ---------------------------------------------------------------------------
 
 const JAVASCRIPT_SAMPLE: &str = include_str!("fixtures/javascript/sample.js");
+const JAVASCRIPT_VARIANTS: &str = include_str!("fixtures/javascript/variants.js");
+
+// --- Dimension 4: real-world fixture coverage (sample.js) -------------------
 
 #[test]
 fn javascript_tags_finds_functions_and_classes() {
@@ -4128,6 +7159,27 @@ fn javascript_tags_finds_functions_and_classes() {
             .iter()
             .any(|n| n == "Stack" || n == "classify" || n == "fibonacci"),
         "expected 'Stack'/'classify'/'fibonacci' in javascript tags, got: {names:?}"
+    );
+    // SerializableStack extends Serializable(Stack) — the mixin-pattern
+    // superclass expression must still surface Stack via @reference.class.
+    assert!(
+        names.contains(&"SerializableStack".to_string()),
+        "expected 'SerializableStack' class in javascript tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Stack".to_string()),
+        "expected 'Stack' superclass reference in javascript tags, got: {names:?}"
+    );
+    // Private method #peek must be found as a method definition, not
+    // silently dropped for having a private_property_identifier name.
+    assert!(
+        names.iter().any(|n| n == "#peek"),
+        "expected private method '#peek' in javascript tags, got: {names:?}"
+    );
+    // Generator function must still be found as a function definition.
+    assert!(
+        names.contains(&"range".to_string()),
+        "expected generator function 'range' in javascript tags, got: {names:?}"
     );
 }
 
@@ -4151,6 +7203,22 @@ fn javascript_calls_finds_function_calls() {
             .iter()
             .any(|c| c == "classify" || c == "fibonacci" || c == "push"),
         "expected a function call in javascript sample, got: {calls:?}"
+    );
+    // Private method call site: this.#peek() inside SerializableStack.
+    assert!(
+        calls.iter().any(|c| c == "#peek"),
+        "expected private method call '#peek' in javascript sample, got: {calls:?}"
+    );
+    // Tagged template call: html`<h1>${resolved}</h1>` — arguments is a bare
+    // template_string, not the usual `arguments` node.
+    assert!(
+        calls.iter().any(|c| c == "html"),
+        "expected tagged-template call 'html' in javascript sample, got: {calls:?}"
+    );
+    // Computed/bracket call: dispatch['classify'](0).
+    assert!(
+        calls.iter().any(|c| c.contains("dispatch")),
+        "expected computed/bracket call on 'dispatch' in javascript sample, got: {calls:?}"
     );
 }
 
@@ -4217,6 +7285,319 @@ fn javascript_types_finds_type_references() {
     assert!(
         !refs.is_empty(),
         "expected at least one type reference in javascript sample, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.js) -
+
+/// Every grammar-legal variant of `call_expression.function` that
+/// javascript.calls.scm claims to support must actually match, with the
+/// right capture *kind* (dimension 3) — not just the right text.
+#[test]
+fn javascript_calls_completeness_all_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping javascript_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!("Skipping javascript_calls_completeness: javascript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("javascript")
+        .expect("javascript calls query missing");
+    let caps = collect_captures_full(&lang, JAVASCRIPT_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "identifier", "identity"),                  // plainCall
+        ("call", "property_identifier", "push"), // methodCall: function: member_expression, property: property_identifier
+        ("call", "private_property_identifier", "#compute"), // callPrivate: private method call
+        ("call", "subscript_expression", "arr[0]"), // computedCall
+        ("call", "parenthesized_expression", "(function iife() {})"), // parenthesizedCall (IIFE)
+        ("call", "call_expression", "curried()"), // chainedCall
+        ("call", "identifier", "taggedTemplateCall"), // tagged template call (arguments: template_string)
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in javascript.calls.scm \
+             output for variants.js, got: {caps:?}"
+        );
+    }
+
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"arr"),
+        "expected 'arr' qualifier for the plain method call, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"this"),
+        "expected 'this' qualifier for the private method call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call captures.
+#[test]
+fn javascript_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping javascript_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!("Skipping javascript_calls_negative: javascript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("javascript")
+        .expect("javascript calls query missing");
+    let caps = collect_captures_full(&lang, JAVASCRIPT_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `holder.field` is a bare field read (no call parens); must never be a call.
+    assert!(
+        !call_texts.contains(&"field"),
+        "bare field access 'holder.field' must not be captured as a call, got: {call_texts:?}"
+    );
+    // The closure definition site (`addOne`) must not appear as a call —
+    // only the call site `addOne(1)` should.
+    let add_one_calls = call_texts.iter().filter(|t| **t == "addOne").count();
+    assert_eq!(
+        add_one_calls, 1,
+        "expected exactly 1 call to 'addOne' (the call site, not the closure \
+         definition), got {add_one_calls}: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of `method_definition.name` that
+/// javascript.tags.scm claims to support (plain, private, computed) must
+/// produce a @name capture with the correct kind.
+#[test]
+fn javascript_tags_completeness_all_method_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping javascript_tags_completeness_methods: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!(
+            "Skipping javascript_tags_completeness_methods: javascript grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("javascript")
+        .expect("javascript tags query missing");
+    let caps = collect_captures_full(&lang, JAVASCRIPT_VARIANTS, &query_str);
+    let name_kinds: Vec<(&str, &str)> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "name")
+        .map(|(_, k, t, _)| (k.as_str(), t.as_str()))
+        .collect();
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "property_identifier" && *t == "plainMethod"),
+        "expected plain method name 'plainMethod' (property_identifier), got: {name_kinds:?}"
+    );
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "private_property_identifier" && *t == "#privateMethod"),
+        "expected private method name '#privateMethod' (private_property_identifier), got: {name_kinds:?}"
+    );
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "computed_property_name" && *t == "[\"computedMethod\"]"),
+        "expected computed method name (computed_property_name), got: {name_kinds:?}"
+    );
+    assert!(
+        name_kinds
+            .iter()
+            .any(|(k, t)| *k == "property_identifier" && *t == "staticMethod"),
+        "expected static method name 'staticMethod' (property_identifier), got: {name_kinds:?}"
+    );
+}
+
+/// Every grammar-legal variant of class_heritage's superclass expression
+/// (identifier, member_expression, call_expression/mixin) must produce a
+/// @reference.class capture.
+#[test]
+fn javascript_tags_completeness_class_heritage_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping javascript_tags_completeness_heritage: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!(
+            "Skipping javascript_tags_completeness_heritage: javascript grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("javascript")
+        .expect("javascript tags query missing");
+    let class_refs =
+        tags_matches_by_kind(&lang, JAVASCRIPT_VARIANTS, &query_str, "reference.class");
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "identifier" && t == "Base"),
+        "expected 'Base' extends-reference (identifier), got: {class_refs:?}"
+    );
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "member_expression" && t == "nsObj.Ctor"),
+        "expected 'nsObj.Ctor' extends-reference (member_expression), got: {class_refs:?}"
+    );
+    assert!(
+        class_refs
+            .iter()
+            .any(|(k, t)| k == "call_expression" && t.starts_with("Mixin(")),
+        "expected 'Mixin(Base)' extends-reference (call_expression, mixin pattern), got: {class_refs:?}"
+    );
+}
+
+/// Every grammar-legal variant of `new_expression.constructor` (already a
+/// wildcard `(_)` in javascript.tags.scm) must produce a @reference.class
+/// capture regardless of shape.
+#[test]
+fn javascript_tags_completeness_new_expression_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping javascript_tags_completeness_new: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!("Skipping javascript_tags_completeness_new: javascript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("javascript")
+        .expect("javascript tags query missing");
+    let names = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "name");
+    assert!(
+        names.contains(&"PrivateHolder".to_string()),
+        "expected plain constructor 'PrivateHolder', got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "nsObj.Ctor"),
+        "expected namespaced constructor 'nsObj.Ctor' (member_expression), got: {names:?}"
+    );
+}
+
+/// Negative case: closures are not function_declarations/method_definitions
+/// and must never appear as @definition.function or @definition.method.
+#[test]
+fn javascript_tags_negative_closures_are_not_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping javascript_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!("Skipping javascript_tags_negative: javascript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("javascript")
+        .expect("javascript tags query missing");
+    let caps = collect_captures_full(&lang, JAVASCRIPT_VARIANTS, &query_str);
+    let is_def_add_one = caps.iter().any(|(cn, _, t, _)| {
+        (cn == "definition.function" || cn == "definition.method") && t == "addOne"
+    });
+    assert!(
+        !is_def_add_one,
+        "closure binding 'addOne' must never be captured as a function/method \
+         definition, got captures: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of import/re-export/require/dynamic-import
+/// that javascript.imports.scm claims to support must produce a correctly
+/// shaped @import capture, including the previously-silent `default`-name
+/// (anonymous-token) gap.
+#[test]
+fn javascript_imports_completeness_all_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping javascript_imports_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("javascript").ok() else {
+        eprintln!("Skipping javascript_imports_completeness: javascript grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("javascript")
+        .expect("javascript imports query missing");
+    let names = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "import.name");
+    let aliases = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "import.alias");
+    let paths = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "import.path");
+    let globs = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "import.glob");
+    let reexports = collect_captures(&lang, JAVASCRIPT_VARIANTS, &query_str, "import.reexport");
+
+    assert!(
+        names.contains(&"plainName".to_string()),
+        "expected plain import name, got: {names:?}"
+    );
+    // import { default as renamedDefault } — previously silently dropped
+    // entirely since `default` is an anonymous token, not (identifier).
+    assert!(
+        names.iter().any(|n| n == "default"),
+        "expected a 'default' import name (import {{ default as ... }}), got: {names:?}"
+    );
+    assert!(
+        aliases.contains(&"renamedDefault".to_string()),
+        "expected 'renamedDefault' alias for the default-import, got: {aliases:?}"
+    );
+    assert!(
+        !globs.is_empty(),
+        "expected at least one import.glob capture, got: {globs:?}"
+    );
+    assert!(
+        aliases.contains(&"wildcardNs".to_string()),
+        "expected 'wildcardNs' namespace re-export alias, got: {aliases:?}"
+    );
+    assert!(
+        reexports.len() >= 2,
+        "expected multiple @import.reexport captures (named + default forms), got {}: {reexports:?}",
+        reexports.len()
+    );
+    assert!(
+        aliases.contains(&"renamedDefaultReexport".to_string()),
+        "expected 'renamedDefaultReexport' aliased-default-reexport alias, got: {aliases:?}"
+    );
+    // const { statSync } = require('fs') — destructured require, shorthand.
+    assert!(
+        names.contains(&"statSync".to_string()),
+        "expected 'statSync' from destructured require, got: {names:?}"
+    );
+    // import('mod-dynamic') — dynamic import expression.
+    assert!(
+        paths.contains(&"mod-dynamic".to_string()),
+        "expected 'mod-dynamic' from dynamic import(), got: {paths:?}"
     );
 }
 

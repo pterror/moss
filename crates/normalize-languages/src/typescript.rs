@@ -549,10 +549,8 @@ mod tests {
             // CLAUSE
             "default_type",            // default type param
             "else_clause",             // else branch
-            "extends_clause",          // class extends
             "extends_type_clause",     // T extends U
             "finally_clause",          // finally block
-            "implements_clause",       // implements X
 
             // EXPRESSION
             "as_expression",           // x as T
@@ -581,7 +579,6 @@ mod tests {
             "existential_type",        // *
             "flow_maybe_type",         // ?T      // function sig
             "function_type",           // (x: T) => U
-            "generic_type",            // T<U>
             "index_type_query",        // keyof T
             "infer_type",              // infer T
             "intersection_type",       // T & U
@@ -631,7 +628,6 @@ mod tests {
             "expression_statement",    // expr;
             "generator_function",      // function* foo
             "generator_function_declaration", // function* declaration
-            "internal_module",         // namespace/module
             "labeled_statement",       // label: stmt
             "lexical_declaration",     // let/const                  // module keyword
             "using_declaration",       // using x = ...

@@ -40,6 +40,21 @@
   source: (string
     (string_fragment) @import.path)) @import
 
+; import { default as alias } from 'module' — re-importing the default export
+; under a named binding. `default` is an anonymous keyword token (not a named
+; node — see import_specifier.name in arborium-typescript's node-types.json),
+; so it must be matched as a string literal, not `(default)`. Without this
+; clause the entire import_specifier fails to match (name: (identifier)
+; requires a *named* node) and the whole import silently disappears.
+(import_statement
+  (import_clause
+    (named_imports
+      (import_specifier
+        name: "default" @import.name
+        alias: (identifier) @import.alias)))
+  source: (string
+    (string_fragment) @import.path)) @import
+
 ; import * as ns from 'module'
 (import_statement
   (import_clause
@@ -48,14 +63,20 @@
   source: (string
     (string_fragment) @import.path)) @import
 
-; import type { Foo } from 'module'
+; import fsThing = require('module')  (TS import-equals with require)
 (import_statement
-  (import_clause
-    (named_imports
-      (import_specifier
-        name: (identifier) @import.name)))
-  source: (string
-    (string_fragment) @import.path)) @import
+  (import_require_clause
+    (identifier) @import.name
+    source: (string
+      (string_fragment) @import.path))) @import
+
+; NOTE: `import type { Foo } from 'module'` and `import { type Foo } from
+; 'module'` are intentionally NOT given their own clause — the `type` keyword
+; is just an extra sibling/child token the grammar attaches alongside the
+; existing import_clause/import_specifier shape, so the plain named-import
+; clause above already matches them (verified via `normalize syntax ast`). A
+; near-duplicate clause here used to exist and was dead: identical field
+; constraints, zero additional matches.
 
 ; export { name } from 'module'  (re-export)
 (export_statement
@@ -87,6 +108,31 @@
     (identifier) @import.alias)
   source: (string
     (string_fragment) @import.path)) @import @import.reexport
+
+; export { default } from 'module'  (bare default re-export, no rename)
+(export_statement
+  (export_clause
+    (export_specifier
+      name: "default" @import.name))
+  source: (string
+    (string_fragment) @import.path)) @import @import.reexport
+
+; export { default as alias } from 'module'  (default re-export, renamed)
+(export_statement
+  (export_clause
+    (export_specifier
+      name: "default" @import.name
+      alias: (identifier) @import.alias))
+  source: (string
+    (string_fragment) @import.path)) @import @import.reexport
+
+; import('module')  (dynamic import expression — matches regardless of
+; whether it's awaited, assigned, or bare)
+(call_expression
+  function: (import)
+  arguments: (arguments
+    (string
+      (string_fragment) @import.path))) @import
 
 ; const x = require('module')
 (lexical_declaration

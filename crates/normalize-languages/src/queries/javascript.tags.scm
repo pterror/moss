@@ -1,11 +1,19 @@
 ; Vendored from https://github.com/tree-sitter/tree-sitter-javascript
+;
+; Extended past the upstream baseline to close completeness gaps found via
+; docs/query-testing-methodology.md: method_definition.name allows
+; computed_property_name/private_property_identifier in addition to plain
+; property_identifier (arborium-javascript node-types.json), so private class
+; methods (`#foo() {}`) and computed method names (`[key]() {}`) were
+; previously dropped entirely from tags; and class_heritage (the `extends`
+; clause) had no @reference.class at all.
 ; License: MIT
 
 (
   (comment)* @doc
   .
   (method_definition
-    name: (property_identifier) @name) @definition.method
+    name: [(property_identifier) (private_property_identifier) (computed_property_name)] @name) @definition.method
   (#strip! @doc "^[\\s\\*/]+|^[\\s\\*/]$")
   (#select-adjacent! @doc @definition.method)
 )
@@ -88,6 +96,12 @@
 
 (new_expression
   constructor: (_) @name) @reference.class
+
+; class Derived extends Base {} / extends ns.Base {} / extends Mixin(Base) {}
+; — class_heritage's single child is the (unconstrained) `expression`
+; supertype, so a wildcard covers every superclass-expression shape at once.
+(class_heritage
+  (_) @name) @reference.class
 
 (export_statement value: (assignment_expression left: (identifier) @name right: ([
  (number)
