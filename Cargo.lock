@@ -5586,6 +5586,7 @@ dependencies = [
  "normalize-output",
  "normalize-rank",
  "normalize-rules-config",
+ "normalize-vcs",
  "nu-ansi-term",
  "rayon",
  "schemars",
@@ -6130,6 +6131,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tree-sitter",
+]
+
+[[package]]
+name = "normalize-vcs"
+version = "0.3.2"
+dependencies = [
+ "gix",
+ "normalize-git",
 ]
 
 [[package]]

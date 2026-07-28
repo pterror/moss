@@ -4,6 +4,7 @@ use crate::complexity::max_function_complexity;
 use crate::is_source_file;
 use glob::Pattern;
 use normalize_rank::ranked::{Column, RankEntry};
+use normalize_vcs::Vcs;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -244,7 +245,7 @@ fn parse_git_churn(root: &Path) -> Result<HashMap<String, ChurnStats>, String> {
     let raw = normalize_git::git_file_churn_stats(root);
     if raw.is_empty() {
         // Check whether this is a genuine "no history" case or "not a repo" case.
-        if normalize_git::open_repo(root).is_none() {
+        if !normalize_vcs::GitBackend.repo_exists(root) {
             return Err("Not a git repository".to_string());
         }
         return Err("git log failed or no history found".to_string());

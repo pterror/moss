@@ -519,13 +519,10 @@ impl HistoryService {
 
         // Auto-scale the edge threshold by repo size when not given.
         let effective_min = min_commits.unwrap_or_else(|| {
-            let total = (|| -> Option<usize> {
-                let repo = normalize_git::open_repo(&root_path)?;
-                let head_id = repo.head_id().ok()?;
-                let walk = head_id.ancestors().all().ok()?;
-                Some(walk.filter(|r| r.is_ok()).count())
-            })()
-            .unwrap_or(60);
+            use normalize_vcs::Vcs;
+            let total = normalize_vcs::GitBackend
+                .commit_count(&root_path)
+                .unwrap_or(60);
             (total / 20).clamp(3, 50)
         });
 

@@ -3,6 +3,7 @@
 use crate::is_source_file;
 use glob::Pattern;
 use normalize_rank::ranked::{Column, DiffableRankEntry, RankEntry, format_delta};
+use normalize_vcs::Vcs;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -142,34 +143,14 @@ pub struct OwnershipReport {
     pub diff_ref: Option<String>,
 }
 
-/// Get ownership data for a single file via gix blame.
+/// Get ownership data for a single file via the VCS backend's blame.
 fn blame_file(root: &Path, path: &str) -> Option<FileOwnership> {
-    let repo = normalize_git::open_repo(root)?;
-    let head_id = repo.head_id().ok()?;
-    let path_bstr: &gix::bstr::BStr = path.as_bytes().into();
-    let outcome = repo
-        .blame_file(
-            path_bstr,
-            head_id.detach(),
-            gix::repository::blame_file::Options::default(),
-        )
-        .ok()?;
+    let lines = normalize_vcs::GitBackend.blame(root, path)?;
 
-    // Accumulate per-author line counts by resolving each commit's author.
+    // Accumulate per-author line counts.
     let mut author_lines: HashMap<String, usize> = HashMap::new();
-    for entry in &outcome.entries {
-        let lines = entry.len.get() as usize;
-        let author_name = repo
-            .find_object(entry.commit_id)
-            .ok()
-            .and_then(|obj| {
-                obj.into_commit()
-                    .author()
-                    .ok()
-                    .map(|a| String::from_utf8_lossy(a.name).into_owned())
-            })
-            .unwrap_or_else(|| "Unknown".to_string());
-        *author_lines.entry(author_name).or_default() += lines;
+    for line in &lines {
+        *author_lines.entry(line.author_name.clone()).or_default() += 1;
     }
 
     if author_lines.is_empty() {

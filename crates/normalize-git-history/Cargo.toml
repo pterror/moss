@@ -27,6 +27,7 @@ cli = [
 
 [dependencies]
 normalize-git = { workspace = true }
+normalize-vcs = { workspace = true }
 normalize-output = { path = "../normalize-output", version = "0.3.2", optional = true }
 nu-ansi-term = { version = "0.50", optional = true }
 normalize-rank = { path = "../normalize-rank", version = "0.3.2" }
