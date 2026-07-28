@@ -118,6 +118,64 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     engine (`query_predicates.rs`) supports no ancestor-aware predicate that
     would let it scope narrowly to `@spec`/`@type` bodies without also
     dropping legitimate module-as-type references elsewhere.
+- **Kotlin query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `kotlin.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-kotlin 2.17.0's node-types.json field-by-field
+  and verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Implementing an interface without parens (`class Person(...) : Greeter`) —
+    by far the most common Kotlin idiom for interface implementation — was
+    entirely unmatched** in `kotlin.tags.scm`'s `@reference.class`. Only the
+    constructor-call form (`: Base()`, wrapped in `constructor_invocation`) was
+    handled; the bare `delegation_specifier -> user_type` form (no invocation)
+    was missing a pattern.
+  - **`by`-delegation (`class Derived(b: Base) : Base by b`) was also
+    unmatched** — the delegate type is nested two levels deep
+    (`delegation_specifier -> explicit_delegation -> user_type`), a distinct
+    shape from both forms above.
+  - **`@Deprecated("...")`/any argument-carrying annotation usage was
+    misclassified as a `@reference.class`.** `constructor_invocation` is a
+    legal child of both `delegation_specifier` (intended) and `annotation`
+    (not intended); the pattern was unconstrained and fired on both.
+  - **Secondary-constructor delegation (`this(...)`/`super(...)`) was entirely
+    unmatched** in both `kotlin.tags.scm` and `kotlin.calls.scm` —
+    `constructor_delegation_call` is a distinct node kind from
+    `call_expression`, silently dropping every secondary-constructor
+    delegation from call extraction.
+  - **Aliased and wildcard imports were double-counted.** `kotlin.imports.scm`'s
+    plain-import pattern was unconstrained and additionally matched every
+    `import pkg.Class as Alias` and `import pkg.*` statement (same bug class as
+    the Java import fix), producing a duplicate `@import` per aliased/wildcard
+    import.
+  - **A trailing same-line comment after a plain import silently dropped the
+    import entirely** once the duplicate-match anchor fix above was applied: a
+    `line_comment`/`multiline_comment` immediately following an import
+    attaches as a literal trailing child of `import_header` in this grammar,
+    and — contrary to tree-sitter's documented anchor behavior for `extra`
+    nodes — the trailing `.` anchor does not skip it. Fixed with two explicit
+    "identifier, then exactly one comment, then nothing" variants instead of
+    an optional-quantified sibling (`(line_comment)? .`, which was tried first
+    and silently reintroduced the original duplicate-match bug — a quantified
+    sibling combined with a trailing anchor does not constrain matches in this
+    query engine the way it does without the `?`).
+  - **`kotlin.types.scm`'s `(user_type (type_identifier) @type.reference)`
+    pattern was a strict subset of its own blanket `(type_identifier)
+    @type.reference` pattern**, producing a literal duplicate `@type.reference`
+    capture for every qualified/generic type usage — the common case in real
+    Kotlin code (`LinkedList<T>`, `foo.Bar`, any generic container). Removed
+    the redundant pattern.
+  - **`kotlin.types.scm` had no `@definition.type` patterns at all**
+    (class/object/type-alias declarations), unlike the java/go/rust sibling
+    convention. Added, matching the existing precedent that a type's own
+    declared name legitimately also matches the blanket `@type.reference`
+    pattern (same as Rust's struct/enum names).
+  Extended `sample.kt` with real-world idioms (sealed classes, interfaces
+  implemented without parens, named/unnamed companion objects, secondary
+  constructors, extension functions, suspend functions, trailing-lambda
+  calls) and added a `variants.kt` completeness-matrix fixture covering every
+  node-type variant found, plus a NEGATIVE section (callable references,
+  argument-carrying annotations, top-level properties, unnamed companion
+  objects — the last two are documented grammar limitations, not bugs).
+
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
