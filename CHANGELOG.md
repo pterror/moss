@@ -75,6 +75,75 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Swift query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `swift.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-swift 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **Every `extension` declaration was completely invisible to tags.** `class`/
+    `struct`/`enum`/`actor`/`extension` all share the `class_declaration` node
+    type, but `extension`'s target type is wrapped in `user_type` instead of a
+    bare `type_identifier` — the exact class of bug the batch-1 Rust sweep found
+    for generic/path-qualified `impl` blocks. Since extensions are one of the
+    most heavily-used Swift idioms (protocol conformance, computed properties,
+    organizing code by feature), this meant no extension ever produced a
+    container symbol, and every method/property declared inside one was never
+    nested under anything.
+  - **Operator-overload function declarations were entirely dropped**
+    (`static func == (lhs: Foo, rhs: Foo) -> Bool`, `static func += (...)`,
+    custom operators like `+++`) — `function_declaration.name` only matched
+    `simple_identifier`, so the near-universal way of implementing
+    `Equatable`/`Comparable`/`Hashable`/arithmetic conformance in Swift was
+    silently absent from tags. Also documented (not fixed — a real grammar
+    quirk, not a query bug): the same `name` field, per `node-types.json`, also
+    lists type-expression variants; verified via `normalize syntax query` that
+    this is the function's *return type* mistakenly sharing the `name` field —
+    a wildcard `name: (_)` pattern would silently capture the return type text
+    as the function's name instead.
+  - **Member properties (`var`/`let`) were never captured at all.** Fixed by
+    restricting `property_declaration` matches to a direct child of
+    `class_body`/`enum_class_body` (member position), distinguishing them from
+    the same node kind used for local `var`/`let` inside function bodies
+    (children of `statements`) — verified this ancestor restriction correctly
+    excludes locals with a dedicated negative test. `let`/`var` map to
+    `@definition.constant`/`@definition.var` respectively.
+  - **Enum cases, protocol requirements, and associated types were never
+    captured.** Added `enum_entry` (`@definition.constant`; verified — unlike
+    the analogous Go `const_spec` bug — every name in a comma-separated case
+    list `case pending, cancelled` IS tagged, no positional workaround needed),
+    `protocol_property_declaration`/`protocol_function_declaration`
+    (`@definition.var`/`@definition.method`), and `associatedtype_declaration`
+    (`@definition.type`) — all distinct node types from their concrete-body
+    counterparts, previously entirely absent from `swift.tags.scm`.
+  - **Force-unwrap calls (`completion!()`) and generic type-instantiation
+    calls (`Array<Int>()`, `Optional<String>(nil)`) were unmatched** in
+    `swift.calls.scm`. The former's callee is a `postfix_expression`
+    (`target`/`operation: bang`) sitting inside `call_expression`, a distinct
+    shape from the plain-identifier and navigation-expression patterns already
+    handled. The latter parses as an entirely different node type,
+    `constructor_expression` with a `constructed_type: (user_type)` field, not
+    `call_expression` at all — the same class of bug as batch 1's Rust
+    turbofish-call gap.
+  - **`switch` complexity was undercounted for every switch with more than one
+    case**, and `guard` (Swift's early-exit branch — an extremely common
+    idiom) and short-circuit boolean operators (`&&`/`||`) were entirely
+    absent from `swift.complexity.scm`. Added `switch_entry` (one per case,
+    matching the convention already used by every other language's
+    match/switch construct), `guard_statement`, and
+    `conjunction_expression`/`disjunction_expression` (matching Kotlin's
+    identical convention for the identically-named node types).
+  - Documented (not fixed, since there is no stable callee name to capture):
+    immediately-invoked closures (`{ ... }(args)`), curried calls
+    (`adder(1)(2)`), and bracket type-literal initializer calls
+    (`[Int](repeating:count:)`) remain deliberately excluded from
+    `swift.calls.scm`. Also documented: `init`/`deinit` declarations have no
+    populated `name`-field child in the real parse tree despite
+    `node-types.json` claiming one, and `subscript` declarations are
+    genuinely unnamed in Swift — capturing any of the three in
+    `swift.tags.scm` without also fixing `Language::node_name` in `swift.rs`
+    would produce query matches that silently vanish downstream (no symbol
+    emitted), so they are intentionally left uncaptured with the reasoning
+    recorded in the query file.
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
