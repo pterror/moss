@@ -75,6 +75,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Content-addressed extraction cache now detects grammar `.so` changes, not just
+  `.scm` query changes.** A prior fix (`ecfd1dfa`) folded `.scm` query content into the
+  cache key via `query_fingerprint`, but a compiled tree-sitter grammar (`.so`/`.dylib`/
+  `.dll`) could still change independently — e.g. a different arborium version producing
+  different node types (proven real by the kdl grammar work) — without invalidating any
+  cached extraction results. `cargo xtask build-grammars` now embeds each grammar's
+  source version directly inside the compiled artifact as an exported
+  `normalize_grammar_version` symbol (the arborium crate's semver for arborium-sourced
+  grammars, or a content hash for local grammars like jinja2), so the version travels
+  with the `.so` itself — no sidecar manifest, no changes needed to the `grammars
+  install` tarball format or release CI. `GrammarLoader::grammar_version` reads it via
+  the already-`dlopen`'d library, and `normalize-facts::ca_cache::cache_version_suffix`
+  folds it into the cache key alongside the query fingerprint. A `.so` with no version
+  symbol (a hand-placed third-party grammar, or one built by a release before this
+  change) is treated as always-stale — the content-addressed cache is bypassed entirely
+  for that grammar (not cached under a version that can't distinguish two different
+  builds), with a one-time warning naming the grammar so the resulting cache-miss
+  performance hit is never silent.
 - **C/C++ header guards no longer reported as symbols.** Today's earlier macro-tags fix
   (`preproc_def`/`preproc_function_def` capture added to `c.tags.scm`/`cpp.tags.scm`) had
   a side effect: a classic header guard (`#ifndef FOO_H` / `#define FOO_H` / `...` /

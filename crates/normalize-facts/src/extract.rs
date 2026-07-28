@@ -306,12 +306,13 @@ impl Extractor {
         let grammar_name = support.grammar_name();
         warn_if_known_broken_grammar(grammar_name);
 
-        // Cache version encodes the extraction schema, include_private flag, and a
-        // fingerprint of the `.scm` query content (tags/complexity/calls/imports/types)
-        // for this grammar. Bump the base string whenever the Symbol struct or
-        // post-processing logic changes in a way that invalidates existing cached
-        // results; the fingerprint suffix invalidates automatically whenever the
-        // query files themselves change, so no manual bump is needed for that case.
+        // Cache version encodes the extraction schema, include_private flag, a
+        // fingerprint of the `.scm` query content (tags/complexity/calls/imports/types),
+        // and the grammar `.so`'s own embedded build version. Bump the base string
+        // whenever the Symbol struct or post-processing logic changes in a way that
+        // invalidates existing cached results; the fingerprint/version suffix
+        // invalidates automatically whenever the query files or the compiled grammar
+        // itself change, so no manual bump is needed for either case.
         // Cross-file resolver results are not cached (resolver.is_none() guard below).
         // v2 (2026-07-15): Symbol gained a `complexity` field.
         let base_cache_ver = if self.options.include_private {
@@ -319,15 +320,18 @@ impl Extractor {
         } else {
             "symbols-v2-public"
         };
-        let cache_ver = format!(
-            "{base_cache_ver}-{}",
-            ca_cache::query_fingerprint(grammar_name)
-        );
-        let cache_ver = cache_ver.as_str();
+        // `None` means the grammar's `.so` carries no embedded version symbol (see
+        // `ca_cache::cache_version_suffix`) — we cannot prove two builds of it behave
+        // identically, so caching is bypassed entirely for this grammar rather than
+        // keyed on a fingerprint that can't detect a changed grammar.
+        let cache_ver = ca_cache::cache_version_suffix(grammar_name)
+            .map(|suffix| format!("{base_cache_ver}-{suffix}"));
 
         // Check the persistent symbol cache before parsing (only when no cross-file
-        // resolver is involved, as resolver results depend on other files).
+        // resolver is involved, as resolver results depend on other files, and only
+        // when the grammar is cacheable — see `cache_ver` above).
         if resolver.is_none()
+            && let Some(ref cache_ver) = cache_ver
             && let Some(cache) = ca_cache::symbol_cache()
         {
             let hash = blake3::hash(content.as_bytes());
@@ -373,8 +377,10 @@ impl Extractor {
         support.post_process_symbols(&mut symbols, resolver, current_file);
 
         // Store in the persistent symbol cache (only when no cross-file resolver
-        // was used, so the result is fully content-addressed).
+        // was used, so the result is fully content-addressed, and only when the
+        // grammar is cacheable).
         if resolver.is_none()
+            && let Some(ref cache_ver) = cache_ver
             && let Some(cache) = ca_cache::symbol_cache()
         {
             let hash = blake3::hash(content.as_bytes());

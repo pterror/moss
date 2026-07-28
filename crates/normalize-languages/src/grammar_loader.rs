@@ -41,10 +41,30 @@
 
 use libloading::{Library, Symbol};
 use std::collections::HashMap;
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tree_sitter::Language;
 use tree_sitter_language::LanguageFn;
+
+/// Exported symbol name `cargo xtask build-grammars` bakes into every `.so`/`.dylib`/
+/// `.dll` it compiles: a `const char normalize_grammar_version[]` array holding the
+/// grammar's source version (the arborium crate's semver for arborium-sourced
+/// grammars, or a content hash for local grammars under `grammars/`). This lets
+/// the version travel with the artifact itself — no sidecar manifest, no tar-filter
+/// or CI changes needed to ship it alongside `grammars install`.
+///
+/// MUST match `GRAMMAR_VERSION_SYMBOL` in `xtask/src/main.rs` exactly (duplicated
+/// rather than shared because xtask and this crate don't share a dependency).
+///
+/// A `.so` with no such symbol — a hand-placed third-party grammar, or one built
+/// before this convention existed — is deliberately NOT assigned a fabricated
+/// version: `grammar_version` returns `None`, and callers (see
+/// `normalize-facts::ca_cache`) must treat that as "always potentially stale" and
+/// bypass the content-addressed cache for that grammar, rather than caching under
+/// a version that can't actually distinguish one build from another.
+const GRAMMAR_VERSION_SYMBOL: &[u8] = b"normalize_grammar_version";
 
 /// Error returned by [`GrammarLoader::get`].
 #[derive(Debug, thiserror::Error)]
@@ -73,6 +93,42 @@ struct LoadedGrammar {
     _library: Library,
     /// Tree-sitter Language (contains pointers into `_library`).
     language: Language,
+    /// Version embedded in the `.so` via `GRAMMAR_VERSION_SYMBOL`, if present.
+    /// `None` means the artifact predates the convention or is third-party —
+    /// callers must treat that as always-stale, not as "no versioning needed".
+    version: Option<Arc<str>>,
+}
+
+/// Read `GRAMMAR_VERSION_SYMBOL` from an already-loaded library, if present.
+///
+/// The symbol is declared by generated code as `const char normalize_grammar_version[]
+/// = "...";` — a byte array, NOT a `const char *` pointer variable. This matters:
+/// `libloading::Symbol<T>::deref` reinterprets the symbol's *address itself* as a
+/// value of type `T` (the same single-indirection convention already relied on for
+/// the grammar's `tree_sitter_<lang>` function symbol below). For an array, the
+/// symbol's address already IS the address of the string's first byte, so
+/// `Symbol<*const c_char>` derefs directly to a usable C-string pointer. Had this
+/// been declared as a pointer *variable* instead, the symbol's address would be the
+/// address of the pointer *slot*, requiring a second dereference to reach the
+/// string — get this wrong and `CStr::from_ptr` reads the pointer's own raw bytes
+/// as if they were text.
+fn read_grammar_version_symbol(library: &Library) -> Option<Arc<str>> {
+    // SAFETY: `library` is already successfully loaded (dlopen succeeded). Looking up
+    // a symbol that may not exist is safe — `get` returns `Err` in that case. If the
+    // symbol exists, we trust it was produced by `write_grammar_version_source` in
+    // xtask (a `const char[]` array initialized from a valid, NUL-terminated string
+    // literal), consistent with how `load_from_path` already trusts the grammar's own
+    // function symbol to conform to tree-sitter's ABI.
+    let sym: Symbol<*const c_char> = unsafe { library.get(GRAMMAR_VERSION_SYMBOL) }.ok()?;
+    let ptr: *const c_char = *sym;
+    if ptr.is_null() {
+        return None;
+    }
+    // SAFETY: non-null pointer sourced from a symbol we trust (see above) to point
+    // at a NUL-terminated string with 'static lifetime (backed by the library, which
+    // outlives this read).
+    let cstr = unsafe { CStr::from_ptr(ptr) };
+    cstr.to_str().ok().map(Arc::from)
 }
 
 /// Dynamic grammar loader with caching.
@@ -725,10 +781,13 @@ impl GrammarLoader {
             }
         };
 
+        let version = read_grammar_version_symbol(&library);
+
         // Cache the loaded grammar
         let loaded = Arc::new(LoadedGrammar {
             _library: library,
             language: language.clone(),
+            version,
         });
 
         self.cache
@@ -737,6 +796,26 @@ impl GrammarLoader {
             .insert(name.to_string(), loaded);
 
         Ok(language)
+    }
+
+    /// Return the version baked into grammar `name`'s `.so` at build time (see
+    /// `GRAMMAR_VERSION_SYMBOL`), loading it first if necessary.
+    ///
+    /// Returns `None` when the grammar can't be loaded at all, *or* when it loads
+    /// fine but carries no version symbol — an artifact built before this
+    /// convention existed, or a hand-placed third-party grammar. Callers that use
+    /// this for cache-key purposes must treat `None` as "possibly changed since
+    /// last cached" (always-stale), not as "no versioning available, cache
+    /// normally" — see `normalize-facts::ca_cache::cache_version_suffix`.
+    pub fn grammar_version(&self, name: &str) -> Option<Arc<str>> {
+        if self.get(name).is_err() {
+            return None;
+        }
+        self.cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(name)
+            .and_then(|loaded| loaded.version.clone())
     }
 
     /// List available grammars in search paths.
@@ -1470,6 +1549,165 @@ mod tests {
         assert_eq!(grammar_symbol_name("rust"), "tree_sitter_rust_orchard");
         assert_eq!(grammar_symbol_name("ssh-config"), "tree_sitter_ssh_config");
         assert_eq!(grammar_symbol_name("vb"), "tree_sitter_vb_dotnet");
+    }
+
+    /// Find the workspace's `target/grammars/` directory, if it exists.
+    fn workspace_grammars_dir() -> Option<PathBuf> {
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+        // CARGO_MANIFEST_DIR is crates/normalize-languages; workspace root is two up.
+        let mut dir = PathBuf::from(manifest_dir);
+        dir.pop();
+        dir.pop();
+        let grammars = dir.join("target/grammars");
+        grammars.is_dir().then_some(grammars)
+    }
+
+    /// Compile `source` (a small C translation unit) into a shared library at
+    /// `out_so` with the same flags xtask uses. Returns `false` (never panics) if
+    /// no C compiler is available, so callers can skip gracefully.
+    fn compile_test_fixture_so(source: &str, out_so: &Path) -> bool {
+        let src_c = out_so.with_extension("c");
+        if std::fs::write(&src_c, source).is_err() {
+            return false;
+        }
+        let ok =
+            std::process::Command::new(std::env::var("CC").unwrap_or_else(|_| "cc".to_string()))
+                .arg("-shared")
+                .arg("-fPIC")
+                .arg(&src_c)
+                .arg("-o")
+                .arg(out_so)
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+        let _ = std::fs::remove_file(&src_c);
+        ok
+    }
+
+    /// Grammars compiled by `cargo xtask build-grammars` carry an embedded
+    /// `normalize_grammar_version` symbol (see `write_grammar_version_source` in
+    /// `xtask/src/main.rs`). This is the positive case of the always-stale
+    /// cache-key contract: a grammar with the symbol must report a non-empty
+    /// version.
+    ///
+    /// Uses an isolated `GrammarLoader::with_paths` pointed straight at
+    /// `target/grammars/` rather than `GrammarLoader::new()`'s env-var-based
+    /// default resolution — `test_load_from_env` (elsewhere in this module)
+    /// mutates the process-wide `NORMALIZE_GRAMMAR_PATH` env var, which races
+    /// with any test relying on that default when the test harness runs tests
+    /// in parallel (the default).
+    #[test]
+    fn test_grammar_version_present_when_built_by_xtask() {
+        let Some(grammar_dir) = workspace_grammars_dir() else {
+            eprintln!(
+                "Skipping test_grammar_version_present_when_built_by_xtask: \
+                 target/grammars/ not found — run `cargo xtask build-grammars` first"
+            );
+            return;
+        };
+        let loader = GrammarLoader::with_paths(vec![grammar_dir]);
+        if loader.get("rust").is_err() {
+            eprintln!(
+                "Skipping test_grammar_version_present_when_built_by_xtask: rust grammar \
+                 .so not found in target/grammars/"
+            );
+            return;
+        }
+        let version = loader.grammar_version("rust");
+        assert!(
+            version.is_some(),
+            "rust's grammar .so was built by `cargo xtask build-grammars` and should carry \
+             the embedded normalize_grammar_version symbol — if this fails after a fresh \
+             `cargo xtask build-grammars`, the injection in xtask/src/main.rs \
+             (write_grammar_version_source / compile_grammar) has regressed"
+        );
+        assert!(!version.unwrap().is_empty());
+    }
+
+    /// A grammar name with no `.so` at all must report `None`, not panic or
+    /// fabricate a version. `ca_cache::cache_version_suffix` relies on exactly
+    /// this to trigger its always-stale/bypass-the-cache path.
+    #[test]
+    fn test_grammar_version_none_for_nonexistent_grammar() {
+        let loader = GrammarLoader::new();
+        assert_eq!(
+            loader.grammar_version("totally-nonexistent-grammar-xyz-normalize-test"),
+            None
+        );
+    }
+
+    /// Regression test for the always-stale contract on the "loads fine but has no
+    /// version symbol" case: a `.so` built before this convention existed, or a
+    /// hand-placed third-party grammar. Compiles a minimal fixture library with no
+    /// `normalize_grammar_version` symbol at all and asserts `read_grammar_version_symbol`
+    /// reports `None` for it — never a stale/fabricated version. Exercises the exact
+    /// symbol-lookup code path (`Library::get` + deref), just without requiring a real
+    /// tree-sitter grammar function to also be present, since this is testing the
+    /// version-symbol path in isolation. Skips (doesn't fail) if no C compiler is
+    /// available.
+    #[test]
+    fn test_grammar_version_none_when_symbol_absent() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "normalize-grammar-version-test-absent-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp_dir).expect("create temp dir");
+        let out_so = tmp_dir.join(format!("fixture{}", grammar_extension()));
+        // Deliberately has no `normalize_grammar_version` symbol.
+        let compiled = compile_test_fixture_so(
+            "/* fixture .so with no version symbol */\nint normalize_test_other_symbol = 1;\n",
+            &out_so,
+        );
+        if !compiled {
+            eprintln!(
+                "Skipping test_grammar_version_none_when_symbol_absent: no C compiler available"
+            );
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            return;
+        }
+
+        let library = unsafe { Library::new(&out_so) }.expect("load fixture .so");
+        let version = read_grammar_version_symbol(&library);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        assert_eq!(
+            version, None,
+            "a .so with no normalize_grammar_version symbol must report None — treating it \
+             as versioned (even at some prior value) would let cache entries survive a \
+             grammar change we cannot actually see"
+        );
+    }
+
+    /// Positive counterpart of the above: compiles a minimal fixture that DOES
+    /// export `normalize_grammar_version` (as the array declaration
+    /// `write_grammar_version_source` in xtask generates) and asserts
+    /// `read_grammar_version_symbol` reads the exact string back. This is the test
+    /// that would have caught the pointer-vs-array indirection bug directly (see
+    /// the long comment on `read_grammar_version_symbol`), independent of any
+    /// particular grammar being built.
+    #[test]
+    fn test_grammar_version_symbol_roundtrip() {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "normalize-grammar-version-test-present-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp_dir).expect("create temp dir");
+        let out_so = tmp_dir.join(format!("fixture{}", grammar_extension()));
+        let compiled = compile_test_fixture_so(
+            "const char normalize_grammar_version[] = \"9.9.9-fixture\";\n",
+            &out_so,
+        );
+        if !compiled {
+            eprintln!("Skipping test_grammar_version_symbol_roundtrip: no C compiler available");
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            return;
+        }
+
+        let library = unsafe { Library::new(&out_so) }.expect("load fixture .so");
+        let version = read_grammar_version_symbol(&library);
+        drop(library);
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        assert_eq!(version.as_deref(), Some("9.9.9-fixture"));
     }
 
     #[test]

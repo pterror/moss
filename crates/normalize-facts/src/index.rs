@@ -140,13 +140,17 @@ const SCHEMA_VERSION: i64 = 17;
 const EXTRACTOR_VERSION: &str = "4";
 
 /// Cache key version for a grammar: `EXTRACTOR_VERSION` plus a fingerprint of
-/// that grammar's `.scm` query content, so editing any query file for a
-/// grammar automatically invalidates every persisted cache entry for it.
-fn extr_ver_for_grammar(grammar: &str) -> String {
-    format!(
-        "{EXTRACTOR_VERSION}-{}",
-        crate::ca_cache::query_fingerprint(grammar)
-    )
+/// that grammar's `.scm` query content and its embedded `.so` build version, so
+/// editing any query file — or rebuilding the grammar itself against a different
+/// arborium version — automatically invalidates every persisted cache entry for it.
+///
+/// Returns `None` when the grammar's `.so` has no embedded version symbol (see
+/// `ca_cache::cache_version_suffix`); callers MUST treat that as "bypass the CA
+/// cache for this grammar" rather than caching under a fingerprint that can't
+/// prove two builds of the `.so` are equivalent.
+fn extr_ver_for_grammar(grammar: &str) -> Option<String> {
+    crate::ca_cache::cache_version_suffix(grammar)
+        .map(|suffix| format!("{EXTRACTOR_VERSION}-{suffix}"))
 }
 
 /// Check if a file path has a supported source extension.
@@ -2901,8 +2905,9 @@ impl FileIndex {
                 }
             };
             let hash = blake3::hash(&bytes);
-            if let Some(ca) = &self.ca_cache {
-                let extr_ver = extr_ver_for_grammar(&grammar);
+            if let Some(ca) = &self.ca_cache
+                && let Some(extr_ver) = extr_ver_for_grammar(&grammar)
+            {
                 match ca.get::<CachedFileData>(hash.as_bytes(), &extr_ver, &grammar) {
                     Ok(Some(cached)) => {
                         ca_cached_files.push(file_path.clone());
@@ -3043,6 +3048,7 @@ impl FileIndex {
                 // so empty results here are legitimate and safe to cache.
                 if !grammar.is_empty()
                     && let Some(ca) = &ca_cache_for_rayon
+                    && let Some(extr_ver) = extr_ver_for_grammar(&grammar)
                 {
                     let cached = CachedFileData {
                         symbols: sym_data
@@ -3066,7 +3072,6 @@ impl FileIndex {
                         type_methods: type_methods.clone(),
                         type_refs: type_refs.clone(),
                     };
-                    let extr_ver = extr_ver_for_grammar(&grammar);
                     if let Err(e) = ca.put(hash.as_bytes(), &extr_ver, &grammar, &cached) {
                         tracing::warn!("normalize-facts: CA cache put error: {}", e);
                     }
@@ -3433,16 +3438,21 @@ impl FileIndex {
                 .unwrap_or_default();
             let hash = blake3::hash(&bytes);
 
-            // Try CA cache first (best-effort)
+            // Try CA cache first (best-effort). `extr_ver` is `None` when the grammar's
+            // `.so` has no embedded version symbol — bypass the cache entirely for it
+            // (see `extr_ver_for_grammar`), both for this lookup and the put below.
             let extr_ver = extr_ver_for_grammar(&grammar);
             let cached: Option<CachedFileData> = if !grammar.is_empty() {
-                self.ca_cache.as_ref().and_then(|ca| {
-                    ca.get::<CachedFileData>(hash.as_bytes(), &extr_ver, &grammar)
-                        .unwrap_or_else(|e| {
-                            tracing::warn!("normalize-facts: CA cache get error: {}", e);
-                            None
-                        })
-                })
+                match &extr_ver {
+                    Some(extr_ver) => self.ca_cache.as_ref().and_then(|ca| {
+                        ca.get::<CachedFileData>(hash.as_bytes(), extr_ver, &grammar)
+                            .unwrap_or_else(|e| {
+                                tracing::warn!("normalize-facts: CA cache get error: {}", e);
+                                None
+                            })
+                    }),
+                    None => None,
+                }
             } else {
                 None
             };
@@ -3501,6 +3511,7 @@ impl FileIndex {
                 // so empty results here are legitimate and safe to cache.
                 if !grammar.is_empty()
                     && let Some(ca) = &self.ca_cache
+                    && let Some(ref extr_ver) = extr_ver
                 {
                     let cached_store = CachedFileData {
                         symbols: sym_data
@@ -3524,7 +3535,7 @@ impl FileIndex {
                         type_methods: Vec::new(), // type_methods not extracted in incremental path
                         type_refs: type_refs.clone(),
                     };
-                    if let Err(e) = ca.put(hash.as_bytes(), &extr_ver, &grammar, &cached_store) {
+                    if let Err(e) = ca.put(hash.as_bytes(), extr_ver, &grammar, &cached_store) {
                         tracing::warn!("normalize-facts: CA cache put error: {}", e);
                     }
                 }

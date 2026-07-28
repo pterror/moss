@@ -387,6 +387,61 @@ pub(crate) fn query_fingerprint(grammar_name: &str) -> Arc<str> {
     fp
 }
 
+/// Memoized per-grammar cache-key suffix combining [`query_fingerprint`] with the
+/// grammar `.so`'s own embedded build version (`GrammarLoader::grammar_version`,
+/// baked in by `cargo xtask build-grammars` — see `normalize_languages::grammar_loader`
+/// for the symbol convention).
+///
+/// Returns `None` when the grammar's `.so` has no embedded version symbol: a
+/// hand-placed third-party grammar, or one built by a release before this
+/// convention existed. Per the project's always-stale policy for that case,
+/// callers MUST treat `None` as "bypass the content-addressed cache for this
+/// grammar" — never fall back to caching on `query_fingerprint` alone, since that
+/// cannot detect a grammar `.so` that changed (different arborium version -> different
+/// node types) without any `.scm` query edit alongside it.
+///
+/// Logs a one-time (per grammar, per process) warning when this happens, so an
+/// unversioned grammar degrading cache performance is never silent.
+static GRAMMAR_CACHE_SUFFIXES: OnceLock<RwLock<HashMap<String, Option<Arc<str>>>>> =
+    OnceLock::new();
+static WARNED_UNVERSIONED_GRAMMARS: OnceLock<RwLock<std::collections::HashSet<String>>> =
+    OnceLock::new();
+
+pub(crate) fn cache_version_suffix(grammar_name: &str) -> Option<Arc<str>> {
+    let map = GRAMMAR_CACHE_SUFFIXES.get_or_init(|| RwLock::new(HashMap::new()));
+    if let Some(entry) = map.read().unwrap().get(grammar_name) {
+        return entry.clone();
+    }
+
+    let loader = normalize_languages::parsers::grammar_loader();
+    let suffix = match loader.grammar_version(grammar_name) {
+        Some(version) => {
+            let combined = format!("{version}-{}", query_fingerprint(grammar_name));
+            Some(Arc::from(combined.as_str()))
+        }
+        None => {
+            let warned = WARNED_UNVERSIONED_GRAMMARS
+                .get_or_init(|| RwLock::new(std::collections::HashSet::new()));
+            let newly_warned = warned.write().unwrap().insert(grammar_name.to_string());
+            if newly_warned {
+                tracing::warn!(
+                    "normalize-facts: grammar '{grammar_name}' has no embedded version symbol \
+                     (built before `cargo xtask build-grammars` started injecting one, or a \
+                     hand-placed third-party grammar) — content-addressed caching is disabled \
+                     for '{grammar_name}' until it is rebuilt with a current toolchain; every \
+                     extraction for this grammar will re-parse instead of hitting the cache"
+                );
+            }
+            None
+        }
+    };
+
+    map.write()
+        .unwrap()
+        .insert(grammar_name.to_string(), suffix.clone());
+    suffix
+}
+
 /// Global singleton for the symbol extraction cache used by `Extractor`.
 ///
 /// Initialized lazily on first access. Uses the same SQLite DB as the
@@ -636,6 +691,82 @@ mod tests {
         );
         // Memoization: calling again for the same grammar returns the same value.
         assert_eq!(rust_fp, query_fingerprint("rust"));
+    }
+
+    /// A grammar with no `.so` at all must yield the always-stale/bypass signal
+    /// (`None`), not fall back to caching on `query_fingerprint` alone — that
+    /// fingerprint has no way to detect a grammar `.so` that changed underneath
+    /// it. Also exercises the one-time-warning path (no assertion on the log
+    /// itself; just that repeated calls are memoized and don't panic/loop).
+    #[test]
+    fn cache_version_suffix_none_for_unloadable_grammar() {
+        assert_eq!(
+            cache_version_suffix("totally-nonexistent-grammar-xyz-normalize-test"),
+            None
+        );
+        // Memoized: second call still None, doesn't re-warn or diverge.
+        assert_eq!(
+            cache_version_suffix("totally-nonexistent-grammar-xyz-normalize-test"),
+            None
+        );
+    }
+
+    /// When a grammar's `.so` does carry the embedded version symbol (built by
+    /// `cargo xtask build-grammars`), the cache-key suffix must fold in that
+    /// version alongside the query fingerprint — not just the fingerprint alone.
+    /// Skips (rather than fails) when grammars aren't built locally, matching the
+    /// convention used elsewhere in this codebase for grammar-dependent tests.
+    #[test]
+    fn cache_version_suffix_includes_grammar_version_when_present() {
+        let loader = normalize_languages::parsers::grammar_loader();
+        if loader.get("rust").is_err() {
+            eprintln!(
+                "Skipping cache_version_suffix_includes_grammar_version_when_present: \
+                 rust grammar .so not found — run `cargo xtask build-grammars` first"
+            );
+            return;
+        }
+        let Some(version) = loader.grammar_version("rust") else {
+            eprintln!(
+                "Skipping cache_version_suffix_includes_grammar_version_when_present: \
+                 rust.so has no embedded version symbol (pre-injection build?)"
+            );
+            return;
+        };
+        let suffix =
+            cache_version_suffix("rust").expect("rust has a version symbol, suffix must be Some");
+        assert!(
+            suffix.starts_with(version.as_ref()),
+            "suffix {suffix:?} should start with the grammar version {version:?}"
+        );
+    }
+
+    /// End-to-end: when the grammar's `.so` carries a version symbol, a cache
+    /// entry keyed on `cache_version_suffix`'s output round-trips normally
+    /// through `CaCache::put`/`get`. Skips when grammars aren't built locally.
+    #[test]
+    fn caching_round_trips_when_grammar_version_present() {
+        let loader = normalize_languages::parsers::grammar_loader();
+        if loader.get("rust").is_err() || loader.grammar_version("rust").is_none() {
+            eprintln!(
+                "Skipping caching_round_trips_when_grammar_version_present: rust grammar \
+                 .so unavailable or has no version symbol — run `cargo xtask build-grammars` \
+                 first"
+            );
+            return;
+        }
+        let suffix = cache_version_suffix("rust").expect("version present -> suffix must be Some");
+        let cache = temp_cache();
+        let hash = blake3::hash(b"caching_round_trips_when_grammar_version_present");
+        let payload = Payload {
+            symbols: vec!["fn foo()".to_string()],
+            count: 1,
+        };
+        cache
+            .put(hash.as_bytes(), &suffix, "rust", &payload)
+            .unwrap();
+        let got: Option<Payload> = cache.get(hash.as_bytes(), &suffix, "rust").unwrap();
+        assert_eq!(got, Some(payload));
     }
 
     #[test]

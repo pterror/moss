@@ -2528,23 +2528,64 @@ the default path.
     Tests: `ca_cache.rs`'s `gc_stale_versions_keeps_fingerprint_suffixed_entries`,
     `gc_stale_symbol_versions_keeps_fingerprint_suffixed_entries`,
     `query_fingerprint_changes_when_query_content_changes`.
-    **Not fixed here — separate, larger design question, flagged not guessed:** the cache key
-    still does not fold in the tree-sitter **grammar** version/content. Grammars are `.so`
-    files built by `cargo xtask build-grammars` from arborium sources pinned with `= "*"` in
-    `normalize-grammars/Cargo.toml` (i.e. unpinned/floating) and dynamically loaded at runtime
-    from `GrammarLoader`'s `search_paths` (`grammar_loader.rs::load_external`/`load_from_path`)
-    — not compiled into the `normalize` binary. So a grammar rebuild/update (the kind of
-    node-type drift the kdl work hit) changes extraction behavior without changing anything
-    the cache key currently sees, and can reintroduce this exact bug class one layer down.
-    Options for a follow-up session (tradeoffs, not a recommendation):
-    (a) hash each grammar's `.so` file content (mirrors `query_fingerprint`: memoize per
-    grammar name, read+blake3 once per process) — precise, but needs `GrammarLoader` to expose
-    the resolved `.so` path (currently private), and reads a multi-MB file once per grammar;
-    (b) pin arborium crate versions instead of `= "*"` in `normalize-grammars/Cargo.toml` and
-    bump `EXTRACTOR_VERSION` deliberately alongside every arborium bump — cheaper, no runtime
-    hashing, but re-introduces the "human must remember" failure mode this task just closed
-    for `.scm` files, one layer up; (c) do nothing extra and rely on `EXTRACTOR_VERSION` manual
-    bumps at grammar-update time — status quo, already the case today.
+  - [x] Fixed (2026-07-28): the cache key now also folds in the tree-sitter **grammar**
+    version, closing the hole described below. Implemented by embedding the version
+    directly *inside* the compiled `.so`/`.dylib`/`.dll` — not a sidecar manifest file
+    (option (a) below was reconsidered: the "`GrammarLoader` path is private" blocker
+    turned out to already be false — `available_external_with_paths()` was already
+    `pub` — but a sidecar still needs its own tar-filter/CI wiring, which the embedded
+    symbol avoids entirely). Also confirmed compile-time-baking-into-the-binary is
+    unsound: `normalize grammars install --version <tag>` and `NORMALIZE_GRAMMAR_PATH`
+    both let on-disk `.so` files change independently of the running binary, so the
+    version has to be read from the artifact at load time, not compiled into
+    `normalize` itself.
+    - `xtask/src/main.rs` (`compile_grammar`/`compile_local_grammar`) generates a tiny
+      C translation unit per grammar exporting `const char normalize_grammar_version[]`
+      (an **array**, not a `const char*` pointer variable — see the long comment on
+      `read_grammar_version_symbol` for why that distinction is load-bearing for
+      `libloading`'s single-indirection symbol semantics) and compiles it in alongside
+      `parser.c`/`scanner.c`. Arborium-sourced grammars use the arborium crate's semver
+      (already extracted by `split_version_suffix`, previously discarded); local
+      grammars under `grammars/<lang>/` (e.g. jinja2) have no crate version, so an
+      FNV-1a hash of their `parser.c`/`scanner.c` content is used instead.
+    - `normalize-languages::GrammarLoader::grammar_version(name)` reads the symbol from
+      the already-`dlopen`'d library via `libloading` (cheap — no extra file I/O, the
+      library is loaded anyway) and returns `None` if absent.
+    - `normalize-facts::ca_cache::cache_version_suffix(grammar)` combines
+      `grammar_version` with the existing `query_fingerprint` into one cache-key
+      suffix.
+    - **Missing-symbol policy: always-stale.** A `.so` with no version symbol (a
+      hand-placed third-party grammar, or a release built before this convention
+      existed) is treated as possibly-changed-since-last-cached: `cache_version_suffix`
+      returns `None`, and both call sites (`extract.rs::extract_with_support`,
+      `index.rs::extr_ver_for_grammar`) bypass the CA cache entirely for that grammar
+      (no `get`, no `put`) rather than caching under a fingerprint that can't prove two
+      builds of the `.so` are equivalent — this avoids writing entries that could never
+      be correctly invalidated. Logs a one-time-per-grammar-per-process warning so the
+      resulting cache-miss-on-every-call performance hit is never silent.
+    - No CI changes needed: `.github/workflows/release.yml` already just runs `cargo
+      xtask build-grammars` and tars up the resulting `.so`/`.dylib`/`.dll` files
+      directly (`tar -czf ... *.so`) — the embedded symbol travels with the artifact by
+      construction, unlike a sidecar manifest which would've needed its own
+      tar-filter/CI plumbing.
+    - Tests: `normalize-languages::grammar_loader::tests::{test_grammar_version_present_when_built_by_xtask,
+      test_grammar_version_none_for_nonexistent_grammar, test_grammar_version_none_when_symbol_absent,
+      test_grammar_version_symbol_roundtrip}`; `normalize-facts::ca_cache::tests::{cache_version_suffix_none_for_unloadable_grammar,
+      cache_version_suffix_includes_grammar_version_when_present, caching_round_trips_when_grammar_version_present}`.
+  - Original hole (fixed above), kept for context: the cache key did not fold in the
+    tree-sitter **grammar** version/content. Grammars are `.so` files built by `cargo
+    xtask build-grammars` from arborium sources pinned with `= "*"` in
+    `normalize-grammars/Cargo.toml` (i.e. unpinned/floating) and dynamically loaded at
+    runtime from `GrammarLoader`'s `search_paths` — not compiled into the `normalize`
+    binary. So a grammar rebuild/update (the kind of node-type drift the kdl work hit)
+    changed extraction behavior without changing anything the cache key saw, and could
+    reintroduce this exact bug class one layer down. Options considered at the time
+    (tradeoffs, not a recommendation) — (a) hash each grammar's `.so` file content
+    (mirrors `query_fingerprint`); (b) pin arborium crate versions and bump
+    `EXTRACTOR_VERSION` manually per bump; (c) do nothing extra. What actually shipped
+    is closer to (a) but reading a pre-embedded version symbol instead of hashing the
+    whole multi-MB file, avoiding both the "human must remember" failure mode of (b)
+    and the per-file-read cost of a literal (a).
 
 **Pillar 5 — Perf and memory baseline**
 
