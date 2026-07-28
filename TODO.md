@@ -3018,15 +3018,32 @@ global measures need a new value type on `Metric::measure_all`.
 
 ### VCS abstraction layer
 
-Unstarted idea. Goal: an abstraction layer over different version control systems (git, jj, mercurial, or others) to make normalize's VCS-touching functionality not git-specific. Currently `normalize-graph`, budget metrics, and other VCS operations shell out to `git` or use `git2`; this abstraction would unify them.
+Unstarted idea. Goal: an abstraction layer over different version control systems (git, jj, mercurial, or others) to make normalize's VCS-touching functionality not git-specific.
 
-Related infrastructure: `git2` crate already in use for direct VCS operations.
+**Settled analysis (verified against source 2026-07-28):**
+- `normalize-git` (`crates/normalize-git/src/lib.rs`) is already 100% pure-Rust `gix` — not `git2`. The only shell-out is `run_in_worktree`, because `gix` doesn't support worktree add/remove; every read path (blame, diff, tree walk, log, churn, blob read) goes through `gix`. `docs/crates.md`'s entry for `normalize-git` is accurate as written ("Pure-Rust read-only git operations"), no fix needed there.
+- The old wording above ("`git2` crate already in use for direct VCS operations") was wrong on two counts: `git2` is not what `normalize-git` uses, and separately, `git2` is a declared-but-unused dependency in `crates/normalize/Cargo.toml` (no `git2::` references anywhere in `crates/normalize/src/`) — a small standalone cleanup opportunity (removing an unused dep), independent of this idea.
+- `normalize-git`'s public API returns `gix` types directly (`gix::Repository`, `gix::hash::ObjectId`, `gix::Tree`, etc.), so it's git-idiomatic today, not just internally-git-idiomatic-behind-a-facade. A real trait boundary would need its own domain types (e.g. `CommitId`, `BlobId`, `DiffChange`) instead of exposing `gix` types, which is a genuine API redesign, not a thin wrapper.
+- Per this file's/CLAUDE.md's crate-existence test (needs multiple real dependents or clear standalone value — "could theoretically be reused" doesn't count), a new `normalize-vcs` crate fails that test today: there is exactly one backend (git) and no concrete second-backend consumer.
+- `docs/architecture-decisions.md`'s runtime-vs-compile-time dispatch guidance (the "When to Use Runtime Dispatch" / "When to Use Compile-Time Dispatch" sections) also cuts against a trait+registry crate here: VCS backends are heavyweight deps (gix vs jj-lib vs hg bindings), which is exactly the profile that guidance assigns to feature flags, not a runtime trait+registry — absent an actual runtime-extensibility need (user swapping backends at runtime), which doesn't exist yet.
+- jj's data model (working-copy-as-commit, change-id vs commit-id, no staging area/index) doesn't map cleanly onto git's rev-parse/staged-unstaged concepts that `normalize-git`'s current API is built around (e.g. `is_staged`/`is_unstaged`, `git_diff_name_status` against a base ref). Generalizing that boundary is the hardest part of this idea, not a minor detail — an abstraction layer would need to define VCS-neutral concepts (working-copy state, change identity) before either backend fits it.
+
+**Open questions for the user (not decided here):**
+- Is there an actual concrete jj or Mercurial need driving this today, or is it speculative? The crate-existence test above says wait for a real second-backend consumer.
+- If/when a second backend becomes real, should the trait live in a new `normalize-vcs` crate, or inside `normalize-git-history` until a second concrete dependent shows up?
 
 ### Composite tooling: `normalize sessions blame` — session provenance tracking
 
-Unstarted idea. Observation: `git blame` tracks the provenance of a line of code by commit and author; `normalize sessions blame` would track the same line's provenance *through AI/coding sessions* (which session introduced or changed the line, when, what the conversation was). This is composite tooling — it requires cross-referencing session data (`normalize-sessions`, `normalize-chat-sessions`) with VCS line history (via `git blame` / `git2`).
+Unstarted idea. Observation: `git blame` tracks the provenance of a line of code by commit and author; `normalize sessions blame` would track the same line's provenance *through AI/coding sessions* (which session introduced or changed the line, when, what the conversation was). This is composite tooling — it requires cross-referencing session data (`normalize-sessions`, `normalize-chat-sessions`) with VCS line history (via `gix` blame, through `normalize-git`/`normalize-git-history`).
 
-Related infrastructure: `normalize-sessions` and `normalize-chat-sessions` crates provide session log parsing; `git2` provides VCS operations. No new infrastructure required to pursue this idea.
+**Settled analysis (verified against source 2026-07-28):**
+- Substrate partly exists on the sessions side: `normalize-sessions/src/heatmap.rs` (`normalize sessions heatmap`) already cross-references session tool-calls — `Edit`/`Write`/`Read` tool-use blocks carry `file_path` (and, for `Edit`, `old_string`/`new_string`, though `heatmap.rs` doesn't currently read those fields) — against files, producing per-file read/write counts. This is file-granularity only: no line-level tracking, and no correlation to git commits at all today.
+- Substrate fully exists on the git side: `normalize-git-history/src/ownership.rs`'s `blame_file()` already does per-line git blame via `repo.blame_file(...)` (gix), accumulating author/commit attribution per line. This is the exact primitive `sessions blame` would need to consult per-line commit provenance.
+- The genuinely hard, undone part is the correlation heuristic — matching a session's edits to the specific commit/hunk/lines that resulted from them — not new infrastructure. Both halves (session tool-call log parsing, git line-blame) already exist; nothing new needs to be built to have data to correlate.
+- No cyclic-dependency concern either direction: `normalize-sessions` currently depends on `normalize-chat-sessions` (not on `normalize-git-history` or `normalize-git`), and `normalize-git-history` depends on `normalize-git` only (not on `normalize-sessions` or `normalize-chat-sessions`). Wiring `normalize-sessions` → `normalize-git-history` (the natural direction, since blame is a git-history concern) introduces no cycle.
+
+**Open questions for the user (not decided here):**
+- How should session edits correlate to commits — by timestamp proximity (session edit time vs. commit time), by matching `old_string`/`new_string` content against blame hunks, or some other heuristic? This is a design call for whoever implements it, not something to settle in TODO.md.
 
 ## Implementation Notes
 
