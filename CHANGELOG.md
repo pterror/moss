@@ -75,6 +75,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **C/C++ header guards no longer reported as symbols.** Today's earlier macro-tags fix
+  (`preproc_def`/`preproc_function_def` capture added to `c.tags.scm`/`cpp.tags.scm`) had
+  a side effect: a classic header guard (`#ifndef FOO_H` / `#define FOO_H` / `...` /
+  `#endif`) got its valueless `#define FOO_H` reported as a `Function`-kind symbol named
+  `FOO_H` — pure noise nobody reading `normalize view --types-only` on a header wants.
+  Fixed structurally, not by naming convention: a new `preproc_ifdef` pattern in both
+  `.tags.scm` files matches a `preproc_def` with no value whose name equals its enclosing
+  `#ifndef`/`#ifdef`'s condition (`#eq?` + `!value`), and tags it with a new
+  language-agnostic `@_suppress` capture convention — any node so tagged has its
+  `@definition.*` capture (from any pattern, in any language's tags query) dropped in
+  `collect_symbols_from_tags`. A macro that merely shares its guard's name but carries a
+  real value (`#ifndef DEBUG` / `#define DEBUG 1`) is unaffected, since it still has a
+  `value` field. Also fixed in passing (uncovered only because this and other stale
+  fixtures were masked by fail-fast test ordering): C++ namespace nesting (added earlier
+  today) wasn't reflected in the `normalize-facts` end-to-end fixture; Haskell named
+  imports (`import Data.Map (empty, insert)`) resolved to `line: 0` and `module: null`
+  because the capture pattern never included the enclosing `@import` node, now fixed to
+  report the correct line/module; Gleam and Lua `add_numbers` fixtures were stale from
+  earlier grammar/query restoration work and are now regenerated to match the (correct)
+  current extraction.
 - **Elixir query correctness and completeness gaps found applying the
   query-testing methodology (`docs/query-testing-methodology.md`) to
   `elixir.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced

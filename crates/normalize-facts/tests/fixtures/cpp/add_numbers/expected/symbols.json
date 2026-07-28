@@ -8,58 +8,72 @@
   },
   {
     "file": "math_utils.cpp",
-    "kind": "Function",
-    "name": "add",
+    "kind": "Module",
+    "name": "math",
     "parent": null,
+    "start_line": 4
+  },
+  {
+    "file": "math_utils.cpp",
+    "kind": "Method",
+    "name": "add",
+    "parent": "math",
     "start_line": 6
   },
   {
     "file": "math_utils.cpp",
-    "kind": "Function",
+    "kind": "Method",
     "name": "multiply",
-    "parent": null,
+    "parent": "math",
     "start_line": 10
   },
   {
     "file": "math_utils.cpp",
     "kind": "Method",
     "name": "Calculator",
-    "parent": null,
+    "parent": "math",
     "start_line": 14
   },
   {
     "file": "math_utils.cpp",
     "kind": "Method",
     "name": "compute",
-    "parent": null,
+    "parent": "math",
     "start_line": 16
   },
   {
     "file": "math_utils.cpp",
     "kind": "Method",
     "name": "last_result",
-    "parent": null,
+    "parent": "math",
     "start_line": 25
   },
   {
     "file": "math_utils.hpp",
-    "kind": "Function",
-    "name": "add",
+    "kind": "Module",
+    "name": "math",
     "parent": null,
+    "start_line": 4
+  },
+  {
+    "file": "math_utils.hpp",
+    "kind": "Method",
+    "name": "add",
+    "parent": "math",
     "start_line": 6
   },
   {
     "file": "math_utils.hpp",
-    "kind": "Function",
+    "kind": "Method",
     "name": "multiply",
-    "parent": null,
+    "parent": "math",
     "start_line": 7
   },
   {
     "file": "math_utils.hpp",
     "kind": "Class",
     "name": "Calculator",
-    "parent": null,
+    "parent": "math",
     "start_line": 9
   },
   {

@@ -29,6 +29,15 @@
 (preproc_def name: (identifier) @name) @definition.macro
 (preproc_function_def name: (identifier) @name) @definition.macro
 
+; Header guards — same structural exclusion as c.tags.scm (shared C
+; preprocessor grammar). See the comment there for the full rationale.
+(preproc_ifdef
+  name: (identifier) @_guard.cond
+  (preproc_def
+    name: (identifier) @_guard.name
+    !value) @_suppress
+  (#eq? @_guard.cond @_guard.name))
+
 (function_declarator declarator: (qualified_identifier scope: (namespace_identifier) @local.scope name: (identifier) @name)) @definition.method
 
 ; Out-of-line destructor/operator definitions: `Stack::~Stack() {}`,

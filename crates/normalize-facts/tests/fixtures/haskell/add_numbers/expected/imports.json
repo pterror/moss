@@ -5,5 +5,19 @@
     "line": 3,
     "module": null,
     "name": "MathUtils"
+  },
+  {
+    "alias": null,
+    "file": "Main.hs",
+    "line": 3,
+    "module": "MathUtils",
+    "name": "add"
+  },
+  {
+    "alias": null,
+    "file": "Main.hs",
+    "line": 3,
+    "module": "MathUtils",
+    "name": "multiply"
   }
 ]

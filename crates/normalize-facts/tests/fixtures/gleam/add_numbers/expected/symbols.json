@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "file": "main.gleam",
+    "kind": "Function",
+    "name": "main",
+    "parent": null,
+    "start_line": 3
+  },
+  {
+    "file": "math_utils.gleam",
+    "kind": "Function",
+    "name": "add",
+    "parent": null,
+    "start_line": 1
+  },
+  {
+    "file": "math_utils.gleam",
+    "kind": "Function",
+    "name": "subtract",
+    "parent": null,
+    "start_line": 5
+  }
+]

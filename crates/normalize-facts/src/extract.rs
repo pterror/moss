@@ -509,6 +509,29 @@ fn collect_symbols_from_tags<'tree>(
 
     // Run the query and collect TagDef records.
     let root = tree.root_node();
+
+    // Generic suppression pass: a node captured `@_suppress` by *any* pattern in
+    // the query is structural noise (e.g. a C/C++ header guard's `#define`) that
+    // a *different* pattern in the same query may otherwise tag `@definition.*`
+    // (patterns are independent — a node matching two patterns yields two
+    // separate matches, so suppression can't be expressed by a single pattern
+    // alone). This is a language-agnostic capture convention, not per-language
+    // Rust logic: any `.scm` tags query can opt a node out of symbol extraction
+    // by tagging it `@_suppress`, and this scan applies uniformly.
+    let mut suppressed: std::collections::HashSet<(usize, usize)> =
+        std::collections::HashSet::new();
+    {
+        let mut suppress_cursor = tree_sitter::QueryCursor::new();
+        let mut suppress_matches = suppress_cursor.matches(query, root, content.as_bytes());
+        while let Some(m) = suppress_matches.next() {
+            for capture in m.captures {
+                if capture_names[capture.index as usize] == "_suppress" {
+                    suppressed.insert((capture.node.start_byte(), capture.node.end_byte()));
+                }
+            }
+        }
+    }
+
     let mut qcursor = tree_sitter::QueryCursor::new();
     let mut matches = qcursor.matches(query, root, content.as_bytes());
 
@@ -531,6 +554,9 @@ fn collect_symbols_from_tags<'tree>(
         let Some((def_node, capture_name)) = def_capture else {
             continue;
         };
+        if suppressed.contains(&(def_node.start_byte(), def_node.end_byte())) {
+            continue;
+        }
         let kind = match tags_capture_to_kind(capture_name) {
             Some(k) => k,
             None => continue,
@@ -706,6 +732,63 @@ fn count_complexity_with_query(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// Regression test for the C header-guard misclassification: `#define FOO_H`
+    /// with no value, matching the enclosing `#ifndef FOO_H`, is structural noise
+    /// and must not appear as a symbol — even though a real, valued macro that
+    /// happens to share the guard's name (`#define DEBUG 1`) still should.
+    #[test]
+    fn test_c_header_guard_suppressed() {
+        let extractor = Extractor::new();
+        let content = r#"#ifndef FOO_H
+#define FOO_H
+
+#ifndef DEBUG
+#define DEBUG 1
+#endif
+
+int foo(void);
+
+#endif
+"#;
+        let result = extractor.extract(&PathBuf::from("test.h"), content);
+        let names: Vec<&str> = result.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !names.contains(&"FOO_H"),
+            "header guard macro should be suppressed, got {names:?}"
+        );
+        assert!(
+            names.contains(&"DEBUG"),
+            "valued macro sharing its ifdef's name should still be extracted, got {names:?}"
+        );
+        assert!(
+            names.contains(&"foo"),
+            "real declaration should survive, got {names:?}"
+        );
+    }
+
+    /// Same structural exclusion for C++, sharing the C preprocessor grammar.
+    #[test]
+    fn test_cpp_header_guard_suppressed() {
+        let extractor = Extractor::new();
+        let content = r#"#ifndef FOO_HPP
+#define FOO_HPP
+
+void foo();
+
+#endif
+"#;
+        let result = extractor.extract(&PathBuf::from("test.hpp"), content);
+        let names: Vec<&str> = result.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !names.contains(&"FOO_HPP"),
+            "header guard macro should be suppressed, got {names:?}"
+        );
+        assert!(
+            names.contains(&"foo"),
+            "real declaration should survive, got {names:?}"
+        );
+    }
 
     #[test]
     fn test_extract_python() {
