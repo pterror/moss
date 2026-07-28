@@ -75,6 +75,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **C# query completeness and correctness gaps found applying the query-testing
+  methodology (`docs/query-testing-methodology.md`) to
+  `c-sharp.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-c-sharp 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **`c-sharp.types.scm`'s `@type.reference` matched every identifier in the
+    file, not just type positions** — a severe correctness bug, not merely a
+    completeness gap. Unlike Java/Rust, this grammar reuses the plain
+    `identifier` node for both type and value positions (no distinct
+    `type_identifier` kind), so the previous unconstrained `(identifier)
+    @type.reference` pattern captured method names, parameter names, and local
+    variable names (verified: 103 spurious captures on the pre-existing
+    `sample.cs`, including `Push`, `Add`, `item`). Replaced with field-constrained
+    patterns for the actual `type`/`returns` positions (variable declarations,
+    parameters, method/local-function return types, property types, foreach
+    loop variables, catch clauses, casts, `is`/`as` patterns, object creation),
+    covering identifier/generic_name/qualified_name leaves plus one level of
+    `nullable_type` unwrapping for C# 8+ nullable reference types.
+  - **`base_list` (the `class Foo : Base, IBar, IBaz<T>` clause) was entirely
+    unhandled in `c-sharp.tags.scm`** — every superclass and every implemented
+    interface silently disappeared from tags. Unlike Java/TypeScript, the C#
+    grammar has no syntactic extends/implements split (a single undifferentiated
+    `base_list`), so — per "be honest about capabilities" — every entry is
+    captured uniformly as `@reference.class` rather than fabricating a split the
+    CST cannot support. Also added `primary_constructor_base_type` handling
+    (`record Person(...) : PersonBase(...)`, a common modern-C# idiom).
+  - **`c-sharp.types.scm` had no `@definition.type` at all** (unlike
+    `java.types.scm`'s equivalent set) — class/struct/interface/enum/record
+    declarations were invisible to type-definition lookups.
+  - **Generic and qualified invocation targets unmatched in `c-sharp.calls.scm`
+    and `c-sharp.tags.scm`**: unqualified generic calls (`Bar<int>()`),
+    qualified generic calls (`list.OfType<T>()`, `Enumerable.Empty<T>()` — a
+    near-ubiquitous LINQ idiom), and the entire null-conditional invocation
+    chain (`obj?.Method()`, parsed as a distinct `conditional_access_expression`,
+    not `member_access_expression`) were all silently dropped.
+  - **`base(...)`/`this()` constructor delegation (`constructor_initializer`)
+    entirely unmatched** in both `calls.scm` and `tags.scm` — every subclass
+    constructor delegating to its base class or a sibling overload disappeared
+    from call extraction (the C# analog of Java's `explicit_constructor_invocation`
+    gap fixed in batch 1).
+  - **Aliased `using` directives produced duplicate/wrong `@import.path`
+    captures**: `using Sys = System;` matched both `"Sys"` (the alias) and
+    `"System"` (the real path) from the unconstrained plain-path pattern, and
+    even after anchoring to the real path, the dedicated alias pattern
+    double-fired alongside it — every aliased import produced two `@import`
+    records instead of one. Fixed with a trailing `.` anchor plus `!name`
+    field negation on the plain-path patterns. Also added previously-missing
+    forms: bare generic-type usings (`using static List<int>;`) and bare
+    extern-alias-qualified usings (`using global::System;`).
+  - **`switch_expression_arm` (the C# 8+ `n switch { 1 => ..., }` expression
+    form) was entirely uncounted in `c-sharp.complexity.scm`** — only the
+    older statement-form `switch_section` was recognized, despite the
+    pre-existing sample fixture already using the expression form.
+  Extended `sample.cs` with real-world idioms (LINQ pipelines, async/await,
+  records with primary-constructor inheritance, extension methods, nullable
+  reference types, base/interface lists, constructor delegation) and added a
+  `variants.cs` completeness-matrix fixture. New `csharp_*_completeness_*`/
+  `csharp_*_negative_*` tests in `query_fixtures.rs` assert capture kind (not
+  just text) via `collect_captures_full`/`collect_tag_pairs`, exact counts, and
+  zero false positives — including regression tests for the `@type.reference`
+  overmatching bug and the duplicate-`@import.path` bug.
+
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
