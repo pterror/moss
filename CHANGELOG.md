@@ -578,6 +578,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   assert capture kind (not just text) via a new `collect_captures_full`/`collect_tag_pairs`
   helper pair, exact counts, and zero false positives.
 
+- **Ruby query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `ruby.{tags,calls,imports,complexity,types}.scm`.**
+  All verified against real parse output via `normalize syntax query`/`normalize
+  syntax ast`, cross-referenced against arborium-ruby 2.17.0's node-types.json:
+  - `ruby.complexity.scm` never matched statement-modifier forms (`stmt if cond`,
+    `unless`, `while`, `until` — distinct node types from the block forms, not a
+    different field layout), inline `rescue` modifiers (`x = risky rescue nil`),
+    each independent `elsif` branch in an if/elsif chain (previously only the
+    outer `if` counted, undercounting multi-branch chains), and Ruby 2.7+
+    pattern-matching `case ... in ...` (`case_match`/`in_clause`, entirely
+    distinct from `case`/`when`) — all extremely common idioms, now covered.
+  - `ruby.tags.scm`/`ruby.calls.scm` never matched bare Kernel-style calls whose
+    callee name is a constant rather than an identifier (`Integer(x)`,
+    `Array(x)`, `String(x)`).
+  - `ruby.calls.scm`'s receiver-qualified call pattern re-captured `@call` on
+    top of the always-firing receiver-less pattern, silently double-counting
+    every receiver-qualified method call (found via the negative-case test
+    added alongside these fixes; fixed by capturing `@call.qualifier` only).
+  - `ruby.imports.scm` never matched `load 'file'`, `using Module` (refinement
+    activation), or namespaced `include`/`extend`/`prepend` arguments
+    (`include ActiveSupport::Concern`-style — the argument is a
+    `scope_resolution`, not a bare `constant`; this is the common case in
+    Rails-style codebases).
+  - `ruby.types.scm` never matched dynamic/computed superclasses
+    (`class Foo < Struct.new(:x, :y)`) — now captures the call's receiver
+    constant as a best-effort partial reference (there's no static name for
+    the resulting anonymous class).
+  - `class << self` singleton-class reopening was investigated and left
+    uncaptured as a definition: its `value` field is the bare `self` keyword
+    with no name text, so there is no honest name to report; methods defined
+    inside still parse as plain `method` nodes and are captured normally.
+    Documented in `ruby.tags.scm` rather than silently dropped or fabricated.
+- **Missing `cmake` fixture (`crates/normalize-languages/tests/fixtures/cmake/CMakeLists.txt`)
+  broke compilation of the entire `query_fixtures` test binary.** Root cause:
+  `.gitignore`'s blanket `*.txt` rule only carved out an exception for
+  `tests/fixtures/**/expected/*.txt`, so `git add` silently dropped the
+  `CMakeLists.txt` fixture (a `.txt`-suffixed file outside any `expected/`
+  directory) while its `SUMMARY.md` sibling was committed fine — the file
+  was never actually added in the commit that introduced its tests, and no
+  one noticed because CI's `NORMALIZE_REQUIRE_GRAMMARS` compile-guardrail
+  test didn't exist yet on the branch that landed it. Widened the
+  `.gitignore` exception to `tests/fixtures/**/*.txt` (any fixture input or
+  output, not just `expected/`) and added the missing fixture file.
 - **Codex session parser rewritten for current rollout protocol (Phase 2b).** The prior
   `format-codex` parser targeted a stale format. It now correctly parses
   `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` rollout files: reads line 1
