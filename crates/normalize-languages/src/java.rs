@@ -526,7 +526,6 @@ mod tests {
             "interface_body",          // interface body
             "modifiers",               // access modifiers
             "scoped_identifier",       // pkg.Class
-            "scoped_type_identifier",  // pkg.Type              // extends
             "super_interfaces",        // implements         // type name
 
             // CLAUSE
@@ -556,7 +555,6 @@ mod tests {
             "array_type",              // T[]
             "boolean_type",            // boolean
             "floating_point_type",     // float, double
-            "generic_type",            // T<U>
             "integral_type",           // int, long
             "type_arguments",          // <T, U>
             "type_bound",              // T extends X               // T, U, V
@@ -567,16 +565,13 @@ mod tests {
 
             // DECLARATION
             "annotation_type_body",    // @interface body
-            "annotation_type_declaration", // @interface
             "annotation_type_element_declaration", // @interface element
             "assert_statement",        // assert
             "compact_constructor_declaration", // record constructor
             "constant_declaration",    // const decl
-            "explicit_constructor_invocation", // this(), super()
             "expression_statement",    // expr;
             "labeled_statement",       // label: stmt
             "local_variable_declaration", // local var
-            "record_declaration",      // record
             "record_pattern_body",     // record pattern
 
             // MODULE

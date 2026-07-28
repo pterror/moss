@@ -480,6 +480,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed (internal)
 
+- **Java query completeness gaps repaired, applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `java.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-java 2.17.0's node-types.json field-by-field and
+  verified against real parse output via `normalize syntax query`/`normalize syntax ast`.
+  Found and fixed:
+  - `new ArrayList<>()`/`new HashMap<>()` (generic constructor targets) and
+    `new java.util.Date()` (path-qualified constructor targets) entirely unmatched in
+    `java.tags.scm`'s `@reference.class` — only the plain `type_identifier` form of
+    `object_creation_expression.type` was handled, silently dropping one of the most
+    common Java idioms.
+  - `extends AbstractList<String>` / `extends java.util.AbstractList` (generic and
+    path-qualified superclasses) and `implements Comparable<Foo>` /
+    `implements java.io.Serializable` (generic and path-qualified interfaces) losing
+    their `@reference.class`/`@reference.implementation` tags for the same reason.
+  - `record` (Java 16+) and `@interface` (annotation type) declarations entirely
+    unhandled in `java.tags.scm` and `java.types.scm` — no `@definition`/`@definition.type`
+    at all. Mapped to the closest existing kind (`class`/`interface` respectively,
+    matching how the JVM spec compiles them) rather than inventing a new capture kind.
+  - `super(...)`/`this(...)` explicit constructor-invocation calls (a distinct
+    `explicit_constructor_invocation` node, not `method_invocation`) entirely unmatched
+    in both `java.calls.scm` and `java.tags.scm` — every subclass constructor delegating
+    to its superclass silently disappeared from call extraction.
+  - Bare single-segment imports (`import Foo;`, no package) silently dropped by
+    `java.imports.scm`'s scoped-identifier-only patterns.
+  - A latent duplicate-match bug in `java.imports.scm`: the plain-import pattern was
+    unconstrained and also matched every wildcard and `static` import (since `static`-ness
+    and wildcard-ness don't change which child holds the path), producing 2-4x duplicate
+    `@import` captures per statement. Fixed with a `.` anchor and removal of the redundant
+    now-unnecessary `static`-specific pattern variants.
+  Extended `sample.java` with real-world idioms (generics, iterator-chain pipelines,
+  nested/anonymous classes, lambdas, method references, enums with constructors, records,
+  interface default/static methods) and added a `variants.java` completeness-matrix
+  fixture. New `java_*_completeness_*`/`java_*_negative_*` tests in `query_fixtures.rs`
+  assert capture kind (not just text) via a new `collect_captures_full`/`collect_tag_pairs`
+  helper pair, exact counts, and zero false positives.
+
 - **Codex session parser rewritten for current rollout protocol (Phase 2b).** The prior
   `format-codex` parser targeted a stale format. It now correctly parses
   `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` rollout files: reads line 1
