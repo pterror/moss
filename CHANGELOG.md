@@ -75,6 +75,425 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Elixir query correctness and completeness gaps found applying the
+  query-testing methodology (`docs/query-testing-methodology.md`) to
+  `elixir.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced
+  against arborium-elixir 2.17.0's node-types.json field-by-field and
+  verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Complexity massively overcounted every function.** The previous
+    `elixir.complexity.scm` matched a blanket `(call) @complexity` and
+    `(binary_operator) @complexity`, treating literally every function call
+    (`IO.puts`, `Enum.reduce`, even `def`/`defmodule` themselves) and every
+    arithmetic/comparison operator (`+`, `-`, `==`) as a decision point —
+    since Elixir represents control flow as macro calls rather than
+    dedicated AST nodes, this made the complexity metric essentially
+    meaningless (proportional to how much code a function calls, not how
+    much it branches). Rescoped to the specific branching macros
+    (if/unless/case/cond/with/for/try/receive), each independent
+    `stab_clause` branch arm (so a `case`/`cond` with N arms scores N, not
+    1), and only the boolean short-circuit operators (`&&`, `||`, `and`,
+    `or`).
+  - **Guarded function/macro heads were entirely unmatched by
+    `elixir.tags.scm`.** `def name(x) when guard do ... end` puts a
+    `binary_operator` (operator `when`) directly under `arguments`, not the
+    `call`/`identifier` the four existing def/defp/defmacro/defmacrop
+    patterns required — silently dropping every guarded function, one of
+    the most common idioms in real Elixir code. Also added `defguard`/
+    `defguardp` (structurally identical, always guarded) and `defdelegate`,
+    neither previously recognized at all.
+  - **Anonymous-function invocation (`fun.(args)`) was unmatched by
+    `elixir.calls.scm`.** `dot.right` is optional in this grammar and is
+    absent for this form; the existing remote-call pattern required
+    `right: (identifier)` and never fires. Also added a best-effort capture
+    for dynamic/macro-generated call targets (`unquote(name)(1, 2)` inside a
+    `quote` block, where `call.target` is itself a `call`).
+  - **Multi-alias form (`alias Foo.{Bar, Baz}`) was unmatched by
+    `elixir.imports.scm`.** This extremely common idiom parses as `dot
+    right: (tuple (alias) ...)`, not a bare `(alias)` under `arguments`; the
+    four existing alias/import/use/require patterns never matched it. Also
+    added the dot-qualified single form (`alias __MODULE__.Sub`).
+  - Documented (not changed, since it is already the tested contract) that
+    `elixir.types.scm`'s `(alias) @type.reference` is intentionally broad —
+    Elixir has no separate type namespace from module names, and the query
+    engine (`query_predicates.rs`) supports no ancestor-aware predicate that
+    would let it scope narrowly to `@spec`/`@type` bodies without also
+    dropping legitimate module-as-type references elsewhere.
+- **Kotlin query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to `kotlin.{tags,calls,imports,types}.scm`.**
+  Cross-referenced against arborium-kotlin 2.17.0's node-types.json field-by-field
+  and verified via `normalize syntax query`/`normalize syntax ast`:
+  - **Implementing an interface without parens (`class Person(...) : Greeter`) —
+    by far the most common Kotlin idiom for interface implementation — was
+    entirely unmatched** in `kotlin.tags.scm`'s `@reference.class`. Only the
+    constructor-call form (`: Base()`, wrapped in `constructor_invocation`) was
+    handled; the bare `delegation_specifier -> user_type` form (no invocation)
+    was missing a pattern.
+  - **`by`-delegation (`class Derived(b: Base) : Base by b`) was also
+    unmatched** — the delegate type is nested two levels deep
+    (`delegation_specifier -> explicit_delegation -> user_type`), a distinct
+    shape from both forms above.
+  - **`@Deprecated("...")`/any argument-carrying annotation usage was
+    misclassified as a `@reference.class`.** `constructor_invocation` is a
+    legal child of both `delegation_specifier` (intended) and `annotation`
+    (not intended); the pattern was unconstrained and fired on both.
+  - **Secondary-constructor delegation (`this(...)`/`super(...)`) was entirely
+    unmatched** in both `kotlin.tags.scm` and `kotlin.calls.scm` —
+    `constructor_delegation_call` is a distinct node kind from
+    `call_expression`, silently dropping every secondary-constructor
+    delegation from call extraction.
+  - **Aliased and wildcard imports were double-counted.** `kotlin.imports.scm`'s
+    plain-import pattern was unconstrained and additionally matched every
+    `import pkg.Class as Alias` and `import pkg.*` statement (same bug class as
+    the Java import fix), producing a duplicate `@import` per aliased/wildcard
+    import.
+  - **A trailing same-line comment after a plain import silently dropped the
+    import entirely** once the duplicate-match anchor fix above was applied: a
+    `line_comment`/`multiline_comment` immediately following an import
+    attaches as a literal trailing child of `import_header` in this grammar,
+    and — contrary to tree-sitter's documented anchor behavior for `extra`
+    nodes — the trailing `.` anchor does not skip it. Fixed with two explicit
+    "identifier, then exactly one comment, then nothing" variants instead of
+    an optional-quantified sibling (`(line_comment)? .`, which was tried first
+    and silently reintroduced the original duplicate-match bug — a quantified
+    sibling combined with a trailing anchor does not constrain matches in this
+    query engine the way it does without the `?`).
+  - **`kotlin.types.scm`'s `(user_type (type_identifier) @type.reference)`
+    pattern was a strict subset of its own blanket `(type_identifier)
+    @type.reference` pattern**, producing a literal duplicate `@type.reference`
+    capture for every qualified/generic type usage — the common case in real
+    Kotlin code (`LinkedList<T>`, `foo.Bar`, any generic container). Removed
+    the redundant pattern.
+  - **`kotlin.types.scm` had no `@definition.type` patterns at all**
+    (class/object/type-alias declarations), unlike the java/go/rust sibling
+    convention. Added, matching the existing precedent that a type's own
+    declared name legitimately also matches the blanket `@type.reference`
+    pattern (same as Rust's struct/enum names).
+  Extended `sample.kt` with real-world idioms (sealed classes, interfaces
+  implemented without parens, named/unnamed companion objects, secondary
+  constructors, extension functions, suspend functions, trailing-lambda
+  calls) and added a `variants.kt` completeness-matrix fixture covering every
+  node-type variant found, plus a NEGATIVE section (callable references,
+  argument-carrying annotations, top-level properties, unnamed companion
+  objects — the last two are documented grammar limitations, not bugs).
+
+- **Swift query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `swift.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-swift 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **Every `extension` declaration was completely invisible to tags.** `class`/
+    `struct`/`enum`/`actor`/`extension` all share the `class_declaration` node
+    type, but `extension`'s target type is wrapped in `user_type` instead of a
+    bare `type_identifier` — the exact class of bug the batch-1 Rust sweep found
+    for generic/path-qualified `impl` blocks. Since extensions are one of the
+    most heavily-used Swift idioms (protocol conformance, computed properties,
+    organizing code by feature), this meant no extension ever produced a
+    container symbol, and every method/property declared inside one was never
+    nested under anything.
+  - **Operator-overload function declarations were entirely dropped**
+    (`static func == (lhs: Foo, rhs: Foo) -> Bool`, `static func += (...)`,
+    custom operators like `+++`) — `function_declaration.name` only matched
+    `simple_identifier`, so the near-universal way of implementing
+    `Equatable`/`Comparable`/`Hashable`/arithmetic conformance in Swift was
+    silently absent from tags. Also documented (not fixed — a real grammar
+    quirk, not a query bug): the same `name` field, per `node-types.json`, also
+    lists type-expression variants; verified via `normalize syntax query` that
+    this is the function's *return type* mistakenly sharing the `name` field —
+    a wildcard `name: (_)` pattern would silently capture the return type text
+    as the function's name instead.
+  - **Member properties (`var`/`let`) were never captured at all.** Fixed by
+    restricting `property_declaration` matches to a direct child of
+    `class_body`/`enum_class_body` (member position), distinguishing them from
+    the same node kind used for local `var`/`let` inside function bodies
+    (children of `statements`) — verified this ancestor restriction correctly
+    excludes locals with a dedicated negative test. `let`/`var` map to
+    `@definition.constant`/`@definition.var` respectively.
+  - **Enum cases, protocol requirements, and associated types were never
+    captured.** Added `enum_entry` (`@definition.constant`; verified — unlike
+    the analogous Go `const_spec` bug — every name in a comma-separated case
+    list `case pending, cancelled` IS tagged, no positional workaround needed),
+    `protocol_property_declaration`/`protocol_function_declaration`
+    (`@definition.var`/`@definition.method`), and `associatedtype_declaration`
+    (`@definition.type`) — all distinct node types from their concrete-body
+    counterparts, previously entirely absent from `swift.tags.scm`.
+  - **Force-unwrap calls (`completion!()`) and generic type-instantiation
+    calls (`Array<Int>()`, `Optional<String>(nil)`) were unmatched** in
+    `swift.calls.scm`. The former's callee is a `postfix_expression`
+    (`target`/`operation: bang`) sitting inside `call_expression`, a distinct
+    shape from the plain-identifier and navigation-expression patterns already
+    handled. The latter parses as an entirely different node type,
+    `constructor_expression` with a `constructed_type: (user_type)` field, not
+    `call_expression` at all — the same class of bug as batch 1's Rust
+    turbofish-call gap.
+  - **`switch` complexity was undercounted for every switch with more than one
+    case**, and `guard` (Swift's early-exit branch — an extremely common
+    idiom) and short-circuit boolean operators (`&&`/`||`) were entirely
+    absent from `swift.complexity.scm`. Added `switch_entry` (one per case,
+    matching the convention already used by every other language's
+    match/switch construct), `guard_statement`, and
+    `conjunction_expression`/`disjunction_expression` (matching Kotlin's
+    identical convention for the identically-named node types).
+  - Documented (not fixed, since there is no stable callee name to capture):
+    immediately-invoked closures (`{ ... }(args)`), curried calls
+    (`adder(1)(2)`), and bracket type-literal initializer calls
+    (`[Int](repeating:count:)`) remain deliberately excluded from
+    `swift.calls.scm`. Also documented: `init`/`deinit` declarations have no
+    populated `name`-field child in the real parse tree despite
+    `node-types.json` claiming one, and `subscript` declarations are
+    genuinely unnamed in Swift — capturing any of the three in
+    `swift.tags.scm` without also fixing `Language::node_name` in `swift.rs`
+    would produce query matches that silently vanish downstream (no symbol
+    emitted), so they are intentionally left uncaptured with the reasoning
+    recorded in the query file.
+- **PHP query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `php.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-php 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast` (this is a separate, wider
+  sweep than the earlier CFG-only remediation of `php.cfg.scm`):
+  - **`php.tags.scm` had no `@reference.*` captures at all.** Every function
+    call, method call, `new` expression, `extends`, and `implements` was
+    entirely invisible to tags — only definitions were ever captured. Added
+    `@reference.call` (function/static/instance/nullsafe method calls),
+    `@reference.class` (constructor invocation, `extends`), and
+    `@reference.implementation` (`implements`), mirroring the coverage
+    java.tags.scm/ruby.tags.scm already have for the same construct
+    categories.
+  - **`require`/`require_once` were entirely unmatched in `php.imports.scm`**
+    — a distinct grammar node from `include`/`include_once`, not a variant of
+    it. Since `require` is the more common file-inclusion form in real PHP
+    (fatals instead of warning on failure), this silently dropped the
+    majority of file-inclusion imports in a typical codebase.
+  - **Single-segment `use ClassName;` (no namespace separator) was entirely
+    unmatched in `php.imports.scm`** — the query only ever matched
+    `qualified_name`; a bare `use Exception;`/`use Throwable;` parses as
+    `name`. Very common for global/built-in classes.
+  - **Grouped `use App\{Foo, Bar};` was entirely unmatched.** Each grouped
+    member nests one level deeper (inside `namespace_use_group`) than the
+    plain form; tree-sitter query nesting requires a direct-child match, so
+    none of the existing direct-child patterns ever matched a grouped
+    member.
+  - **Trait composition (`use TraitA, TraitB;` inside a class/trait body)
+    was entirely unmatched** — a distinct node kind (`use_declaration`) from
+    the namespace-import `namespace_use_declaration`. Added to
+    `php.imports.scm` (mirroring how `ruby.imports.scm` treats
+    `include`/`extend`/`prepend`), not `php.tags.scm`.
+  - **Aliased imports were double-counted**: `use X as Y;` produced two
+    identical `@import.path` captures (one from the base pattern, one from
+    the alias-specific pattern, both unconditionally matching). Fixed with
+    tree-sitter's `!field` negation so the base pattern only fires when no
+    alias is present.
+  - **Union type members were double-counted in `php.types.scm`**: a
+    redundant `union_type`-specific pattern duplicated every match the
+    already-unanchored `named_type` pattern produced (e.g. `Foo|Bar` yielded
+    two captures per member). Removed the redundant pattern.
+  - **`named_type`'s `relative_name` variant** (`namespace\LocalType`) was
+    unmatched in `php.types.scm`.
+  - **Constructor invocation (`new Foo()`) was entirely unmatched in
+    `php.calls.scm`** as well as invisible in tags (see above) — not treated
+    as a call anywhere. Deliberately kept out of `calls.scm` (matching
+    java.calls.scm's precedent that `new` is a class reference, not an
+    invocation) but added to `php.tags.scm`'s new `@reference.class`.
+  - **Namespaced function calls** (`\Ns\func()`, `Ns\func()`) and several
+    computed-callee forms (IIFEs, callable-array syntax, subscript-indexed
+    callables, chained call/`new` results) were unmatched in
+    `php.calls.scm` — `function_call_expression.function` allows 17 node
+    variants; only 2 were handled.
+  - **Dynamic static/instance method calls** (`Class::$method()`,
+    `$obj->$method()`, `$obj->{$expr}()`) were unmatched in both
+    `php.calls.scm` and the new `php.tags.scm` reference patterns —
+    `scoped_call_expression`/`member_call_expression`/
+    `nullsafe_member_call_expression`'s `name` field allows
+    `variable_name`/`dynamic_variable_name`/`expression` in addition to the
+    only-handled plain `name`.
+  - **PHP 8's `match` expression arms (`match_conditional_expression`) were
+    entirely uncounted in `php.complexity.scm`** — the same "distinct node
+    type from what the query checks" bug class the CFG remediation found for
+    `match_condition_list` nesting. `match_default_expression` is
+    deliberately left uncounted, mirroring `switch`'s existing
+    `default_statement` exclusion.
+  - **Short-circuit boolean operators (`&&`, `||`, `and`, `or`, `xor`) were
+    uncounted in `php.complexity.scm`**, unlike the `and`/`or` precedent
+    already established for `python.complexity.scm`/`ruby.complexity.scm`.
+    Matched via `binary_expression`'s `operator` field (PHP's single generic
+    binary-operator node) rather than a dedicated node kind.
+- **Scala query completeness gaps found applying the query-testing methodology
+  (`docs/query-testing-methodology.md`) to
+  `scala.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-scala 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **Scala 3 `enum` definitions were entirely unmatched** by `scala.tags.scm`
+    — `enum Color { case Red, Green, Blue }` produced no symbol at all, despite
+    enums being a headline Scala 3 feature that replaces the old
+    sealed-trait-ADT pattern. Now tagged as `definition.enum` (a container, so
+    methods inside the enum body nest correctly).
+  - **Operator-method definitions (`def +(other: Point): Point = ...`) were
+    unmatched.** `function_definition.name` allows `operator_identifier` in
+    addition to `identifier`; only the latter was handled, silently dropping
+    every arithmetic/comparison operator overload on a case class — one of the
+    most common reasons to define an operator method in Scala.
+  - **`scala.tags.scm` had no `@reference.*` captures at all** (calls, `new`
+    instantiation, `extends`/`with` supertypes), unlike the other JVM
+    languages already swept (Java, batch 1). Added `@reference.call` (ported
+    from `scala.calls.scm`, including the two new call-shape fixes below),
+    `@reference.class` for object instantiation (`new Foo()`, `new
+    Stack[Int]()`, `new java.util.Date()`, `new java.util.HashMap[String,
+    Int]()`), and `@reference.implementation` for `extends`/`with` supertypes.
+  - **`with`-mixin traits were invisible to any supertype query.**
+    `extends_clause.type` is declared `multiple: true` in node-types.json, but
+    in practice only the *first* type after `extends` actually carries the
+    `type` field — every subsequent `with X` mixin trait is an unfielded
+    direct child. A field-constrained query alone would have silently dropped
+    every mixin after the first; fixed by matching unconstrained children,
+    which is exactly the "field declared but not populated for every
+    occurrence" trap the methodology doc warns about.
+  - **Explicit operator-method calls (`obj.+(x)`, `this.n.+(1)`) were
+    unmatched** in both `scala.calls.scm` and the new `scala.tags.scm`
+    references — `field_expression.field` allows `operator_identifier` in
+    addition to `identifier`.
+  - **Parenthesized call targets (`(f)(x)`) were unmatched** —
+    `call_expression.function` allows `parenthesized_expression` directly
+    (mirrors the existing `typescript.calls.scm` treatment of the same shape).
+  - **`scala.types.scm` double-counted every qualified type reference.** A
+    redundant `(stable_type_identifier (type_identifier))` clause matched the
+    same node a plain unconstrained `(type_identifier)` clause already
+    covered (tree-sitter queries match nodes anywhere in the tree regardless
+    of parent kind), so `java.util.Date` produced two `@type.reference`
+    captures for "Date" instead of one. Removed the redundant clause.
+  - **`Scala::extract_imports` left raw rename-arrow text in parsed import
+    names.** `import scala.util.{Try, Success => S, Failure}` (Scala 2
+    `=>` rename) and `import java.util.{List as JList}` (Scala 3 `as`
+    rename) — both extremely common idioms for avoiding name clashes — stored
+    the literal `"Success => S"` in the parsed `names` list instead of the
+    plain name `"Success"`. Now strips the rename suffix from every name, and
+    recovers the alias when the braces contain exactly one name (the `Import`
+    struct has one whole-statement `alias` field, so per-name aliases in a
+    multi-name brace import can't be fully represented). Also fixed brace
+    wildcard detection (`{_}`/`{*}`) from a substring `.contains('_')` check
+    — which would misfire on any plain snake_case-ish name — to an exact-token
+    check.
+  - `(enum_definition)` added to `scala.complexity.scm`'s nesting set,
+    matching the existing treatment of class/object/trait definitions now
+    that enums are extracted as symbols.
+- **C# query completeness and correctness gaps found applying the query-testing
+  methodology (`docs/query-testing-methodology.md`) to
+  `c-sharp.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced against
+  arborium-c-sharp 2.17.0's node-types.json field-by-field and verified via
+  `normalize syntax query`/`normalize syntax ast`:
+  - **`c-sharp.types.scm`'s `@type.reference` matched every identifier in the
+    file, not just type positions** — a severe correctness bug, not merely a
+    completeness gap. Unlike Java/Rust, this grammar reuses the plain
+    `identifier` node for both type and value positions (no distinct
+    `type_identifier` kind), so the previous unconstrained `(identifier)
+    @type.reference` pattern captured method names, parameter names, and local
+    variable names (verified: 103 spurious captures on the pre-existing
+    `sample.cs`, including `Push`, `Add`, `item`). Replaced with field-constrained
+    patterns for the actual `type`/`returns` positions (variable declarations,
+    parameters, method/local-function return types, property types, foreach
+    loop variables, catch clauses, casts, `is`/`as` patterns, object creation),
+    covering identifier/generic_name/qualified_name leaves plus one level of
+    `nullable_type` unwrapping for C# 8+ nullable reference types.
+  - **`base_list` (the `class Foo : Base, IBar, IBaz<T>` clause) was entirely
+    unhandled in `c-sharp.tags.scm`** — every superclass and every implemented
+    interface silently disappeared from tags. Unlike Java/TypeScript, the C#
+    grammar has no syntactic extends/implements split (a single undifferentiated
+    `base_list`), so — per "be honest about capabilities" — every entry is
+    captured uniformly as `@reference.class` rather than fabricating a split the
+    CST cannot support. Also added `primary_constructor_base_type` handling
+    (`record Person(...) : PersonBase(...)`, a common modern-C# idiom).
+  - **`c-sharp.types.scm` had no `@definition.type` at all** (unlike
+    `java.types.scm`'s equivalent set) — class/struct/interface/enum/record
+    declarations were invisible to type-definition lookups.
+  - **Generic and qualified invocation targets unmatched in `c-sharp.calls.scm`
+    and `c-sharp.tags.scm`**: unqualified generic calls (`Bar<int>()`),
+    qualified generic calls (`list.OfType<T>()`, `Enumerable.Empty<T>()` — a
+    near-ubiquitous LINQ idiom), and the entire null-conditional invocation
+    chain (`obj?.Method()`, parsed as a distinct `conditional_access_expression`,
+    not `member_access_expression`) were all silently dropped.
+  - **`base(...)`/`this()` constructor delegation (`constructor_initializer`)
+    entirely unmatched** in both `calls.scm` and `tags.scm` — every subclass
+    constructor delegating to its base class or a sibling overload disappeared
+    from call extraction (the C# analog of Java's `explicit_constructor_invocation`
+    gap fixed in batch 1).
+  - **Aliased `using` directives produced duplicate/wrong `@import.path`
+    captures**: `using Sys = System;` matched both `"Sys"` (the alias) and
+    `"System"` (the real path) from the unconstrained plain-path pattern, and
+    even after anchoring to the real path, the dedicated alias pattern
+    double-fired alongside it — every aliased import produced two `@import`
+    records instead of one. Fixed with a trailing `.` anchor plus `!name`
+    field negation on the plain-path patterns. Also added previously-missing
+    forms: bare generic-type usings (`using static List<int>;`) and bare
+    extern-alias-qualified usings (`using global::System;`).
+  - **`switch_expression_arm` (the C# 8+ `n switch { 1 => ..., }` expression
+    form) was entirely uncounted in `c-sharp.complexity.scm`** — only the
+    older statement-form `switch_section` was recognized, despite the
+    pre-existing sample fixture already using the expression form.
+  Extended `sample.cs` with real-world idioms (LINQ pipelines, async/await,
+  records with primary-constructor inheritance, extension methods, nullable
+  reference types, base/interface lists, constructor delegation) and added a
+  `variants.cs` completeness-matrix fixture. New `csharp_*_completeness_*`/
+  `csharp_*_negative_*` tests in `query_fixtures.rs` assert capture kind (not
+  just text) via `collect_captures_full`/`collect_tag_pairs`, exact counts, and
+  zero false positives — including regression tests for the `@type.reference`
+  overmatching bug and the duplicate-`@import.path` bug.
+- **Haskell query completeness gaps and extraction bugs found applying the
+  query-testing methodology (`docs/query-testing-methodology.md`) to
+  `haskell.{tags,calls,imports,complexity,types}.scm`.** Cross-referenced
+  against arborium-haskell 2.17.0's node-types.json field-by-field and
+  verified via `normalize syntax query`/`normalize syntax ast`/`normalize
+  rank complexity`:
+  - **Every Haskell function's cyclomatic complexity was inflated, in every
+    file, unconditionally.** `haskell.complexity.scm` had `(match) @complexity`,
+    but every function equation body (even a zero-branch `f x = x + 1`) and
+    every case/lambda_case arm body is wrapped in its own `match` node — so
+    the equation-body wrapper itself was miscounted as a decision point.
+    Confirmed via `normalize rank complexity`: a trivial one-line function
+    reported complexity 2 instead of 1, and a plain 4-arm, no-guard `case`
+    reported complexity 7 instead of the correct 5 (base 1 + case 1 + one per
+    arm). Fixed by removing `(match) @complexity` and adding `(alternative)
+    @complexity` (one decision point per case/lambda_case/lambda_cases arm,
+    mirroring `match_arm` in `rust.complexity.scm`).
+  - **`multi_way_if`/`lambda_case`/`lambda_cases` (MultiWayIf/LambdaCase
+    extensions, in pervasive real-world use) contributed zero complexity**
+    regardless of branch count — entirely absent from the query.
+  - **Two of Haskell's most common top-level definition shapes were entirely
+    absent from tags:** zero-argument/point-free bindings (`main = do ...`,
+    `frequencyMap = foldr (...) Map.empty`) use a `bind` node, not
+    `function` (which requires ≥1 pattern argument) — `main` itself, and any
+    point-free-style definition, never appeared as a symbol.
+  - **`where`-bound local helper functions leaked into top-level symbols**
+    (confirmed on a `where`-clause fixture: local helpers appeared as
+    top-level functions). `function`/`bind` are also the node types used for
+    local `let`/`where` bindings; fixed by scoping both tags patterns to
+    `(declarations (function|bind ...))` — direct top-level children only.
+  - **Multiple `instance` declarations of the same typeclass for different
+    types collapsed into one symbol.** `instance.name` holds the *typeclass*
+    name (not the instantiated type), so `instance Shape Rectangle` and
+    `instance Shape Count` both produced a symbol named "Shape"; a
+    kind-unscoped post-processing dedup pass (`dedup_haskell_functions` in
+    `haskell.rs`, meant only for multi-equation function collapsing) removed
+    every instance after the first with the same class name. Scoped the
+    dedup to `Function`/`Method` kinds only.
+  - **Custom-operator definitions (`(+++) xs ys = ...`) were unmatched** for
+    functions, data types, newtypes, type synonyms, typeclasses, and
+    instances alike — all six `name`-field constraints allow `prefix_id` (the
+    parenthesized-operator form) in addition to the plain form.
+  - **Operator-section-as-prefix-function calls were entirely unmatched in
+    `haskell.calls.scm`** — `($) f x`, `(+) 1 2`, `(Prelude.+) 1 2`.
+    `apply.function` allows `prefix_id` wrapping a bare or qualified
+    operator; `($)` applied directly (e.g. `foldr ($) x fs`) is a pervasive
+    point-free idiom. Also added parens-wrapped plain/qualified identifiers
+    used as a call target (`(f) 1`, `(Map.lookup) k m`).
+  - **Named imports were never extracted at all** — `haskell.imports.scm` had
+    no `@import.name` capture whatsoever, silently dropping every name from
+    `import Data.List (sort, nub)` and every `hiding (...)` clause.
+  - Documented (not fixed) two confirmed-real but vanishingly-rare grammar
+    edge cases rather than fabricating error-prone patterns: unparenthesized
+    infix type/data declarations (`data a :+: b = ...`) and custom infix
+    *type* operators used as a type constructor (`x :: Int :+: String`) — the
+    latter would require scoping to type-level `infix` nodes specifically,
+    since the same node shape is also used for ordinary value-level operators.
+
 - **Go query completeness gaps found applying the query-testing methodology
   (`docs/query-testing-methodology.md`) to `go.{tags,calls,imports,types}.scm`.**
   Cross-referenced against arborium-go 2.17.0's node-types.json field-by-field
@@ -100,6 +519,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     generic-function instantiation calls (`Sum[int](args)`) do not parse as
     `call_expression` at all in this grammar version — a tree-sitter-go
     parsing ambiguity with generic-type conversion, not fixable via query.
+- **SQL query completeness gaps found applying the query-testing methodology
+  to `sql.{tags,calls,complexity,types}.scm`** (arborium-sql 2.17.0 has no
+  separate `imports.scm`/`cfg.scm` for SQL). Cross-referenced against
+  node-types.json field-by-field and verified via `normalize syntax
+  query`/`normalize syntax ast`:
+  - **`CASE ... WHEN ... END` branches contributed zero complexity, ever, in
+    any SQL file.** The original `(when_clause) @complexity` was wrong from
+    the start: `when_clause` is exclusively the node type for MERGE
+    statement's `WHEN MATCHED`/`WHEN NOT MATCHED` clauses — a scalar CASE
+    expression's `case` node has no `when_clause` child at all (confirmed via
+    real parse). Fixed by matching `keyword_when` directly, which correctly
+    counts one branch per WHEN in both CASE expressions and MERGE statements.
+  - **`EXTRACT(field FROM source)` (e.g. `EXTRACT(YEAR FROM ordered_at)`)
+    produced two spurious function calls instead of one.** `invocation`'s
+    `unit` field (the date-part keyword, e.g. `YEAR`) is also an
+    unconstrained `object_reference`, and both `sql.calls.scm` and
+    `sql.tags.scm`'s `@reference.call` matched it as if it were a second
+    function call. Fixed by anchoring to the first child of `invocation`.
+  - **`CREATE FUNCTION ... RETURNS <custom_type>` and `CREATE SCHEMA ...
+    AUTHORIZATION <role>` each produced a second, spurious definition** — the
+    custom return type and the authorization role are both represented as
+    unconstrained siblings of the real name (`object_reference`/`identifier`
+    respectively) inside `create_function`/`create_schema`, and the
+    unanchored queries matched both. Fixed by anchoring each to the position
+    immediately after `keyword_function`/`keyword_schema`.
+  - **`CREATE TRIGGER`, `CREATE INDEX`, `CREATE SEQUENCE`, and `CREATE
+    MATERIALIZED VIEW` were entirely unmatched** in `sql.tags.scm` — no
+    definitions were ever produced for any of these common DDL statements.
+  - **`sql.tags.scm` had no `@reference.call` at all** — SQL function calls
+    never appeared as references in the tags-based symbol view, even though
+    `sql.calls.scm` matched them correctly.
+  - **Function/procedure parameter types and `DECLARE`d procedural variable
+    types were entirely unmatched** in `sql.types.scm` — only column
+    definition types were captured. Unlike `column_definition`, neither
+    `function_argument` nor `function_declaration` has a `type` field for
+    builtin types in this grammar; fixed by enumerating the concrete builtin
+    type node kinds directly (an adjacency-based `identifier . type` query
+    was tried and rejected: it silently misses unnamed parameters, which are
+    grammar-legal, e.g. `CREATE FUNCTION f(INTEGER, TEXT)`).
+  - **`CAST(expr AS type)` and `CREATE SEQUENCE ... AS type` target types
+    were entirely unmatched** in `sql.types.scm`.
+  - **`sql.complexity.scm` had no handling for `UNION`/`INTERSECT`/`EXCEPT`
+    set operations, `EXISTS` subquery predicates, or CTE (`WITH`) nesting** —
+    all added as `@complexity`/`@nesting` respectively.
+  - Documented (not fixed, since the grammar genuinely cannot parse it): a
+    *named* `CONSTRAINT fk_name FOREIGN KEY ...` table constraint produces an
+    `ERROR` node in arborium-sql 2.17.0 (the unnamed `FOREIGN KEY ...`
+    form parses cleanly); PL/pgSQL's `IF ... THEN ... ELSE ... END IF;`
+    procedural control flow inside a function body also produces `ERROR`
+    nodes (the grammar has no model for it at all — `CASE WHEN` is the
+    closest constrained form that parses).
 
 ### Added (internal)
 

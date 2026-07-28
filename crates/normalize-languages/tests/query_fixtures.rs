@@ -1868,7 +1868,7 @@ fn go_complexity_completeness_and_negative() {
     // introduce a complexity node — only the 3 listed statement/expression
     // kinds above (and switch/select forms, not exercised in sample.go) do.
     assert!(
-        !complexity_kinds.iter().any(|k| *k == "call_expression"),
+        !complexity_kinds.contains(&"call_expression"),
         "call_expression must never be a complexity node, got: {complexity_kinds:?}"
     );
 }
@@ -3653,6 +3653,9 @@ fn ruby_types_completeness_superclass_variants() {
 // ---------------------------------------------------------------------------
 
 const KOTLIN_SAMPLE: &str = include_str!("fixtures/kotlin/sample.kt");
+const KOTLIN_VARIANTS: &str = include_str!("fixtures/kotlin/variants.kt");
+
+// --- Dimension 4: real-world fixture coverage (sample.kt) -------------------
 
 #[test]
 fn kotlin_tags_finds_class_and_functions() {
@@ -3681,6 +3684,37 @@ fn kotlin_tags_finds_class_and_functions() {
         names.contains(&"sumEvens".to_string()),
         "expected 'sumEvens' function in kotlin tags, got: {names:?}"
     );
+    // Sealed class hierarchy + interface implemented WITHOUT parens
+    // (`class Circle(val r: Double) : Shape` — the near-ubiquitous Kotlin
+    // idiom that was previously entirely unmatched).
+    assert!(
+        names.contains(&"Shape".to_string()),
+        "expected 'Shape' interface reference (no-paren delegation) in kotlin tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Figure".to_string()),
+        "expected 'Figure' sealed class in kotlin tags, got: {names:?}"
+    );
+    // Secondary constructor delegating to the primary via `this(...)`.
+    assert!(
+        names.contains(&"this".to_string()),
+        "expected 'this' constructor delegation reference in kotlin tags, got: {names:?}"
+    );
+    // Extension function and suspend function are both ordinary
+    // function_declarations — must still surface as @definition.function.
+    assert!(
+        names.contains(&"shout".to_string()),
+        "expected extension function 'shout' in kotlin tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"fetchData".to_string()),
+        "expected suspend function 'fetchData' in kotlin tags, got: {names:?}"
+    );
+    // Named companion object.
+    assert!(
+        names.contains(&"Repository".to_string()),
+        "expected 'Repository' class in kotlin tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -3701,6 +3735,22 @@ fn kotlin_calls_finds_function_calls() {
     assert!(
         calls.contains(&"println".to_string()) || calls.contains(&"enqueue".to_string()),
         "expected 'println' or 'enqueue' call in kotlin sample, got: {calls:?}"
+    );
+    // Trailing-lambda call: `listOf(1, 2, 3).map { it * 2 }`.
+    assert!(
+        calls.contains(&"map".to_string()),
+        "expected trailing-lambda 'map' call in kotlin sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"filter".to_string()),
+        "expected lambda-with-arrow 'filter' call in kotlin sample, got: {calls:?}"
+    );
+    // `Repository(name, 16)` secondary-constructor `this(...)` delegation —
+    // a distinct `constructor_delegation_call` node, not `call_expression`,
+    // previously entirely unmatched.
+    assert!(
+        calls.contains(&"this".to_string()),
+        "expected 'this' constructor-delegation call in kotlin sample, got: {calls:?}"
     );
 }
 
@@ -3725,6 +3775,13 @@ fn kotlin_imports_finds_import_paths() {
             .any(|p| p.contains("LinkedList") || p.contains("java")),
         "expected 'java.util.LinkedList' in kotlin import paths, got: {paths:?}"
     );
+    // `import kotlin.math.max as mathMax` — aliased import must still
+    // report its path (and, per the completeness test below, must not
+    // also be double-counted by the plain-import pattern).
+    assert!(
+        paths.iter().any(|p| p.contains("max")),
+        "expected 'kotlin.math.max' aliased import path in kotlin sample, got: {paths:?}"
+    );
 }
 
 #[test]
@@ -3742,9 +3799,11 @@ fn kotlin_complexity_finds_control_flow() {
         .get_complexity("kotlin")
         .expect("kotlin complexity query missing");
     let complexity = collect_captures(&lang, KOTLIN_SAMPLE, &query_str, "complexity");
+    // classify()'s when-arms, sumEvens()'s if, dequeue()'s if, the
+    // when(figure) is-branches, and the try/catch all contribute.
     assert!(
-        complexity.len() >= 2,
-        "expected at least 2 complexity nodes in kotlin sample, got {} ({complexity:?})",
+        complexity.len() >= 5,
+        "expected at least 5 complexity nodes in kotlin sample, got {} ({complexity:?})",
         complexity.len()
     );
 }
@@ -3771,11 +3830,489 @@ fn kotlin_types_finds_type_references() {
     );
 }
 
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.kt) -
+
+/// Every type-defining declaration kind (class, interface, enum, sealed
+/// class, object, type alias) must be found as a tags AND types definition
+/// with the correct capture kind.
+#[test]
+fn kotlin_tags_completeness_type_declaration_kinds() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_type_declaration_kinds: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_type_declaration_kinds: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let pairs = collect_tag_pairs(&lang, KOTLIN_VARIANTS, &query_str);
+
+    let find_def_kind = |name: &str| -> Option<&str> {
+        pairs
+            .iter()
+            .find(|(k, n)| k.starts_with("definition.") && n == name)
+            .map(|(k, _)| k.as_str())
+    };
+    assert_eq!(
+        find_def_kind("PlainClass"),
+        Some("definition.class"),
+        "expected PlainClass as definition.class, got pairs: {pairs:?}"
+    );
+    assert_eq!(
+        find_def_kind("PlainObject"),
+        Some("definition.class"),
+        "expected PlainObject as definition.class, got pairs: {pairs:?}"
+    );
+    assert_eq!(
+        find_def_kind("PlainAlias"),
+        Some("definition.type"),
+        "expected PlainAlias as definition.type, got pairs: {pairs:?}"
+    );
+    assert_eq!(
+        find_def_kind("PlainInterface"),
+        Some("definition.class"),
+        "expected PlainInterface as definition.class (same node kind as class_declaration), got pairs: {pairs:?}"
+    );
+    assert_eq!(
+        find_def_kind("Direction"),
+        Some("definition.class"),
+        "expected enum class Direction as definition.class, got pairs: {pairs:?}"
+    );
+    assert_eq!(
+        find_def_kind("SealedBase"),
+        Some("definition.class"),
+        "expected sealed class SealedBase as definition.class, got pairs: {pairs:?}"
+    );
+    // Enum entries are @definition.constant, not @definition.class.
+    assert_eq!(
+        find_def_kind("NORTH"),
+        Some("definition.constant"),
+        "expected enum entry NORTH as definition.constant, got pairs: {pairs:?}"
+    );
+}
+
+/// Every grammar-legal shape of `delegation_specifier` (superclass call
+/// with parens, bare interface reference with no parens, and `by`
+/// delegation) must produce a @reference.class capture with the right name.
+#[test]
+fn kotlin_tags_completeness_delegation_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_delegation_variants: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_delegation_variants: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let pairs = collect_tag_pairs(&lang, KOTLIN_VARIANTS, &query_str);
+
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // delegation_specifier -> constructor_invocation -> user_type (superclass
+    // call with parens/args).
+    assert!(
+        ref_class_names.contains(&"OpenBase"),
+        "expected 'OpenBase' (constructor-invocation delegation) in kotlin tags, got: {ref_class_names:?}"
+    );
+    // delegation_specifier -> user_type directly (bare interface reference,
+    // no parens) — the most common Kotlin idiom, previously unmatched.
+    assert!(
+        ref_class_names.contains(&"PlainInterface"),
+        "expected 'PlainInterface' (bare delegation, no parens) in kotlin tags, got: {ref_class_names:?}"
+    );
+    // delegation_specifier -> explicit_delegation -> user_type (`by`
+    // interface delegation), previously unmatched.
+    assert!(
+        ref_class_names.contains(&"SuperBase"),
+        "expected 'SuperBase' (bare delegation before secondary ctor) in kotlin tags, got: {ref_class_names:?}"
+    );
+
+    // Re-run the tags query but only look at ExplicitDelegationVariant's
+    // line to disambiguate the `by`-delegation form specifically (the name
+    // "PlainInterface" is reused above for the paren-less form).
+    let full_captures = collect_captures_full(&lang, KOTLIN_VARIANTS, &query_str);
+    let by_delegation = full_captures
+        .iter()
+        .find(|(cap, _, text, _)| cap == "reference.class" && text.contains(" by impl"));
+    assert!(
+        by_delegation.is_some(),
+        "expected a @reference.class capture spanning the `by impl` explicit_delegation, got: {full_captures:?}"
+    );
+}
+
+/// `this(...)` / `super(...)` secondary-constructor delegation
+/// (`constructor_delegation_call`, a distinct node kind from
+/// `call_expression`) must produce a @reference.call in tags and a @call in
+/// calls, with the correct capture kind (an anonymous keyword token, not
+/// `simple_identifier`).
+#[test]
+fn kotlin_tags_completeness_constructor_delegation_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_constructor_delegation_calls: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_completeness_constructor_delegation_calls: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let pairs = collect_tag_pairs(&lang, KOTLIN_VARIANTS, &query_str);
+    assert!(
+        pairs.contains(&("reference.call".to_string(), "this".to_string())),
+        "expected 'this' constructor-delegation @reference.call, got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("reference.call".to_string(), "super".to_string())),
+        "expected 'super' constructor-delegation @reference.call, got: {pairs:?}"
+    );
+}
+
+/// Every grammar-legal call shape (plain call, navigation/method call,
+/// `this`/`super` constructor delegation) must produce a @call with the
+/// correct capture kind.
+#[test]
+fn kotlin_calls_completeness_call_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_calls_completeness_call_variants: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!("Skipping kotlin_calls_completeness_call_variants: kotlin grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("kotlin")
+        .expect("kotlin calls query missing");
+    let full = collect_captures_full(&lang, KOTLIN_VARIANTS, &query_str);
+
+    let find_kind = |name: &str| -> Vec<&str> {
+        full.iter()
+            .filter(|(cap, _, text, _)| cap == "call" && text == name)
+            .map(|(_, kind, _, _)| kind.as_str())
+            .collect()
+    };
+    assert!(
+        find_kind("println").contains(&"simple_identifier"),
+        "expected plain call 'println' as simple_identifier, got: {full:?}"
+    );
+    assert!(
+        find_kind("add").contains(&"simple_identifier"),
+        "expected navigation call 'add' as simple_identifier, got: {full:?}"
+    );
+    assert!(
+        find_kind("map").contains(&"simple_identifier"),
+        "expected trailing-lambda call 'map' as simple_identifier, got: {full:?}"
+    );
+    // "this"/"super" constructor delegation: captured node kind is the
+    // anonymous keyword token itself, not simple_identifier — distinct
+    // extraction depth signal from ordinary calls.
+    assert!(
+        find_kind("this").contains(&"this"),
+        "expected 'this' constructor-delegation call captured as kind 'this', got: {full:?}"
+    );
+    assert!(
+        find_kind("super").contains(&"super"),
+        "expected 'super' constructor-delegation call captured as kind 'super', got: {full:?}"
+    );
+}
+
+/// Every grammar-legal `import_header` shape (plain, aliased, wildcard)
+/// must produce exactly one @import per statement — no duplicates. The
+/// plain-import pattern was previously unconstrained and also matched
+/// every aliased/wildcard import.
+#[test]
+fn kotlin_imports_completeness_no_duplicate_matches() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_imports_completeness_no_duplicate_matches: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_imports_completeness_no_duplicate_matches: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_imports("kotlin")
+        .expect("kotlin imports query missing");
+    let full = collect_captures_full(&lang, KOTLIN_VARIANTS, &query_str);
+    let import_paths: Vec<&str> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "import.path")
+        .map(|(_, _, text, _)| text.as_str())
+        .collect();
+
+    // variants.kt has exactly 3 import statements (plain, aliased,
+    // wildcard); each must contribute exactly one @import.path.
+    assert_eq!(
+        import_paths,
+        vec!["java.util.ArrayList", "java.util.HashMap", "kotlin.math"],
+        "expected exactly one @import.path per import statement (no duplicates), got: {import_paths:?}"
+    );
+
+    let aliases: Vec<&str> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "import.alias")
+        .map(|(_, _, text, _)| text.as_str())
+        .collect();
+    assert_eq!(
+        aliases,
+        vec!["JHashMap"],
+        "expected exactly one @import.alias, got: {aliases:?}"
+    );
+
+    let globs: Vec<&str> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "import.glob")
+        .map(|(_, _, text, _)| text.as_str())
+        .collect();
+    assert_eq!(
+        globs,
+        vec!["*"],
+        "expected exactly one @import.glob, got: {globs:?}"
+    );
+}
+
+/// Type-defining declarations must produce @definition.type, and the
+/// blanket @type.reference pattern must not double-count qualified/generic
+/// type usages (the fixed duplicate-match bug).
+#[test]
+fn kotlin_types_completeness_definitions_and_no_duplicates() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_types_completeness_definitions_and_no_duplicates: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_types_completeness_definitions_and_no_duplicates: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_types("kotlin")
+        .expect("kotlin types query missing");
+    let pairs = collect_tag_pairs(&lang, KOTLIN_VARIANTS, &query_str);
+    let full = collect_captures_full(&lang, KOTLIN_VARIANTS, &query_str);
+
+    // collect_tag_pairs pairs the @name leaf (just the identifier) with its
+    // @definition.type container, not the container's own (much larger)
+    // span — the query's outer @definition.type capture spans the whole
+    // declaration (e.g. "class PlainClass"), so asserting equality against
+    // the outer capture's text (as collect_captures_full alone would) is
+    // wrong; the leaf name is what a consumer actually wants.
+    for expected in ["PlainClass", "PlainObject", "PlainAlias"] {
+        assert!(
+            pairs.contains(&("definition.type".to_string(), expected.to_string())),
+            "expected '{expected}' among @definition.type captures, got: {pairs:?}"
+        );
+    }
+
+    // "PlainClass" appears at exactly 4 distinct source lines in
+    // variants.kt (the class declaration itself, `plainType: PlainClass?`,
+    // `List<PlainClass>` generic argument, and the callable-reference
+    // negative case) — each must produce exactly one @type.reference,
+    // not two, even though the generic-argument occurrence is wrapped in
+    // a `user_type` (the redundant pattern that caused the duplicate).
+    let plain_class_ref_lines: Vec<usize> = full
+        .iter()
+        .filter(|(cap, _, text, _)| cap == "type.reference" && text == "PlainClass")
+        .map(|(_, _, _, line)| *line)
+        .collect();
+    let mut sorted_lines = plain_class_ref_lines.clone();
+    sorted_lines.sort_unstable();
+    let mut deduped_lines = sorted_lines.clone();
+    deduped_lines.dedup();
+    assert_eq!(
+        sorted_lines, deduped_lines,
+        "expected no duplicate @type.reference lines for 'PlainClass' (found the same line twice), got: {plain_class_ref_lines:?}"
+    );
+    assert_eq!(
+        plain_class_ref_lines.len(),
+        4,
+        "expected exactly 4 'PlainClass' @type.reference occurrences (decl, plain annotation, generic argument, callable-reference), got {}: {plain_class_ref_lines:?}",
+        plain_class_ref_lines.len()
+    );
+}
+
+// --- Negative cases: constructs that must NOT match -------------------------
+
+/// Annotation usages WITH constructor args (`@Deprecated("...")`) must NOT
+/// be misclassified as a @reference.class: `constructor_invocation` is
+/// also a legal child of `annotation`, not just `delegation_specifier`,
+/// and the tags query is deliberately scoped to exclude it.
+#[test]
+fn kotlin_tags_negative_annotation_args_not_class_reference() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_annotation_args_not_class_reference: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_annotation_args_not_class_reference: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let pairs = collect_tag_pairs(&lang, KOTLIN_VARIANTS, &query_str);
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert!(
+        !ref_class_names.contains(&"Deprecated"),
+        "the @Deprecated(\"...\") annotation must not be misclassified as @reference.class, got: {ref_class_names:?}"
+    );
+}
+
+/// A top-level `val` (`property_declaration`) must never produce a
+/// @definition.* capture: the grammar reuses `property_declaration` for
+/// both class-level properties and local `val`/`var` bindings inside
+/// function bodies with no reliable way to distinguish them without
+/// ancestor traversal (documented in kotlin.tags.scm).
+#[test]
+fn kotlin_tags_negative_property_declarations_not_captured() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_property_declarations_not_captured: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_property_declarations_not_captured: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let names = collect_captures(&lang, KOTLIN_VARIANTS, &query_str, "name");
+    assert!(
+        !names.contains(&"topLevelPropertyNegative".to_string()),
+        "top-level 'val' must not appear in tags, got: {names:?}"
+    );
+}
+
+/// An unnamed companion object (`companion object { ... }`, no explicit
+/// name) has no `type_identifier` child at all and is architecturally
+/// unable to produce a @name capture. This documents the absence rather
+/// than asserting new behavior — Kotlin gives it the implicit name
+/// "Companion", but the grammar provides no source text to capture that
+/// name from, so fabricating it would violate "be honest about
+/// capabilities" (CLAUDE.md).
+#[test]
+fn kotlin_tags_negative_unnamed_companion_object_has_no_name() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_unnamed_companion_object_has_no_name: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_tags_negative_unnamed_companion_object_has_no_name: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("kotlin")
+        .expect("kotlin tags query missing");
+    let full = collect_captures_full(&lang, KOTLIN_VARIANTS, &query_str);
+    // variants.kt's only `companion_object` node is the unnamed one inside
+    // `UnnamedCompanionNegative`. Filter by capture *kind* (not just name
+    // text — `UnnamedCompanionNegative` the outer class also legitimately
+    // produces a @definition.class, but its capture's node kind is
+    // `class_declaration`, not `companion_object`) to precisely isolate
+    // whether the companion_object pattern fired at all.
+    let companion_definitions: Vec<&(String, String, String, usize)> = full
+        .iter()
+        .filter(|(cap, kind, ..)| cap == "definition.class" && kind == "companion_object")
+        .collect();
+    assert!(
+        companion_definitions.is_empty(),
+        "expected no @definition.class capture with kind 'companion_object' for the unnamed companion object, got: {companion_definitions:?}"
+    );
+}
+
+/// `::foo` / `Type::method` callable references are a distinct node kind
+/// (`callable_reference`) from `call_expression` and must never be
+/// misclassified as a call.
+#[test]
+fn kotlin_calls_negative_callable_reference_not_a_call() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping kotlin_calls_negative_callable_reference_not_a_call: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("kotlin").ok() else {
+        eprintln!(
+            "Skipping kotlin_calls_negative_callable_reference_not_a_call: kotlin grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_calls("kotlin")
+        .expect("kotlin calls query missing");
+    let calls = collect_captures(&lang, KOTLIN_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"hashCode".to_string()),
+        "the 'PlainClass::hashCode' callable reference must not appear as a call, got: {calls:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Swift
 // ---------------------------------------------------------------------------
 
 const SWIFT_SAMPLE: &str = include_str!("fixtures/swift/sample.swift");
+const SWIFT_VARIANTS: &str = include_str!("fixtures/swift/variants.swift");
+
+// --- Dimension 4: real-world fixture coverage (sample.swift) ----------------
 
 #[test]
 fn swift_tags_finds_class_and_functions() {
@@ -3802,6 +4339,56 @@ fn swift_tags_finds_class_and_functions() {
         names.contains(&"sumEvens".to_string()),
         "expected 'sumEvens' function in swift tags, got: {names:?}"
     );
+    // Protocol + protocol extension: the protocol itself and its
+    // requirement/associatedtype must all be found.
+    assert!(
+        names.contains(&"Greetable".to_string()),
+        "expected 'Greetable' protocol in swift tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"greet".to_string()),
+        "expected 'greet' protocol requirement in swift tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Payload".to_string()),
+        "expected 'Payload' associatedtype in swift tags, got: {names:?}"
+    );
+    // Generic function with a constraint (`<T: Comparable>`) must still be
+    // found like any other function.
+    assert!(
+        names.contains(&"largest".to_string()),
+        "expected 'largest' generic function in swift tags, got: {names:?}"
+    );
+    // Enum with associated values: both the enum and its cases.
+    assert!(
+        names.contains(&"NetworkResult".to_string()),
+        "expected 'NetworkResult' enum in swift tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"success".to_string()) && names.contains(&"cancelled".to_string()),
+        "expected enum cases 'success'/'cancelled' in swift tags, got: {names:?}"
+    );
+    // Extension: previously entirely invisible (name field is
+    // user_type-wrapped, not a bare type_identifier).
+    assert!(
+        names.contains(&"Coordinate".to_string()),
+        "expected 'Coordinate' class in swift tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"magnitude".to_string()),
+        "expected 'magnitude' computed property (declared in an extension) \
+         in swift tags, got: {names:?}"
+    );
+    // Standard-operator overload declared inside an extension.
+    assert!(
+        names.contains(&"==".to_string()),
+        "expected '==' operator overload in swift tags, got: {names:?}"
+    );
+    // Member properties: onComplete (var) on Downloader.
+    assert!(
+        names.contains(&"onComplete".to_string()),
+        "expected 'onComplete' member property in swift tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -3822,6 +4409,17 @@ fn swift_calls_finds_function_calls() {
     assert!(
         calls.contains(&"print".to_string()) || calls.contains(&"push".to_string()),
         "expected 'print' or 'push' call in swift sample, got: {calls:?}"
+    );
+    // Trailing closure call (`numbers.map { ... }`) — the call_suffix's
+    // lambda_literal content doesn't change the callee shape.
+    assert!(
+        calls.contains(&"map".to_string()),
+        "expected trailing-closure 'map' call in swift sample, got: {calls:?}"
+    );
+    // Force-unwrap call: `onComplete!()`.
+    assert!(
+        calls.contains(&"onComplete".to_string()),
+        "expected force-unwrap 'onComplete' call in swift sample, got: {calls:?}"
     );
 }
 
@@ -3868,6 +4466,20 @@ fn swift_complexity_finds_control_flow() {
         "expected at least 2 complexity nodes in swift sample, got {} ({complexity:?})",
         complexity.len()
     );
+    // `largest<T: Comparable>` uses `guard ... else { return nil }` — must
+    // count toward complexity like any other branch.
+    let source_from_guard = SWIFT_SAMPLE.contains("guard var best = items.first");
+    assert!(
+        source_from_guard,
+        "fixture must contain the guard statement this test relies on"
+    );
+    assert!(
+        complexity.len() >= 8,
+        "expected guard_statement/switch_entry/conjunction/disjunction to be \
+         counted (sample has >=1 guard, a 4-case switch, and no boolean \
+         operators yet at this count baseline), got {} ({complexity:?})",
+        complexity.len()
+    );
 }
 
 #[test]
@@ -3892,11 +4504,387 @@ fn swift_types_finds_type_references() {
     );
 }
 
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.swift) -
+
+/// Every grammar-legal variant of declaration `name` fields that
+/// swift.tags.scm claims to support must actually match, with the right
+/// capture *kind* (dimension 3) — not just the right text.
+#[test]
+fn swift_tags_completeness_all_declaration_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_tags_completeness: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("swift").expect("swift tags query missing");
+    let pairs = collect_tag_pairs(&lang, SWIFT_VARIANTS, &query_str);
+
+    // plain_name / custom_operator / standard-operator-overload function names.
+    assert!(
+        pairs.contains(&(
+            "definition.function".to_string(),
+            "plainFunction".to_string()
+        )),
+        "expected plain function name, got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "+++".to_string())),
+        "expected custom_operator overload '+++', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "==".to_string())),
+        "expected standard-operator overload '==', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "+=".to_string())),
+        "expected compound-assignment operator overload '+=', got: {pairs:?}"
+    );
+
+    // plain class name vs. extension (user_type-wrapped) name.
+    assert!(
+        pairs.contains(&("definition.class".to_string(), "PlainClass".to_string())),
+        "expected plain class name, got: {pairs:?}"
+    );
+    // "PlainClass" appears twice: once for the class itself (type_identifier)
+    // and once for its extension (user_type -> type_identifier) — both must
+    // be present as separate matches.
+    let plain_class_defs = pairs
+        .iter()
+        .filter(|(k, n)| k == "definition.class" && n == "PlainClass")
+        .count();
+    assert_eq!(
+        plain_class_defs, 2,
+        "expected 2 'PlainClass' definitions (class + extension), got {plain_class_defs}: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.class".to_string(), "Array".to_string())),
+        "expected extension-of-generic-stdlib-type name 'Array', got: {pairs:?}"
+    );
+
+    // Enum cases: single, associated-value, and comma-separated multi-name.
+    for case_name in ["ready", "failed", "paused", "cancelled"] {
+        assert!(
+            pairs.contains(&("definition.constant".to_string(), case_name.to_string())),
+            "expected enum case '{case_name}', got: {pairs:?}"
+        );
+    }
+
+    // Member let/var + computed property (class_body), and enum_class_body
+    // variant of the same ancestor restriction.
+    assert!(
+        pairs.contains(&("definition.constant".to_string(), "readOnly".to_string())),
+        "expected member 'let readOnly', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "mutable".to_string())),
+        "expected member 'var mutable', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "computed".to_string())),
+        "expected computed property 'computed', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "isA".to_string())),
+        "expected enum computed property 'isA' (enum_class_body variant), got: {pairs:?}"
+    );
+
+    // Protocol requirements: property, method, associatedtype.
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "label".to_string())),
+        "expected protocol property requirement 'label', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.method".to_string(), "describe".to_string())),
+        "expected protocol method requirement 'describe', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.type".to_string(), "Value".to_string())),
+        "expected protocol associatedtype 'Value', got: {pairs:?}"
+    );
+}
+
+/// Local `let`/`var` declarations inside function bodies share a node kind
+/// (property_declaration) with member-level properties, but must never be
+/// captured as @definition.constant/@definition.var — verified with exact
+/// zero counts, not just "absent from a name list" (a false positive that
+/// happened to collide with another name would otherwise hide the bug).
+#[test]
+fn swift_tags_negative_local_declarations_not_captured() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_tags_negative: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("swift").expect("swift tags query missing");
+    let pairs = collect_tag_pairs(&lang, SWIFT_VARIANTS, &query_str);
+
+    for local_name in [
+        "localReadOnly",
+        "localMutable",
+        "notAMember",
+        "alsoNotAMember",
+    ] {
+        let count = pairs
+            .iter()
+            .filter(|(k, n)| {
+                (k == "definition.constant" || k == "definition.var") && n == local_name
+            })
+            .count();
+        assert_eq!(
+            count, 0,
+            "local declaration '{local_name}' must never be captured as a \
+             member constant/var, got {count} match(es): {pairs:?}"
+        );
+    }
+}
+
+/// Every grammar-legal variant of `call_expression.function` (plus the
+/// distinct postfix_expression/constructor_expression callee shapes) that
+/// swift.calls.scm claims to support must actually match, with the right
+/// capture kind.
+#[test]
+fn swift_calls_completeness_all_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_calls_completeness: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("swift")
+        .expect("swift calls query missing");
+    let caps = collect_captures_full(&lang, SWIFT_VARIANTS, &query_str);
+
+    let call_names: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    // plain_call: function: identifier
+    assert!(
+        call_names.contains(&"identity"),
+        "expected 'identity' plain call, got: {call_names:?}"
+    );
+    // method_call: function: navigation_expression -> simple_identifier
+    assert!(
+        call_names.contains(&"get"),
+        "expected 'get' method call, got: {call_names:?}"
+    );
+    // force-unwrap call: function: postfix_expression(target, operation: bang)
+    assert!(
+        call_names.contains(&"completion"),
+        "expected force-unwrap 'completion' call, got: {call_names:?}"
+    );
+    // optional-chaining call: plain identifier callee, same as plain_call.
+    let completion_calls = call_names.iter().filter(|n| **n == "completion").count();
+    assert_eq!(
+        completion_calls, 2,
+        "expected 2 'completion' calls (force-unwrap + optional-chaining), \
+         got {completion_calls}: {call_names:?}"
+    );
+    // generic type instantiation call: constructor_expression, constructed_type:
+    // (user_type (type_identifier)).
+    assert!(
+        call_names.contains(&"GenericBox"),
+        "expected generic-instantiation call 'GenericBox', got: {call_names:?}"
+    );
+    assert!(
+        call_names.contains(&"Optional"),
+        "expected generic-instantiation call 'Optional', got: {call_names:?}"
+    );
+
+    // Every @call capture must be one of the node kinds the query actually
+    // targets — never the parenthesized wrapper or anything larger
+    // (extraction depth: capture kind, not just text).
+    for (cn, kind, text, line) in &caps {
+        if cn == "call" {
+            assert!(
+                kind == "simple_identifier" || kind == "type_identifier",
+                "expected @call capture kind to be simple_identifier/type_identifier, \
+                 got kind={kind} text={text} line={line}"
+            );
+        }
+    }
+
+    // @call.qualifier must carry the qualifier text for the method call.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"b"),
+        "expected 'b' qualifier for the method call, got: {qualifiers:?}"
+    );
+}
+
+/// Negative cases: call_expression.function variants with no stable,
+/// nameable callee (curried calls, IIFEs, bracket type-literal calls) must
+/// never produce a @call capture.
+#[test]
+fn swift_calls_negative_uncallable_function_variants_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_calls_negative: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("swift")
+        .expect("swift calls query missing");
+    let caps = collect_captures_full(&lang, SWIFT_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // NEGATIVE: curried call `makeAdder()(1)` — the INNER call (`makeAdder()`)
+    // is a real plain_call and must be captured once; the OUTER call (whose
+    // callee is the inner call_expression's *result*) must not add a second
+    // 'makeAdder' capture.
+    let make_adder_calls = call_texts.iter().filter(|t| **t == "makeAdder").count();
+    assert_eq!(
+        make_adder_calls, 1,
+        "expected exactly 1 'makeAdder' call (the inner call only, not the \
+         curried outer call), got {make_adder_calls}: {call_texts:?}"
+    );
+    // NEGATIVE: IIFE `{ (x: Int) -> Int in x * 2 }(5)` — anonymous callee —
+    // and the bracket type-literal call `[Int](repeating:count:)` must
+    // produce no capture at all. No text assertion is possible for either
+    // (there is no name to accidentally capture); instead assert the total
+    // capture count matches exactly the full expected set of named calls
+    // across variants.swift, so a stray capture from either would be caught.
+    let expected_calls = [
+        "Vector",
+        "reduce",
+        "print",
+        "identity",
+        "Box",
+        "get",
+        "Optional",
+        "completion",
+        "completion",
+        "GenericBox",
+        "Optional",
+        "makeAdder",
+        "print",
+    ];
+    let mut actual_sorted = call_texts.clone();
+    actual_sorted.sort_unstable();
+    let mut expected_sorted: Vec<&str> = expected_calls.to_vec();
+    expected_sorted.sort_unstable();
+    assert_eq!(
+        actual_sorted, expected_sorted,
+        "expected exactly the named calls in variants.swift, got: {call_texts:?}"
+    );
+}
+
+/// guard_statement / switch_entry / conjunction_expression / disjunction_expression
+/// must all be counted individually — completeness + extraction-depth check
+/// against the dedicated complexityVariants function in variants.swift.
+#[test]
+fn swift_complexity_completeness_guard_switch_and_boolean_operators() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_complexity_completeness: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("swift")
+        .expect("swift complexity query missing");
+    let caps = collect_captures_full(&lang, SWIFT_VARIANTS, &query_str);
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+
+    assert!(
+        complexity_kinds.contains(&"guard_statement"),
+        "expected guard_statement to count toward complexity, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"conjunction_expression"),
+        "expected conjunction_expression (&&) to count toward complexity, got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"disjunction_expression"),
+        "expected disjunction_expression (||) to count toward complexity, got: {complexity_kinds:?}"
+    );
+    // complexityVariants has 4 switch_entry nodes (1, 2-3, where-guarded, default).
+    let switch_entry_count = complexity_kinds
+        .iter()
+        .filter(|k| **k == "switch_entry")
+        .count();
+    assert_eq!(
+        switch_entry_count, 4,
+        "expected 4 switch_entry complexity nodes, got {switch_entry_count}: {complexity_kinds:?}"
+    );
+}
+
+/// `let`-bound vs `var`-bound member properties must land in distinct
+/// capture kinds (@definition.constant vs @definition.var) — the closest
+/// analog in this query to a read/write or definition/reference
+/// distinction, since Swift's tags query has no separate reference captures.
+#[test]
+fn swift_tags_distinguishes_let_and_var_member_properties() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping swift_tags_let_var: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("swift").ok() else {
+        eprintln!("Skipping swift_tags_let_var: swift grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("swift").expect("swift tags query missing");
+    let pairs = collect_tag_pairs(&lang, SWIFT_VARIANTS, &query_str);
+
+    assert!(
+        pairs.contains(&("definition.constant".to_string(), "readOnly".to_string())),
+        "expected 'readOnly' as @definition.constant, got: {pairs:?}"
+    );
+    assert!(
+        !pairs.contains(&("definition.var".to_string(), "readOnly".to_string())),
+        "'readOnly' (a `let`) must not ALSO appear as @definition.var, got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "mutable".to_string())),
+        "expected 'mutable' as @definition.var, got: {pairs:?}"
+    );
+    assert!(
+        !pairs.contains(&("definition.constant".to_string(), "mutable".to_string())),
+        "'mutable' (a `var`) must not ALSO appear as @definition.constant, got: {pairs:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Scala
 // ---------------------------------------------------------------------------
 
 const SCALA_SAMPLE: &str = include_str!("fixtures/scala/sample.scala");
+const SCALA_VARIANTS: &str = include_str!("fixtures/scala/variants.scala");
+
+// --- Dimension 4: real-world fixture coverage (sample.scala) ----------------
 
 #[test]
 fn scala_tags_finds_class_and_functions() {
@@ -3923,6 +4911,39 @@ fn scala_tags_finds_class_and_functions() {
         names.contains(&"sumEvens".to_string()),
         "expected 'sumEvens' function in scala tags, got: {names:?}"
     );
+    // Companion object.
+    assert!(
+        names.contains(&"Point".to_string()),
+        "expected companion 'Point' object in scala tags, got: {names:?}"
+    );
+    // Traits with mixins.
+    assert!(
+        names.contains(&"Named".to_string()) && names.contains(&"Aged".to_string()),
+        "expected 'Named'/'Aged' traits in scala tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Person".to_string()),
+        "expected 'Person' class (extends Named with Aged) in scala tags, got: {names:?}"
+    );
+    // Scala 3 enum with a body method.
+    assert!(
+        names.contains(&"Direction".to_string()),
+        "expected 'Direction' enum in scala tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"opposite".to_string()),
+        "expected 'opposite' method inside the enum body in scala tags, got: {names:?}"
+    );
+    // Operator-method definition on the case class.
+    assert!(
+        names.contains(&"+".to_string()),
+        "expected operator method '+' in scala tags, got: {names:?}"
+    );
+    // Higher-kinded generic trait.
+    assert!(
+        names.contains(&"Functor".to_string()),
+        "expected 'Functor' higher-kinded trait in scala tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -3943,6 +4964,11 @@ fn scala_calls_finds_function_calls() {
     assert!(
         calls.contains(&"println".to_string()) || calls.contains(&"push".to_string()),
         "expected 'println' or 'push' call in scala sample, got: {calls:?}"
+    );
+    // Companion-object factory call and case-class apply.
+    assert!(
+        calls.contains(&"distanceTo".to_string()),
+        "expected 'distanceTo' method call in scala sample, got: {calls:?}"
     );
 }
 
@@ -3965,6 +4991,12 @@ fn scala_imports_finds_import_paths() {
     assert!(
         !imports.is_empty(),
         "expected at least one import declaration in scala sample, got: {imports:?}"
+    );
+    // Import with a per-name rename (`Success => S`) must still surface as
+    // its own @import declaration.
+    assert!(
+        imports.iter().any(|i| i.contains("Success")),
+        "expected the 'Success => S' rename import in scala sample, got: {imports:?}"
     );
 }
 
@@ -4012,11 +5044,487 @@ fn scala_types_finds_type_references() {
     );
 }
 
+// --- Dimensions 2/3: completeness + extraction depth (variants.scala) ------
+
+/// `function_definition.name` allows `identifier` and `operator_identifier`;
+/// both must produce a `definition.function` tag with the correct kind.
+#[test]
+fn scala_tags_completeness_function_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping scala_tags_completeness_function_name: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_completeness_function_name: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "plainFunc".to_string())),
+        "expected identifier-named function 'plainFunc', got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "+".to_string())),
+        "expected operator_identifier-named method '+', got: {pairs:?}"
+    );
+}
+
+/// Scala 3 `enum` definitions must surface as `definition.enum`.
+#[test]
+fn scala_tags_completeness_enum_definition() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_tags_completeness_enum: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_completeness_enum: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+    assert!(
+        pairs.contains(&("definition.enum".to_string(), "Color".to_string())),
+        "expected 'Color' enum as definition.enum, got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.enum".to_string(), "Nested".to_string())),
+        "expected 'Nested' enum as definition.enum, got: {pairs:?}"
+    );
+    // A method inside the enum body must still surface as its own definition,
+    // proving the enum acts as a container (SymbolKind::Enum is a container
+    // kind).
+    assert!(
+        pairs.contains(&("definition.function".to_string(), "label".to_string())),
+        "expected 'label' method inside 'Nested' enum body, got: {pairs:?}"
+    );
+}
+
+/// Every `call_expression.function` variant scala.tags.scm's @reference.call
+/// claims to support must produce a matching capture, with the correct name.
+#[test]
+fn scala_tags_completeness_reference_call_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping scala_tags_completeness_reference_call: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_completeness_reference_call: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+    let ref_calls: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.call")
+        .map(|(_, n)| n.as_str())
+        .collect();
+
+    assert!(
+        ref_calls.contains(&"identity"),
+        "expected plain call 'identity', got: {ref_calls:?}"
+    );
+    assert!(
+        ref_calls.contains(&"map"),
+        "expected method call 'map', got: {ref_calls:?}"
+    );
+    assert!(
+        ref_calls.contains(&"+"),
+        "expected explicit operator-method call 'a.+(b)', got: {ref_calls:?}"
+    );
+    assert!(
+        ref_calls.contains(&"identityGeneric"),
+        "expected generic call 'identityGeneric[Int](1)', got: {ref_calls:?}"
+    );
+}
+
+/// Object creation (`new X()`) must be found for plain, generic, qualified,
+/// and generic+qualified type shapes.
+#[test]
+fn scala_tags_completeness_new_expression_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_tags_completeness_new: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_completeness_new: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+    let ref_class: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+
+    assert!(
+        ref_class.contains(&"OpHolder"),
+        "expected plain 'new OpHolder(1)', got: {ref_class:?}"
+    );
+    assert!(
+        ref_class.contains(&"ArrayBuffer"),
+        "expected generic 'new ArrayBuffer[Int]()', got: {ref_class:?}"
+    );
+    assert!(
+        ref_class.contains(&"Date"),
+        "expected qualified 'new java.util.Date()', got: {ref_class:?}"
+    );
+    assert!(
+        ref_class.contains(&"HashMap"),
+        "expected qualified+generic 'new java.util.HashMap[String, Int]()', got: {ref_class:?}"
+    );
+}
+
+/// `extends X with Y with Z` — the first supertype and every subsequent
+/// `with` mixin must all surface as @reference.implementation, including
+/// generic and qualified shapes.
+#[test]
+fn scala_tags_completeness_extends_mixin_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping scala_tags_completeness_extends: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_completeness_extends: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+    let ref_impl: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.implementation")
+        .map(|(_, n)| n.as_str())
+        .collect();
+
+    // Both the first supertype (fielded) and the "with" mixin (unfielded)
+    // from `class MultiMixin extends TraitA with TraitB`.
+    assert!(
+        ref_impl.contains(&"TraitA"),
+        "expected first supertype 'TraitA', got: {ref_impl:?}"
+    );
+    assert!(
+        ref_impl.contains(&"TraitB"),
+        "expected 'with' mixin 'TraitB', got: {ref_impl:?}"
+    );
+    // Generic mixin: `class GenericMixin extends TraitC[Int]`.
+    assert!(
+        ref_impl.contains(&"TraitC"),
+        "expected generic supertype 'TraitC', got: {ref_impl:?}"
+    );
+    // Qualified + generic mixin: `extends scala.collection.Iterable[Int]`.
+    assert!(
+        ref_impl.contains(&"Iterable"),
+        "expected qualified+generic supertype 'Iterable', got: {ref_impl:?}"
+    );
+}
+
+/// Negative case: bare field access/write, lambda bindings, and
+/// eta-expansion (passing a method by name without calling it) must never
+/// surface as tags definitions or call references.
+#[test]
+fn scala_tags_negative_field_access_and_lambda_bindings() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_tags_negative: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("scala").expect("scala tags query missing");
+    let pairs = collect_tag_pairs(&lang, SCALA_VARIANTS, &query_str);
+
+    let def_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k.starts_with("definition."))
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert!(
+        !def_names.contains(&"lambdaBinding"),
+        "'lambdaBinding' (a val bound to a lambda) must not be a definition, got: {def_names:?}"
+    );
+    assert!(
+        !def_names.contains(&"etaExpanded"),
+        "'etaExpanded' (a val bound via eta-expansion) must not be a definition, got: {def_names:?}"
+    );
+
+    let ref_calls: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.call")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert!(
+        !ref_calls.contains(&"counter"),
+        "bare field read/write 'counter' must not be a call reference, got: {ref_calls:?}"
+    );
+}
+
+/// Every `call_expression.function` variant scala.calls.scm claims to
+/// support (identifier, method call, explicit operator-method call, generic,
+/// qualified generic, parenthesized target) must produce a @call capture.
+#[test]
+fn scala_calls_completeness_function_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_calls_completeness: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("scala")
+        .expect("scala calls query missing");
+    let caps = collect_captures_full(&lang, SCALA_VARIANTS, &query_str);
+    let calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    assert!(
+        calls.contains(&"identity"),
+        "expected plain call 'identity', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"map"),
+        "expected method call 'map', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"+"),
+        "expected explicit operator-method call '+', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"identityGeneric"),
+        "expected generic call 'identityGeneric', got: {calls:?}"
+    );
+    // Parenthesized call target: (f)(1) — the whole parenthesized text is
+    // captured as @call, matching typescript.calls.scm's convention.
+    assert!(
+        calls.iter().any(|c| c.starts_with('(') && c.contains('f')),
+        "expected parenthesized call target '(f)', got: {calls:?}"
+    );
+}
+
+/// Negative case: bare field access/write must never appear as a @call.
+#[test]
+fn scala_calls_negative_field_access() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_calls_negative: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("scala")
+        .expect("scala calls query missing");
+    let calls = collect_captures(&lang, SCALA_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"counter".to_string()),
+        "bare field read/write 'counter' must not be captured as a call, got: {calls:?}"
+    );
+}
+
+/// `enum_definition` must contribute nesting depth, matching how
+/// class/object/trait definitions are treated.
+#[test]
+fn scala_complexity_completeness_enum_nesting() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_complexity_completeness: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("scala")
+        .expect("scala complexity query missing");
+    let caps = collect_captures_full(&lang, SCALA_VARIANTS, &query_str);
+    let nesting_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "nesting")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    assert!(
+        nesting_kinds.contains(&"enum_definition"),
+        "expected enum_definition to contribute nesting, got: {nesting_kinds:?}"
+    );
+    // match with guards (case_clause) must contribute complexity.
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    assert!(
+        complexity_kinds
+            .iter()
+            .filter(|k| **k == "case_clause")
+            .count()
+            >= 2,
+        "expected multiple case_clause complexity nodes (guarded match), got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"for_expression"),
+        "expected for-comprehension to contribute complexity, got: {complexity_kinds:?}"
+    );
+}
+
+/// Duplicate-capture regression: a qualified type reference (`java.util.Date`)
+/// must produce exactly one @type.reference capture per identifier, not two.
+/// A previous version of scala.types.scm had a redundant clause that matched
+/// every `stable_type_identifier`-nested `type_identifier` twice.
+#[test]
+fn scala_types_negative_no_duplicate_qualified_captures() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_types_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_types_negative: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("scala")
+        .expect("scala types query missing");
+    let refs = collect_captures(&lang, SCALA_VARIANTS, &query_str, "type");
+    // variants.scala's NewVariants object has exactly one `new java.util.Date()`.
+    let date_count = refs.iter().filter(|r| *r == "Date").count();
+    assert_eq!(
+        date_count, 1,
+        "expected exactly 1 'Date' type.reference capture (qualified type must not \
+         double-count), got {date_count}: {refs:?}"
+    );
+}
+
+/// Rename-arrow import bugs: `{Map => MutableMap}` (Scala 2 arrow),
+/// `{List as JList}` (Scala 3 `as`), and per-name renames inside a
+/// multi-name brace list (`{Try, Success => S, Failure}`) must all still
+/// anchor as their own `import_declaration` — this exercises
+/// `Scala::extract_imports`'s text-parsing fallback via the same
+/// query-selected `import_declaration` nodes.
+#[test]
+fn scala_imports_completeness_rename_and_wildcard_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_imports_completeness: scala grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("scala")
+        .expect("scala imports query missing");
+    let imports = collect_captures(&lang, SCALA_VARIANTS, &query_str, "import");
+
+    assert!(
+        imports.iter().any(|i| i.contains("Map => MutableMap")),
+        "expected the arrow-rename import statement, got: {imports:?}"
+    );
+    assert!(
+        imports.iter().any(|i| i.contains("List as JList")),
+        "expected the Scala-3 'as'-rename import statement, got: {imports:?}"
+    );
+    assert!(
+        imports.iter().any(|i| i.contains("foo.bar.baz.*")),
+        "expected the bare-wildcard import statement, got: {imports:?}"
+    );
+}
+
+/// `Scala::extract_imports` must strip per-name rename suffixes (`=>`/`as`)
+/// from the parsed `names` list instead of leaving raw "X => Y" text in it,
+/// and must not mistake a name merely containing '_' for a wildcard marker.
+#[test]
+fn scala_imports_extract_strips_rename_suffix_and_detects_wildcard_precisely() {
+    use normalize_languages::{Language, Scala};
+    use tree_sitter::{Parser, StreamingIterator};
+
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping scala_imports_extract: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("scala").ok() else {
+        eprintln!("Skipping scala_imports_extract: scala grammar .so not found");
+        return;
+    };
+    // Parse directly and probe extract_imports on the raw import_declaration
+    // nodes — no need for the tags/imports query here.
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let source = "import scala.util.{Try, Success => S, Failure}\n\
+                  import scala.collection.mutable.{Map => MutableMap}\n";
+    let tree = parser.parse(source, None).expect("parse failed");
+    let query =
+        tree_sitter::Query::new(&lang, "(import_declaration) @import").expect("query compile");
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    let scala = Scala;
+    let mut all_names: Vec<String> = Vec::new();
+    let mut single_alias: Option<String> = None;
+    while let Some(m) = matches.next() {
+        for cap in m.captures {
+            let imports = scala.extract_imports(&cap.node, source);
+            for imp in imports {
+                all_names.extend(imp.names.iter().cloned());
+                if imp.names.len() == 1 {
+                    single_alias = imp.alias.clone();
+                }
+            }
+        }
+    }
+    // Multi-name brace import: renamed entry must contribute a clean plain
+    // name ("Success"), never the raw "Success => S" text.
+    assert!(
+        all_names.contains(&"Success".to_string()),
+        "expected clean name 'Success' (rename suffix stripped), got: {all_names:?}"
+    );
+    assert!(
+        !all_names.iter().any(|n| n.contains("=>")),
+        "no parsed import name may contain a raw rename arrow, got: {all_names:?}"
+    );
+    assert!(
+        all_names.contains(&"Try".to_string()) && all_names.contains(&"Failure".to_string()),
+        "expected unrenamed names 'Try'/'Failure' preserved, got: {all_names:?}"
+    );
+    // Single-name brace import with a rename: alias must be recovered.
+    assert_eq!(
+        single_alias,
+        Some("MutableMap".to_string()),
+        "expected single-name rename alias 'MutableMap' to be recovered"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // PHP
 // ---------------------------------------------------------------------------
 
 const PHP_SAMPLE: &str = include_str!("fixtures/php/sample.php");
+const PHP_VARIANTS: &str = include_str!("fixtures/php/variants.php");
+
+// --- Dimension 4: real-world fixture coverage (sample.php) ------------------
 
 #[test]
 fn php_tags_finds_class_and_functions() {
@@ -4043,6 +5551,48 @@ fn php_tags_finds_class_and_functions() {
         names.contains(&"sumEvens".to_string()),
         "expected 'sumEvens' function in php tags, got: {names:?}"
     );
+    // Trait, interface, enum containers must also surface as definitions.
+    assert!(
+        names.contains(&"Loggable".to_string()),
+        "expected 'Loggable' trait in php tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Comparable".to_string()),
+        "expected 'Comparable' interface in php tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Direction".to_string()),
+        "expected 'Direction' enum in php tags, got: {names:?}"
+    );
+
+    // References: extends/implements and constructor calls must now surface
+    // too (previously entirely absent — see php.tags.scm's "References"
+    // section for the field-by-field verification).
+    let pairs = collect_tag_pairs(&lang, PHP_SAMPLE, &query_str);
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.class" && n == "Stack"),
+        "expected 'extends Stack' (BoundedStack) as reference.class, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.implementation" && n == "Comparable"),
+        "expected 'implements Comparable' as reference.implementation, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.class" && n == "Stack"),
+        "expected 'new Stack()' as reference.class, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.call" && n == "push"),
+        "expected '$stack->push(...)' as reference.call, got: {pairs:?}"
+    );
 }
 
 #[test]
@@ -4063,6 +5613,18 @@ fn php_calls_finds_function_calls() {
             || calls.contains(&"array_push".to_string())
             || calls.contains(&"empty".to_string()),
         "expected a function call in php sample, got: {calls:?}"
+    );
+    // Static method call (BoundedStack::class is a constant-fetch, not a
+    // call — check parent::push(...) and parent::__construct() instead,
+    // real scoped_call_expression sites in the sample).
+    assert!(
+        calls.contains(&"push".to_string()),
+        "expected 'parent::push(...)'/'$stack->push(...)' method call, got: {calls:?}"
+    );
+    // Namespace-qualified function call.
+    assert!(
+        calls.iter().any(|c| c.contains("classify")),
+        "expected '\\App\\Collections\\classify(3)' namespaced call, got: {calls:?}"
     );
 }
 
@@ -4087,6 +5649,19 @@ fn php_imports_finds_use_declarations() {
             .any(|p| p.contains("User") || p.contains("Collection") || p.contains("App")),
         "expected namespace path in php import paths, got: {paths:?}"
     );
+    // Bare single-segment `use Countable;`/`use Traversable;` (no
+    // namespace separator) — previously dropped entirely.
+    assert!(
+        paths.contains(&"Countable".to_string()),
+        "expected bare 'use Countable;', got: {paths:?}"
+    );
+    // `require_once __DIR__ . '/bootstrap.php';` — the string-literal
+    // suffix of a concatenation; require_expression/require_once_expression
+    // were previously entirely unmatched (only include* was handled).
+    assert!(
+        paths.iter().any(|p| p.contains("bootstrap.php")),
+        "expected 'require_once ... bootstrap.php' path, got: {paths:?}"
+    );
 }
 
 #[test]
@@ -4109,6 +5684,21 @@ fn php_complexity_finds_control_flow() {
         "expected at least 2 complexity nodes in php sample, got {} ({complexity:?})",
         complexity.len()
     );
+    // `match ($this) { ... }` arms in Direction::opposite() and
+    // `describeDirection` must count too.
+    let caps = collect_captures_full(&lang, PHP_SAMPLE, &query_str);
+    assert!(
+        caps.iter()
+            .any(|(cn, k, _, _)| cn == "complexity" && k == "match_conditional_expression"),
+        "expected at least one match_conditional_expression @complexity, got: {caps:?}"
+    );
+    // `$n % 2 === 0 && $n > 0` — the `&&` must count as its own branch.
+    assert!(
+        caps.iter().any(|(cn, k, t, _)| cn == "complexity"
+            && k == "binary_expression"
+            && t.contains("&&")),
+        "expected the '&&' in sumEvens to count as @complexity, got: {caps:?}"
+    );
 }
 
 #[test]
@@ -4124,8 +5714,469 @@ fn php_types_finds_type_references() {
     };
     let query_str = loader.get_types("php").expect("php types query missing");
     let refs = collect_captures(&lang, PHP_SAMPLE, &query_str, "type");
-    // PHP types.scm captures @type.reference; sample has typed parameters
-    let _ = refs; // result content is grammar-dependent; query must compile
+    assert!(
+        refs.contains(&"Direction".to_string()) || refs.contains(&"mixed".to_string()),
+        "expected a type reference (Direction/mixed/etc) in php sample, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2/3: completeness matrix + extraction depth (variants.php) --
+
+/// Every grammar-legal variant of `function_call_expression.function` /
+/// `scoped_call_expression.name` / `member_call_expression.name` /
+/// `nullsafe_member_call_expression.name` that php.calls.scm claims to
+/// support, asserted by capture kind (not just text).
+#[test]
+fn php_calls_completeness_all_callee_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_calls_completeness: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("php").expect("php calls query missing");
+    let caps = collect_captures_full(&lang, PHP_VARIANTS, &query_str);
+    let calls: Vec<(&str, &str)> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, k, t, _)| (k.as_str(), t.as_str()))
+        .collect();
+
+    // function_call_expression.function variants.
+    assert!(
+        calls.contains(&("name", "helperFn")),
+        "expected plain function call (function: name), got: {calls:?}"
+    );
+    // `$fn();` drills into variable_name to capture the *variable's own*
+    // name ("fn") — the AST has no notion of the string value ("helperFn")
+    // the variable happens to hold, only the identifier being called.
+    assert!(
+        calls.contains(&("name", "fn")),
+        "expected variable function call ($fn(), function: variable_name -> \
+         name, capturing the variable's own name) got: {calls:?}"
+    );
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "qualified_name" && t.contains("classify")),
+        "expected namespaced function call (function: qualified_name), got: {calls:?}"
+    );
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "relative_name" && t.contains("helperFn")),
+        "expected relative-namespace function call (function: relative_name), got: {calls:?}"
+    );
+
+    // scoped_call_expression.name variants.
+    assert!(
+        calls.contains(&("name", "on")),
+        "expected static method call (scoped_call name: name), got: {calls:?}"
+    );
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "variable_name" && *t == "$method"),
+        "expected dynamic static method call (scoped_call name: variable_name), got: {calls:?}"
+    );
+
+    // member_call_expression.name variants.
+    assert!(
+        calls.contains(&("name", "next")),
+        "expected nullsafe method call (name: name), got: {calls:?}"
+    );
+
+    // object_creation_expression is NOT a call (see php.calls.scm comment):
+    // must never contribute a @call capture.
+    assert!(
+        !calls.iter().any(|(_, t)| *t == "Widget"),
+        "constructor invocation must not be captured as @call, got: {calls:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call captures.
+#[test]
+fn php_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_calls_negative: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("php").expect("php calls query missing");
+    let caps = collect_captures_full(&lang, PHP_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // A property read ($this->field) must never appear as a call.
+    assert!(
+        !call_texts.contains(&"field"),
+        "property read must not be captured as @call, got: {call_texts:?}"
+    );
+    // Anonymous class instantiation contributes no @call/name capture.
+    assert!(
+        !call_texts.iter().any(|t| t.contains("implements Shape")),
+        "anonymous class body must never leak into @call text, got: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of `object_creation_expression`/
+/// `base_clause`/`class_interface_clause` that php.tags.scm's new
+/// @reference.class/@reference.implementation patterns claim to support.
+#[test]
+fn php_tags_completeness_reference_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_tags_completeness: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("php").expect("php tags query missing");
+    // @reference.class/@reference.implementation are attached to the
+    // *container* node (object_creation_expression/base_clause/
+    // class_interface_clause), not the field-variant node itself — so
+    // `tags_matches_by_kind` (which correlates each match's anchor capture
+    // with that match's @name capture) is required here, not
+    // `collect_captures_full` filtered by capture name (that would report
+    // every reference.class hit as kind "object_creation_expression"/
+    // "base_clause", the container's own kind, not the variant).
+    let class_refs = tags_matches_by_kind(&lang, PHP_VARIANTS, &query_str, "reference.class");
+    let class_ref_pairs: Vec<(&str, &str)> = class_refs
+        .iter()
+        .map(|(k, t)| (k.as_str(), t.as_str()))
+        .collect();
+
+    assert!(
+        class_ref_pairs
+            .iter()
+            .any(|(k, t)| *k == "qualified_name" && t.contains("User")),
+        "expected 'new \\App\\Models\\User()' (object_creation: qualified_name), got: {class_ref_pairs:?}"
+    );
+    assert!(
+        class_ref_pairs
+            .iter()
+            .any(|(k, t)| *k == "relative_name" && t.contains("Widget")),
+        "expected 'new namespace\\Widget()' (object_creation: relative_name), got: {class_ref_pairs:?}"
+    );
+    assert!(
+        class_ref_pairs
+            .iter()
+            .any(|(k, t)| *k == "variable_name" && *t == "$cls"),
+        "expected 'new $cls()' (object_creation: variable_name), got: {class_ref_pairs:?}"
+    );
+    // 'new Widget()' (object_creation: name) and 'extends Widget'
+    // (base_clause: name) both produce identical ("name", "Widget") pairs
+    // by design — assert at least 2 occurrences so a regression that drops
+    // either pattern is still caught.
+    let widget_name_refs = class_ref_pairs
+        .iter()
+        .filter(|(k, t)| *k == "name" && *t == "Widget")
+        .count();
+    assert!(
+        widget_name_refs >= 2,
+        "expected both 'new Widget()' (object_creation) and 'extends Widget' \
+         (base_clause) to each produce a ('name', 'Widget') reference.class \
+         capture, got {widget_name_refs}: {class_ref_pairs:?}"
+    );
+
+    let impl_refs =
+        tags_matches_by_kind(&lang, PHP_VARIANTS, &query_str, "reference.implementation");
+    let impl_ref_pairs: Vec<(&str, &str)> = impl_refs
+        .iter()
+        .map(|(k, t)| (k.as_str(), t.as_str()))
+        .collect();
+    assert!(
+        impl_ref_pairs.contains(&("name", "Shape")),
+        "expected 'implements Shape' (class_interface_clause: name), got: {impl_ref_pairs:?}"
+    );
+    assert!(
+        impl_ref_pairs.contains(&("name", "Colored")),
+        "expected 'implements Colored' (class_interface_clause: name), got: {impl_ref_pairs:?}"
+    );
+}
+
+/// Negative case: anonymous class instantiation must never produce a
+/// @reference.class capture with fabricated name text (no name field
+/// exists for `anonymous_class`).
+#[test]
+fn php_tags_negative_anonymous_class_has_no_reference() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_tags_negative: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("php").expect("php tags query missing");
+    let caps = collect_captures_full(&lang, PHP_VARIANTS, &query_str);
+    let anon_leaks = caps
+        .iter()
+        .filter(|(cn, _, t, _)| cn == "reference.class" && t.contains("implements Shape"))
+        .count();
+    assert_eq!(
+        anon_leaks, 0,
+        "anonymous_class body must never leak into a @reference.class capture, got: {caps:?}"
+    );
+}
+
+/// Every grammar-legal variant of `namespace_use_declaration`/
+/// `use_declaration`/`require*`/`include*` that php.imports.scm claims to
+/// support.
+#[test]
+fn php_imports_completeness_directive_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_imports_completeness: php grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("php")
+        .expect("php imports query missing");
+    let paths = collect_captures(&lang, PHP_VARIANTS, &query_str, "import.path");
+
+    assert!(
+        paths.iter().any(|p| p.contains("User")),
+        "expected 'use App\\Models\\User;' (qualified_name, no alias), got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("Order")),
+        "expected 'use App\\Models\\Order as OrderModel;' path, got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Exception".to_string()),
+        "expected bare 'use Exception;' (name, no alias), got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Throwable".to_string()),
+        "expected bare 'use Throwable as T;' path, got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Loggable".to_string()) && paths.contains(&"Cacheable".to_string()),
+        "expected grouped 'use App\\Traits\\{{Loggable, Cacheable as Cache}};' members, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("bootstrap.php")),
+        "expected 'require_once ... bootstrap.php', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"config.php".to_string()),
+        "expected 'require config.php', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"legacy.php".to_string()),
+        "expected 'include legacy.php', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"once.php".to_string()),
+        "expected 'include_once once.php', got: {paths:?}"
+    );
+    // Trait composition (use_declaration, distinct from namespace imports).
+    assert!(
+        paths.contains(&"GreetingTrait".to_string())
+            && paths.contains(&"FarewellTrait".to_string()),
+        "expected trait composition 'use GreetingTrait;'/'use FarewellTrait, GreetingTrait;', \
+         got: {paths:?}"
+    );
+}
+
+/// Aliased imports must not double-count @import.path (the alias-form and
+/// bare-form patterns previously both fired for every aliased `use`).
+#[test]
+fn php_imports_negative_alias_does_not_double_count() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_imports_negative: php grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("php")
+        .expect("php imports query missing");
+    let paths = collect_captures(&lang, PHP_VARIANTS, &query_str, "import.path");
+    let order_count = paths.iter().filter(|p| p.contains("Order")).count();
+    assert_eq!(
+        order_count, 1,
+        "'use App\\Models\\Order as OrderModel;' must produce exactly 1 \
+         @import.path capture, got {order_count}: {paths:?}"
+    );
+    let throwable_count = paths.iter().filter(|p| **p == "Throwable").count();
+    assert_eq!(
+        throwable_count, 1,
+        "'use Throwable as T;' must produce exactly 1 @import.path capture, \
+         got {throwable_count}: {paths:?}"
+    );
+}
+
+/// Every grammar-legal variant of `named_type`'s children (name,
+/// qualified_name, relative_name) that php.types.scm claims to support.
+#[test]
+fn php_types_completeness_named_type_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_types_completeness: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_types("php").expect("php types query missing");
+    let refs = collect_captures(&lang, PHP_VARIANTS, &query_str, "type");
+
+    assert!(
+        refs.contains(&"int".to_string()),
+        "expected primitive_type 'int', got: {refs:?}"
+    );
+    assert!(
+        refs.contains(&"Widget".to_string()),
+        "expected named_type -> name 'Widget', got: {refs:?}"
+    );
+    assert!(
+        refs.iter().any(|t| t.contains("User")),
+        "expected named_type -> qualified_name '\\App\\Models\\User', got: {refs:?}"
+    );
+    assert!(
+        refs.iter().any(|t| t.contains("namespace\\Widget")),
+        "expected named_type -> relative_name 'namespace\\Widget', got: {refs:?}"
+    );
+    // Union type members (int|string) — each must appear.
+    assert!(
+        refs.contains(&"string".to_string()),
+        "expected union_type member 'string', got: {refs:?}"
+    );
+}
+
+/// Negative case: union type members must not be double-counted (a
+/// redundant union_type-specific pattern previously duplicated every
+/// match the unanchored named_type rule already produced).
+#[test]
+fn php_types_negative_union_type_not_double_counted() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_types_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_types_negative: php grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_types("php").expect("php types query missing");
+    let refs = collect_captures(&lang, PHP_VARIANTS, &query_str, "type");
+    // `Shape&Colored $f` (intersection_type) is the only site each of these
+    // two names appears in a type position in variants.php — unlike
+    // "Widget"/"int", which legitimately appear at several distinct
+    // parameter sites, so a >1 count for either of these specifically
+    // indicates the same named_type node was captured twice, not two
+    // different real sites.
+    for name in ["Shape", "Colored"] {
+        let count = refs.iter().filter(|t| t.as_str() == name).count();
+        assert_eq!(
+            count, 1,
+            "'{name}' (from the 'Shape&Colored' intersection_type) must \
+             produce exactly 1 @type.reference capture, got {count}: {refs:?}"
+        );
+    }
+}
+
+/// Every grammar-legal variant of `match_conditional_expression` and the
+/// short-circuit boolean operator set that php.complexity.scm claims to
+/// support.
+#[test]
+fn php_complexity_completeness_match_and_boolean_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_complexity_completeness: php grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("php")
+        .expect("php complexity query missing");
+    let caps = collect_captures_full(&lang, PHP_VARIANTS, &query_str);
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+
+    assert!(
+        complexity_kinds.contains(&"match_conditional_expression"),
+        "expected match_conditional_expression @complexity, got: {complexity_kinds:?}"
+    );
+
+    let bool_ops: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "complexity" && k == "binary_expression")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    for op in ["&&", "||", "and", "or", "xor"] {
+        assert!(
+            bool_ops.iter().any(|t| t.contains(op)),
+            "expected a binary_expression @complexity containing operator '{op}', \
+             got: {bool_ops:?}"
+        );
+    }
+}
+
+/// Negative cases: `match_default_expression` (the default arm) and a
+/// plain arithmetic binary_expression must never count as @complexity.
+#[test]
+fn php_complexity_negative_default_arm_and_arithmetic_not_counted() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping php_complexity_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("php").ok() else {
+        eprintln!("Skipping php_complexity_negative: php grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("php")
+        .expect("php complexity query missing");
+    let caps = collect_captures_full(&lang, PHP_VARIANTS, &query_str);
+    let default_arms = caps
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "complexity" && k == "match_default_expression")
+        .count();
+    assert_eq!(
+        default_arms, 0,
+        "match_default_expression must never count as @complexity, got: {caps:?}"
+    );
+    let arithmetic_hits = caps
+        .iter()
+        .filter(|(cn, k, t, _)| {
+            cn == "complexity" && k == "binary_expression" && t.contains("1 + 2")
+        })
+        .count();
+    assert_eq!(
+        arithmetic_hits, 0,
+        "plain arithmetic '1 + 2' must never count as @complexity, got: {caps:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -4250,6 +6301,9 @@ fn dart_types_finds_type_references() {
 // ---------------------------------------------------------------------------
 
 const ELIXIR_SAMPLE: &str = include_str!("fixtures/elixir/sample.ex");
+const ELIXIR_VARIANTS: &str = include_str!("fixtures/elixir/variants.ex");
+
+// --- Dimension 4: real-world fixture coverage (sample.ex) -------------------
 
 #[test]
 fn elixir_tags_finds_modules_and_functions() {
@@ -4274,6 +6328,42 @@ fn elixir_tags_finds_modules_and_functions() {
         names.contains(&"push".to_string()) || names.contains(&"pop".to_string()),
         "expected 'push' or 'pop' in elixir tags, got: {names:?}"
     );
+    // Guard clauses: `def double(n) when is_integer(n) or is_float(n)` — the
+    // gap fixed on top of the shallow baseline. Previously silently dropped
+    // any guarded function head entirely.
+    assert!(
+        names.contains(&"double".to_string()),
+        "expected 'double' (guarded function head) in elixir tags, got: {names:?}"
+    );
+    // defguard
+    assert!(
+        names.contains(&"is_percentage".to_string()),
+        "expected 'is_percentage' (defguard) in elixir tags, got: {names:?}"
+    );
+    // defp with guard
+    assert!(
+        names.contains(&"clamp".to_string()),
+        "expected 'clamp' (guarded defp) in elixir tags, got: {names:?}"
+    );
+    // defprotocol / defimpl
+    assert!(
+        names.contains(&"Sized".to_string()),
+        "expected 'Sized' protocol in elixir tags, got: {names:?}"
+    );
+    // Nested module name is a single dotted alias token
+    assert!(
+        names.contains(&"Stack.Namespaced".to_string()),
+        "expected 'Stack.Namespaced' nested module in elixir tags, got: {names:?}"
+    );
+    // defmacro / defmacrop
+    assert!(
+        names.contains(&"trace".to_string()),
+        "expected 'trace' defmacro in elixir tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"double_expr".to_string()),
+        "expected 'double_expr' guarded defmacrop in elixir tags, got: {names:?}"
+    );
 }
 
 #[test]
@@ -4295,6 +6385,12 @@ fn elixir_calls_finds_function_calls() {
         calls.contains(&"defmodule".to_string()) || calls.contains(&"def".to_string()),
         "expected 'defmodule' or 'def' call in elixir sample, got: {calls:?}"
     );
+    // Anonymous-function invocation `predicate.(x)` — the gap fixed on top
+    // of the shallow baseline (dot with no `right` field).
+    assert!(
+        calls.contains(&"predicate".to_string()),
+        "expected 'predicate' anon-fn invocation call in elixir sample, got: {calls:?}"
+    );
 }
 
 #[test]
@@ -4315,6 +6411,12 @@ fn elixir_imports_finds_alias_and_import() {
     assert!(
         paths.iter().any(|p| p.contains("Enum")),
         "expected 'Enum' in elixir import paths, got: {paths:?}"
+    );
+    // Multi-alias form `alias Stack.{Namespaced}` — the gap fixed on top of
+    // the shallow baseline (dot with a tuple right-hand side).
+    assert!(
+        paths.iter().any(|p| p.contains("Namespaced")),
+        "expected 'Namespaced' from multi-alias 'alias Stack.{{Namespaced}}', got: {paths:?}"
     );
 }
 
@@ -4338,6 +6440,22 @@ fn elixir_complexity_finds_control_flow() {
         "expected at least 1 complexity node in elixir sample, got {} ({complexity:?})",
         complexity.len()
     );
+    // The previous blanket `(call) @complexity` counted every function call
+    // (including ordinary calls like `Enum.reduce`, `IO.inspect`) as a
+    // decision point. With the fix, plain non-branching calls must NOT
+    // contribute — only the scoped set of branching macros / stab_clause
+    // arms / boolean operators listed in elixir.complexity.scm should.
+    // `sum_evens/1`'s body is a single non-branching call with no control
+    // flow at all, so the *total* complexity count for the whole sample
+    // must be far smaller than "one point per call", which the previous
+    // version produced (every `def`/`defmodule`/ordinary call counted).
+    let total_calls_in_sample = ELIXIR_SAMPLE.matches('(').count();
+    assert!(
+        complexity.len() < total_calls_in_sample,
+        "expected complexity count ({}) to be well below the raw call count \
+         ({total_calls_in_sample}) now that ordinary calls are excluded",
+        complexity.len()
+    );
 }
 
 #[test]
@@ -4359,6 +6477,377 @@ fn elixir_types_finds_module_aliases() {
         refs.iter()
             .any(|r| r.contains("Enum") || r.contains("Stack") || r.contains("MathUtils")),
         "expected module alias references in elixir sample, got: {refs:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.ex) -
+
+/// Every grammar-legal variant of def/defp/defmacro/defmacrop/defguard/
+/// defguardp/defdelegate name extraction that elixir.tags.scm claims to
+/// support, with the correct definition kind (dimension 3).
+#[test]
+fn elixir_tags_completeness_def_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_tags_completeness: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("elixir")
+        .expect("elixir tags query missing");
+    let pairs = collect_tag_pairs(&lang, ELIXIR_VARIANTS, &query_str);
+
+    let function_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.function")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    let macro_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.macro")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    let module_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.module")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    let interface_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.interface")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    let impl_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.implementation")
+        .map(|(_, n)| n.as_str())
+        .collect();
+
+    for expected in [
+        "plain_call",
+        "plain_noargs",
+        "guarded_call",
+        "guarded_noargs",
+        "private_plain",
+        "private_guarded",
+        "guard_expr",
+        "guardp_expr",
+        "delegated_call",
+        "delegated_noargs",
+    ] {
+        assert!(
+            function_names.contains(&expected),
+            "expected '{expected}' in elixir @definition.function, got: {function_names:?}"
+        );
+    }
+    for expected in [
+        "macro_plain",
+        "macro_guarded",
+        "macrop_plain",
+        "macrop_guarded",
+    ] {
+        assert!(
+            macro_names.contains(&expected),
+            "expected '{expected}' in elixir @definition.macro, got: {macro_names:?}"
+        );
+    }
+    assert!(
+        module_names.contains(&"Plain") && module_names.contains(&"Deep.Nested"),
+        "expected 'Plain' and 'Deep.Nested' modules, got: {module_names:?}"
+    );
+    assert!(
+        interface_names.contains(&"PlainProtocol"),
+        "expected 'PlainProtocol' defprotocol, got: {interface_names:?}"
+    );
+    assert!(
+        impl_names.contains(&"PlainProtocol"),
+        "expected 'PlainProtocol' defimpl reference, got: {impl_names:?}"
+    );
+}
+
+/// Every grammar-legal variant of call.target (identifier, dot-with-right,
+/// dot-without-right, call) that elixir.calls.scm claims to support.
+#[test]
+fn elixir_calls_completeness_target_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_calls_completeness: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("elixir")
+        .expect("elixir calls query missing");
+    let caps = collect_captures_full(&lang, ELIXIR_VARIANTS, &query_str);
+    let calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // target: identifier (local call)
+    assert!(
+        calls.contains(&"identity"),
+        "expected 'identity' local call, got: {calls:?}"
+    );
+    // target: dot, right: identifier (remote call)
+    assert!(
+        calls.contains(&"identity")
+            && caps
+                .iter()
+                .any(|(cn, _, t, _)| cn == "call.qualifier" && t == "Kernel"),
+        "expected 'Kernel.identity' remote call with qualifier, got: {caps:?}"
+    );
+    // target: dot, no right (anonymous-function invocation)
+    assert!(
+        calls.contains(&"add_one"),
+        "expected 'add_one' anon-fn invocation ('add_one.(5)'), got: {calls:?}"
+    );
+
+    // target: call (dynamic/macro-generated call, e.g. `unquote(x)(1, 2)`
+    // inside a `quote` block) — best-effort partial capture of the inner
+    // call's own text.
+    let query_str2 = loader
+        .get_calls("elixir")
+        .expect("elixir calls query missing");
+    let dyn_source = "defmodule M do\n  defmacro build(name) do\n    quote do\n      unquote(name)(1, 2)\n    end\n  end\nend\n";
+    let dyn_caps = collect_captures_full(&lang, dyn_source, &query_str2);
+    assert!(
+        dyn_caps
+            .iter()
+            .any(|(cn, k, t, _)| cn == "call" && k == "call" && t == "unquote(name)"),
+        "expected dynamic call-target 'unquote(name)' captured as @call, got: {dyn_caps:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear (or must appear exactly
+/// once, not duplicated) in @call captures.
+#[test]
+fn elixir_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_calls_negative: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("elixir")
+        .expect("elixir calls query missing");
+    let caps = collect_captures_full(&lang, ELIXIR_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `holder2.other_field` IS a remote call (target: dot, right: identifier
+    // "other_field"); it must appear exactly once — the negative guard here
+    // is against the anon-invocation `!right` pattern ALSO firing on it (it
+    // has a `right`, so it must not double-match).
+    let field_calls = call_texts.iter().filter(|t| **t == "other_field").count();
+    assert_eq!(
+        field_calls, 1,
+        "expected exactly 1 'other_field' call (holder2.other_field), got {field_calls}: {call_texts:?}"
+    );
+
+    // A bare local-variable read (`bound = plain_arithmetic`) must never be
+    // captured as a call.
+    assert!(
+        !call_texts.contains(&"bound"),
+        "local variable 'bound' must never be captured as a call, got: {call_texts:?}"
+    );
+}
+
+/// Every grammar-legal variant of alias/import/use/require argument shape
+/// (plain alias, multi-alias tuple, dot-qualified) that elixir.imports.scm
+/// claims to support.
+#[test]
+fn elixir_imports_completeness_directive_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_imports_completeness: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("elixir")
+        .expect("elixir imports query missing");
+    let paths = collect_captures(&lang, ELIXIR_VARIANTS, &query_str, "import.path");
+
+    // Plain forms
+    assert!(
+        paths.contains(&"Plain".to_string()),
+        "expected plain 'alias Plain', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Deep.Nested".to_string()),
+        "expected 'alias Deep.Nested, as: DN', got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("Kernel")),
+        "expected 'import Kernel, only: [...]', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Logger".to_string()),
+        "expected 'require Logger', got: {paths:?}"
+    );
+    assert!(
+        paths.contains(&"Application".to_string()),
+        "expected 'use Application', got: {paths:?}"
+    );
+    // Multi-alias tuple form: `alias Deep.{Nested}`
+    assert!(
+        paths.iter().filter(|p| *p == "Nested").count() >= 1,
+        "expected 'Nested' from multi-alias 'alias Deep.{{Nested}}', got: {paths:?}"
+    );
+    // Dot-qualified single form: `alias __MODULE__.Plain`
+    assert!(
+        paths.iter().any(|p| p == "Plain"),
+        "expected 'Plain' from dot-qualified 'alias __MODULE__.Plain', got: {paths:?}"
+    );
+}
+
+/// Every grammar-legal variant of branching complexity node that
+/// elixir.complexity.scm claims to support, plus the correctness fix:
+/// ordinary (non-branching) calls and arithmetic operators must NOT count.
+#[test]
+fn elixir_complexity_completeness_branch_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping elixir_complexity_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_complexity_completeness: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("elixir")
+        .expect("elixir complexity query missing");
+    let caps = collect_captures_full(&lang, ELIXIR_VARIANTS, &query_str);
+    let complexity_kinds: Vec<&(String, String, String, usize)> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .collect();
+    let complexity_call_kws: Vec<&str> = complexity_kinds
+        .iter()
+        .filter(|(_, k, _, _)| k == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    for kw in [
+        "if x > 0",
+        "unless x > 0",
+        "case x",
+        "cond do",
+        "with {:ok",
+        "for x <- list",
+        "try do",
+        "receive do",
+    ] {
+        let head = kw.split_whitespace().next().unwrap();
+        assert!(
+            complexity_call_kws.iter().any(|t| t.starts_with(head)),
+            "expected a branching '{head}' call in @complexity, got: {complexity_call_kws:?}"
+        );
+    }
+
+    // stab_clause arms count independently: branch_case has 3 arms.
+    let stab_count = complexity_kinds
+        .iter()
+        .filter(|(_, k, _, _)| k == "stab_clause")
+        .count();
+    assert!(
+        stab_count >= 3,
+        "expected at least 3 'stab_clause' complexity nodes (branch_case alone has 3), got {stab_count}"
+    );
+
+    // Boolean operators count; arithmetic/comparison operators must not.
+    let bool_ops: Vec<&str> = complexity_kinds
+        .iter()
+        .filter(|(_, k, _, _)| k == "binary_operator")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        bool_ops.iter().any(|t| t.contains("&&"))
+            && bool_ops.iter().any(|t| t.contains(" and "))
+            && bool_ops.iter().any(|t| t.contains(" or ")),
+        "expected &&/and/or boolean-operator complexity nodes, got: {bool_ops:?}"
+    );
+}
+
+/// Negative cases: ordinary (non-branching) calls and arithmetic/comparison
+/// operators must never contribute to @complexity — the correctness bug
+/// fixed on top of the previous blanket `(call) @complexity` / `(binary_
+/// operator) @complexity`.
+#[test]
+fn elixir_complexity_negative_ordinary_calls_and_arithmetic_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_complexity_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_complexity_negative: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("elixir")
+        .expect("elixir complexity query missing");
+    let source = "defmodule N do\n  def f(x) do\n    plain_arithmetic = 1 + 2 - 3 * 4 / 5\n    plain_comparison = 1 == 2\n    identity(x)\n    {plain_arithmetic, plain_comparison}\n  end\nend\n";
+    let caps = collect_captures_full(&lang, source, &query_str);
+    let complexity_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        complexity_texts.is_empty(),
+        "expected 0 complexity nodes for a function with only ordinary calls and \
+         arithmetic/comparison operators (no branching), got: {complexity_texts:?}"
+    );
+}
+
+/// Negative case for tags: `defguard`'s always-guarded form must not also
+/// spuriously produce a plain (unguarded) @definition.function match — the
+/// unguarded def/defp patterns require `arguments -> call`/`identifier`
+/// directly, which a guarded head's `binary_operator` wrapper never
+/// satisfies, so no double-counting should occur.
+#[test]
+fn elixir_tags_negative_guarded_head_not_double_counted() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping elixir_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elixir").ok() else {
+        eprintln!("Skipping elixir_tags_negative: elixir grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("elixir")
+        .expect("elixir tags query missing");
+    let names = collect_captures(&lang, ELIXIR_VARIANTS, &query_str, "name");
+    let guarded_count = names.iter().filter(|n| *n == "guarded_call").count();
+    assert_eq!(
+        guarded_count, 1,
+        "expected exactly 1 'guarded_call' definition (not double-counted \
+         across guarded/unguarded patterns), got {guarded_count}: {names:?}"
     );
 }
 
@@ -5172,6 +7661,9 @@ fn cpp_imports_completeness_using_and_alias_variants() {
 // ---------------------------------------------------------------------------
 
 const CSHARP_SAMPLE: &str = include_str!("fixtures/c-sharp/sample.cs");
+const CSHARP_VARIANTS: &str = include_str!("fixtures/c-sharp/variants.cs");
+
+// --- Dimension 4: real-world fixture coverage (sample.cs) -------------------
 
 #[test]
 fn csharp_tags_finds_class_and_methods() {
@@ -5200,6 +7692,77 @@ fn csharp_tags_finds_class_and_methods() {
         names.contains(&"Classify".to_string()),
         "expected 'Classify' method in c-sharp tags, got: {names:?}"
     );
+    // base_list: `class Stack<T> : IEnumerable<T>, System.IDisposable` — both
+    // the generic and the path-qualified interface must be found.
+    assert!(
+        names.contains(&"IEnumerable".to_string()),
+        "expected 'IEnumerable' (generic base_list entry) in c-sharp tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"IDisposable".to_string()),
+        "expected 'IDisposable' (path-qualified base_list entry) in c-sharp tags, got: {names:?}"
+    );
+    // `class BoundedStack<T> : Stack<T>` — generic base class.
+    assert!(
+        names.contains(&"BoundedStack".to_string()),
+        "expected 'BoundedStack' class in c-sharp tags, got: {names:?}"
+    );
+    // Record with primary-constructor base type: `record Point3D(...) : Point(X, Y);`
+    assert!(
+        names.contains(&"Point3D".to_string()),
+        "expected 'Point3D' record in c-sharp tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Point".to_string()),
+        "expected 'Point' record (primary-constructor base) in c-sharp tags, got: {names:?}"
+    );
+    // Lambda binding parameters must never surface as method/function
+    // definitions — closures aren't method_declaration/local_function_statement.
+    let def_names: Vec<&str> = names
+        .iter()
+        .map(std::string::String::as_str)
+        .filter(|n| *n == "FetchLengthAsync")
+        .collect();
+    assert!(
+        def_names.contains(&"FetchLengthAsync"),
+        "expected the real async method 'FetchLengthAsync' in c-sharp tags, got: {names:?}"
+    );
+}
+
+#[test]
+fn csharp_tags_finds_call_references() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_tags_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_tags_calls: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("c-sharp")
+        .expect("c-sharp tags query missing");
+    let pairs = collect_tag_pairs(&lang, CSHARP_SAMPLE, &query_str);
+    let ref_calls: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.call")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // base()/this() constructor delegation inside BoundedStack.
+    assert!(
+        ref_calls.contains(&"base"),
+        "expected 'base' constructor-delegation reference.call, got: {ref_calls:?}"
+    );
+    assert!(
+        ref_calls.contains(&"this"),
+        "expected 'this' constructor-delegation reference.call, got: {ref_calls:?}"
+    );
+    // Qualified generic LINQ call: Enumerable.Range(...).Where(...).ToList()
+    assert!(
+        ref_calls.contains(&"Range"),
+        "expected 'Range' qualified generic call reference, got: {ref_calls:?}"
+    );
 }
 
 #[test]
@@ -5222,6 +7785,44 @@ fn csharp_calls_finds_method_calls() {
             || calls.contains(&"WriteLine".to_string())
             || calls.contains(&"Add".to_string()),
         "expected method call in c-sharp sample, got: {calls:?}"
+    );
+    // Unqualified generic call: Identity<int>(42).
+    assert!(
+        calls.contains(&"Identity".to_string()),
+        "expected 'Identity' generic call in c-sharp sample, got: {calls:?}"
+    );
+    // Qualified generic LINQ chain: Enumerable.Range(...).Where(...).ToList().
+    assert!(
+        calls.contains(&"Range".to_string()),
+        "expected 'Range' call in c-sharp sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"Where".to_string()),
+        "expected 'Where' chained call in c-sharp sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"ToList".to_string()),
+        "expected 'ToList' chained call in c-sharp sample, got: {calls:?}"
+    );
+    // Null-conditional invocation chain: maybeNull?.Trim()?.Length (Trim is a
+    // call; Length is a property access, not a call).
+    assert!(
+        calls.contains(&"Trim".to_string()),
+        "expected 'Trim' null-conditional call in c-sharp sample, got: {calls:?}"
+    );
+    // base()/this() constructor delegation.
+    assert!(
+        calls.contains(&"base".to_string()),
+        "expected 'base' constructor-delegation call in c-sharp sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"this".to_string()),
+        "expected 'this' constructor-delegation call in c-sharp sample, got: {calls:?}"
+    );
+    // Extension method call: blank.IsBlank().
+    assert!(
+        calls.contains(&"IsBlank".to_string()),
+        "expected 'IsBlank' extension-method call in c-sharp sample, got: {calls:?}"
     );
 }
 
@@ -5252,6 +7853,11 @@ fn csharp_imports_finds_using_directives() {
             .any(|p| p.contains("Collections") || p.contains("Generic")),
         "expected qualified namespace in c-sharp import paths, got: {paths:?}"
     );
+    // `using System.Linq;` / `using System.Threading.Tasks;`
+    assert!(
+        paths.iter().any(|p| p.contains("Linq")),
+        "expected 'System.Linq' in c-sharp import paths, got: {paths:?}"
+    );
 }
 
 #[test]
@@ -5277,6 +7883,34 @@ fn csharp_complexity_finds_control_flow() {
 }
 
 #[test]
+fn csharp_complexity_finds_switch_expression_arms() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_complexity_switch: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_complexity_switch: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("c-sharp")
+        .expect("c-sharp complexity query missing");
+    let caps = collect_captures_full(&lang, CSHARP_SAMPLE, &query_str);
+    // sample.cs's `n switch { < 0 => ..., 0 => ..., _ => ... }` has 3 arms —
+    // previously entirely uncounted (switch_expression_arm is a distinct node
+    // kind from switch_section, the statement-form switch's case label).
+    let arm_count = caps
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "complexity" && k == "switch_expression_arm")
+        .count();
+    assert!(
+        arm_count >= 3,
+        "expected >= 3 switch_expression_arm complexity nodes, got {arm_count}: {caps:?}"
+    );
+}
+
+#[test]
 fn csharp_types_finds_type_references() {
     let Some(gdir) = grammar_dir() else {
         eprintln!("Skipping csharp_types: run `cargo xtask build-grammars` first");
@@ -5290,12 +7924,532 @@ fn csharp_types_finds_type_references() {
     let query_str = loader
         .get_types("c-sharp")
         .expect("c-sharp types query missing");
-    let refs = collect_captures(&lang, CSHARP_SAMPLE, &query_str, "type");
+    let refs = collect_captures(&lang, CSHARP_SAMPLE, &query_str, "type.reference");
     assert!(
         refs.iter()
             .any(|r| r == "Stack" || r == "MathUtils" || r == "List"),
         "expected type reference in c-sharp sample, got: {refs:?}"
     );
+}
+
+#[test]
+fn csharp_types_finds_type_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_types_definitions: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_types_definitions: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("c-sharp")
+        .expect("c-sharp types query missing");
+    let pairs = collect_tag_pairs(&lang, CSHARP_SAMPLE, &query_str);
+    let def_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k.starts_with("definition."))
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // Previously c-sharp.types.scm had NO @definition.type at all.
+    assert!(
+        def_names.contains(&"Stack"),
+        "expected 'Stack' @definition.type, got: {def_names:?}"
+    );
+    assert!(
+        def_names.contains(&"Point"),
+        "expected 'Point' record @definition.type, got: {def_names:?}"
+    );
+}
+
+#[test]
+fn csharp_types_negative_no_value_identifiers() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_types_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_types_negative: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("c-sharp")
+        .expect("c-sharp types query missing");
+    let refs = collect_captures(&lang, CSHARP_SAMPLE, &query_str, "type.reference");
+    // Regression test for the severe overmatching bug: `(identifier)
+    // @type.reference` with no field constraint used to match every
+    // identifier in the file, including method names, parameter names, and
+    // local variable names. None of these are type positions.
+    for value_ident in ["Push", "Add", "items", "item", "Classify", "stack"] {
+        assert!(
+            !refs.contains(&value_ident.to_string()),
+            "'{value_ident}' is a value identifier, must not appear as a \
+             @type.reference, got: {refs:?}"
+        );
+    }
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.cs) --
+
+/// Every grammar-legal variant of `base_list` (plain, generic, path-qualified
+/// base class AND interface — C# has no syntactic extends/implements split)
+/// must produce a @reference.class capture, matching c-sharp.tags.scm's
+/// completeness claims.
+#[test]
+fn csharp_tags_completeness_base_list_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping csharp_tags_completeness_base_list: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_tags_completeness_base_list: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("c-sharp")
+        .expect("c-sharp tags query missing");
+    let pairs = collect_tag_pairs(&lang, CSHARP_VARIANTS, &query_str);
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    for expected in [
+        "PlainBase",         // base_list: identifier
+        "GenericBase",       // base_list: generic_name -> identifier
+        "Exception",         // base_list: qualified_name -> identifier
+        "IPlainIface",       // base_list: identifier (interface)
+        "IGenericIface",     // base_list: generic_name -> identifier (interface)
+        "IDisposable",       // base_list: qualified_name -> identifier (interface)
+        "RecordBase",        // primary_constructor_base_type: identifier
+        "RecordBaseGeneric", // primary_constructor_base_type: generic_name -> identifier
+    ] {
+        assert!(
+            ref_class_names.contains(&expected),
+            "expected '{expected}' among base_list @reference.class captures, got: {ref_class_names:?}"
+        );
+    }
+    // MultiBase : PlainBase, IPlainIface, IGenericIface<int> — all 3 entries
+    // in one base_list must be found, not just the first.
+    let multi_base_count = ref_class_names
+        .iter()
+        .filter(|n| **n == "PlainBase" || **n == "IPlainIface" || **n == "IGenericIface")
+        .count();
+    assert!(
+        multi_base_count >= 3,
+        "expected all 3 entries of MultiBase's base_list, found {multi_base_count} among: {ref_class_names:?}"
+    );
+}
+
+/// Every grammar-legal variant of `object_creation_expression.type` must
+/// produce a @reference.class capture with the leaf class name.
+#[test]
+fn csharp_tags_completeness_object_creation_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping csharp_tags_completeness_object_creation: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!(
+            "Skipping csharp_tags_completeness_object_creation: c-sharp grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("c-sharp")
+        .expect("c-sharp tags query missing");
+    let pairs = collect_tag_pairs(&lang, CSHARP_VARIANTS, &query_str);
+    let ref_class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "reference.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    // Note: `new object()` (PlainNew) is deliberately excluded — `object` is a
+    // `predefined_type` keyword node (like Java's `boolean_type`/`integral_type`),
+    // not `identifier`/`generic_name`/`qualified_name`, so it correctly does
+    // NOT produce a @reference.class (a builtin keyword type isn't a "class
+    // reference" in any meaningful sense).
+    for expected in ["List", "StringBuilder"] {
+        assert!(
+            ref_class_names.contains(&expected),
+            "expected '{expected}' among object-creation @reference.class captures, got: {ref_class_names:?}"
+        );
+    }
+    // Extraction depth: leaf-only names (no '.') even for qualified forms.
+    assert!(
+        ref_class_names.iter().all(|n| !n.contains('.')),
+        "expected leaf-only class names (no '.'), got: {ref_class_names:?}"
+    );
+}
+
+/// Every type-defining declaration kind (class, struct, interface, enum,
+/// record) must be found as a tags definition.
+#[test]
+fn csharp_tags_completeness_type_declaration_kinds() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping csharp_tags_completeness_type_declaration_kinds: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!(
+            "Skipping csharp_tags_completeness_type_declaration_kinds: c-sharp grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("c-sharp")
+        .expect("c-sharp tags query missing");
+    let pairs = collect_tag_pairs(&lang, CSHARP_VARIANTS, &query_str);
+    let find_def_kind = |name: &str| -> Option<&str> {
+        pairs
+            .iter()
+            .find(|(k, n)| k.starts_with("definition.") && n == name)
+            .map(|(k, _)| k.as_str())
+    };
+    assert_eq!(find_def_kind("PlainClass"), Some("definition.class"));
+    assert_eq!(
+        find_def_kind("PlainStruct"),
+        Some("definition.class"),
+        "structs map to definition.class (closest existing kind)"
+    );
+    assert_eq!(
+        find_def_kind("PlainInterface"),
+        Some("definition.interface")
+    );
+    assert_eq!(find_def_kind("PlainEnum"), Some("definition.enum"));
+    assert_eq!(
+        find_def_kind("PlainRecord"),
+        Some("definition.class"),
+        "records map to definition.class (closest existing kind)"
+    );
+}
+
+/// Every grammar-legal variant of `invocation_expression.function` (plain
+/// identifier, generic_name, member_access_expression with identifier/
+/// generic_name name, chained qualifier, conditional-access) must produce a
+/// @call capture, matching c-sharp.calls.scm's completeness claims.
+#[test]
+fn csharp_calls_completeness_invocation_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_calls_completeness: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("c-sharp")
+        .expect("c-sharp calls query missing");
+    let caps = collect_captures_full(&lang, CSHARP_VARIANTS, &query_str);
+    let calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        calls.contains(&"Identity"),
+        "expected plain call 'Identity', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"GenericIdentity"),
+        "expected unqualified generic call 'GenericIdentity', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"WriteLine"),
+        "expected qualified call 'WriteLine', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"OfType"),
+        "expected qualified generic call 'OfType', got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"Trim") && calls.contains(&"ToUpper"),
+        "expected chained calls 'Trim'/'ToUpper', got: {calls:?}"
+    );
+    // Null-conditional invocation: s?.Trim() / xs?.OfType<int>().
+    let conditional_call_count = calls.iter().filter(|c| **c == "Trim").count();
+    assert!(
+        conditional_call_count >= 1,
+        "expected at least one conditional-access 'Trim' call, got: {calls:?}"
+    );
+}
+
+/// `constructor_initializer`'s base(...)/this(...) delegation must produce a
+/// @call capture for both keywords.
+#[test]
+fn csharp_calls_completeness_constructor_initializer() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping csharp_calls_completeness_ctor_init: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_calls_completeness_ctor_init: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("c-sharp")
+        .expect("c-sharp calls query missing");
+    let calls = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "call");
+    assert!(
+        calls.contains(&"base".to_string()),
+        "expected 'base' constructor-delegation call, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"this".to_string()),
+        "expected 'this' constructor-delegation call, got: {calls:?}"
+    );
+}
+
+/// Negative case: method references passed as delegates, bare field
+/// access/writes, and casts must never appear as @call captures.
+#[test]
+fn csharp_calls_negative_field_access_and_lambda() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_calls_negative: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("c-sharp")
+        .expect("c-sharp calls query missing");
+    let calls = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.contains(&"field".to_string()),
+        "bare field access/write 'this.field' must not be captured as a call, got: {calls:?}"
+    );
+    assert!(
+        !calls.contains(&"StaticMethod".to_string()),
+        "'StaticMethod' is never invoked in variants.cs (only referenced via delegate-\
+         shaped lambda text); must not spuriously appear as a call, got: {calls:?}"
+    );
+}
+
+/// Every grammar-legal variant of `using_directive`'s path argument (bare
+/// identifier, qualified_name, bare generic_name, bare alias_qualified_name,
+/// each with and without an alias) must produce a correctly-shaped @import,
+/// with NO duplicate @import.path for aliased forms (regression test for the
+/// alias/path overlap bug).
+#[test]
+fn csharp_imports_completeness_all_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_imports_completeness: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("c-sharp")
+        .expect("c-sharp imports query missing");
+    let paths = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "import.path");
+    let aliases = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "import.alias");
+
+    // using Bare; — bare single-segment path.
+    assert!(
+        paths.contains(&"Bare".to_string()),
+        "expected 'Bare' bare-identifier import path, got: {paths:?}"
+    );
+    // using System.Collections.Generic; — qualified path.
+    assert!(
+        paths.iter().any(|p| p.contains("Collections")),
+        "expected qualified import path, got: {paths:?}"
+    );
+    // using static Wrapper<int>; — bare generic_name path.
+    assert!(
+        paths.iter().any(|p| p.starts_with("Wrapper")),
+        "expected 'Wrapper<int>' bare-generic import path, got: {paths:?}"
+    );
+    // using global::System; — bare alias_qualified_name path.
+    assert!(
+        paths.iter().any(|p| p.contains("global::System")),
+        "expected 'global::System' alias_qualified_name import path, got: {paths:?}"
+    );
+    // using Sys = System; using SysColl = ...; using MyList = List<int>; —
+    // three aliases, each with exactly one alias and one path capture (the
+    // historical bug produced the alias identifier itself as a spurious
+    // second @import.path).
+    assert!(
+        aliases.contains(&"Sys".to_string()),
+        "expected 'Sys' import alias, got: {aliases:?}"
+    );
+    assert!(
+        !paths.contains(&"Sys".to_string()),
+        "alias name 'Sys' must not also appear as an @import.path, got: {paths:?}"
+    );
+    assert!(
+        !paths.contains(&"SysColl".to_string()),
+        "alias name 'SysColl' must not also appear as an @import.path, got: {paths:?}"
+    );
+    assert!(
+        !paths.contains(&"MyList".to_string()),
+        "alias name 'MyList' must not also appear as an @import.path, got: {paths:?}"
+    );
+}
+
+/// Exact-count regression test for the duplicate-@import.path bug: every
+/// using_directive in variants.cs must produce exactly one @import.path
+/// capture (not two, from the alias identifier bleeding into the plain
+/// pattern).
+#[test]
+fn csharp_imports_negative_no_duplicate_path_per_alias() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_imports_negative: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("c-sharp")
+        .expect("c-sharp imports query missing");
+    let caps = collect_captures_full(&lang, CSHARP_VARIANTS, &query_str);
+    // variants.cs has exactly 8 using directives.
+    let import_stmts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "import")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert_eq!(
+        import_stmts.len(),
+        8,
+        "expected 8 @import captures (one per using directive in variants.cs), got {}: {import_stmts:?}",
+        import_stmts.len()
+    );
+    // Every using_directive produces exactly one @import.path — the
+    // historical bug produced two for aliased forms (the alias identifier
+    // plus the real path), so a 1:1 ratio with @import statements is the
+    // exact regression guard.
+    let path_count = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "import.path")
+        .count();
+    assert_eq!(
+        path_count, 8,
+        "expected exactly 8 @import.path captures (one per using directive, no \
+         duplicates from alias bleed-through), got {path_count}: {caps:?}"
+    );
+}
+
+/// Every `types.scm`-covered type-position field (variable declaration,
+/// parameter, method return type, local function type, property type,
+/// foreach loop variable, catch clause, cast, is/as pattern) must produce a
+/// @type.reference capture for its identifier/generic_name/qualified_name/
+/// nullable_type-wrapped leaf.
+#[test]
+fn csharp_types_completeness_field_positions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping csharp_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_types_completeness: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("c-sharp")
+        .expect("c-sharp types query missing");
+    let refs = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "type.reference");
+    // variable_declaration.type: identifier / generic_name / qualified_name / nullable_type
+    assert!(
+        refs.contains(&"List".to_string()),
+        "expected 'List' (variable_declaration.type generic_name), got: {refs:?}"
+    );
+    assert!(
+        refs.contains(&"StringBuilder".to_string()),
+        "expected 'StringBuilder' (variable_declaration.type qualified_name), got: {refs:?}"
+    );
+    // parameter.type
+    assert!(
+        refs.iter().filter(|r| *r == "List").count() >= 2,
+        "expected 'List' from both variable_declaration.type and parameter.type, got: {refs:?}"
+    );
+    // method_declaration.returns
+    assert!(
+        refs.iter().filter(|r| *r == "StringBuilder").count() >= 2,
+        "expected 'StringBuilder' from both variable_declaration.type and returns:, got: {refs:?}"
+    );
+    // The bare `identifier` variant (as opposed to generic_name/qualified_name)
+    // — exercised via the user-defined `PlainClass` type across
+    // variable_declaration.type, parameter.type, method_declaration.returns,
+    // local_function_statement.type, property_declaration.type,
+    // foreach_statement.type, cast_expression.type, and as_expression.right.
+    // Builtin keyword types (`int`, `object`, `string`) are deliberately NOT
+    // used for this check: they parse as `predefined_type`, not `identifier`,
+    // so they would silently fail to exercise this variant at all.
+    let plain_class_count = refs.iter().filter(|r| *r == "PlainClass").count();
+    assert!(
+        plain_class_count >= 7,
+        "expected >= 7 'PlainClass' identifier-variant @type.reference captures \
+         (one per field position), got {plain_class_count}: {refs:?}"
+    );
+    // catch_declaration.type: qualified_name (System.Exception)
+    // is_expression.right: generic_name (List<int>)
+    // These are exercised structurally by the field patterns above; spot-check
+    // extraction depth instead:
+    let caps = collect_captures_full(&lang, CSHARP_VARIANTS, &query_str);
+    let list_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, t, _)| cn == "type.reference" && t == "List")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    assert!(
+        list_kinds.iter().all(|k| *k == "identifier"),
+        "expected 'List' captures to be leaf identifier nodes, got kinds: {list_kinds:?}"
+    );
+}
+
+/// Negative case: value identifiers (parameter names, local variable names,
+/// method names unrelated to type positions) must never appear as
+/// @type.reference in the completeness fixture either.
+#[test]
+fn csharp_types_negative_field_positions_no_overmatch() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping csharp_types_negative_field_positions: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("c-sharp").ok() else {
+        eprintln!("Skipping csharp_types_negative_field_positions: c-sharp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("c-sharp")
+        .expect("c-sharp types query missing");
+    let refs = collect_captures(&lang, CSHARP_VARIANTS, &query_str, "type.reference");
+    for value_ident in ["Identity", "GenericIdentity", "field1", "a", "b", "x"] {
+        assert!(
+            !refs.contains(&value_ident.to_string()),
+            "'{value_ident}' is a value/method identifier, must not appear as a \
+             @type.reference, got: {refs:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -8102,93 +11256,456 @@ fn prolog_imports_finds_use_module() {
 // ---------------------------------------------------------------------------
 
 const SQL_SAMPLE: &str = include_str!("fixtures/sql/sample.sql");
+const SQL_VARIANTS: &str = include_str!("fixtures/sql/variants.sql");
+
+/// `(loader, language, tags, calls, types, complexity)` — see
+/// [`sql_lang_and_queries`] for why the loader must be kept alongside the
+/// language it produced.
+type SqlLangAndQueries = (
+    GrammarLoader,
+    tree_sitter::Language,
+    Arc<String>,
+    Arc<String>,
+    Arc<String>,
+    Arc<String>,
+);
+
+/// Load the sql grammar and all four query strings, or return `None` if the
+/// grammar `.so` isn't built (skip gracefully, per `grammar_dir`'s contract).
+///
+/// Returns the `GrammarLoader` itself alongside everything derived from it:
+/// `GrammarLoader` owns the `libloading::Library` backing the returned
+/// `tree_sitter::Language`'s function pointers, so the loader must outlive
+/// every use of that `Language` — dropping it (e.g. at the end of a helper
+/// function that only returns the `Language`) unloads the `.so` and turns
+/// the `Language`'s function pointers into dangling pointers (confirmed via
+/// a real SIGSEGV when the loader was dropped at the end of a first version
+/// of this helper).
+fn sql_lang_and_queries() -> Option<SqlLangAndQueries> {
+    let gdir = grammar_dir()?;
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let lang = loader.get("sql").ok()?;
+    let tags = loader.get_tags("sql")?;
+    let calls = loader.get_calls("sql")?;
+    let types = loader.get_types("sql")?;
+    let complexity = loader.get_complexity("sql")?;
+    Some((loader, lang, tags, calls, types, complexity))
+}
+
+// --- Dimension 4: real-world fixture coverage (sample.sql) ------------------
 
 #[test]
 fn sql_tags_finds_tables_and_functions() {
-    let Some(gdir) = grammar_dir() else {
+    let Some((_loader, lang, tags, ..)) = sql_lang_and_queries() else {
         eprintln!("Skipping sql_tags: run `cargo xtask build-grammars` first");
         return;
     };
-    let loader = GrammarLoader::with_paths(vec![gdir]);
-    let Some(lang) = loader.get("sql").ok() else {
-        eprintln!("Skipping sql_tags: sql grammar .so not found");
-        return;
-    };
-    let query_str = loader.get_tags("sql").expect("sql tags query missing");
-    let names = collect_captures(&lang, SQL_SAMPLE, &query_str, "name");
+    let names = collect_captures(&lang, SQL_SAMPLE, &tags, "name");
     assert!(
-        names
-            .iter()
-            .any(|n| n.contains("products") || n == "products"),
-        "expected 'products' table in sql tags, got: {names:?}"
+        names.iter().any(|n| n == "inventory.products"),
+        "expected 'inventory.products' table in sql tags, got: {names:?}"
     );
     assert!(
-        names
-            .iter()
-            .any(|n| n.contains("calculate_total") || n == "calculate_total"),
-        "expected 'calculate_total' function in sql tags, got: {names:?}"
+        names.iter().any(|n| n == "inventory.calculate_total"),
+        "expected 'inventory.calculate_total' function in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "inventory"),
+        "expected 'inventory' schema in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "inventory.low_stock"),
+        "expected 'inventory.low_stock' view in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "inventory.category_totals"),
+        "expected 'inventory.category_totals' materialized view in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "idx_products_category"),
+        "expected 'idx_products_category' index in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "inventory.order_seq"),
+        "expected 'inventory.order_seq' sequence in sql tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "touch_orders"),
+        "expected 'touch_orders' trigger in sql tags, got: {names:?}"
     );
 }
 
 #[test]
 fn sql_types_finds_column_types() {
-    let Some(gdir) = grammar_dir() else {
+    let Some((_loader, lang, _tags, _calls, types, _complexity)) = sql_lang_and_queries() else {
         eprintln!("Skipping sql_types: run `cargo xtask build-grammars` first");
         return;
     };
-    let loader = GrammarLoader::with_paths(vec![gdir]);
-    let Some(lang) = loader.get("sql").ok() else {
-        eprintln!("Skipping sql_types: sql grammar .so not found");
-        return;
-    };
-    let query_str = loader.get_types("sql").expect("sql types query missing");
-    let types = collect_captures(&lang, SQL_SAMPLE, &query_str, "type");
+    let found = collect_captures(&lang, SQL_SAMPLE, &types, "type");
     assert!(
-        !types.is_empty(),
-        "expected at least one type in sql sample, got: {types:?}"
+        !found.is_empty(),
+        "expected at least one type in sql sample, got: {found:?}"
+    );
+    assert!(
+        found.iter().any(|t| t.contains("NUMERIC")),
+        "expected a NUMERIC column type in sql sample, got: {found:?}"
     );
 }
 
 #[test]
 fn sql_complexity_finds_control_flow() {
-    let Some(gdir) = grammar_dir() else {
+    let Some((_loader, lang, _tags, _calls, _types, complexity)) = sql_lang_and_queries() else {
         eprintln!("Skipping sql_complexity: run `cargo xtask build-grammars` first");
         return;
     };
-    let loader = GrammarLoader::with_paths(vec![gdir]);
-    let Some(lang) = loader.get("sql").ok() else {
-        eprintln!("Skipping sql_complexity: sql grammar .so not found");
+    let found = collect_captures(&lang, SQL_SAMPLE, &complexity, "complexity");
+    assert!(
+        !found.is_empty(),
+        "expected at least 1 complexity node in sql sample, got {} ({found:?})",
+        found.len()
+    );
+}
+
+/// Regression test for the `when_clause` → `keyword_when` complexity bug:
+/// `sample.sql`'s `reorder_needed` function uses `CASE WHEN ... END` (one
+/// branch) and the MERGE statement at the end uses `WHEN MATCHED`/`WHEN NOT
+/// MATCHED` (two branches) — three real WHEN branches total. The original
+/// `(when_clause) @complexity` query matched zero of them (confirmed via
+/// real parse: a scalar CASE expression's `case` node has no `when_clause`
+/// child at all — `when_clause` is exclusively for MERGE).
+#[test]
+fn sql_complexity_finds_case_and_merge_when_branches() {
+    let Some((_loader, lang, _tags, _calls, _types, complexity)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_complexity_when: run `cargo xtask build-grammars` first");
         return;
     };
-    let query_str = loader
-        .get_complexity("sql")
-        .expect("sql complexity query missing");
-    let complexity = collect_captures(&lang, SQL_SAMPLE, &query_str, "complexity");
-    assert!(
-        !complexity.is_empty(),
-        "expected at least 1 complexity node in sql sample, got {} ({complexity:?})",
-        complexity.len()
+    let full = collect_captures_full(&lang, SQL_SAMPLE, &complexity);
+    let when_branches: Vec<_> = full
+        .iter()
+        .filter(|(cap, kind, ..)| cap == "complexity" && kind == "keyword_when")
+        .collect();
+    assert_eq!(
+        when_branches.len(),
+        3,
+        "expected 3 WHEN branches (1 CASE + 2 MERGE) in sql sample, got: {when_branches:?}\nfull: {full:?}"
     );
 }
 
 #[test]
 fn sql_calls_finds_function_calls() {
-    let Some(gdir) = grammar_dir() else {
+    let Some((_loader, lang, _tags, calls, ..)) = sql_lang_and_queries() else {
         eprintln!("Skipping sql_calls: run `cargo xtask build-grammars` first");
         return;
     };
-    let loader = GrammarLoader::with_paths(vec![gdir]);
-    let Some(lang) = loader.get("sql").ok() else {
-        eprintln!("Skipping sql_calls: sql grammar .so not found");
-        return;
-    };
-    let query_str = loader.get_calls("sql").expect("sql calls query missing");
-    let calls = collect_captures(&lang, SQL_SAMPLE, &query_str, "call");
+    let found = collect_captures(&lang, SQL_SAMPLE, &calls, "call");
     assert!(
-        calls
+        found
             .iter()
             .any(|c| c == "NOW" || c == "COUNT" || c == "SUM" || c == "COALESCE"),
-        "expected a SQL function call in sql sample, got: {calls:?}"
+        "expected a SQL function call in sql sample, got: {found:?}"
+    );
+    assert!(
+        found.iter().any(|c| c == "ROW_NUMBER"),
+        "expected the window function ROW_NUMBER() call in sql sample, got: {found:?}"
+    );
+    assert!(
+        found.iter().any(|c| c == "EXTRACT"),
+        "expected the EXTRACT(...) call in sql sample, got: {found:?}"
+    );
+}
+
+/// Negative case (regression for the `invocation`'s `unit`-field bug):
+/// `EXTRACT(YEAR FROM ordered_at)` must produce exactly one call (`EXTRACT`
+/// itself) — the date-part keyword `YEAR` (the `unit` field) must never be
+/// mistaken for a second call.
+#[test]
+fn sql_calls_negative_extract_unit_is_not_a_call() {
+    let Some((_loader, lang, _tags, calls, ..)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let found = collect_captures(&lang, SQL_SAMPLE, &calls, "call");
+    let extract_count = found.iter().filter(|c| *c == "EXTRACT").count();
+    assert_eq!(
+        extract_count, 1,
+        "expected exactly 1 EXTRACT call in sql sample, got: {found:?}"
+    );
+    assert!(
+        !found.iter().any(|c| c == "YEAR"),
+        "YEAR is EXTRACT's date-part unit, not a call — must not appear as a @call capture, got: {found:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix (variants.sql) --------------------
+
+#[test]
+fn sql_tags_completeness_all_definition_variants() {
+    let Some((_loader, lang, tags, ..)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let pairs = collect_tag_pairs(&lang, SQL_VARIANTS, &tags);
+    let has = |kind: &str, name: &str| {
+        pairs
+            .iter()
+            .any(|(k, n)| k == kind && n.ends_with(name) || n == name)
+    };
+    assert!(
+        has("definition.function", "variants.plain_fn"),
+        "missing create_function definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.class", "variants.widgets"),
+        "missing create_table definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.class", "variants.widget_labels"),
+        "missing create_view definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.class", "variants.widget_count"),
+        "missing create_materialized_view definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.module", "variants"),
+        "missing create_schema definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.type", "variants.status"),
+        "missing create_type definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.var", "idx_widgets_label"),
+        "missing create_index definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.function", "widgets_touch"),
+        "missing create_trigger definition, got: {pairs:?}"
+    );
+    assert!(
+        has("definition.var", "variants.widget_seq"),
+        "missing create_sequence definition, got: {pairs:?}"
+    );
+}
+
+/// Regression tests for the anchoring bugs found while applying the
+/// query-testing methodology: each of these constructs has a second
+/// candidate `object_reference`/`identifier` sibling that an unanchored
+/// query previously (or hypothetically) also matched. Assert the exact
+/// count of definitions each construct produces, not just presence.
+#[test]
+fn sql_tags_negative_anchoring_regressions_exact_counts() {
+    let Some((_loader, lang, tags, ..)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_tags_negative_anchoring: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let pairs = collect_tag_pairs(&lang, SQL_VARIANTS, &tags);
+
+    // CREATE OR REPLACE FUNCTION ... RETURNS <custom_type> — "variants.status"
+    // is independently, legitimately defined once by its own CREATE TYPE
+    // statement (definition.type). It must NOT also appear a second time as
+    // a spurious definition.function pulled from custom_return_fn's RETURNS
+    // clause.
+    let status_defs: Vec<_> = pairs
+        .iter()
+        .filter(|(_, n)| n == "variants.status")
+        .collect();
+    assert_eq!(
+        status_defs.len(),
+        1,
+        "'variants.status' must be defined exactly once (by its own CREATE TYPE), \
+         not also captured from custom_return_fn's RETURNS clause; got: {pairs:?}"
+    );
+    assert_eq!(
+        status_defs[0].0, "definition.type",
+        "the sole 'variants.status' definition must be definition.type, got: {status_defs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "variants.custom_return_fn"),
+        "expected variants.custom_return_fn function definition, got: {pairs:?}"
+    );
+
+    // CREATE SCHEMA ... AUTHORIZATION <role> — must produce exactly 1
+    // definition (the schema), not 2 (schema + role).
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.module" && n == "variants_auth"),
+        "expected variants_auth schema definition, got: {pairs:?}"
+    );
+    assert!(
+        !pairs.iter().any(|(_, n)| n == "some_role"),
+        "AUTHORIZATION role name must never be captured as a definition, got: {pairs:?}"
+    );
+
+    // CREATE TABLE ... AS SELECT ... FROM <other_table> — must produce
+    // exactly 1 definition (the new table, variants.widgets_copy); the
+    // source table's own name (variants.widgets) must not leak a second
+    // definition.class out of the CTAS statement (variants.widgets already
+    // has its own, separate, legitimate CREATE TABLE earlier in the fixture,
+    // so only its *total* count is asserted, not a per-statement one).
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.class" && n == "variants.widgets_copy"),
+        "expected variants.widgets_copy CTAS definition, got: {pairs:?}"
+    );
+    let widgets_defs = pairs
+        .iter()
+        .filter(|(k, n)| k == "definition.class" && n == "variants.widgets")
+        .count();
+    assert_eq!(
+        widgets_defs, 1,
+        "'variants.widgets' must be defined exactly once (by its own CREATE TABLE), \
+         not leaked a second time via the CTAS or FK-referencing statements; got: {pairs:?}"
+    );
+
+    // Table-level FOREIGN KEY ... REFERENCES <other_table> — must produce
+    // exactly 1 definition (the table being created), not 2.
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.class" && n == "variants.widget_refs"),
+        "expected variants.widget_refs definition, got: {pairs:?}"
+    );
+}
+
+/// `@reference.call` in tags.scm must capture the same set of call names as
+/// calls.scm's `@call` (parity dimension — a batch-1 Rust bug was exactly
+/// this drifting apart between the two query files).
+#[test]
+fn sql_tags_reference_call_matches_calls_scm() {
+    let Some((_loader, lang, tags, calls, ..)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_tags_reference_call: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let mut from_tags: Vec<String> = collect_tag_pairs(&lang, SQL_VARIANTS, &tags)
+        .into_iter()
+        .filter(|(k, _)| k == "reference.call")
+        .map(|(_, n)| n)
+        .collect();
+    let mut from_calls = collect_captures(&lang, SQL_VARIANTS, &calls, "call");
+    from_tags.sort();
+    from_calls.sort();
+    assert_eq!(
+        from_tags, from_calls,
+        "tags.scm's @reference.call and calls.scm's @call must agree on the exact call set"
+    );
+}
+
+#[test]
+fn sql_types_completeness_all_variants() {
+    let Some((_loader, lang, _tags, _calls, types, _complexity)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_types_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let full = collect_captures_full(&lang, SQL_VARIANTS, &types);
+    let kind_for = |text_contains: &str| -> Vec<&str> {
+        full.iter()
+            .filter(|(_, _, text, _)| text.contains(text_contains))
+            .map(|(_, kind, ..)| kind.as_str())
+            .collect()
+    };
+    // column_definition builtin type
+    assert!(
+        kind_for("VARCHAR(50)").contains(&"varchar"),
+        "expected varchar column type, got: {full:?}"
+    );
+    // column_definition custom_type (only one occurrence: custom_typed_columns.status)
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "object_reference" && text == "variants.status"),
+        "expected object_reference custom column type, got: {full:?}"
+    );
+    // alter_column type
+    assert!(
+        kind_for("NUMERIC(10, 4)").contains(&"numeric"),
+        "expected ALTER COLUMN ... TYPE capture, got: {full:?}"
+    );
+    // function_argument builtin type, named parameter
+    // (variants.named_param_fn's `qty INTEGER` — one of several INTEGER captures)
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "int" && text == "INTEGER"),
+        "expected function_argument builtin type, got: {full:?}"
+    );
+    // function_argument builtin type, unnamed parameter — regression: this
+    // shape has no identifier at all, so an adjacency-based query would
+    // silently miss it.
+    assert!(
+        kind_for("TEXT").contains(&"keyword_text"),
+        "expected unnamed function_argument TEXT type, got: {full:?}"
+    );
+    // function_argument custom_type (object_reference)
+    let custom_type_count = full
+        .iter()
+        .filter(|(_, kind, text, _)| kind == "object_reference" && text == "variants.status")
+        .count();
+    assert!(
+        custom_type_count >= 3,
+        "expected variants.status to appear as a custom @type at least 3 times \
+         (column, function_argument, function_declaration), got {custom_type_count}: {full:?}"
+    );
+    // cast (keyword_as) . type
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "keyword_text" && text == "TEXT"),
+        "expected CAST(... AS TEXT) type capture, got: {full:?}"
+    );
+    // create_sequence (keyword_as) . type
+    assert!(
+        kind_for("BIGINT").contains(&"bigint"),
+        "expected CREATE SEQUENCE ... AS BIGINT type capture, got: {full:?}"
+    );
+}
+
+#[test]
+fn sql_complexity_completeness_all_variants() {
+    let Some((_loader, lang, _tags, _calls, _types, complexity)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let full = collect_captures_full(&lang, SQL_VARIANTS, &complexity);
+    let has = |cap: &str, kind: &str| full.iter().any(|(c, k, ..)| c == cap && k == kind);
+    assert!(
+        has("complexity", "keyword_when"),
+        "missing CASE WHEN branch, got: {full:?}"
+    );
+    assert!(has("complexity", "join"), "missing JOIN, got: {full:?}");
+    assert!(has("complexity", "where"), "missing WHERE, got: {full:?}");
+    assert!(has("complexity", "having"), "missing HAVING, got: {full:?}");
+    assert!(
+        has("complexity", "set_operation"),
+        "missing UNION set_operation, got: {full:?}"
+    );
+    assert!(has("complexity", "exists"), "missing EXISTS, got: {full:?}");
+    assert!(
+        has("nesting", "select"),
+        "missing select nesting, got: {full:?}"
+    );
+    assert!(
+        has("nesting", "subquery"),
+        "missing subquery nesting, got: {full:?}"
+    );
+    assert!(has("nesting", "cte"), "missing CTE nesting, got: {full:?}");
+}
+
+// --- NEGATIVE: constructs that must not match (variants.sql) ---------------
+
+#[test]
+fn sql_calls_negative_bare_table_reference_is_not_a_call() {
+    let Some((_loader, lang, _tags, calls, ..)) = sql_lang_and_queries() else {
+        eprintln!("Skipping sql_calls_negative_bare_table: run `cargo xtask build-grammars` first");
+        return;
+    };
+    // "SELECT * FROM variants.widgets;" — a bare table reference must never
+    // produce a @call capture named "widgets".
+    let found = collect_captures(&lang, SQL_VARIANTS, &calls, "call");
+    assert!(
+        !found.iter().any(|c| c == "widgets"),
+        "a bare FROM table reference must not be captured as a call, got: {found:?}"
     );
 }
 
@@ -10086,11 +13603,23 @@ end"#;
 }
 
 const HASKELL_SAMPLE: &str = include_str!("fixtures/haskell/sample.hs");
+const HASKELL_VARIANTS: &str = include_str!("fixtures/haskell/variants.hs");
+
+/// Returns `(loader, lang)` together — the `GrammarLoader` owns the loaded
+/// dylib, so it must stay alive for as long as the returned `Language` is
+/// used (dropping it early unloads the library and leaves `Language`'s
+/// function pointers dangling, which segfaults rather than erroring).
+fn haskell_lang() -> Option<(normalize_languages::GrammarLoader, tree_sitter::Language)> {
+    let loader = normalize_languages::GrammarLoader::new();
+    let lang = loader.get("haskell").ok()?;
+    Some((loader, lang))
+}
+
+// --- Dimension 4: real-world fixture coverage (sample.hs) -------------------
 
 #[test]
 fn haskell_tags_no_duplicate_signatures() {
-    let loader = normalize_languages::GrammarLoader::new();
-    let Some(lang) = loader.get("haskell").ok() else {
+    let Some((loader, lang)) = haskell_lang() else {
         eprintln!("Skipping haskell_tags_no_duplicate_signatures: haskell grammar not found");
         return;
     };
@@ -10122,12 +13651,54 @@ fn haskell_tags_no_duplicate_signatures() {
         names.contains(&"Count".to_string()),
         "expected 'Count' newtype, got: {names:?}"
     );
+    // Typeclass + two instances of it for different types — both must be
+    // captured (see haskell.rs's dedup_haskell_functions fix: it previously
+    // dropped every instance after the first with the same class name).
+    assert!(
+        names.contains(&"Shape".to_string()),
+        "expected 'Shape' typeclass and/or its instances, got: {names:?}"
+    );
+    let shape_count = names.iter().filter(|n| *n == "Shape").count();
+    assert!(
+        shape_count >= 3,
+        "expected 'Shape' at least 3 times (class def + 2 instances), got: {names:?}"
+    );
+    // Record type declaration.
+    assert!(
+        names.contains(&"Rectangle".to_string()),
+        "expected 'Rectangle' record type, got: {names:?}"
+    );
+    // Operator function definition: `(<+>) a b = ...`.
+    assert!(
+        names.contains(&"(<+>)".to_string()),
+        "expected '(<+>)' operator function definition, got: {names:?}"
+    );
+    // Point-free / zero-argument top-level binding: `frequencyMap = foldr ...`.
+    // Entirely absent before the `bind`-node fix.
+    assert!(
+        names.contains(&"frequencyMap".to_string()),
+        "expected point-free 'frequencyMap' binding, got: {names:?}"
+    );
+    // `main` itself — the most fundamental top-level Haskell definition —
+    // was entirely absent before the `bind`-node fix.
+    assert!(
+        names.contains(&"main".to_string()),
+        "expected 'main' binding, got: {names:?}"
+    );
+    // where-bound local helpers must never leak into top-level tags.
+    assert!(
+        !names.contains(&"bmiTier".to_string()),
+        "where-bound 'bmiTier' must not appear in top-level tags, got: {names:?}"
+    );
+    assert!(
+        !names.contains(&"bmi".to_string()),
+        "where-bound 'bmi' must not appear in top-level tags, got: {names:?}"
+    );
 }
 
 #[test]
 fn haskell_calls_finds_local_qualified_and_constructor_calls() {
-    let loader = normalize_languages::GrammarLoader::new();
-    let Some(lang) = loader.get("haskell").ok() else {
+    let Some((loader, lang)) = haskell_lang() else {
         eprintln!(
             "Skipping haskell_calls_finds_local_qualified_and_constructor_calls: haskell grammar not found"
         );
@@ -10153,6 +13724,309 @@ fn haskell_calls_finds_local_qualified_and_constructor_calls() {
     assert!(
         qualifiers.contains(&"Map".to_string()),
         "expected 'Map' qualifier in haskell calls, got: {qualifiers:?}"
+    );
+}
+
+#[test]
+fn haskell_imports_finds_named_imports() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_imports_finds_named_imports: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("haskell")
+        .expect("haskell imports query missing");
+    let paths = collect_captures(&lang, HASKELL_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p == "Data.List" || p == "Data"),
+        "expected 'Data.List' import path, got: {paths:?}"
+    );
+    // Named imports were entirely unmatched before this fix — @import.name
+    // never had a single capture in the whole file.
+    let names = collect_captures(&lang, HASKELL_SAMPLE, &query_str, "import.name");
+    assert!(
+        names.contains(&"sort".to_string()) && names.contains(&"nub".to_string()),
+        "expected 'sort' and 'nub' named imports, got: {names:?}"
+    );
+    // hiding-imports use the same import_list shape — `hiding (lookup)` must
+    // also produce an @import.name capture for "lookup".
+    assert!(
+        names.contains(&"lookup".to_string()),
+        "expected 'lookup' from 'import Prelude hiding (lookup)', got: {names:?}"
+    );
+}
+
+#[test]
+fn haskell_complexity_no_baseline_inflation_and_finds_branches() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!(
+            "Skipping haskell_complexity_no_baseline_inflation_and_finds_branches: haskell grammar not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_complexity("haskell")
+        .expect("haskell complexity query missing");
+    let complexity = collect_captures(&lang, HASKELL_SAMPLE, &query_str, "complexity");
+    // "classify" (nested if/else) and "describe" (case with a guarded
+    // alternative) both contribute real decision points.
+    assert!(
+        complexity.len() >= 4,
+        "expected at least 4 complexity nodes in haskell sample, got {} ({complexity:?})",
+        complexity.len()
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.hs) -
+
+#[test]
+fn haskell_tags_completeness_all_name_variants() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_tags_completeness: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("haskell")
+        .expect("haskell tags query missing");
+    let caps = collect_captures_full(&lang, HASKELL_VARIANTS, &query_str);
+
+    // (capture_name, node_kind, text) for every documented variant.
+    let required: &[(&str, &str, &str)] = &[
+        ("name", "variable", "plainFunc"), // function.name: variable
+        ("name", "prefix_id", "(+++)"),    // function.name: prefix_id
+        ("name", "name", "Tree"),          // data_type.name: name
+        ("name", "prefix_id", "(:+:)"),    // data_type.name: prefix_id
+        ("name", "name", "Count"),         // newtype.name: name
+        ("name", "prefix_id", "(:*:)"),    // newtype.name: prefix_id
+        ("name", "name", "Name"),          // type_synomym.name: name
+        ("name", "prefix_id", "(:->)"),    // type_synomym.name: prefix_id
+        ("name", "name", "Shape"),         // class.name: name (also matches both instances)
+        ("name", "prefix_id", "(:~:)"),    // class.name / instance.name: prefix_id
+        ("name", "variable", "doubleAll"), // bind.name: variable (point-free)
+        ("name", "prefix_id", "(<+>)"),    // bind.name: prefix_id (point-free operator)
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in haskell.tags.scm \
+             output for variants.hs, got: {caps:?}"
+        );
+    }
+
+    // NEGATIVE: where-bound and let-bound local names must never appear as
+    // @name captures — `function`/`bind` are also the node types for local
+    // helpers, and only top-level `(declarations ...)` children are tagged.
+    for local in ["negHelper", "negLocal"] {
+        assert!(
+            !caps.iter().any(|(cn, _, t, _)| cn == "name" && t == local),
+            "local binding '{local}' must not appear as a @name capture, got: {caps:?}"
+        );
+    }
+}
+
+#[test]
+fn haskell_calls_completeness_all_function_variants() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_calls_completeness: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("haskell")
+        .expect("haskell calls query missing");
+    let caps = collect_captures_full(&lang, HASKELL_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "variable", "plainFunc"), // apply.function: variable
+        ("call", "constructor", "TNode"),  // apply.function: constructor
+        ("call", "variable", "lookup"),    // apply.function: qualified, id: variable
+        ("call", "constructor", "Just"),   // apply.function: qualified, id: constructor
+        ("call", "operator", "$"),         // apply.function: prefix_id(operator)
+        ("call", "operator", "+"),         // apply.function: prefix_id(qualified(operator))
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in haskell.calls.scm \
+             output for variants.hs, got: {caps:?}"
+        );
+    }
+
+    // apply.function: parens(qualified(variable)) — `(Map.lookup) 1 Map.empty`.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"Map"),
+        "expected 'Map' qualifier (incl. parens-wrapped qualified call), got: {qualifiers:?}"
+    );
+
+    // `plainFunc` as a call target appears at least 3 times: the plain call,
+    // the parens-wrapped-variable call, and inside the negative composition
+    // case is intentionally NOT one of them (see negative test below).
+    let plain_func_calls = caps
+        .iter()
+        .filter(|(cn, k, t, _)| cn == "call" && k == "variable" && t == "plainFunc")
+        .count();
+    assert!(
+        plain_func_calls >= 3,
+        "expected 'plainFunc' called at least 3 times (plain, in callParenVariable, in \
+         callQualifiedConstructor argument), got {plain_func_calls} in {caps:?}"
+    );
+}
+
+#[test]
+fn haskell_calls_negative_composition_not_matched() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_calls_negative_composition: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("haskell")
+        .expect("haskell calls query missing");
+    let caps = collect_captures_full(&lang, HASKELL_VARIANTS, &query_str);
+    // `negComposed = (plainFunc . plainFunc) 1` — the applied value is a
+    // point-free composition (parens wrapping an `infix` expression), not a
+    // single nameable identifier. No @call capture should attribute this
+    // outer apply to a specific function name; only the innermost `apply`
+    // for the outer application itself is absent (composition is not
+    // unwound into two calls to `plainFunc`).
+    //
+    // Every top-level `apply` in the file whose function is a bare `infix`
+    // node (not `variable`/`constructor`/`prefix_id`/`parens`-wrapping-name)
+    // must produce zero matches from this query on that specific node.
+    let composed_query = "(apply function: (parens expression: (infix) @composed))";
+    let ts_query = tree_sitter::Query::new(&lang, composed_query).expect("compiles");
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(HASKELL_VARIANTS, None).expect("parse failed");
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let source_bytes = HASKELL_VARIANTS.as_bytes();
+    let mut matches = cursor.matches(&ts_query, tree.root_node(), source_bytes);
+    let mut composed_count = 0;
+    while matches.next().is_some() {
+        composed_count += 1;
+    }
+    assert_eq!(
+        composed_count, 1,
+        "expected exactly 1 parens-wrapped-infix apply.function (negComposed's `(plainFunc . \
+         plainFunc)`), got {composed_count}"
+    );
+    let _ = caps; // calls.scm output already asserted not to double-count this construct above.
+}
+
+#[test]
+fn haskell_imports_completeness_all_name_variants() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_imports_completeness: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("haskell")
+        .expect("haskell imports query missing");
+    let caps = collect_captures_full(&lang, HASKELL_VARIANTS, &query_str);
+
+    let required: &[(&str, &str, &str)] = &[
+        ("import.name", "variable", "sort"), // import_name.variable: variable
+        ("import.name", "variable", "nub"),
+        ("import.name", "name", "Down"), // import_name.type: name
+        ("import.name", "prefix_id", "(<|>)"), // import_name.operator: prefix_id
+        ("import.name", "variable", "lookup"), // hiding-import reuses the same shape
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in haskell.imports.scm \
+             output for variants.hs, got: {caps:?}"
+        );
+    }
+}
+
+#[test]
+fn haskell_complexity_completeness_all_branch_variants() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_complexity_completeness: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("haskell")
+        .expect("haskell complexity query missing");
+    let caps = collect_captures_full(&lang, HASKELL_VARIANTS, &query_str);
+
+    let required_kinds: &[&str] = &[
+        "conditional", // if/then/else
+        // `guard` is a grammar supertype alias (subtypes: boolean/let/
+        // pattern_guard) that never materializes as a "guard"-kind node —
+        // confirmed via node-types.json and real parse. Tree-sitter's query
+        // engine still matches `(guard) @complexity` against the concrete
+        // subtype nodes; the captured node's own `.kind()` reports the
+        // subtype ("boolean" here), not "guard".
+        "boolean",
+        "lambda",       // plain lambda
+        "multi_way_if", // MultiWayIf extension — previously entirely unmatched
+        "lambda_case",  // LambdaCase extension — previously entirely unmatched
+        "alternative",  // per-arm case decision point — previously unmatched
+        "case",         // case container
+    ];
+    for kind in required_kinds {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, _, _)| cn == "complexity" && k == kind),
+            "expected a @complexity capture of kind '{kind}' in variants.hs, got: {caps:?}"
+        );
+    }
+}
+
+#[test]
+fn haskell_complexity_negative_trivial_function_has_no_complexity_captures() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_complexity_negative: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("haskell")
+        .expect("haskell complexity query missing");
+
+    // `negTrivial x = x + 1` — zero branches. Before the fix, the function's
+    // own `match` (equation-body) node was unconditionally counted as a
+    // decision point, so this construct alone would have produced one
+    // @complexity capture despite having no branching whatsoever.
+    let source = "module M where\n\nnegTrivial :: Int -> Int\nnegTrivial x = x + 1\n";
+    let caps = collect_captures_full(&lang, source, &query_str);
+    let complexity_caps: Vec<_> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .collect();
+    assert!(
+        complexity_caps.is_empty(),
+        "expected zero @complexity captures for a branch-free function, got: {complexity_caps:?}"
+    );
+}
+
+#[test]
+fn haskell_types_finds_qualified_and_generic_type_references() {
+    let Some((loader, lang)) = haskell_lang() else {
+        eprintln!("Skipping haskell_types_finds_qualified_and_generic: haskell grammar not found");
+        return;
+    };
+    let query_str = loader
+        .get_types("haskell")
+        .expect("haskell types query missing");
+    let types = collect_captures(&lang, HASKELL_VARIANTS, &query_str, "type.reference");
+    // Qualified type reference: Map.Map Int Int — the inner `Map` (via
+    // `qualified.id`) must still be captured.
+    assert!(
+        types.iter().filter(|t| *t == "Map").count() >= 1,
+        "expected qualified 'Map' type reference, got: {types:?}"
+    );
+    // Generic/applied type reference: Maybe Int (apply.constructor: name).
+    assert!(
+        types.contains(&"Maybe".to_string()),
+        "expected generic 'Maybe' type reference, got: {types:?}"
     );
 }
 

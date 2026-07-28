@@ -350,7 +350,9 @@ mod tests {
             "rescue_block", "sigil_modifiers", "stab_clause", "struct",
             "unary_operator",
             // control flow — not extracted as symbols
-            "binary_operator",
+            // "binary_operator" is now used in tags.scm (guard-clause
+            // patterns, `def name(x) when guard do ... end`) — see
+            // elixir.tags.scm's guard-clause section.
             "do_block",
             "anonymous_function",
         ];

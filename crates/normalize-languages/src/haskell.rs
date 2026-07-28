@@ -138,12 +138,31 @@ impl LanguageSymbols for Haskell {}
 /// only the first occurrence of each (name, kind) pair at the top level, and merges
 /// the byte ranges by extending the first occurrence's `end_line` to cover all
 /// equations (so the symbol spans the complete definition).
+///
+/// SCOPED TO `SymbolKind::Function`/`Method` ONLY — this must not touch other
+/// kinds. `instance` declarations are tagged `@definition.module` (see
+/// haskell.tags.scm) and the grammar's `instance.name` field holds the
+/// *typeclass* name, not the instantiated type — so `instance Shape Rectangle
+/// where ...` and `instance Shape Count where ...` both produce a symbol
+/// named "Shape". An earlier, kind-unscoped version of this dedup pass
+/// silently dropped every instance after the first one that implemented the
+/// same typeclass for a different type — a common, previously-silent bug
+/// (confirmed via `normalize view` on a two-instance fixture: only the first
+/// `instance Shape ...` survived).
 fn dedup_haskell_functions(symbols: &mut Vec<crate::Symbol>) {
     // Use a Vec<(name, kind)> for seen tracking since SymbolKind doesn't derive Hash.
     let mut seen: Vec<(String, crate::SymbolKind)> = Vec::new();
     let mut i = 0;
     while i < symbols.len() {
-        let key = (symbols[i].name.clone(), symbols[i].kind);
+        let kind = symbols[i].kind;
+        if !matches!(
+            kind,
+            crate::SymbolKind::Function | crate::SymbolKind::Method
+        ) {
+            i += 1;
+            continue;
+        }
+        let key = (symbols[i].name.clone(), kind);
         if seen.contains(&key) {
             symbols.remove(i);
         } else {
@@ -324,7 +343,7 @@ mod tests {
         let documented_unused: &[&str] = &[
             "associated_type", "class_declarations", "constructor",
             "constructor_operator", "constructor_synonym", "constructor_synonyms",
-            "data_constructor", "data_constructors", "declarations",
+            "data_constructor", "data_constructors",
             "default_types", "do_module", "explicit_type", "export", "exports",
             "forall", "forall_required", "foreign_export", "foreign_import",
             "function_head_parens", "gadt_constructor", "gadt_constructors",
