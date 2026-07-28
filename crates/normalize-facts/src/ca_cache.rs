@@ -1,8 +1,9 @@
 use libsql::{Builder, Connection, Database, params};
 use serde::{Serialize, de::DeserializeOwned};
+use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use tokio::runtime::{Handle, Runtime};
 
 #[derive(Debug)]
@@ -230,12 +231,21 @@ impl CaCache {
     /// Only removes entries whose `extr_ver` does not start with `"symbols-"` (those
     /// belong to the symbol extraction cache and are managed separately). This lets
     /// symbol cache entries survive across index rebuilds.
+    ///
+    /// `current_extr_ver` is matched both exactly and as a `"{current_extr_ver}-"`
+    /// prefix, since `extr_ver` now carries a per-grammar query-content fingerprint
+    /// suffix (`"{EXTRACTOR_VERSION}-{query_fingerprint}"`) — different grammars can
+    /// legitimately have different suffixes under the same base version.
     pub(crate) fn gc_stale_versions(&self, current_extr_ver: &str) -> Result<usize, Error> {
         let conn = &self.inner.conn;
+        let prefix_pattern = format!("{current_extr_ver}-%");
         let n = self.inner.block_on(async {
             conn.execute(
-                "DELETE FROM ca_entries WHERE extr_ver != ?1 AND extr_ver NOT LIKE 'symbols-%'",
-                params![current_extr_ver],
+                "DELETE FROM ca_entries
+                 WHERE extr_ver NOT LIKE 'symbols-%'
+                   AND extr_ver != ?1
+                   AND extr_ver NOT LIKE ?2",
+                params![current_extr_ver, prefix_pattern],
             )
             .await
         })?;
@@ -244,23 +254,29 @@ impl CaCache {
 
     /// Remove symbol cache entries for outdated symbol cache versions. Call once at startup.
     ///
-    /// Removes all `"symbols-*"` entries except those matching the current symbol
-    /// cache version strings (`"symbols-v1-all"`, `"symbols-v1-public"`).
+    /// Removes all `"symbols-*"` entries except those matching (exactly, or as a
+    /// `"{version}-"` prefix — see `gc_stale_versions` doc comment) one of the
+    /// current symbol cache version strings (`"symbols-v2-all"`, `"symbols-v2-public"`).
     pub(crate) fn gc_stale_symbol_versions(
         &self,
         current_versions: &[&str],
     ) -> Result<usize, Error> {
-        // Build a NOT IN clause for the current versions
-        let placeholders: String = current_versions
-            .iter()
-            .enumerate()
-            .map(|(i, _)| format!("?{}", i + 1))
-            .collect::<Vec<_>>()
-            .join(", ");
+        // Build a "NOT (extr_ver = ?i OR extr_ver LIKE ?j)" clause for each current version.
+        let mut conditions = Vec::with_capacity(current_versions.len());
+        let mut owned: Vec<String> = Vec::with_capacity(current_versions.len() * 2);
+        for v in current_versions {
+            let exact_idx = owned.len() + 1;
+            owned.push(v.to_string());
+            let prefix_idx = owned.len() + 1;
+            owned.push(format!("{v}-%"));
+            conditions.push(format!(
+                "extr_ver = ?{exact_idx} OR extr_ver LIKE ?{prefix_idx}"
+            ));
+        }
         let sql = format!(
-            "DELETE FROM ca_entries WHERE extr_ver LIKE 'symbols-%' AND extr_ver NOT IN ({placeholders})"
+            "DELETE FROM ca_entries WHERE extr_ver LIKE 'symbols-%' AND NOT ({})",
+            conditions.join(" OR ")
         );
-        let owned: Vec<String> = current_versions.iter().map(|s| s.to_string()).collect();
         let conn = &self.inner.conn;
         let n = self.inner.block_on(async {
             // libsql accepts a Vec<Value> as IntoParams for variable-arity statements.
@@ -329,6 +345,46 @@ fn unix_now() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Per-grammar fingerprint of the built-in `.scm` query content that backs
+/// extraction: `tags`, `complexity`, `calls`, `imports`, `types`. Memoized per
+/// grammar name (the query strings are `include_str!`-embedded and therefore
+/// fixed for the lifetime of the process, so computing this once per grammar
+/// and reusing it is safe).
+///
+/// Folding this into a cache key means editing any `.scm` file for a grammar
+/// automatically invalidates every persisted cache entry for that grammar the
+/// next time the binary is rebuilt — no human needs to remember to bump a
+/// version constant (`EXTRACTOR_VERSION`, `SYMBOL_CACHE_VERSIONS`) when a query
+/// file changes. Those constants remain for invalidating on *Rust-side*
+/// extraction/post-processing logic changes, which this fingerprint cannot see.
+static QUERY_FINGERPRINTS: OnceLock<RwLock<HashMap<String, Arc<str>>>> = OnceLock::new();
+
+pub(crate) fn query_fingerprint(grammar_name: &str) -> Arc<str> {
+    let map = QUERY_FINGERPRINTS.get_or_init(|| RwLock::new(HashMap::new()));
+    if let Some(fp) = map.read().unwrap().get(grammar_name) {
+        return fp.clone();
+    }
+    let loader = normalize_languages::parsers::grammar_loader();
+    let mut hasher = blake3::Hasher::new();
+    for query in [
+        loader.get_tags(grammar_name),
+        loader.get_complexity(grammar_name),
+        loader.get_calls(grammar_name),
+        loader.get_imports(grammar_name),
+        loader.get_types(grammar_name),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        hasher.update(query.as_bytes());
+    }
+    let fp: Arc<str> = hasher.finalize().to_hex()[..16].to_string().into();
+    map.write()
+        .unwrap()
+        .insert(grammar_name.to_string(), fp.clone());
+    fp
 }
 
 /// Global singleton for the symbol extraction cache used by `Extractor`.
@@ -496,6 +552,90 @@ mod tests {
             .get(hash.as_bytes(), "symbols-v1-all", "rust")
             .unwrap();
         assert!(got.is_some());
+    }
+
+    #[test]
+    fn gc_stale_versions_keeps_fingerprint_suffixed_entries() {
+        // Simulates extr_ver = "{EXTRACTOR_VERSION}-{query_fingerprint}": different
+        // grammars legitimately have different fingerprint suffixes under the same
+        // base version, and gc_stale_versions must keep all of them while still
+        // dropping entries from a genuinely older base version.
+        let cache = temp_cache();
+        let hash = blake3::hash(b"test");
+        let payload = Payload {
+            symbols: vec![],
+            count: 0,
+        };
+        cache
+            .put(hash.as_bytes(), "2-oldfp", "rust", &payload)
+            .unwrap();
+        cache
+            .put(hash.as_bytes(), "3-aaaa1111", "rust", &payload)
+            .unwrap();
+        cache
+            .put(hash.as_bytes(), "3-bbbb2222", "python", &payload)
+            .unwrap();
+        let deleted = cache.gc_stale_versions("3").unwrap();
+        assert_eq!(deleted, 1, "only the base-version-2 entry should be pruned");
+        let got: Option<Payload> = cache.get(hash.as_bytes(), "2-oldfp", "rust").unwrap();
+        assert_eq!(got, None);
+        let got: Option<Payload> = cache.get(hash.as_bytes(), "3-aaaa1111", "rust").unwrap();
+        assert!(got.is_some());
+        let got: Option<Payload> = cache.get(hash.as_bytes(), "3-bbbb2222", "python").unwrap();
+        assert!(got.is_some());
+    }
+
+    #[test]
+    fn gc_stale_symbol_versions_keeps_fingerprint_suffixed_entries() {
+        let cache = temp_cache();
+        let hash = blake3::hash(b"sym-test");
+        let payload = Payload {
+            symbols: vec![],
+            count: 0,
+        };
+        cache
+            .put(hash.as_bytes(), "symbols-v1-all", "rust", &payload)
+            .unwrap();
+        cache
+            .put(hash.as_bytes(), "symbols-v2-all-aaaa1111", "rust", &payload)
+            .unwrap();
+        cache
+            .put(
+                hash.as_bytes(),
+                "symbols-v2-public-bbbb2222",
+                "python",
+                &payload,
+            )
+            .unwrap();
+        let deleted = cache
+            .gc_stale_symbol_versions(&["symbols-v2-all", "symbols-v2-public"])
+            .unwrap();
+        assert_eq!(deleted, 1, "only the v1 entry should be pruned");
+        let got: Option<Payload> = cache
+            .get(hash.as_bytes(), "symbols-v2-all-aaaa1111", "rust")
+            .unwrap();
+        assert!(got.is_some());
+        let got: Option<Payload> = cache
+            .get(hash.as_bytes(), "symbols-v2-public-bbbb2222", "python")
+            .unwrap();
+        assert!(got.is_some());
+    }
+
+    #[test]
+    fn query_fingerprint_changes_when_query_content_changes() {
+        // The fingerprint is a pure function of the query strings currently loaded
+        // for a grammar. Different grammars generally have different query content,
+        // so their fingerprints should (almost always) differ — this is a sanity
+        // check that the function is actually reading distinct content per grammar,
+        // not returning a constant.
+        let rust_fp = query_fingerprint("rust");
+        let python_fp = query_fingerprint("python");
+        assert_ne!(
+            rust_fp, python_fp,
+            "rust and python have different .scm query content and must fingerprint differently"
+        );
+        // Memoization: calling again for the same grammar returns the same value.
+        assert_eq!(rust_fp, query_fingerprint("rust"));
     }
 
     #[test]

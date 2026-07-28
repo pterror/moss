@@ -109,6 +109,31 @@ Note: `normalize-cfg`'s `java_cfg`/`lua_cfg` snapshot tests and `normalize-facts
 
   **Flagged during batch 2 (Haskell sub-agent), not yet investigated**: `normalize view`/`normalize rank complexity` (and presumably other CA-cache-backed commands) key their persistent cache (`~/.config/normalize/ca-cache.sqlite`) by file-content hash + a static schema-version string only — with no dependency on the `.scm` query files' own content/mtime. During this sweep's dev iteration, re-running a command against byte-identical source after editing a `.scm` file silently returned stale pre-fix output until the cache was manually cleared. This is a cross-cutting caching-architecture question (affects every language, not just Haskell) — whoever owns the CA-cache design (see the "Content-addressed indexer (CA store)" section elsewhere in this file) should decide whether the cache key needs to fold in query-file hashes, or whether some other invalidation signal (grammar/query build version bump) is the intended mechanism.
 
+- **Known pre-existing test failures (confirmed 2026-07-28, unrelated to cache-key fix below)**:
+  reproduced on a clean checkout (stashed the cache-key changes and reran) before attributing
+  any of these — none are caused by the cache-key fix.
+  - `normalize-facts::extract_fixtures` fails at `ada/add_numbers` (stale `SUMMARY.md`-derived
+    heading expectation; likely the same drift class as the `c/add_numbers` MATH_H failure
+    another agent is already working — the SUMMARY.md convention was removed but golden
+    fixtures weren't regenerated).
+  - `normalize-cfg`'s `go_cfg` tests fail with `QueryCompile("Query error at 27:4. Invalid node
+    type \"expression_case_clause\"")` — a CFG query referencing a node type the current Go
+    grammar doesn't have.
+  - `normalize-languages` fails to *compile* its `query_fixtures` integration test:
+    `crates/normalize-languages/tests/fixtures/cmake/CMakeLists.txt` is `include_str!`-referenced
+    by `cmake_tags_finds_functions_and_macros`/`cmake_calls_finds_command_calls`/
+    `cmake_complexity_finds_control_flow` but was never committed. Needs a real CMake sample
+    exercising functions/macros, command calls (`find_package`/`add_library`/
+    `target_link_libraries`), and control flow — not fabricated here per the "don't guess"
+    rule, since the exact expected symbol names are asserted in the test.
+  - `normalize-languages::kdl::tests::unused_node_kinds_audit` fails: `identifier_string` and
+    `multi_line_string_body` are documented but don't exist in the current grammar, and
+    `identifier` exists but is undocumented/unused — the exact "grammar version drift" failure
+    mode called out when auditing the cache-key fix's scope (see the CA-cache entry above);
+    presumably from an in-flight kdl grammar bump in another worktree.
+  All four block a clean `NORMALIZE_REQUIRE_GRAMMARS=1 cargo test -q --workspace`; verified
+  clean otherwise (401+ passing tests across all other workspace crates with grammars built).
+
 ---
 
 ## KDL `unused_node_kinds_audit` fix (2026-07-28)
@@ -2456,6 +2481,55 @@ the default path.
   the existing CA cache DB (`~/.config/normalize/ca-cache.sqlite`). Key: `(blake3(content),
   "symbols-v1-{all|public}", grammar_name)`. Cross-file resolver results (TS/JS interface
   resolution) are not cached. `gc_stale_versions` now preserves `"symbols-*"` entries.
+  - [x] **CONFIRMED + FIXED (2026-07-28) — cache key didn't fold in `.scm` query content.**
+    A language-sweep sub-agent flagged that the CA cache key (`(blake3(content), extr_ver,
+    grammar_name)`, both in `Extractor::extract_with_support`'s symbol cache and
+    `Facts::refresh_call_graph`/incremental-reindex's `CachedFileData` cache in
+    `normalize-facts/src/index.rs`) only changed on a manually-bumped version constant
+    (`SYMBOL_CACHE_VERSIONS`, `EXTRACTOR_VERSION`) — never on the actual `.scm` query text.
+    **Confirmed empirically**: cached a `normalize view` result for a Python file, edited
+    `python.tags.scm` to stop capturing `@definition.function`, rebuilt the binary, and
+    re-ran `normalize view` on the same file *without* clearing `~/.config/normalize/ca-cache.sqlite`
+    — the stale (wrong) result was returned. Deleting the cache and re-running gave the
+    correct (post-edit) result, proving the query change alone didn't invalidate anything.
+    This meant today's 59 fixed `.scm` files (dead Lua/Gleam queries, 46 broken CFG queries)
+    plus the 17-language query-completeness fixes would have been silently masked for any
+    user with a pre-existing cache.
+    **Fix**: `ca_cache::query_fingerprint(grammar_name)` (in `normalize-facts/src/ca_cache.rs`)
+    hashes (blake3, memoized per grammar in a process-wide map) the concatenation of that
+    grammar's `tags`/`complexity`/`calls`/`imports`/`types` `.scm` query content (loaded via
+    the same `GrammarLoader` getters extraction already uses) and is folded as a suffix into
+    the cache-version string at every `ca.get`/`ca.put` call site — `extract.rs`'s
+    `"symbols-v2-{all|public}-{fingerprint}"` and `index.rs`'s new `extr_ver_for_grammar()`
+    helper (`"{EXTRACTOR_VERSION}-{fingerprint}"`). Since query files are `include_str!`-embedded,
+    the fingerprint is fixed for the process lifetime and only changes across a rebuild —
+    exactly the granularity needed, with no per-file I/O per cache lookup. `gc_stale_versions`
+    / `gc_stale_symbol_versions` were updated from exact-string matching to
+    exact-or-`"{version}-"`-prefix matching so different grammars' differing fingerprint
+    suffixes under the same base version don't get pruned as "stale". `EXTRACTOR_VERSION`
+    bumped `"3"` → `"4"` as a one-time full-cache invalidation so caches already poisoned by
+    today's `.scm` fixes (pre-dating the fingerprint mechanism) get cleared on upgrade — the
+    fingerprint alone can't retroactively invalidate entries that were never fingerprinted.
+    Tests: `ca_cache.rs`'s `gc_stale_versions_keeps_fingerprint_suffixed_entries`,
+    `gc_stale_symbol_versions_keeps_fingerprint_suffixed_entries`,
+    `query_fingerprint_changes_when_query_content_changes`.
+    **Not fixed here — separate, larger design question, flagged not guessed:** the cache key
+    still does not fold in the tree-sitter **grammar** version/content. Grammars are `.so`
+    files built by `cargo xtask build-grammars` from arborium sources pinned with `= "*"` in
+    `normalize-grammars/Cargo.toml` (i.e. unpinned/floating) and dynamically loaded at runtime
+    from `GrammarLoader`'s `search_paths` (`grammar_loader.rs::load_external`/`load_from_path`)
+    — not compiled into the `normalize` binary. So a grammar rebuild/update (the kind of
+    node-type drift the kdl work hit) changes extraction behavior without changing anything
+    the cache key currently sees, and can reintroduce this exact bug class one layer down.
+    Options for a follow-up session (tradeoffs, not a recommendation):
+    (a) hash each grammar's `.so` file content (mirrors `query_fingerprint`: memoize per
+    grammar name, read+blake3 once per process) — precise, but needs `GrammarLoader` to expose
+    the resolved `.so` path (currently private), and reads a multi-MB file once per grammar;
+    (b) pin arborium crate versions instead of `= "*"` in `normalize-grammars/Cargo.toml` and
+    bump `EXTRACTOR_VERSION` deliberately alongside every arborium bump — cheaper, no runtime
+    hashing, but re-introduces the "human must remember" failure mode this task just closed
+    for `.scm` files, one layer up; (c) do nothing extra and rely on `EXTRACTOR_VERSION` manual
+    bumps at grammar-update time — status quo, already the case today.
 
 **Pillar 5 — Perf and memory baseline**
 
