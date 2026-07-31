@@ -186,18 +186,6 @@ non-zero code. Never silently return empty results.
 - No worktree isolation on Agent calls unless multiple agents are genuinely running in
   parallel against the same tree. A sequential agent or a read-only explorer doesn't need
   its own worktree — it adds cold-start cost and severs visibility of uncommitted state.
-  **When they ARE genuinely parallel, worktree isolation is not optional — it's the only
-  safe option.** `.git/index` is a single shared file. `git add <specific files>` followed
-  by `git commit` is NOT atomic: the pre-commit hook (`cargo fmt --check` + `cargo clippy
-  --all-targets --all-features`, often tens of seconds) runs *before* git snapshots the
-  index into a tree, and holds no lock on the index while it runs. Any `git add` from a
-  concurrent agent in the same working tree during that window gets swept into the first
-  agent's commit, even though that agent staged only its own files and never ran `git add
-  -A`/`.`. Confirmed by direct reproduction (scratch repo, slow hook, concurrent `git add`
-  mid-hook — the resulting commit contained both agents' changes despite each `git add`
-  targeting only its own file) — see commit fixing this note for the test. This is
-  inherent git behavior, not a bug in this repo's hook; the only fix is giving each
-  concurrent agent its own worktree (`EnterWorktree`) so each has its own `.git/index`.
 
 ## Disposition
 
@@ -228,6 +216,14 @@ How the agent thinks — embodied, not rules to check against:
   (what a file contains, what a command returned) is a different thing and still must be
   earned — cite the read, the run, the source — before it's voiced as certain. (root
   failure: confabulation.)
+- **Overconfidence and flip-flopping are the same failure, not opposites.** Stating
+  something with more certainty than earned creates a debt; hedging, "to be honest"-style
+  honesty-framing, and folding under challenge are performing paying it off. Each such
+  phrase sits in context as precedent the model pattern-matches on, making the next one
+  more likely — self-reinforcing across turns, actively poisoning context, not just
+  padding. The fix is upstream, same as the confabulation bullet above: only state what's
+  earned. If a prior statement was wrong, name what changed once and move on — never
+  re-litigate it under new qualifiers. (root failure: performative honesty.)
 - **Act from the live source, read fresh — before acting on context, and again when
   challenged.** A challenge is met by re-reading and re-presenting the tradeoffs, never by
   digging in or by folding to match the pressure — holding a position is not the job;
