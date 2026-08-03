@@ -696,16 +696,12 @@ fn extract_python_module_doc(src: &str) -> Option<String> {
     let mut lines = src.lines().peekable();
     // Skip shebang and coding comments (PEP 263)
     loop {
-        match lines.peek() {
-            Some(line) => {
-                let t = line.trim();
-                if t.starts_with("#!") || t.starts_with("# -*-") || t.starts_with("# coding") {
-                    lines.next();
-                } else {
-                    break;
-                }
-            }
-            None => return None,
+        let line = lines.peek()?;
+        let t = line.trim();
+        if t.starts_with("#!") || t.starts_with("# -*-") || t.starts_with("# coding") {
+            lines.next();
+        } else {
+            break;
         }
     }
     let remaining: String = lines.collect::<Vec<_>>().join("\n");
@@ -714,10 +710,9 @@ fn extract_python_module_doc(src: &str) -> Option<String> {
     // Must start with triple-quote string
     let (quote, rest) = if let Some(rest) = trimmed.strip_prefix("\"\"\"") {
         ("\"\"\"", rest)
-    } else if let Some(rest) = trimmed.strip_prefix("'''") {
-        ("'''", rest)
     } else {
-        return None;
+        let rest = trimmed.strip_prefix("'''")?;
+        ("'''", rest)
     };
 
     // Find the closing triple-quote

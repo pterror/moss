@@ -87,10 +87,8 @@ pub fn get_merged_context(root: &Path, target: &Path, max_depth: Option<usize>) 
     } else {
         let mut dir = target.to_path_buf();
         while !dir.exists() {
-            match dir.parent() {
-                Some(p) => dir = p.to_path_buf(),
-                None => return None,
-            }
+            let p = dir.parent()?;
+            dir = p.to_path_buf()
         }
         dir
     };

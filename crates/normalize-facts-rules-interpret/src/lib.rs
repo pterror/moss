@@ -693,7 +693,7 @@ pub fn prime_rule_engine(
     rule: &FactsRule,
     relations: &Relations,
 ) -> Result<CachedRuleEngine, InterpretError> {
-    let full_source = format!("{}\n{}", PREAMBLE, &rule.source);
+    let full_source = format!("{}\n{}", PREAMBLE, rule.source);
     let ast: AscentProgram =
         syn::parse_str(&full_source).map_err(|e| InterpretError::Parse(e.to_string()))?;
     let program = Program::from_ast(ast).map_err(InterpretError::Parse)?;
@@ -1186,7 +1186,7 @@ pub fn run_rules_batch(
     let results: Vec<Result<Vec<Diagnostic>, InterpretError>> = rules
         .par_iter()
         .map(|rule| {
-            let full_source = format!("{}\n{}", PREAMBLE, &rule.source);
+            let full_source = format!("{}\n{}", PREAMBLE, rule.source);
             let ast: AscentProgram =
                 syn::parse_str(&full_source).map_err(|e| InterpretError::Parse(e.to_string()))?;
             let program = Program::from_ast(ast).map_err(InterpretError::Parse)?;

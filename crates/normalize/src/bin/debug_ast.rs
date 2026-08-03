@@ -71,7 +71,7 @@ fn print_tree(node: tree_sitter::Node, source: &[u8], indent: usize) {
     let preview = if is_leaf {
         text.replace('\n', "\\n")
     } else if text.len() > 40 {
-        format!("{}...", &text[..40].replace('\n', "\\n"))
+        format!("{}...", text[..40].replace('\n', "\\n"))
     } else {
         text.replace('\n', "\\n")
     };

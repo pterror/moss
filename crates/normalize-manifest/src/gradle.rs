@@ -132,20 +132,18 @@ fn parse_gradle_dep_line(line: &str) -> Option<DeclaredDep> {
     } else if let Some(inner) = rest.strip_prefix('\'') {
         let end = inner.find('\'')?;
         &inner[..end]
-    } else if let Some(inner) = rest.strip_prefix('(') {
+    } else {
+        let inner = rest.strip_prefix('(')?;
         // Kotlin: implementation("...")
         let inner = inner.trim_start();
         if let Some(inner2) = inner.strip_prefix('"') {
             let end = inner2.find('"')?;
             &inner2[..end]
-        } else if let Some(inner2) = inner.strip_prefix('\'') {
+        } else {
+            let inner2 = inner.strip_prefix('\'')?;
             let end = inner2.find('\'')?;
             &inner2[..end]
-        } else {
-            return None;
         }
-    } else {
-        return None;
     };
 
     // Parse `group:artifact:version` — also handle `group:artifact` (no version)
