@@ -1,32 +1,110 @@
 #!/usr/bin/env bash
-# Pre-commit hook: format check, clippy, and normalize checks
+# Pre-commit hook: format check, clippy, and normalize checks — scoped to
+# what's actually staged, not the whole workspace.
 #
 # Auto-installed via `nix develop` shellHook. To install manually:
 #   cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Why scoped: this repo runs many agents concurrently in the same working
+# tree. A commit's validity must not depend on unrelated uncommitted files
+# elsewhere in the workspace (a different agent's in-progress edits can
+# leave other crates non-compiling). Scoping to the crates touched by the
+# staged changes also cuts wall-clock from minutes (full-workspace clippy)
+# to seconds for a typical single-crate commit.
+#
+# Guarantee traded away: this hook does NOT prove the whole workspace
+# builds/lints clean, only that the touched package(s) do. It does not catch
+# breakage in crates that depend on a touched crate (e.g. a signature change
+# that breaks a downstream consumer). CI (.github/workflows/ci.yml) already
+# runs `cargo fmt --all --check`, `cargo clippy --workspace --all-features`,
+# and `cargo test --workspace` on every push/PR — that's the full-workspace
+# safety net. Cargo.toml/Cargo.lock/toolchain changes fall back to a
+# full-workspace check below since those affect every crate.
 
-set -e
+set -euo pipefail
 
-echo "Running cargo fmt check..."
-cargo fmt --check
+# Files staged for this commit (Added/Copied/Modified/Renamed; excludes
+# Deleted since there's nothing left to check).
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
 
-echo "Running cargo clippy..."
-cargo clippy --all-targets --all-features -- -D warnings
-
-echo "Validating .calls.scm capture names..."
-bad=$(grep -rh "@[A-Za-z0-9_.]*" --include="*.calls.scm" . 2>/dev/null \
-      | grep -v "^[[:space:]]*;" \
-      | grep -oh "@[A-Za-z0-9_.]*" \
-      | grep -oP "@\K.*" \
-      | grep -vxE "call|call\.write|call\.qualifier" \
-      | sort -u)
-if [ -n "$bad" ]; then
-    echo "error: invalid capture names in .calls.scm files:"
-    echo "$bad" | sed 's/^/  @/'
-    exit 1
+if [ "${#STAGED[@]}" -eq 0 ]; then
+    echo "No staged files; nothing to check."
+    exit 0
 fi
 
-# Run normalize checks if binary exists.
-# Prefer debug (always current); release may be stale during active development.
+# --- Determine which cargo packages are touched -----------------------
+workspace_wide=false
+declare -A PKG_SET
+for f in "${STAGED[@]}"; do
+    case "$f" in
+        Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/*)
+            workspace_wide=true
+            ;;
+        crates/*/*)
+            dir="crates/$(echo "$f" | cut -d/ -f2)"
+            ;;
+        xtask/*)
+            dir="xtask"
+            ;;
+        benches/*)
+            dir="benches"
+            ;;
+        *)
+            dir=""
+            ;;
+    esac
+    if [ -n "${dir:-}" ] && [ -f "$dir/Cargo.toml" ]; then
+        pkg=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1)
+        [ -n "$pkg" ] && PKG_SET["$pkg"]=1
+    fi
+    dir=""
+done
+
+PKGS=("${!PKG_SET[@]}")
+
+if [ "$workspace_wide" = true ]; then
+    echo "Workspace manifest/lockfile/toolchain staged — running full-workspace checks..."
+    echo "Running cargo fmt check..."
+    cargo fmt --check
+    echo "Running cargo clippy (workspace)..."
+    cargo clippy --all-targets --all-features -- -D warnings
+elif [ "${#PKGS[@]}" -gt 0 ]; then
+    PKG_ARGS=()
+    for p in "${PKGS[@]}"; do
+        PKG_ARGS+=(-p "$p")
+    done
+    echo "Running cargo fmt check on: ${PKGS[*]}"
+    cargo fmt --check "${PKG_ARGS[@]}"
+    echo "Running cargo clippy on: ${PKGS[*]}"
+    cargo clippy "${PKG_ARGS[@]}" --all-targets --all-features -- -D warnings
+else
+    echo "No staged Rust crate files; skipping fmt/clippy."
+fi
+
+# --- Validate .calls.scm capture names (staged content only) -----------
+scm_files=()
+for f in "${STAGED[@]}"; do
+    case "$f" in
+        *.calls.scm) scm_files+=("$f") ;;
+    esac
+done
+
+if [ "${#scm_files[@]}" -gt 0 ]; then
+    echo "Validating .calls.scm capture names..."
+    bad=$( (for f in "${scm_files[@]}"; do git show ":$f"; done) \
+          | grep -v "^[[:space:]]*;" \
+          | grep -oh "@[A-Za-z0-9_.]*" \
+          | grep -oP "@\K.*" \
+          | grep -vxE "call|call\.write|call\.qualifier" \
+          | sort -u) || true
+    if [ -n "$bad" ]; then
+        echo "error: invalid capture names in staged .calls.scm files:"
+        echo "$bad" | sed 's/^/  @/'
+        exit 1
+    fi
+fi
+
+# --- Run normalize checks against staged files, if the binary exists ---
 if [ -x "./target/debug/normalize" ] || [ -x "./target/release/normalize" ]; then
     NORMALIZE="${NORMALIZE:-./target/debug/normalize}"
     [ -x "$NORMALIZE" ] || NORMALIZE="./target/release/normalize"
@@ -34,9 +112,10 @@ if [ -x "./target/debug/normalize" ] || [ -x "./target/release/normalize" ]; the
     if [ -x "$NORMALIZE" ]; then
         # All rule engines: syntax, native (broken refs, ratchet, budget, etc.), fact.
         # severity=error issues block commits; warnings are informational.
-        # Use `normalize rules run --limit 0` to see full list.
-        echo "Running normalize rules..."
-        $NORMALIZE rules run
+        # Scoped to staged files so unrelated uncommitted content elsewhere
+        # in the workspace can't block this commit.
+        echo "Running normalize rules on staged files..."
+        $NORMALIZE rules run --files "${STAGED[@]}"
     fi
 fi
 
