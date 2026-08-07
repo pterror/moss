@@ -86,22 +86,73 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **HTML import extraction silently dropped every unquoted `src`/`href` and all `<img
-  src>` references.** Applying the query-testing methodology to `html.imports.scm`
-  found that the query only matched the `quoted_attribute_value` node kind; unquoted
-  attribute values (`<script src=app.js>`, `<link href=styles.css>` — legal HTML5,
-  verified via `normalize syntax query`) parse as the distinct `attribute_value` node
-  kind and were never matched at all. `<img src="...">` — a reference-bearing attribute
-  as common as `<link href>`/`<script src>` — had no query pattern whatsoever. Also
-  fixed: tag/attribute name matching used `#eq?` (case-sensitive), so `<LINK HREF=...>`/
-  `<IMG SRC=...>` (legal per HTML's case-insensitive tag/attribute names, confirmed the
-  grammar preserves source casing verbatim) silently produced no import. All three now
-  use `#match? "(?i)..."` and match both attribute-value node kinds. Added
-  `crates/normalize-languages/tests/fixtures/html/{sample,variants}.html` and six
-  `html_*` tests in `query_fixtures.rs` covering the completeness matrix and negative
-  cases (inline scripts, href/src-less tags, and `<a href>`/`<iframe src>` which remain
-  intentionally out of scope for this query).
-
+- **CSS symbol extraction had zero representation for @font-face, @layer,
+  @property, @container, @page, and @scope.** Applying the query-testing
+  methodology to `css.{tags,imports}.scm`/`css.rs` found that
+  arborium-css 2.17.0's grammar declares no `fields` at all (unlike
+  field-based grammars such as Rust/C#/SQL), so completeness meant
+  auditing every distinct at-rule node type instead of field variants.
+  @font-face, @layer, @property, @container, and @page all parse as the
+  same generic `at_rule` node (an `at_keyword` child plus an optional
+  `block`, with no syntactic way to distinguish them) — none were matched
+  by any query, so a CSS file's `@font-face` blocks, layer declarations,
+  custom-property registrations, container queries, and page rules never
+  appeared as symbols at all. `@scope (...) to (...) { ... }` (CSS
+  Scoping) has its own dedicated `scope_statement` node type and was
+  likewise entirely uncaptured. Both are now handled: `css.tags.scm` gained
+  a generic `(at_rule) @definition.module` pattern plus
+  `(scope_statement) @definition.module`, and `css.rs` gained matching
+  `node_name`/`build_signature`/`container_body`/`refine_kind` support
+  (including correctly omitting the ` { … }` signature suffix for the
+  blockless statement form of `at_rule`, e.g. `@layer a, b, c;`). Also
+  fixed a related, previously-existing bug in `css.rs`'s declaration
+  `build_signature`: multi-token shorthand values (`margin: 0 auto;`,
+  `font-weight: 400 700;`, comma-separated `src: url(...) format(...),
+  url(...) format(...);`) were silently truncated to their first token
+  only — confirmed via `normalize view` on real declarations. Documented
+  (not fixed, since the grammar genuinely cannot parse them): CSS Cascade
+  Layers'/conditional imports' `layer(name)`/`supports(...)` conditions on
+  `@import`, named `@container name (...)` queries, and `@page :first`
+  page-selector pseudo-classes all produce ERROR nodes in arborium-css
+  2.17.0. Added `crates/normalize-languages/tests/fixtures/css/variants.css`
+  (completeness matrix + negative cases) and extended `sample.css` with
+  real-world idioms (attribute/pseudo selectors, combinators, CSS Nesting
+  `&`, @font-face, @layer, @container); new `css_*_completeness_*`/
+  `css_*_negative_*` tests in `query_fixtures.rs` assert capture kind (not
+  just text) and exact counts.
+- **Lua call/definition extraction missed several grammar-legal callee/target
+  variants.** Applying the query-testing methodology to `lua.{tags,calls}.scm`
+  (verified against arborium-lua 2.17.0's node-types.json and real parse output)
+  found: `function_call.name` allows `bracket_index_expression` (dispatch-table
+  calls like `handlers["key"]()`, a common Lua idiom), `parenthesized_expression`
+  (IIFE-style `(f)()`), and `function_call` (chained/curried calls like
+  `get_fn()()`) in addition to the three variants `lua.calls.scm` already
+  handled — none were matched, so calls through dispatch tables and IIFEs were
+  silently dropped from the call graph. Separately, the assignment-based
+  function-definition pattern in `lua.tags.scm` (`x = function() ... end`) only
+  handled a `dot_index_expression` target (`Table.method = function() end`); the
+  far more common bare-identifier target (`local f = function() end`/`f =
+  function() end`) was silently dropped as a definition entirely. Finally,
+  `lua.tags.scm` had no `@reference.call` patterns at all — `lua.calls.scm`
+  handled call-site extraction but was never mirrored into tags, the same class
+  of gap as bug #5 in `docs/query-testing-methodology.md`'s Rust worked example.
+  All three are now fixed, with completeness-matrix and negative-case coverage
+  added in `crates/normalize-languages/tests/fixtures/lua/variants.lua`.
+- **JSON symbol extraction silently dropped or truncated pairs with unusual string
+  keys.** Applying the query-testing methodology to `json.tags.scm`/`json.rs` found
+  two real bugs, both verified against real parse output (`normalize syntax ast`):
+  empty-string keys (`"": value`) parse as a `string` node with no `string_content`
+  child at all (the grammar only emits that child for non-empty runs), which the old
+  `(pair key: (string (string_content) @name))` pattern required, silently dropping the
+  pair from extraction entirely; and keys containing an escape sequence (`"a\nb"`)
+  parse as a `string` node with *multiple* `string_content` children (one literal run
+  per side of each `escape_sequence`), which the per-child pattern matched once per
+  run — producing duplicate `@definition.var` matches for the same pair and truncating
+  the reported name to a single run ("a", never the full "a\nb"). `json.tags.scm` now
+  captures the whole `string` key node instead of its `string_content` child, and
+  `json.rs`'s `node_name()` derives the name by slicing between the node's own
+  start/end quotes rather than depending on child structure — fixing both cases
+  uniformly with exactly one match per pair.
 - **Content-addressed extraction cache now detects grammar `.so` changes, not just
   `.scm` query changes.** A prior fix (`ecfd1dfa`) folded `.scm` query content into the
   cache key via `query_fingerprint`, but a compiled tree-sitter grammar (`.so`/`.dylib`/
@@ -635,6 +686,138 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     procedural control flow inside a function body also produces `ERROR`
     nodes (the grammar has no model for it at all — `CASE WHEN` is the
     closest constrained form that parses).
+- **`bash.imports.scm` captured every trailing argument of `source file.sh arg1
+  arg2` as a spurious `@import.path`**, not just the sourced file — bash passes
+  trailing words as positional parameters to the sourced script, a real idiom,
+  and the query's `argument:` field constraint matched once per argument since
+  `command`'s `argument` field is `multiple`. Fixed with a `.` anchor
+  restricting the match to the first argument only (verified via `normalize
+  syntax query`: 3 captures for `./utils.sh arg1 arg2` before the fix, 1 after).
+- **`bash.complexity.scm` had no handling for `c_style_for_statement`**
+  (`for (( i = 0; i < n; i++ ))`) — a structurally distinct node type from the
+  word-list `for_statement` the query already covered, so every C-style for
+  loop in a Bash script contributed zero complexity/nesting. Affects at least
+  4 real loops in this repo's own `.sh` files (`bench.sh`,
+  `post-history.sh`, `block-mainsession-exploration.sh`, `agent-id.sh`).
+  Also added `ternary_expression` (arithmetic `$(( cond ? a : b ))`) and the
+  `&&`/`||` short-circuit operators of `binary_expression`, constrained by
+  `operator:` field text — Bash's `binary_expression` node is overloaded for
+  every binary operator including plain arithmetic and assignment
+  (`+=`, `<`, `==`, ...), so an unconstrained `(binary_expression)
+  @complexity` (the pattern other batches used for C-like grammars with a
+  dedicated binary-op node) would have wildly overcounted ordinary
+  arithmetic-heavy shell scripts; verified via `normalize syntax query` that
+  only the `&&`/`||` variants match and plain arithmetic does not.
+- **TOML symbol extraction silently dropped every dotted and quoted table/pair
+  key.** Applying the query-testing methodology to `toml.tags.scm`/`toml.rs`
+  (verified against arborium-toml 2.17.0's node-types.json, which shows no
+  named fields at all — the header key of a `table`/`table_array_element`,
+  and the key of a `pair`, is whichever of `bare_key`, `quoted_key`, or
+  `dotted_key` appears as a direct child) found the query and `node_name()`
+  only ever matched `bare_key`. Dotted table headers (`[tool.poetry]`,
+  `[workspace.dependencies]`, `[profile.dev.build-override]`) and dotted pair
+  keys (`a.b.c = 1`) got no name at all — the same "dotted-key gap class"
+  called out for other grammars — and quoted-key headers/pairs (`["quoted
+  table"]`, `"quoted key" = 1`) were silently dropped too. This repo's own
+  `.toml` files alone contain 40+ dotted table headers and 370+ dotted pair
+  keys. Fixed in both `toml.tags.scm` (alternation over all three key kinds)
+  and `toml.rs`'s `node_name()`/`build_signature()`. Also removed a dead
+  `"array_table"` match arm in `toml.rs` — confirmed via node-types.json that
+  arborium-toml 2.17.0 never produces that node kind (`table_array_element`
+  is the only `[[...]]` node). Completeness-matrix and negative-case coverage
+  added in `crates/normalize-languages/tests/fixtures/toml/variants.toml`.
+- **Dockerfile stage aliases and ARG/ENV names had extraction bugs found
+  applying the query-testing methodology to `dockerfile.{tags,imports}.scm`
+  and `dockerfile.rs`.** Cross-referenced against arborium-dockerfile
+  2.17.0's node-types.json field-by-field, verified via `normalize syntax
+  query`/`normalize syntax ast`:
+  - **`Dockerfile::extract_imports`'s stage-alias extraction was completely
+    dead — every `FROM ... AS name` silently lost its alias at the Rust
+    trait level.** `extract_stage_name` searched for a child of kind
+    `as_instruction` before accepting the following `image_alias`, but `as`
+    is a direct field on `from_instruction` and there is no `as_instruction`
+    node anywhere in this grammar, so the search condition could never
+    become true and the function always returned `None`. Fixed to read the
+    `as` field directly.
+  - **`dockerfile.tags.scm`'s ARG/ENV name patterns also matched the
+    default/value text as a second, spurious symbol.** `(arg_instruction
+    (unquoted_string) @name)` and the equivalent `env_pair` pattern were
+    unconstrained by field, but `arg_instruction`'s `default` field and
+    `env_pair`'s `value` field both allow `unquoted_string` too — so `ARG
+    VERSION=1.0` reported both `VERSION` and `1.0` as `@definition.constant`
+    symbols, and `ENV KEY1=val1 KEY2=val2` reported `val1`/`val2` alongside
+    the real names. Fixed by anchoring both patterns to `name:`.
+  - **`dockerfile.imports.scm`'s two FROM patterns double-matched every
+    aliased FROM.** The unaliased pattern had no `as:`-absence constraint,
+    so it fired alongside the aliased pattern on the same instruction;
+    downstream aggregation happened to paper over it by keying on the
+    shared `@import` anchor, but it was wasted, confusing work. Consolidated
+    to one pattern with an optional `as: (image_alias)?` field.
+  - Added `COPY --from=<stage-or-image>` extraction (multi-stage build
+    references, by stage name or numeric index) at the `dockerfile.rs`
+    trait level — `copy_instruction` has no fields at all in this grammar,
+    so the `--from=`/`--chown=`/etc. prefix on each `param` child can only
+    be distinguished by text, not by a `.scm` field constraint (documented
+    in both `imports.scm` and `dockerfile.rs`). `FROM builder AS test`
+    (a stage referencing an earlier stage by name) required no fix — it
+    already surfaces identically to an external-image FROM, since the
+    grammar itself has no way to tell the two apart.
+  Completeness-matrix and negative-case coverage added in
+  `crates/normalize-languages/tests/fixtures/dockerfile/variants.dockerfile`.
+- **YAML flow-mapping keys (`{key: value}`) were entirely unextracted.** Applying
+  the query-testing methodology to `yaml.tags.scm`/`yaml.rs` (cross-referenced
+  against arborium-yaml 2.17.0's node-types.json, verified via `normalize syntax
+  query`/`normalize syntax ast`) found `flow_pair` — the node type for keys inside
+  a flow mapping — had no query pattern at all; only `block_mapping_pair` was
+  handled. Real-world density check found 400+ flow_pair keys in this repo's own
+  `docs/pnpm-lock.yaml` alone (e.g. `resolution: {integrity: ..., engines:
+  ...}`). Separately, double- and single-quoted block-mapping keys (`"key":
+  value`, `'key': value`) were also unmatched — the query only handled the
+  `plain_scalar` variant of `block_mapping_pair.key`, silently dropping any
+  quoted key. Both gaps are now fixed for all three scalar variants (plain,
+  double-quoted, single-quoted) on both `block_mapping_pair` and `flow_pair`.
+  Also fixed in `yaml.rs`: a block-style key with an inline flow-mapping value
+  (`flow_map: {a: 1, b: 2}`) was not recognized as a container, so its nested
+  keys became orphaned top-level symbols instead of nesting under `flow_map`;
+  `refine_kind`/`container_body` now detect a nested mapping (block or flow)
+  through either a `block_node` or `flow_node` value uniformly. Completeness and
+  negative-case coverage added in
+  `crates/normalize-languages/tests/fixtures/yaml/{sample,variants}.yaml`.
+- **Setext-style Markdown headings (`Heading\n===`/`Heading\n---`) were entirely
+  unextracted.** Applying the query-testing methodology to `markdown.tags.scm`/
+  `markdown.rs` (cross-referenced against arborium-markdown 2.17.0's
+  node-types.json, verified via `normalize syntax ast`/`normalize syntax
+  query`) found `section.heading_content`-equivalent structure allows both
+  `atx_heading` (`# Heading`) and `setext_heading`, but `markdown.tags.scm` only
+  matched the former — every setext-style heading (a real-world convention,
+  e.g. top-level README/LICENSE titles) silently produced no
+  `@definition.heading` at all, and `normalize view` showed no symbol for it.
+  Fixing this surfaced a second, structural issue: unlike an ATX heading (which
+  this grammar always gives its own dedicated `section`), a setext heading only
+  gets its own `section` when it is the first block inside one — anywhere else
+  (after prose, or immediately after another setext heading with no body
+  between them) it is just another sibling child of whatever `section` is
+  already open. Anchoring the new pattern to the enclosing `section` (mirroring
+  the ATX pattern) therefore produced wrong, overlapping spans and duplicate
+  `@definition.heading` matches on the same `section` node whenever a setext
+  heading wasn't first in its section. Fixed by anchoring the setext pattern
+  directly to the `setext_heading` node instead, giving every setext heading a
+  tight, unique, non-overlapping span regardless of position — an honest
+  reflection of what this grammar structurally provides rather than a
+  fabricated body region. `markdown.rs`'s `node_name` updated to match (handles
+  both a `section`-wrapped ATX/setext heading and a raw `setext_heading` node,
+  since consumers like `normalize-ecosystems`'s doc-symbol lookup walk raw
+  nodes, not just tag captures). Also confirmed and documented: this grammar
+  build has no split inline sub-grammar, so links/images/emphasis/autolinks
+  inside heading/paragraph text are opaque byte spans with no distinguishing
+  node kind — not a query gap, a real capability boundary. Completeness-matrix
+  and negative-case coverage (7-hash non-heading, empty ATX heading, thematic
+  breaks vs. setext underlines, headings inside block quotes/list items,
+  code-block/table content that merely looks heading-like) added in
+  `crates/normalize-languages/tests/fixtures/markdown/variants.md`; sample.md
+  extended with task lists, nested lists, a blockquote callout, link/autolink/
+  image real-world idioms, and a setext-style "License" section exercising the
+  non-first-in-section case.
 
 ### Added (internal)
 

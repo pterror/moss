@@ -9870,6 +9870,322 @@ fn bash_imports_finds_source_commands() {
     );
 }
 
+#[test]
+fn bash_complexity_finds_real_world_idioms() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping bash_complexity_real_world: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_complexity_real_world: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("bash")
+        .expect("bash complexity query missing");
+    let complexity = collect_captures_full(&lang, BASH_SAMPLE, &query_str);
+    let kinds: Vec<&str> = complexity
+        .iter()
+        .filter(|(cap, ..)| cap == "complexity")
+        .map(|(_, kind, ..)| kind.as_str())
+        .collect();
+    // sample.sh's `retry()` function exercises c_style_for_statement,
+    // binary_expression (&&/||), and ternary_expression together — none of
+    // which the pre-fix query captured at all.
+    assert!(
+        kinds.contains(&"c_style_for_statement"),
+        "expected c_style_for_statement complexity in bash sample, got: {kinds:?}"
+    );
+    assert!(
+        kinds.contains(&"binary_expression"),
+        "expected &&/|| binary_expression complexity in bash sample, got: {kinds:?}"
+    );
+    assert!(
+        kinds.contains(&"ternary_expression"),
+        "expected ternary_expression complexity in bash sample, got: {kinds:?}"
+    );
+}
+
+const BASH_VARIANTS: &str = include_str!("fixtures/bash/variants.sh");
+
+#[test]
+fn bash_variants_fixture_parses_clean() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping bash_variants_fixture_parses_clean: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_variants_fixture_parses_clean: bash grammar .so not found");
+        return;
+    };
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(BASH_VARIANTS, None).expect("parse failed");
+    assert!(
+        !tree.root_node().has_error(),
+        "bash variants.sh fixture must parse without ERROR nodes"
+    );
+}
+
+/// tags.scm completeness: both function_definition syntaxes (`function
+/// NAME { }`, `function NAME() { }`, `NAME() { }`) and the non-`{ }`
+/// body variant (`if_statement` as body) all yield `name: (word) @name`
+/// under `@definition.function` — the same shape, verified across every
+/// syntactic form the grammar allows.
+#[test]
+fn bash_tags_completeness_function_definition_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping bash_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_tags_completeness: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("bash").expect("bash tags query missing");
+    let pairs = collect_tag_pairs(&lang, BASH_VARIANTS, &query_str);
+    for expected in [
+        "fn_keyword_no_parens",
+        "fn_keyword_with_parens",
+        "fn_posix_form",
+        "fn_body_if_statement",
+    ] {
+        assert!(
+            pairs
+                .iter()
+                .any(|(kind, name)| kind == "definition.function" && name == expected),
+            "expected {expected} as @definition.function in bash tags, got: {pairs:?}"
+        );
+    }
+    // Negative: a function name mentioned only inside a string literal must
+    // not produce a @definition.function tag.
+    assert!(
+        !pairs
+            .iter()
+            .any(|(_, name)| name.contains("calling function")),
+        "string contents must not produce a tags capture, got: {pairs:?}"
+    );
+}
+
+/// calls.scm completeness: every `command_name` child variant a real bash
+/// script can produce (bare word, relative/absolute path, quoted string,
+/// simple and braced variable expansion) yields a `@call` capture, in every
+/// structural context (pipeline stage, subshell, command substitution,
+/// negated_command).
+#[test]
+fn bash_calls_completeness_command_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping bash_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_calls_completeness: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("bash").expect("bash calls query missing");
+    let calls = collect_captures_full(&lang, BASH_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = calls
+        .iter()
+        .filter(|(cap, ..)| cap == "call")
+        .map(|(_, _, text, _)| text.as_str())
+        .collect();
+    for expected in [
+        "ls",          // bare word
+        "./script.sh", // relative path word
+        "\"ls\"",      // quoted string command_name
+        "$cmd",        // simple_expansion
+        "${cmd}",      // expansion (braced)
+        "grep",        // pipeline stage
+        "sort",        // pipeline stage
+    ] {
+        assert!(
+            call_texts.contains(&expected),
+            "expected {expected:?} among bash @call captures, got: {call_texts:?}"
+        );
+    }
+    // Every @call capture must be a `command_name` node (extraction depth:
+    // kind, not just text).
+    for (cap, kind, text, line) in &calls {
+        if cap == "call" {
+            assert_eq!(
+                kind, "command_name",
+                "@call capture {text:?} at line {line} has unexpected kind {kind:?}"
+            );
+        }
+    }
+}
+
+/// imports.scm completeness: `source`/`.` cover bare word, quoted string,
+/// simple-expansion, and expansion-containing-a-string paths — and the `.`
+/// field anchor means a `source file.sh arg1 arg2` command captures only
+/// the path, never the trailing positional arguments.
+#[test]
+fn bash_imports_completeness_source_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping bash_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_imports_completeness: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("bash")
+        .expect("bash imports query missing");
+    let paths = collect_captures(&lang, BASH_VARIANTS, &query_str, "import.path");
+    assert_eq!(
+        paths,
+        vec![
+            "./plain_path.sh",
+            "./dot_path.sh",
+            "\"./quoted_path.sh\"",
+            "$lib_path",
+            "\"$lib_path/sub.sh\"",
+            "./with_args.sh",
+        ],
+        "expected exactly these @import.path captures (in source order), got: {paths:?}"
+    );
+}
+
+/// Regression test for the trailing-argument bug: `source file.sh arg1
+/// arg2` must produce exactly one @import.path capture, never one per
+/// argument.
+#[test]
+fn bash_imports_negative_no_trailing_arguments_as_path() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping bash_imports_negative_trailing_args: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_imports_negative_trailing_args: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("bash")
+        .expect("bash imports query missing");
+    let source = "source ./with_args.sh arg1 arg2\n";
+    let paths = collect_captures(&lang, source, &query_str, "import.path");
+    assert_eq!(
+        paths,
+        vec!["./with_args.sh"],
+        "expected exactly one @import.path (the sourced file, not trailing args), got: {paths:?}"
+    );
+}
+
+/// complexity.scm completeness: every control-flow/decision node variant —
+/// including c_style_for_statement, the &&/|| binary_expression operators,
+/// and ternary_expression, none of which the pre-fix query captured —
+/// produces exactly the expected count of @complexity/@nesting captures.
+#[test]
+fn bash_complexity_completeness_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping bash_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_complexity_completeness: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("bash")
+        .expect("bash complexity query missing");
+    let complexity = collect_captures_full(&lang, BASH_VARIANTS, &query_str);
+
+    let count_of = |kind: &str| -> usize {
+        complexity
+            .iter()
+            .filter(|(cap, k, ..)| cap == "complexity" && k == kind)
+            .count()
+    };
+
+    assert_eq!(count_of("if_statement"), 4, "if_statement complexity count");
+    assert_eq!(count_of("elif_clause"), 2, "elif_clause complexity count");
+    assert_eq!(
+        count_of("for_statement"),
+        1,
+        "for_statement complexity count"
+    );
+    assert_eq!(
+        count_of("c_style_for_statement"),
+        1,
+        "c_style_for_statement complexity count (previously uncounted entirely)"
+    );
+    assert_eq!(
+        count_of("while_statement"),
+        2,
+        "while_statement complexity count (covers both `while` and `until`)"
+    );
+    assert_eq!(
+        count_of("case_statement"),
+        1,
+        "case_statement complexity count"
+    );
+    assert_eq!(count_of("case_item"), 3, "case_item complexity count");
+    assert_eq!(count_of("pipeline"), 2, "pipeline complexity count");
+    assert_eq!(
+        count_of("list"),
+        2,
+        "list (&&/|| statement-level chain) complexity count"
+    );
+    assert_eq!(
+        count_of("ternary_expression"),
+        1,
+        "ternary_expression complexity count (previously uncounted entirely)"
+    );
+
+    let binary_and_or = complexity
+        .iter()
+        .filter(|(cap, k, ..)| cap == "complexity" && k == "binary_expression")
+        .count();
+    assert_eq!(
+        binary_and_or, 2,
+        "expected exactly 2 binary_expression complexity captures (one &&, one ||); \
+         plain arithmetic/comparison operators (+=, <, >=, ...) must NOT count, got: {complexity:?}"
+    );
+}
+
+/// Negative regression test for the binary_expression overcounting risk:
+/// ordinary arithmetic (`+=`, `<`) inside `(( ))` must contribute zero
+/// complexity — only literal `&&`/`||` operators do.
+#[test]
+fn bash_complexity_negative_arithmetic_not_counted() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping bash_complexity_negative_arithmetic: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("bash").ok() else {
+        eprintln!("Skipping bash_complexity_negative_arithmetic: bash grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("bash")
+        .expect("bash complexity query missing");
+    let source = "negative_arithmetic_not_complexity() {\n    local -i total=0\n    (( total += 1 ))\n    (( total < 100 ))\n}\n";
+    let complexity = collect_captures_full(&lang, source, &query_str);
+    let binary_hits: Vec<_> = complexity
+        .iter()
+        .filter(|(cap, k, ..)| cap == "complexity" && k == "binary_expression")
+        .collect();
+    assert!(
+        binary_hits.is_empty(),
+        "plain arithmetic (+=, <) must not produce binary_expression complexity, got: {binary_hits:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // PowerShell
 // ---------------------------------------------------------------------------
@@ -12647,6 +12963,9 @@ fn jq_imports_finds_import_statements() {
 // ---------------------------------------------------------------------------
 
 const MARKDOWN_SAMPLE: &str = include_str!("fixtures/markdown/sample.md");
+const MARKDOWN_VARIANTS: &str = include_str!("fixtures/markdown/variants.md");
+
+// --- Dimension 4: real-world fixture coverage (sample.md) -------------------
 
 #[test]
 fn markdown_tags_finds_headings() {
@@ -12668,6 +12987,182 @@ fn markdown_tags_finds_headings() {
             .iter()
             .any(|n| n.contains("Getting Started") || n.contains("Installation")),
         "expected heading names in markdown tags, got: {names:?}"
+    );
+    // ATX headings under a task-list-bearing section.
+    assert!(
+        names.contains(&"Roadmap".to_string()),
+        "expected 'Roadmap' heading in markdown tags, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Support".to_string()),
+        "expected 'Support' heading in markdown tags, got: {names:?}"
+    );
+    // Setext-style ("License\n=======") heading in a real-world position:
+    // after prose and a link_reference_definition, not as the first block
+    // in its section — this is the shape that previously (pre-fix) matched
+    // nothing at all.
+    assert!(
+        names.contains(&"License".to_string()),
+        "expected setext-style 'License' heading in markdown tags, got: {names:?}"
+    );
+}
+
+// --- Dimensions 2+3: query completeness + extraction depth (variants.md) ---
+
+/// Every heading construct in variants.md, in source order, as
+/// `(expected_name, expected_definition_container_kind)`. The container kind
+/// differs by heading style: ATX headings anchor `@definition.heading` to
+/// the enclosing `section` (this grammar always gives an ATX heading its own
+/// section); setext headings anchor directly to `setext_heading` (they don't
+/// reliably get their own `section` — see markdown.tags.scm).
+const MARKDOWN_VARIANT_HEADINGS: &[(&str, &str)] = &[
+    ("ATX level 1", "section"),
+    ("ATX level 2", "section"),
+    ("ATX level 3", "section"),
+    ("ATX level 4", "section"),
+    ("ATX level 5", "section"),
+    ("ATX level 6", "section"),
+    ("ATX level 2 with closing sequence ##", "section"),
+    ("Setext level 1", "setext_heading"),
+    ("Setext level 2", "setext_heading"),
+    ("Back to back A", "setext_heading"),
+    ("Back to back B", "setext_heading"),
+    ("Preceding content", "section"),
+    ("Trailing setext divider", "setext_heading"),
+    ("Heading inside a block quote", "section"),
+    ("Heading inside a list item", "section"),
+];
+
+#[test]
+fn markdown_tags_completeness_heading_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping markdown_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("markdown").ok() else {
+        eprintln!("Skipping markdown_tags_completeness: markdown grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("markdown")
+        .expect("markdown tags query missing");
+    let captures = collect_captures_full(&lang, MARKDOWN_VARIANTS, &query_str);
+
+    // Every @name capture must be an `inline` node (dimension 3: kind, not
+    // just text) and must appear in the expected list exactly once.
+    let names: Vec<&(String, String, String, usize)> =
+        captures.iter().filter(|(cn, ..)| cn == "name").collect();
+    assert_eq!(
+        names.len(),
+        MARKDOWN_VARIANT_HEADINGS.len(),
+        "expected {} heading names in variants.md, got {}: {:?}",
+        MARKDOWN_VARIANT_HEADINGS.len(),
+        names.len(),
+        names
+    );
+    for (name, kind, text, _line) in &names {
+        assert_eq!(name, "name");
+        assert_eq!(
+            kind, "inline",
+            "expected @name capture for {text:?} to be an 'inline' node, got {kind:?}"
+        );
+    }
+    let text_set: Vec<&str> = names.iter().map(|(_, _, t, _)| t.as_str()).collect();
+    for (expected_name, _) in MARKDOWN_VARIANT_HEADINGS {
+        assert!(
+            text_set.contains(expected_name),
+            "expected heading {expected_name:?} in variants.md completeness matrix, got: {text_set:?}"
+        );
+    }
+
+    // Every @definition.heading capture's node kind must match the expected
+    // anchor for its heading style (dimension 3: correctness of the anchor
+    // decision documented in markdown.tags.scm, not just presence).
+    let defs: Vec<&(String, String, String, usize)> = captures
+        .iter()
+        .filter(|(cn, ..)| cn == "definition.heading")
+        .collect();
+    assert_eq!(
+        defs.len(),
+        MARKDOWN_VARIANT_HEADINGS.len(),
+        "expected {} @definition.heading captures in variants.md, got {}",
+        MARKDOWN_VARIANT_HEADINGS.len(),
+        defs.len()
+    );
+    let section_anchored = defs.iter().filter(|(_, k, ..)| k == "section").count();
+    let setext_anchored = defs
+        .iter()
+        .filter(|(_, k, ..)| k == "setext_heading")
+        .count();
+    let expected_section = MARKDOWN_VARIANT_HEADINGS
+        .iter()
+        .filter(|(_, k)| *k == "section")
+        .count();
+    let expected_setext = MARKDOWN_VARIANT_HEADINGS
+        .iter()
+        .filter(|(_, k)| *k == "setext_heading")
+        .count();
+    assert_eq!(
+        section_anchored, expected_section,
+        "expected {expected_section} section-anchored (ATX) @definition.heading captures, got {section_anchored}"
+    );
+    assert_eq!(
+        setext_anchored, expected_setext,
+        "expected {expected_setext} setext_heading-anchored @definition.heading captures, got {setext_anchored}"
+    );
+}
+
+#[test]
+fn markdown_tags_negative_non_headings() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping markdown_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("markdown").ok() else {
+        eprintln!("Skipping markdown_tags_negative: markdown grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("markdown")
+        .expect("markdown tags query missing");
+    let names = collect_captures(&lang, MARKDOWN_VARIANTS, &query_str, "name");
+
+    // Exact count: the negative section must contribute zero additional
+    // matches beyond the documented heading constructs above it.
+    assert_eq!(
+        names.len(),
+        MARKDOWN_VARIANT_HEADINGS.len(),
+        "negative-section constructs produced unexpected @name matches, got: {names:?}"
+    );
+
+    // Specific near-miss constructs that must never match:
+    // - seven-hash line exceeds the grammar's max heading level (h1-h6 only)
+    assert!(
+        !names.iter().any(|n| n.contains("seven hashes")),
+        "seven-# line must not match as a heading, got: {names:?}"
+    );
+    // - a pipe-table header row must not match as a heading (also implicitly
+    //   confirms the preceding thematic breaks ---, ***, ___ were not
+    //   mistaken for setext underlines, since a false match there would
+    //   have shifted or duplicated surrounding captures)
+    assert!(
+        !names.iter().any(|n| n.contains("Not a heading")),
+        "pipe-table header row must not match as a heading, got: {names:?}"
+    );
+    // - fenced/indented code block contents that look like ATX headings
+    assert!(
+        !names
+            .iter()
+            .any(|n| n.contains("inside a fenced code block")),
+        "fenced code block content must not match as a heading, got: {names:?}"
+    );
+    assert!(
+        !names
+            .iter()
+            .any(|n| n.contains("inside an indented code block")),
+        "indented code block content must not match as a heading, got: {names:?}"
     );
 }
 
@@ -12932,22 +13427,38 @@ fn scss_imports_finds_use_and_import_statements() {
 // ---------------------------------------------------------------------------
 
 const CSS_SAMPLE: &str = include_str!("fixtures/css/sample.css");
+const CSS_VARIANTS: &str = include_str!("fixtures/css/variants.css");
+
+/// `(loader, language, tags, imports)` — see `sql_lang_and_queries`'s doc
+/// comment for why the `GrammarLoader` must be kept alongside the
+/// `tree_sitter::Language` it produced (it owns the backing `.so`'s
+/// `libloading::Library`; dropping it early dangles the language's function
+/// pointers).
+type CssLangAndQueries = (
+    GrammarLoader,
+    tree_sitter::Language,
+    Arc<String>,
+    Arc<String>,
+);
+
+fn css_lang_and_queries() -> Option<CssLangAndQueries> {
+    let gdir = grammar_dir()?;
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let lang = loader.get("css").ok()?;
+    let tags = loader.get_tags("css")?;
+    let imports = loader.get_imports("css")?;
+    Some((loader, lang, tags, imports))
+}
+
+// --- Dimension 4: real-world fixture coverage (sample.css) ------------------
 
 #[test]
 fn css_imports_finds_at_import_paths() {
-    let Some(gdir) = grammar_dir() else {
+    let Some((_loader, lang, _tags, imports)) = css_lang_and_queries() else {
         eprintln!("Skipping css_imports: run `cargo xtask build-grammars` first");
         return;
     };
-    let loader = GrammarLoader::with_paths(vec![gdir]);
-    let Some(lang) = loader.get("css").ok() else {
-        eprintln!("Skipping css_imports: css grammar .so not found");
-        return;
-    };
-    let query_str = loader
-        .get_imports("css")
-        .expect("css imports query missing");
-    let paths = collect_captures(&lang, CSS_SAMPLE, &query_str, "import.path");
+    let paths = collect_captures(&lang, CSS_SAMPLE, &imports, "import.path");
     assert!(
         paths
             .iter()
@@ -12960,6 +13471,249 @@ fn css_imports_finds_at_import_paths() {
             .any(|p| p.contains("theme") || p.contains("fonts")),
         "expected url() @import paths in css sample, got: {paths:?}"
     );
+}
+
+/// Real-world idioms dimension: attribute/pseudo selectors, combinators,
+/// CSS Nesting (`&`), and the generic `at_rule` fallback (@font-face,
+/// @layer, @container) all appear in `sample.css` and must all surface as
+/// tags — not just the toy `.container`/`.button` rule sets the original
+/// fixture had before this pass.
+#[test]
+fn css_tags_finds_realworld_idioms() {
+    let Some((_loader, lang, tags, _imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_tags_realworld: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let names = collect_captures(&lang, CSS_SAMPLE, &tags, "name");
+    assert!(
+        names.iter().any(|n| n.contains("a[href^=\"https://\"]")),
+        "expected attribute selector in css sample tags, got: {names:?}"
+    );
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains("input:not([disabled]):focus")),
+        "expected chained pseudo-class selector in css sample tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.contains("li:nth-child(2n+1)")),
+        "expected pseudo-class-with-arguments selector in css sample tags, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "& .title" || n == "&:hover"),
+        "expected CSS Nesting (`&`) selectors in css sample tags, got: {names:?}"
+    );
+
+    let full = collect_captures_full(&lang, CSS_SAMPLE, &tags);
+    assert!(
+        full.iter()
+            .any(|(cap, kind, text, _)| cap == "definition.module"
+                && kind == "at_rule"
+                && text.starts_with("@font-face")),
+        "expected @font-face captured via the generic at_rule fallback, got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(cap, kind, text, _)| cap == "definition.module"
+                && kind == "at_rule"
+                && text.starts_with("@layer reset, base")),
+        "expected blockless @layer statement captured, got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(cap, kind, text, _)| cap == "definition.module"
+                && kind == "at_rule"
+                && text.starts_with("@container")),
+        "expected @container captured via the generic at_rule fallback, got: {full:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix (variants.css) --------------------
+
+/// Every at-rule node type this grammar can produce a `@definition.module`
+/// for: the three dedicated node types (`media_statement`,
+/// `supports_statement`, `scope_statement`) plus every construct that falls
+/// through to the generic `at_rule` node (@font-face, blockless `@layer`,
+/// block `@layer`, @property, unnamed @container, bare @page, `@page
+/// :first` (which internally contains an ERROR node but the outer `at_rule`
+/// still matches), and named `@container name (...)` (same — ERROR inside,
+/// outer node still matches)). Asserts capture *kind*, not just count, so a
+/// future accidental match against some unrelated node type would fail
+/// loudly instead of just moving the count.
+#[test]
+fn css_tags_completeness_definition_module_variants() {
+    let Some((_loader, lang, tags, _imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let full = collect_captures_full(&lang, CSS_VARIANTS, &tags);
+    let modules: Vec<_> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "definition.module")
+        .collect();
+
+    for kind in ["media_statement", "supports_statement", "scope_statement"] {
+        assert!(
+            modules.iter().any(|(_, k, ..)| k == kind),
+            "expected a definition.module capture of kind '{kind}' in variants.css, got: {modules:?}"
+        );
+    }
+
+    let at_rule_count = modules.iter().filter(|(_, k, ..)| k == "at_rule").count();
+    assert_eq!(
+        at_rule_count, 8,
+        "expected 8 generic at_rule definition.module captures \
+         (@font-face, blockless @layer, block @layer, @property, unnamed \
+         @container, bare @page, @page :first, named @container) in \
+         variants.css, got {at_rule_count}: {modules:?}"
+    );
+
+    // Blockless `@layer` must be captured with its raw text intact (no
+    // spurious ` { … }` synthesized anywhere in the query layer — that
+    // rendering choice happens in css.rs's build_signature, not here, but
+    // the raw captured node text must still be exactly the statement).
+    assert!(
+        modules
+            .iter()
+            .any(|(_, k, text, _)| k == "at_rule" && text == "@layer utilities, base;"),
+        "expected the blockless @layer statement captured verbatim, got: {modules:?}"
+    );
+}
+
+#[test]
+fn css_tags_completeness_keyframes_and_rule_set_selector_variants() {
+    let Some((_loader, lang, tags, _imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_tags_keyframes: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let pairs = collect_tag_pairs(&lang, CSS_VARIANTS, &tags);
+    assert!(
+        pairs.contains(&(
+            "definition.function".to_string(),
+            "fade-variant".to_string()
+        )),
+        "expected @keyframes fade-variant as definition.function, got: {pairs:?}"
+    );
+
+    let names = collect_captures(&lang, CSS_VARIANTS, &tags, "name");
+    // One representative rule_set per selector node type the grammar's
+    // `selectors` list allows (verified via real parse, not node-types.json
+    // alone — see variants.css's header comment).
+    for expected in [
+        ".class-selector",
+        "#id-selector",
+        "tag-selector",
+        "a[data-x]",
+        "a[data-x=\"y\"]",
+        "a[data-x^=\"y\"]",
+        "a[data-x$=\"y\"]",
+        "a[data-x*=\"y\"]",
+        "a[data-x~=\"y\"]",
+        "a[data-x|=\"y\"]",
+        ".parent > .child",
+        ".a + .b",
+        ".a ~ .b",
+        ".a .b",
+        "svg|circle",
+        ":hover",
+        ":nth-child(2n+1)",
+        "::before",
+        "& .nested",
+        "&:hover",
+        "& > .direct-child",
+    ] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "expected selector variant '{expected}' as a rule_set name in \
+             variants.css, got: {names:?}"
+        );
+    }
+}
+
+/// Custom properties (`--foo`) and standard properties must both be
+/// captured as `definition.var`, with the leading `--` preserved verbatim
+/// in the name (a truncation or trim bug here would silently corrupt every
+/// custom-property symbol name).
+#[test]
+fn css_tags_finds_custom_and_standard_properties() {
+    let Some((_loader, lang, tags, _imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_tags_properties: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let pairs = collect_tag_pairs(&lang, CSS_VARIANTS, &tags);
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "--custom-prop".to_string())),
+        "expected --custom-prop as definition.var, got: {pairs:?}"
+    );
+    assert!(
+        pairs.contains(&("definition.var".to_string(), "color".to_string())),
+        "expected standard 'color' property as definition.var, got: {pairs:?}"
+    );
+}
+
+// --- Negative cases -----------------------------------------------------
+
+/// @charset and @namespace each have their own dedicated node type
+/// (`charset_statement`/`namespace_statement`) that neither query captures
+/// — confirm the generic `(at_rule) @definition.module` pattern does NOT
+/// accidentally sweep them in (it shouldn't, since they're structurally
+/// distinct node types, but this guards against a future grammar upgrade
+/// collapsing them into `at_rule`).
+#[test]
+fn css_tags_negative_charset_and_namespace_not_captured() {
+    let Some((_loader, lang, tags, _imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let full = collect_captures_full(&lang, CSS_VARIANTS, &tags);
+    assert!(
+        !full
+            .iter()
+            .any(|(_, kind, ..)| kind == "charset_statement" || kind == "namespace_statement"),
+        "expected @charset/@namespace to never be captured (no query handles \
+         their dedicated node types), got: {full:?}"
+    );
+}
+
+/// A `url(...)` inside an ordinary declaration value (e.g.
+/// `background: url(...)`) is not an `@import` and must never leak into
+/// `@import.path` — nor must the text of a comment that merely mentions
+/// `@import`.
+#[test]
+fn css_imports_negative_declaration_url_and_comment_not_import() {
+    let Some((_loader, lang, _tags, imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let paths = collect_captures(&lang, CSS_VARIANTS, &imports, "import.path");
+    assert!(
+        !paths.iter().any(|p| p.contains("not-an-import")),
+        "expected background: url(...) to never match @import.path, got: {paths:?}"
+    );
+    assert!(
+        !paths.iter().any(|p| p.contains("inside-a-comment")),
+        "expected a commented-out @import to never match @import.path, got: {paths:?}"
+    );
+}
+
+#[test]
+fn css_imports_completeness_all_clean_variants() {
+    let Some((_loader, lang, _tags, imports)) = css_lang_and_queries() else {
+        eprintln!("Skipping css_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let paths = collect_captures(&lang, CSS_VARIANTS, &imports, "import.path");
+    for expected in [
+        "bare-string.css",
+        "url-string.css",
+        "bare-url.css",
+        "with-media.css",
+    ] {
+        assert!(
+            paths.iter().any(|p| p.contains(expected)),
+            "expected import path variant '{expected}' in variants.css, got: {paths:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -14796,22 +15550,467 @@ fn lua_tags_finds_functions_and_methods() {
         return;
     };
     let query_str = loader.get_tags("lua").expect("lua tags query missing");
-    let names = collect_captures(&lang, LUA_SAMPLE, &query_str, "name");
+    let pairs = collect_tag_pairs(&lang, LUA_SAMPLE, &query_str);
+    // function Stack.new() — name: dot_index_expression -> @definition.method
     assert!(
-        names.contains(&"classify".to_string()),
-        "expected 'classify' function in lua tags, got: {names:?}"
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "new"),
+        "expected 'new' (dot-index function) as definition.method, got: {pairs:?}"
+    );
+    // function Stack:push(value) — name: method_index_expression -> @definition.method
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "push"),
+        "expected 'push' from 'function Stack:push()' as definition.method, got: {pairs:?}"
     );
     assert!(
-        names.contains(&"new".to_string()),
-        "expected 'new' from 'function Stack.new()' in lua tags, got: {names:?}"
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "is_empty"),
+        "expected 'is_empty' from 'function Stack:is_empty()' as definition.method, \
+         got: {pairs:?}"
+    );
+    // function classify(n) — name: identifier -> @definition.function
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "classify"),
+        "expected 'classify' as definition.function, got: {pairs:?}"
+    );
+    // local function dispatch(event, ...) — name: identifier -> @definition.function
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "dispatch"),
+        "expected 'dispatch' as definition.function, got: {pairs:?}"
+    );
+    // handlers.on_push = function(item) ... end — assignment-based dot-index
+    // definition -> @definition.method
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "on_push"),
+        "expected 'on_push' (dot-index assignment) as definition.method, got: {pairs:?}"
+    );
+    // handlers["on_pop"] = function() ... end — bracket-index assignment target
+    // has no static name and must NOT appear as a definition of any kind.
+    assert!(
+        !pairs.iter().any(|(_, n)| n == "on_pop"),
+        "bracket-index assignment target 'on_pop' has no static name and must not \
+         be captured as a definition, got: {pairs:?}"
+    );
+}
+
+#[test]
+fn lua_calls_finds_call_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_calls: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_calls: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("lua").expect("lua calls query missing");
+    let calls = collect_captures(&lang, LUA_SAMPLE, &query_str, "call");
+
+    // Stack.new() — plain identifier call via dot-index qualifier (field: identifier)
+    assert!(
+        calls.iter().any(|c| c == "new"),
+        "expected 'new' call in lua sample, got: {calls:?}"
+    );
+    // s:push(1) — method call
+    assert!(
+        calls.iter().any(|c| c == "push"),
+        "expected 'push' call in lua sample, got: {calls:?}"
+    );
+    // print(classify(-3)) — plain identifier call
+    assert!(
+        calls.iter().any(|c| c == "classify"),
+        "expected 'classify' call in lua sample, got: {calls:?}"
+    );
+    // handlers["on_pop"]() — computed/bracket call (dispatch-table idiom)
+    assert!(
+        calls.iter().any(|c| c.contains("on_pop")),
+        "expected computed bracket call on 'on_pop' in lua sample, got: {calls:?}"
+    );
+}
+
+#[test]
+fn lua_imports_finds_require_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_imports: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_imports: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("lua")
+        .expect("lua imports query missing");
+    let paths = collect_captures(&lang, LUA_SAMPLE, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p.contains("json")),
+        "expected 'json' require path in lua sample, got: {paths:?}"
     );
     assert!(
-        names.contains(&"push".to_string()),
-        "expected 'push' from 'function Stack:push()' in lua tags, got: {names:?}"
+        paths.iter().any(|p| p.contains("utils.string")),
+        "expected 'utils.string' require path in lua sample, got: {paths:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.lua) -
+
+const LUA_VARIANTS: &str = include_str!("fixtures/lua/variants.lua");
+
+/// Every grammar-legal variant of `function_call.name` that lua.calls.scm
+/// claims to support (identifier, method_index_expression,
+/// dot_index_expression, bracket_index_expression, parenthesized_expression,
+/// function_call) must actually match, with the right capture kind.
+#[test]
+fn lua_calls_completeness_all_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_calls_completeness: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("lua").expect("lua calls query missing");
+    let caps = collect_captures_full(&lang, LUA_VARIANTS, &query_str);
+
+    // (capture_name, kind, text) triples, one per documented name-field variant.
+    let required: &[(&str, &str, &str)] = &[
+        ("call", "identifier", "plain_global"),     // name: identifier
+        ("call", "identifier", "method_fn"),        // name: method_index_expression
+        ("call", "identifier", "dotted_fn"),        // name: dot_index_expression
+        ("call", "function_call", "get_handler()"), // name: function_call (chained)
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in lua.calls.scm \
+             output for variants.lua, got: {caps:?}"
+        );
+    }
+
+    // bracket_index_expression callees: whole-node text captured as best-effort @call.
+    let bracket_calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "call" && k == "bracket_index_expression")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        bracket_calls.contains(&"dispatch[\"key\"]"),
+        "expected bracket_index_expression call 'dispatch[\"key\"]', got: {bracket_calls:?}"
     );
     assert!(
-        names.contains(&"is_empty".to_string()),
-        "expected 'is_empty' from 'function Stack:is_empty()' in lua tags, got: {names:?}"
+        bracket_calls.contains(&"dispatch[1]"),
+        "expected bracket_index_expression call 'dispatch[1]', got: {bracket_calls:?}"
+    );
+
+    // parenthesized_expression callee (IIFE-style call target).
+    let paren_calls: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "call" && k == "parenthesized_expression")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        paren_calls.contains(&"(plain_global)"),
+        "expected parenthesized_expression call '(plain_global)', got: {paren_calls:?}"
+    );
+
+    // @call.qualifier must carry the receiver/table text for
+    // method/dot/bracket calls, never the call name itself.
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"NS"),
+        "expected 'NS' qualifier for method/dot calls, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"dispatch"),
+        "expected 'dispatch' qualifier for bracket calls, got: {qualifiers:?}"
+    );
+}
+
+/// Every grammar-legal variant of `function_declaration.name` (identifier,
+/// dot_index_expression, method_index_expression) plus the assignment-based
+/// definition forms (identifier, dot_index_expression) must produce a @name
+/// capture with the correct definition kind; the dynamic
+/// bracket_index_expression assignment target must NOT.
+#[test]
+fn lua_tags_completeness_all_definition_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_tags_completeness: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("lua").expect("lua tags query missing");
+    let pairs = collect_tag_pairs(&lang, LUA_VARIANTS, &query_str);
+
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "plain_global"),
+        "expected 'plain_global' (function_declaration, name: identifier) as \
+         definition.function, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "plain_local"),
+        "expected 'plain_local' (local function, name: identifier) as \
+         definition.function, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "dotted_fn"),
+        "expected 'dotted_fn' (function_declaration, name: dot_index_expression) as \
+         definition.method, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "method_fn"),
+        "expected 'method_fn' (function_declaration, name: method_index_expression) as \
+         definition.method, got: {pairs:?}"
+    );
+    // Bug fix: assignment-based function expression with a bare identifier
+    // target was previously silently dropped (only the dot_index_expression
+    // target was handled).
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "ident_fn"),
+        "expected 'ident_fn' (assignment_statement, variable_list.name: identifier) as \
+         definition.function, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.method" && n == "dotted_assign_fn"),
+        "expected 'dotted_assign_fn' (assignment_statement, variable_list.name: \
+         dot_index_expression) as definition.method, got: {pairs:?}"
+    );
+    // NEGATIVE: dynamic bracket-index assignment target has no static name.
+    assert!(
+        !pairs.iter().any(|(_, n)| n == "dynamic_key"),
+        "bracket-index assignment target must not produce a definition, got: {pairs:?}"
+    );
+}
+
+/// Bug fix: lua.tags.scm never had @reference.call at all (lua.calls.scm
+/// handled call extraction separately, but tags never mirrored it) — the same
+/// class of gap documented as bug #5 in docs/query-testing-methodology.md's
+/// Rust worked example ("scoped calls existed in rust.calls.scm but were
+/// never ported to rust.tags.scm").
+#[test]
+fn lua_tags_finds_call_references() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_tags_call_refs: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_tags_call_refs: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("lua").expect("lua tags query missing");
+    let pairs = collect_tag_pairs(&lang, LUA_VARIANTS, &query_str);
+
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.call" && n == "plain_global"),
+        "expected 'plain_global' call as reference.call, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.call" && n == "method_fn"),
+        "expected 'method_fn' call as reference.call, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "reference.call" && n == "dotted_fn"),
+        "expected 'dotted_fn' call as reference.call, got: {pairs:?}"
+    );
+    // Bracket-dispatched calls report the subscripted container's name as a
+    // best-effort approximation (matches python.tags.scm's convention).
+    let dispatch_refs = pairs
+        .iter()
+        .filter(|(k, n)| k == "reference.call" && n == "dispatch")
+        .count();
+    assert!(
+        dispatch_refs >= 2,
+        "expected at least 2 'dispatch' reference.call entries (dispatch[\"key\"](), \
+         dispatch[1]()), got {dispatch_refs}: {pairs:?}"
+    );
+}
+
+/// Negative cases: constructs that must never appear in @call/@name captures.
+#[test]
+fn lua_calls_negative_cases_do_not_match() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_calls_negative: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("lua").expect("lua calls query missing");
+    let caps = collect_captures_full(&lang, LUA_VARIANTS, &query_str);
+    let call_texts: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+
+    // `holder.field` is a bare field read (no call parens); must never be a call.
+    assert!(
+        !call_texts.contains(&"field"),
+        "bare field access 'holder.field' must not be captured as a call, got: {call_texts:?}"
+    );
+
+    // Only the call site `adder(1)(2)` should register "adder" as a call —
+    // its definition site (the `local adder = function(x) ... end` LHS) must
+    // not.
+    let adder_calls = call_texts.iter().filter(|t| **t == "adder").count();
+    assert_eq!(
+        adder_calls, 1,
+        "expected exactly 1 call to 'adder' (the call site, not the definition), \
+         got {adder_calls}: {call_texts:?}"
+    );
+}
+
+/// Negative case: a plain variable reference passed to something other than
+/// `require(...)` must never be captured as an import path.
+#[test]
+fn lua_imports_negative_case_non_require_not_matched() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_imports_negative: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("lua")
+        .expect("lua imports query missing");
+    let paths = collect_captures(&lang, LUA_VARIANTS, &query_str, "import.path");
+    // All three require() forms (paren, bareword, long-bracket string) must match.
+    assert!(
+        paths.iter().any(|p| p.contains("paren_module")),
+        "expected 'paren_module' require path, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("bareword_module")),
+        "expected 'bareword_module' (bareword require, no parens) path, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("bracket_module")),
+        "expected 'bracket_module' (long-bracket string require) path, got: {paths:?}"
+    );
+    // `local dyn = some_module_var` must never contribute an import path.
+    assert!(
+        !paths.iter().any(|p| p.contains("module_var")),
+        "non-require variable reference must not be captured as an import, got: {paths:?}"
+    );
+}
+
+/// lua.complexity.scm: every branch/loop construct plus `and`/`or` must
+/// contribute to @complexity; only branch/loop constructs (not `and`/`or`)
+/// contribute to @nesting.
+#[test]
+fn lua_complexity_finds_all_branch_and_loop_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping lua_complexity: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("lua").ok() else {
+        eprintln!("Skipping lua_complexity: lua grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("lua")
+        .expect("lua complexity query missing");
+    let caps = collect_captures_full(&lang, LUA_VARIANTS, &query_str);
+
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    for kind in [
+        "if_statement",
+        "elseif_statement",
+        "for_statement",
+        "while_statement",
+        "repeat_statement",
+        "and",
+        "or",
+    ] {
+        assert!(
+            complexity_kinds.contains(&kind),
+            "expected a @complexity capture of kind '{kind}' in variants.lua, \
+             got kinds: {complexity_kinds:?}"
+        );
+    }
+    // for_statement must fire for both the numeric and generic clause forms.
+    let for_count = complexity_kinds
+        .iter()
+        .filter(|k| **k == "for_statement")
+        .count();
+    assert!(
+        for_count >= 2,
+        "expected at least 2 for_statement @complexity captures (numeric + generic \
+         clause), got {for_count}"
+    );
+
+    let nesting_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "nesting")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    for kind in [
+        "if_statement",
+        "for_statement",
+        "while_statement",
+        "repeat_statement",
+    ] {
+        assert!(
+            nesting_kinds.contains(&kind),
+            "expected a @nesting capture of kind '{kind}' in variants.lua, got kinds: \
+             {nesting_kinds:?}"
+        );
+    }
+    // "and"/"or" contribute to @complexity but never to @nesting.
+    assert!(
+        !nesting_kinds.contains(&"and") && !nesting_kinds.contains(&"or"),
+        "'and'/'or' must never contribute to @nesting, got kinds: {nesting_kinds:?}"
     );
 }
 
@@ -15136,16 +16335,21 @@ fn caddy_imports_finds_snippet_reference() {
 }
 
 const DOCKERFILE_SAMPLE: &str = include_str!("fixtures/dockerfile/Sample.dockerfile");
+const DOCKERFILE_VARIANTS: &str = include_str!("fixtures/dockerfile/variants.dockerfile");
 
+/// Dimension 4 (real-world fixture coverage): a multi-stage Go build with
+/// `--platform=`/digest-pinned FROMs, ARG defaults, multi-name ENV, a stage
+/// that references an earlier stage by name (`FROM builder AS test`), and a
+/// `COPY --from=` cross-stage copy.
 #[test]
-fn dockerfile_imports_finds_base_image_and_stage_alias() {
+fn dockerfile_imports_finds_base_images_stage_refs_and_aliases() {
     let Some(gdir) = grammar_dir() else {
-        eprintln!("Skipping dockerfile_imports: run `cargo xtask build-grammars` first");
+        eprintln!("Skipping dockerfile_imports_sample: run `cargo xtask build-grammars` first");
         return;
     };
     let loader = GrammarLoader::with_paths(vec![gdir]);
     let Some(lang) = loader.get("dockerfile").ok() else {
-        eprintln!("Skipping dockerfile_imports: dockerfile grammar .so not found");
+        eprintln!("Skipping dockerfile_imports_sample: dockerfile grammar .so not found");
         return;
     };
     let query_str = loader
@@ -15153,17 +16357,966 @@ fn dockerfile_imports_finds_base_image_and_stage_alias() {
         .expect("dockerfile imports query missing");
     let paths = collect_captures(&lang, DOCKERFILE_SAMPLE, &query_str, "import.path");
     assert!(
-        paths.contains(&"ubuntu:20.04".to_string()),
-        "expected 'ubuntu:20.04' base image in dockerfile imports, got: {paths:?}"
+        paths.contains(&"golang:${GO_VERSION}-alpine".to_string()),
+        "expected the digest-free, ARG-expanded builder base image, got: {paths:?}"
     );
     assert!(
-        paths.contains(&"golang:1.21".to_string()),
-        "expected 'golang:1.21' base image in dockerfile imports, got: {paths:?}"
+        paths.contains(&"builder".to_string()),
+        "expected 'FROM builder AS test' to surface 'builder' as an @import.path \
+         (a stage reference, not an external image), got: {paths:?}"
+    );
+    assert!(
+        paths
+            .iter()
+            .any(|p| p.starts_with("gcr.io/distroless/static-debian12@sha256:")),
+        "expected the digest-pinned final-stage base image, got: {paths:?}"
     );
     let aliases = collect_captures(&lang, DOCKERFILE_SAMPLE, &query_str, "import.alias");
+    assert_eq!(
+        aliases,
+        vec!["builder", "test", "final"],
+        "expected exactly the three stage aliases in source order"
+    );
+}
+
+/// Dimension 4: the same real-world sample's stage names, and every ARG/ENV
+/// variable name, must appear as tags — none of the ARG defaults or ENV
+/// values (which share `unquoted_string` with the names) may leak through.
+#[test]
+fn dockerfile_tags_finds_stage_names_and_declared_variables() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping dockerfile_tags_sample: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_tags_sample: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("dockerfile")
+        .expect("dockerfile tags query missing");
+    let pairs = collect_tag_pairs(&lang, DOCKERFILE_SAMPLE, &query_str);
+
+    let modules: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.module")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert_eq!(modules, vec!["builder", "test", "final"]);
+
+    let constants: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.constant")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert_eq!(
+        constants,
+        vec![
+            "GO_VERSION",
+            "BUILD_ENV",
+            "GO_VERSION",
+            "CGO_ENABLED",
+            "GOOS",
+            "BUILD_ENV",
+        ],
+        "expected exactly the declared ARG/ENV names, with no default/value text \
+         leaking through as spurious symbols"
+    );
+}
+
+/// Dimension 2/3 (completeness + extraction depth) for imports.scm: every
+/// FROM shape node-types.json allows (bare tag, digest, no tag, `AS` alias,
+/// `--platform=` prefix, stage-by-name reference) must produce exactly the
+/// matching `@import.path`/`@import.alias` pair, verified by kind via
+/// `collect_captures_full` so an accidental match on the wrong node type
+/// can't hide behind identical capture text.
+#[test]
+fn dockerfile_imports_completeness_from_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping dockerfile_imports_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_imports_completeness: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("dockerfile")
+        .expect("dockerfile imports query missing");
+
+    let paths = collect_captures(&lang, DOCKERFILE_VARIANTS, &query_str, "import.path");
+    assert_eq!(
+        paths,
+        vec![
+            "ubuntu:20.04",               // bare tag, no alias
+            "ubuntu:20.04@sha256:abc123", // digest, no alias
+            "ubuntu",                     // no tag at all
+            "golang:1.21-alpine",         // tag + AS alias
+            "golang:1.21",                // tag + --platform= sibling + AS alias
+            "builder",                    // stage-by-name reference + AS alias
+        ],
+        "expected exactly six @import.path matches, one per FROM, in source order"
+    );
+
+    let full = collect_captures_full(&lang, DOCKERFILE_VARIANTS, &query_str);
+    let alias_kinds: Vec<&str> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "import.alias")
+        .map(|(_, kind, ..)| kind.as_str())
+        .collect();
+    assert_eq!(
+        alias_kinds,
+        vec!["image_alias"; 4],
+        "every @import.alias must be an image_alias node — the two unaliased \
+         FROMs (line 9 and 12) must not contribute a stray alias capture"
+    );
+}
+
+/// Dimension 2/3 for tags.scm: ARG/ENV name-vs-default(/value) field
+/// anchoring, across every default/value node-type variant node-types.json
+/// allows (`unquoted_string`, `double_quoted_string`, `single_quoted_string`,
+/// and ARG's optional-default / ENV's legacy-no-`=` forms).
+#[test]
+fn dockerfile_tags_completeness_arg_env_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping dockerfile_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_tags_completeness: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("dockerfile")
+        .expect("dockerfile tags query missing");
+    let pairs = collect_tag_pairs(&lang, DOCKERFILE_VARIANTS, &query_str);
+
+    let constants: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.constant")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert_eq!(
+        constants,
+        vec![
+            "VERSION", "NAME", "OTHER", "NOEQ", // ARG: default present (3 default
+            // kinds: unquoted/double/single-quoted) and default absent
+            "KEY1", "KEY2",   // ENV: multi-pair `=` form
+            "LEGACY", // ENV: legacy no-`=` single-pair form
+        ],
+        "expected exactly the ARG/ENV *names*; default/value text (\"1.0\", \
+         \"quoted\", \"single\", \"val1\", \"val2\", \"val3\") must never appear"
+    );
+
+    let modules: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.module")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    assert_eq!(
+        modules,
+        vec!["bare_name", "builder", "platform_stage", "from_stage_ref"],
+        "the two unaliased FROMs (line 9, 12) must not contribute a module definition"
+    );
+}
+
+/// Negative case: instruction kinds that are documented as not contributing
+/// tags (RUN/CMD/ENTRYPOINT/COPY/ADD/LABEL/EXPOSE/USER/VOLUME/WORKDIR/
+/// STOPSIGNAL/ONBUILD/HEALTHCHECK/MAINTAINER/SHELL, in both shell- and
+/// exec-form where applicable) must produce zero @name/@definition captures
+/// from their own content — only the FROM/ARG/ENV lines earlier in the same
+/// fixture may contribute.
+#[test]
+fn dockerfile_tags_negative_non_symbol_instructions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping dockerfile_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_tags_negative: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("dockerfile")
+        .expect("dockerfile tags query missing");
+    let names = collect_captures(&lang, DOCKERFILE_VARIANTS, &query_str, "name");
+
+    // Only the FROM-alias / ARG-name / ENV-name symbols documented above are
+    // expected; nothing from any RUN/CMD/COPY/LABEL/etc. line downstream.
+    let unexpected: Vec<&String> = names
+        .iter()
+        .filter(|n| {
+            ![
+                "bare_name",
+                "builder",
+                "platform_stage",
+                "from_stage_ref",
+                "VERSION",
+                "NAME",
+                "OTHER",
+                "NOEQ",
+                "KEY1",
+                "KEY2",
+                "LEGACY",
+            ]
+            .contains(&n.as_str())
+        })
+        .collect();
     assert!(
-        aliases.contains(&"builder".to_string()),
-        "expected 'builder' stage alias in dockerfile imports, got: {aliases:?}"
+        unexpected.is_empty(),
+        "expected no tag captures from RUN/CMD/COPY/ADD/LABEL/etc. lines, found: {unexpected:?}"
+    );
+}
+
+/// Negative case for imports.scm: `COPY --chown=`, a bare `COPY` with no
+/// params, and every non-FROM/non-COPY instruction must not contribute an
+/// `@import`.
+#[test]
+fn dockerfile_imports_negative_non_from_instructions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping dockerfile_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_imports_negative: dockerfile grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("dockerfile")
+        .expect("dockerfile imports query missing");
+    // Exactly the six FROM instructions in the variants fixture; the
+    // COPY --from=/--chown= lines and everything after them contribute none
+    // (imports.scm only matches from_instruction — see its doc comment on
+    // why COPY --from= is handled at the Rust trait level instead).
+    let import_stmts: Vec<_> = collect_captures_full(&lang, DOCKERFILE_VARIANTS, &query_str)
+        .into_iter()
+        .filter(|(cap, ..)| cap == "import")
+        .collect();
+    assert_eq!(import_stmts.len(), 6, "got: {import_stmts:?}");
+}
+
+/// Regression test for the `extract_stage_name` bug: the old implementation
+/// searched for a child of kind `as_instruction` before accepting an
+/// `image_alias` — but `as` is a direct field on `from_instruction` (there
+/// is no `as_instruction` node in this grammar at all), so the old code
+/// always returned `None` and every stage alias was silently dropped from
+/// `Language::extract_imports`'s trait-level output.
+#[test]
+fn dockerfile_extract_imports_trait_finds_stage_alias() {
+    use normalize_languages::{Dockerfile, Language};
+    use tree_sitter::{Parser, StreamingIterator};
+
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping dockerfile_extract_imports_trait: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!("Skipping dockerfile_extract_imports_trait: dockerfile grammar .so not found");
+        return;
+    };
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let source = "FROM golang:1.21 AS builder\n";
+    let tree = parser.parse(source, None).expect("parse failed");
+    let query = tree_sitter::Query::new(&lang, "(from_instruction) @from").expect("query compile");
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    let dockerfile = Dockerfile;
+    let mut imports = Vec::new();
+    while let Some(m) = matches.next() {
+        for cap in m.captures {
+            imports.extend(dockerfile.extract_imports(&cap.node, source));
+        }
+    }
+    assert_eq!(imports.len(), 1);
+    assert_eq!(imports[0].module, "golang:1.21");
+    assert_eq!(
+        imports[0].alias.as_deref(),
+        Some("builder"),
+        "extract_stage_name must find the alias via the 'as' field, not a \
+         nonexistent 'as_instruction' child"
+    );
+}
+
+/// `Dockerfile::extract_imports`'s COPY `--from=` handling: stage-name and
+/// numeric-index references both produce an import with no alias; a sibling
+/// `--chown=` param on the same instruction must not be mistaken for
+/// `--from=`; and a bare COPY (no params at all) produces zero imports.
+#[test]
+fn dockerfile_extract_imports_trait_copy_from_variants() {
+    use normalize_languages::{Dockerfile, Language};
+    use tree_sitter::{Parser, StreamingIterator};
+
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping dockerfile_extract_imports_copy_from: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("dockerfile").ok() else {
+        eprintln!(
+            "Skipping dockerfile_extract_imports_copy_from: dockerfile grammar .so not found"
+        );
+        return;
+    };
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let source = "COPY --from=builder /out/app /usr/local/bin/app\n\
+                  COPY --from=0 /a /b\n\
+                  COPY --chown=user:group /a /b\n\
+                  COPY /a /b\n";
+    let tree = parser.parse(source, None).expect("parse failed");
+    let query = tree_sitter::Query::new(&lang, "(copy_instruction) @copy").expect("query compile");
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    let dockerfile = Dockerfile;
+    let mut all: Vec<Vec<String>> = Vec::new();
+    while let Some(m) = matches.next() {
+        for cap in m.captures {
+            let imports = dockerfile.extract_imports(&cap.node, source);
+            all.push(imports.into_iter().map(|i| i.module).collect());
+        }
+    }
+    assert_eq!(
+        all,
+        vec![
+            vec!["builder".to_string()],
+            vec!["0".to_string()],
+            Vec::<String>::new(), // --chown= must not be mistaken for --from=
+            Vec::<String>::new(), // bare COPY has no param children at all
+        ]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// JSON
+// ---------------------------------------------------------------------------
+//
+// JSON has exactly one query purpose: tags. There are no call/import/complexity/
+// type concepts in JSON's grammar (verified: `src/grammar_loader.rs`'s
+// `query_source_for("json", ...)` registers only `"json.tags.scm"`, and JSON's
+// node-types.json has no call/import-shaped node kinds — see arborium-json
+// 2.17.0 node-types.json, dumped in full during this remediation: the only
+// node types are `_value`, `array`, `document`, `object`, `pair`, `string`,
+// literal/punctuation tokens, `comment` (extra), `escape_sequence`, and
+// `string_content`).
+
+const JSON_SAMPLE: &str = include_str!("fixtures/json/sample.json");
+const JSON_VARIANTS: &str = include_str!("fixtures/json/variants.json");
+
+/// Returns `(loader, lang)` together — the `GrammarLoader` owns the loaded
+/// dylib, so it must stay alive for as long as the returned `Language` is
+/// used (dropping it early unloads the library and leaves `Language`'s
+/// function pointers dangling, which segfaults rather than erroring).
+fn json_lang() -> Option<(normalize_languages::GrammarLoader, tree_sitter::Language)> {
+    let loader = normalize_languages::GrammarLoader::new();
+    let lang = loader.get("json").ok()?;
+    Some((loader, lang))
+}
+
+// --- Dimension 4: real-world fixture coverage (sample.json) -----------------
+
+#[test]
+fn json_tags_finds_nested_keys_in_realistic_document() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_tags_finds_nested_keys: json grammar not found");
+        return;
+    };
+    let query_str = loader.get_tags("json").expect("json tags query missing");
+    let names = collect_captures(&lang, JSON_SAMPLE, &query_str, "name");
+
+    // Top-level scalar/object/array-valued keys.
+    for expected in [
+        "\"name\"",
+        "\"version\"",
+        "\"scripts\"",
+        "\"dependencies\"",
+        "\"keywords\"",
+        "\"contributors\"",
+    ] {
+        assert!(
+            names.contains(&expected.to_string()),
+            "expected {expected} key in json sample tags, got: {names:?}"
+        );
+    }
+    // Nested object keys (package.json-shaped: scripts.build, deeply nested
+    // dependencies.serde.version) must also be found — nesting is structural
+    // (pair > object > pair), not something the query itself constrains, but
+    // this is the realistic idiom (dimension 4) that would surface a broken
+    // query at any depth.
+    for expected in ["\"build\"", "\"test\"", "\"tree-sitter\"", "\"version\""] {
+        assert!(
+            names.contains(&expected.to_string()),
+            "expected {expected} nested key in json sample tags, got: {names:?}"
+        );
+    }
+    // Object keys inside array elements (contributors: [{ name, role }, ...])
+    // — array elements aren't pairs, but the objects *inside* them still are.
+    assert!(
+        names.iter().filter(|n| *n == "\"name\"").count() >= 3,
+        "expected 'name' from top-level key + 2 contributor objects, got: {names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.json) -
+
+/// Every `pair.value` variant node-types.json's `_value` supertype allows
+/// (array, false, null, number, object, string, true) must produce a
+/// @definition.var capture with kind `pair` on the key — the value's own
+/// kind never gates whether the *key* is captured, only whether json.rs's
+/// refine_kind() promotes it to a container (tested separately below).
+#[test]
+fn json_tags_completeness_all_value_kinds_have_captured_keys() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_tags_completeness_all_value_kinds: json grammar not found");
+        return;
+    };
+    let query_str = loader.get_tags("json").expect("json tags query missing");
+    let caps = collect_captures_full(&lang, JSON_VARIANTS, &query_str);
+
+    // (capture_name, node_kind, text) — every key is a `string` node
+    // regardless of its value's kind.
+    let required: &[(&str, &str, &str)] = &[
+        ("name", "string", "\"valueString\""), // value: string
+        ("name", "string", "\"valueNumber\""), // value: number
+        ("name", "string", "\"valueTrue\""),   // value: true
+        ("name", "string", "\"valueFalse\""),  // value: false
+        ("name", "string", "\"valueNull\""),   // value: null
+        ("name", "string", "\"valueArray\""),  // value: array
+        ("name", "string", "\"valueObject\""), // value: object
+    ];
+    for (cap_name, kind, text) in required {
+        assert!(
+            caps.iter()
+                .any(|(cn, k, t, _)| cn == cap_name && k == kind && t == text),
+            "expected capture ({cap_name}, kind={kind}, text={text}) in json.tags.scm output \
+             for variants.json, got: {caps:?}"
+        );
+    }
+}
+
+/// Real, previously-silent bug (found via a killed prior session, verified
+/// against real parse output in this session): empty-string keys (`"":
+/// value`) parse as a `string` node with NO `string_content` child at all —
+/// the grammar only emits that child for non-empty runs. A
+/// `(string (string_content) @name)` pattern requires the child and so
+/// silently drops the pair from extraction entirely. json.tags.scm now
+/// captures the whole `string` node instead, which does not depend on
+/// `string_content` existing.
+#[test]
+fn json_tags_completeness_empty_string_key_is_captured() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_tags_completeness_empty_string_key: json grammar not found");
+        return;
+    };
+    let query_str = loader.get_tags("json").expect("json tags query missing");
+    let caps = collect_captures_full(&lang, JSON_VARIANTS, &query_str);
+
+    let empty_key_defs: Vec<_> = caps
+        .iter()
+        .filter(|(cn, k, t, _)| cn == "definition.var" && k == "pair" && t.starts_with("\"\":"))
+        .collect();
+    assert_eq!(
+        empty_key_defs.len(),
+        1,
+        "expected exactly 1 @definition.var for the empty-string-key pair, got: {caps:?}"
+    );
+}
+
+/// Second real, previously-unverified bug found while validating the prior
+/// session's fix: keys containing an escape sequence (`"a\nb"`) parse as a
+/// `string` node with *multiple* `string_content` children (one literal run
+/// per side of each `escape_sequence`). A per-child `@name` pattern produces
+/// one separate query match per run — duplicating the @definition.var match
+/// for the same pair and truncating @name to a single run ("a" or "b", never
+/// the full key). Capturing the whole `string` node produces exactly one
+/// match per pair regardless of how many string_content/escape_sequence
+/// children it has internally.
+#[test]
+fn json_tags_completeness_escape_sequence_key_is_single_match() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_tags_completeness_escape_sequence_key: json grammar not found");
+        return;
+    };
+    let query_str = loader.get_tags("json").expect("json tags query missing");
+    let caps = collect_captures_full(&lang, JSON_VARIANTS, &query_str);
+
+    // "a\nb" key: exactly one @definition.var match (not one per string_content run).
+    let escape_run_defs: Vec<_> = caps
+        .iter()
+        .filter(|(cn, k, t, _)| cn == "definition.var" && k == "pair" && t.contains("\"a\\nb\":"))
+        .collect();
+    assert_eq!(
+        escape_run_defs.len(),
+        1,
+        "expected exactly 1 @definition.var for the 'a\\nb' escape-run key, got: {caps:?}"
+    );
+
+    // "\n" key (pure escape sequence, no string_content child at all): must
+    // still be captured, not dropped the way the empty-key case was.
+    let pure_escape_defs: Vec<_> = caps
+        .iter()
+        .filter(|(cn, k, t, _)| cn == "definition.var" && k == "pair" && t.starts_with("\"\\n\":"))
+        .collect();
+    assert_eq!(
+        pure_escape_defs.len(),
+        1,
+        "expected exactly 1 @definition.var for the pure-escape '\\n' key, got: {caps:?}"
+    );
+}
+
+/// NEGATIVE: array elements are values, not pairs — a bare array of scalars
+/// must contribute zero @name/@definition.var captures of its own (only the
+/// pairs nested in the *objects* an array may contain are captured).
+#[test]
+fn json_tags_negative_array_scalar_elements_not_captured() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_tags_negative_array_scalar_elements: json grammar not found");
+        return;
+    };
+    let query_str = loader.get_tags("json").expect("json tags query missing");
+    let caps = collect_captures_full(&lang, JSON_SAMPLE, &query_str);
+
+    // "keywords": ["parsing", "tree-sitter", "cli"] — none of the array's
+    // string elements may appear as a @name capture (they are values, not
+    // pair keys).
+    for scalar in ["\"parsing\"", "\"cli\""] {
+        assert!(
+            !caps.iter().any(|(cn, _, t, _)| cn == "name" && t == scalar),
+            "array scalar element {scalar} must never appear as a @name capture, got: {caps:?}"
+        );
+    }
+}
+
+// --- json.rs Language trait: node_name() / refine_kind() extraction depth ---
+
+/// `node_name()` must return the full raw key text (between the string
+/// node's own quotes), not just the first `string_content` run — regression
+/// test for the escape-run truncation bug at the Rust-code level (as
+/// opposed to the query level tested above), since `node_name()` is what
+/// actually supplies the symbol name consumed by `collect_symbols_from_tags`.
+#[test]
+fn json_node_name_handles_empty_and_escape_keys() {
+    let Some((loader, lang)) = json_lang() else {
+        eprintln!("Skipping json_node_name_handles_empty_and_escape_keys: json grammar not found");
+        return;
+    };
+    let _ = &loader;
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(JSON_VARIANTS, None).expect("parse failed");
+
+    let json_lang_impl = normalize_languages::Json;
+    let mut cursor = tree.walk();
+    let mut found: Vec<(String, String)> = Vec::new();
+
+    fn walk(
+        cursor: &mut tree_sitter::TreeCursor,
+        content: &str,
+        support: &dyn normalize_languages::Language,
+        found: &mut Vec<(String, String)>,
+    ) {
+        loop {
+            let node = cursor.node();
+            if node.kind() == "pair"
+                && let Some(name) = support.node_name(&node, content)
+            {
+                let value_text = node
+                    .child_by_field_name("value")
+                    .map(|v| v.utf8_text(content.as_bytes()).unwrap_or(""))
+                    .unwrap_or("");
+                found.push((name.to_string(), value_text.to_string()));
+            }
+            if cursor.goto_first_child() {
+                walk(cursor, content, support, found);
+                cursor.goto_parent();
+            }
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    walk(&mut cursor, JSON_VARIANTS, &json_lang_impl, &mut found);
+
+    assert!(
+        found.contains(&(String::new(), "\"emptyKeyValue\"".to_string())),
+        "expected node_name() to return \"\" (not None) for the empty-string key, got: {found:?}"
+    );
+    assert!(
+        found.contains(&("a\\nb".to_string(), "\"escapeRunKeyValue\"".to_string())),
+        "expected node_name() to return the FULL 'a\\nb' key text (not truncated to 'a'), \
+         got: {found:?}"
+    );
+    assert!(
+        found.contains(&("\\n".to_string(), "\"pureEscapeKeyValue\"".to_string())),
+        "expected node_name() to return '\\n' (pure-escape key, no string_content child), \
+         got: {found:?}"
+    );
+    assert!(
+        found.contains(&("plainKey".to_string(), "\"plainKeyValue\"".to_string())),
+        "expected node_name() to return the plain key unchanged, got: {found:?}"
+    );
+}
+
+/// `refine_kind()` must promote a pair to `Module` (container) only when its
+/// value is an `object` — every other `_value` variant (array/false/null/
+/// number/string/true) must remain a plain `Variable`. Verified via
+/// `collect_symbols_from_tags`'s nesting logic (only `is_container_kind`
+/// containers can hold children) rather than re-implementing refine_kind's
+/// logic here.
+#[test]
+fn json_refine_kind_only_object_values_are_containers() {
+    let Some((loader, _lang)) = json_lang() else {
+        eprintln!(
+            "Skipping json_refine_kind_only_object_values_are_containers: json grammar not found"
+        );
+        return;
+    };
+    let _ = &loader;
+    let json_impl = normalize_languages::Json;
+
+    let mut parser = Parser::new();
+    let lang2 = normalize_languages::GrammarLoader::new()
+        .get("json")
+        .expect("json grammar");
+    parser.set_language(&lang2).expect("set_language failed");
+    let tree = parser.parse(JSON_VARIANTS, None).expect("parse failed");
+    let root = tree.root_node();
+
+    // Find the "valueObject" and "valueArray" pair nodes directly and check
+    // refine_kind()'s classification of each.
+    fn find_pair<'t>(
+        node: tree_sitter::Node<'t>,
+        key_text: &str,
+        content: &str,
+    ) -> Option<tree_sitter::Node<'t>> {
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "pair"
+                && let Some(key) = child.child_by_field_name("key")
+                && key.utf8_text(content.as_bytes()).unwrap_or("") == key_text
+            {
+                return Some(child);
+            }
+            if let Some(found) = find_pair(child, key_text, content) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    let value_object_pair = find_pair(root, "\"valueObject\"", JSON_VARIANTS)
+        .expect("valueObject pair not found in variants.json");
+    let value_array_pair = find_pair(root, "\"valueArray\"", JSON_VARIANTS)
+        .expect("valueArray pair not found in variants.json");
+
+    let refined_object = normalize_languages::Language::refine_kind(
+        &json_impl,
+        &value_object_pair,
+        JSON_VARIANTS,
+        normalize_languages::SymbolKind::Variable,
+    );
+    let refined_array = normalize_languages::Language::refine_kind(
+        &json_impl,
+        &value_array_pair,
+        JSON_VARIANTS,
+        normalize_languages::SymbolKind::Variable,
+    );
+
+    assert_eq!(
+        refined_object,
+        normalize_languages::SymbolKind::Module,
+        "object-valued pair must refine to Module (container)"
+    );
+    assert_eq!(
+        refined_array,
+        normalize_languages::SymbolKind::Variable,
+        "array-valued pair must remain Variable (not a container), got: {refined_array:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// TOML
+// ---------------------------------------------------------------------------
+//
+// TOML only has a tags.scm (no calls/complexity/imports/types — data-format
+// grammar, not a programming language). arborium-toml 2.17.0's grammar has
+// no named fields at all: the header key of a `table`/`table_array_element`
+// and the key of a `pair` is whichever of three sibling node kinds appears —
+// `bare_key`, `quoted_key`, or `dotted_key` — verified via `node-types.json`
+// and cross-checked against real parse output (`normalize syntax ast`/
+// `normalize syntax query`). The original query only matched `bare_key`,
+// silently dropping every quoted-key and dotted-key table/pair name; dotted
+// table headers alone (`[workspace.dependencies]`, `[profile.dev.build-
+// override]`, …) appear 40+ times and dotted pair keys 370+ times in this
+// repo's own `.toml` files.
+
+const TOML_SAMPLE: &str = include_str!("fixtures/toml/sample.toml");
+const TOML_VARIANTS: &str = include_str!("fixtures/toml/variants.toml");
+
+// --- Dimension 4: real-world fixture coverage (sample.toml) ----------------
+
+#[test]
+fn toml_tags_finds_sample_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping toml_tags_finds_sample_definitions: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("toml").ok() else {
+        eprintln!("Skipping toml_tags_finds_sample_definitions: toml grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("toml").expect("toml tags query missing");
+    let pairs = collect_tag_pairs(&lang, TOML_SAMPLE, &query_str);
+    let class_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.class")
+        .map(|(_, n)| n.as_str())
+        .collect();
+    let var_names: Vec<&str> = pairs
+        .iter()
+        .filter(|(k, _)| k == "definition.var")
+        .map(|(_, n)| n.as_str())
+        .collect();
+
+    // Plain table header.
+    assert!(
+        class_names.contains(&"package"),
+        "expected 'package' table in toml tags, got: {class_names:?}"
+    );
+    // Dotted table header: [workspace.dependencies].
+    assert!(
+        class_names.contains(&"workspace.dependencies"),
+        "expected dotted table header 'workspace.dependencies' in toml tags, got: {class_names:?}"
+    );
+    // Multi-segment dotted table header: [profile.dev.build-override].
+    assert!(
+        class_names.contains(&"profile.dev.build-override"),
+        "expected dotted table header 'profile.dev.build-override' in toml tags, got: {class_names:?}"
+    );
+    // Quoted-key table header: ["cfg(unix)".dependencies].
+    assert!(
+        class_names.contains(&"\"cfg(unix)\".dependencies"),
+        "expected quoted-key dotted table header in toml tags, got: {class_names:?}"
+    );
+    // Array-of-tables headers: three [[bin]] entries, each its own definition.
+    let bin_count = class_names.iter().filter(|n| **n == "bin").count();
+    assert_eq!(
+        bin_count, 3,
+        "expected 3 separate '[[bin]]' array-table entries in toml tags, got {bin_count}: {class_names:?}"
+    );
+    // Dotted pair key nested inside a table: [lints.rust] -> rust.unused = "warn".
+    assert!(
+        var_names.contains(&"rust.unused"),
+        "expected dotted pair key 'rust.unused' in toml tags, got: {var_names:?}"
+    );
+    // Quoted pair key: "ci.badge-url" = "...".
+    assert!(
+        var_names.contains(&"\"ci.badge-url\""),
+        "expected quoted pair key '\"ci.badge-url\"' in toml tags, got: {var_names:?}"
+    );
+    // Dotted array-of-tables header: [[metadata.matrix]], twice.
+    let matrix_count = class_names
+        .iter()
+        .filter(|n| **n == "metadata.matrix")
+        .count();
+    assert_eq!(
+        matrix_count, 2,
+        "expected 2 separate '[[metadata.matrix]]' entries in toml tags, got {matrix_count}: {class_names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix and extraction depth (variants.toml) -
+
+#[test]
+fn toml_tags_completeness_table_header_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping toml_tags_completeness_table_header_variants: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("toml").ok() else {
+        eprintln!(
+            "Skipping toml_tags_completeness_table_header_variants: toml grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader.get_tags("toml").expect("toml tags query missing");
+    let captures = collect_captures_full(&lang, TOML_VARIANTS, &query_str);
+
+    // (expected @name text, expected node kind, which container: table | table_array_element)
+    let expected: &[(&str, &str, &str)] = &[
+        // table header key variants
+        ("bare_table", "bare_key", "table"),
+        ("\"quoted table header\"", "quoted_key", "table"),
+        ("dotted.table.header", "dotted_key", "table"),
+        ("dotted.\"quoted segment\".header", "dotted_key", "table"),
+        // table_array_element header key variants
+        ("bare_array_table", "bare_key", "table_array_element"),
+        (
+            "\"quoted array table header\"",
+            "quoted_key",
+            "table_array_element",
+        ),
+        ("dotted.array.table", "dotted_key", "table_array_element"),
+    ];
+
+    for (text, kind, _container) in expected {
+        let found = captures
+            .iter()
+            .any(|(cap, k, t, _line)| cap == "name" && k == kind && t == text);
+        assert!(
+            found,
+            "expected @name capture text={text:?} kind={kind:?} in toml_tags_completeness_table_header_variants, \
+             got captures: {captures:?}"
+        );
+    }
+
+    // Every table/table_array_element header must co-occur with the right
+    // definition.* tag kind (dimension: definition-kind distinction).
+    let tag_pairs = collect_tag_pairs(&lang, TOML_VARIANTS, &query_str);
+    assert!(
+        tag_pairs.contains(&(
+            "definition.class".to_string(),
+            "dotted.table.header".to_string()
+        )),
+        "expected dotted table header tagged as definition.class, got: {tag_pairs:?}"
+    );
+    assert!(
+        tag_pairs.contains(&(
+            "definition.class".to_string(),
+            "dotted.array.table".to_string()
+        )),
+        "expected dotted array-table header tagged as definition.class, got: {tag_pairs:?}"
+    );
+}
+
+#[test]
+fn toml_tags_completeness_pair_key_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping toml_tags_completeness_pair_key_variants: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("toml").ok() else {
+        eprintln!("Skipping toml_tags_completeness_pair_key_variants: toml grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("toml").expect("toml tags query missing");
+    let tag_pairs = collect_tag_pairs(&lang, TOML_VARIANTS, &query_str);
+
+    // Top-level pair key variants.
+    for kind_text in [
+        "bare_pair",
+        "\"quoted pair key\"",
+        "dotted.pair.key",
+        "dotted.\"quoted segment\".key",
+    ] {
+        assert!(
+            tag_pairs.contains(&("definition.var".to_string(), kind_text.to_string())),
+            "expected pair key '{kind_text}' tagged as definition.var, got: {tag_pairs:?}"
+        );
+    }
+
+    // Same three key-shape variants nested inside an explicit [nested] table
+    // — the key variants must be recognized regardless of container.
+    let var_count_dotted_nested = tag_pairs
+        .iter()
+        .filter(|(k, n)| k == "definition.var" && n == "dotted.pair.key")
+        .count();
+    assert_eq!(
+        var_count_dotted_nested, 2,
+        "expected 'dotted.pair.key' as a pair key both top-level and nested in [nested], got {var_count_dotted_nested}: {tag_pairs:?}"
+    );
+
+    // collect_captures_full: verify node kind, not just text, for the
+    // dotted_key variant specifically (extraction-depth dimension).
+    let captures = collect_captures_full(&lang, TOML_VARIANTS, &query_str);
+    let dotted_pair_kind = captures
+        .iter()
+        .find(|(cap, _k, t, _line)| cap == "name" && t == "dotted.pair.key")
+        .map(|(_cap, k, _t, _line)| k.as_str());
+    assert_eq!(
+        dotted_pair_kind,
+        Some("dotted_key"),
+        "expected 'dotted.pair.key' @name capture to be node kind dotted_key, got: {dotted_pair_kind:?} \
+         (full captures: {captures:?})"
+    );
+}
+
+#[test]
+fn toml_tags_negative_values_and_scalars_not_captured_as_names() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping toml_tags_negative_values_and_scalars_not_captured_as_names: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("toml").ok() else {
+        eprintln!(
+            "Skipping toml_tags_negative_values_and_scalars_not_captured_as_names: toml grammar .so not found"
+        );
+        return;
+    };
+    let query_str = loader.get_tags("toml").expect("toml tags query missing");
+    let names = collect_captures(&lang, TOML_VARIANTS, &query_str, "name");
+
+    // `value_looks_like_key = "not.a.real.key"` — the *string value* text
+    // must never itself appear as a captured @name; only the pair's own key
+    // ("value_looks_like_key") should.
+    assert!(
+        names.contains(&"value_looks_like_key".to_string()),
+        "expected the pair's own key to be captured, got: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n.contains("not.a.real.key")),
+        "string value text must never be captured as a @name, got: {names:?}"
+    );
+
+    // Scalar array elements (`plain_array = [1, 2, 3]`) are never keys —
+    // only the pair's own key ("plain_array") should be captured, not "1",
+    // "2", or "3".
+    assert!(
+        !names.contains(&"1".to_string())
+            && !names.contains(&"2".to_string())
+            && !names.contains(&"3".to_string()),
+        "scalar array elements must never be captured as a @name, got: {names:?}"
+    );
+
+    // Inline tables (`inline = { a = 1, b = 2 }`): the pair's own key
+    // ("inline") is captured as a definition.var, same as any other pair.
+    // Its inner pairs ("a", "b") also match the query as written — this is
+    // documented, existing behavior (see the comment atop toml.tags.scm and
+    // `is_inside_inline_table` in toml.rs): the query intentionally doesn't
+    // special-case inline tables, and downstream Rust-level `node_name()`
+    // filters inline-table-nested pairs back out of actual symbol
+    // extraction. This assertion pins that query-level behavior so a future
+    // change to either layer is deliberate, not accidental.
+    assert!(
+        names.contains(&"inline".to_string())
+            && names.contains(&"a".to_string())
+            && names.contains(&"b".to_string()),
+        "expected inline table's own key plus its inner pair keys to all match \
+         at the query level (filtered downstream in toml.rs), got: {names:?}"
     );
 }
 
@@ -15298,6 +17451,7 @@ fn all_registered_queries_compile() {
     );
 }
 
+// ---------------------------------------------------------------------------
 // HTML
 // ---------------------------------------------------------------------------
 
@@ -15482,9 +17636,18 @@ fn html_tags_completeness_all_element_variants() {
         names.iter().filter(|n| **n == "img").count() >= 4,
         "expected 4 lowercase 'img' variants, got: {names:?}"
     );
-    assert!(names.contains(&"LINK"), "expected uppercase 'LINK', got: {names:?}");
-    assert!(names.contains(&"Link"), "expected mixed-case 'Link', got: {names:?}");
-    assert!(names.contains(&"IMG"), "expected uppercase 'IMG', got: {names:?}");
+    assert!(
+        names.contains(&"LINK"),
+        "expected uppercase 'LINK', got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Link"),
+        "expected mixed-case 'Link', got: {names:?}"
+    );
+    assert!(
+        names.contains(&"IMG"),
+        "expected uppercase 'IMG', got: {names:?}"
+    );
     assert!(
         names.contains(&"SCRIPT"),
         "expected uppercase 'SCRIPT', got: {names:?}"
@@ -15614,4 +17777,243 @@ fn html_imports_negative_out_of_scope_and_missing_attrs() {
              are outside html.imports.scm's documented scope), got: {paths:?}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// YAML
+// ---------------------------------------------------------------------------
+
+const YAML_SAMPLE: &str = include_str!("fixtures/yaml/sample.yaml");
+const YAML_VARIANTS: &str = include_str!("fixtures/yaml/variants.yaml");
+
+/// `(loader, language, tags)` — see `sql_lang_and_queries` for why the
+/// loader must be kept alongside the language it produced (dropping the
+/// `GrammarLoader` unloads the backing `.so` and dangles the `Language`'s
+/// function pointers).
+type YamlLangAndTags = (GrammarLoader, tree_sitter::Language, Arc<String>);
+
+fn yaml_lang_and_tags() -> Option<YamlLangAndTags> {
+    let gdir = grammar_dir()?;
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let lang = loader.get("yaml").ok()?;
+    let tags = loader.get_tags("yaml")?;
+    Some((loader, lang, tags))
+}
+
+// --- Dimension 4: real-world fixture coverage (sample.yaml) ----------------
+
+#[test]
+fn yaml_tags_finds_real_world_keys() {
+    let Some((_loader, lang, tags)) = yaml_lang_and_tags() else {
+        eprintln!("Skipping yaml_tags: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let names = collect_captures(&lang, YAML_SAMPLE, &tags, "name");
+    // Block-style nested keys.
+    assert!(
+        names.iter().any(|n| n == "jobs"),
+        "expected top-level 'jobs' key, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "runs-on"),
+        "expected nested 'runs-on' key, got: {names:?}"
+    );
+    // YAML merge key (`<<: *defaults`) — a plain_scalar key like any other.
+    assert!(
+        names.iter().any(|n| n == "<<"),
+        "expected merge key '<<', got: {names:?}"
+    );
+    // Flow-mapping keys inside a block sequence item
+    // (`- { os: ubuntu-latest, arch: x64 }`).
+    assert!(
+        names.iter().any(|n| n == "os"),
+        "expected flow_pair key 'os' inside matrix_include, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "arch"),
+        "expected flow_pair key 'arch' inside matrix_include, got: {names:?}"
+    );
+    // Quoted top-level keys.
+    assert!(
+        names.iter().any(|n| n == "\"quoted top-level key\""),
+        "expected double-quoted top-level key, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "'single quoted top-level key'"),
+        "expected single-quoted top-level key, got: {names:?}"
+    );
+}
+
+// --- Dimension 2 + 3: completeness matrix (variants.yaml) -------------------
+
+/// Every `block_mapping_pair`/`flow_pair` key-scalar variant found by
+/// cross-referencing arborium-yaml 2.17.0's node-types.json (plain_scalar,
+/// double_quote_scalar, single_quote_scalar — for both block and flow
+/// pairs) must produce a `definition.var` with the correct capture kind.
+/// Uses `collect_captures_full` so a kind mismatch (e.g. a quoted key
+/// accidentally matched by the plain_scalar clause, or vice versa) can't
+/// hide behind string-only assertions.
+#[test]
+fn yaml_tags_completeness_key_scalar_variants() {
+    let Some((_loader, lang, tags)) = yaml_lang_and_tags() else {
+        eprintln!("Skipping yaml_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let full = collect_captures_full(&lang, YAML_VARIANTS, &tags);
+    let name_kind_text = |name: &str| -> Option<&str> {
+        full.iter()
+            .find(|(cap, _, text, _)| cap == "name" && text == name)
+            .map(|(_, kind, ..)| kind.as_str())
+    };
+
+    // block_mapping_pair.key variants.
+    assert_eq!(
+        name_kind_text("plain_key"),
+        Some("string_scalar"),
+        "plain block key must capture as string_scalar, full: {full:?}"
+    );
+    assert_eq!(
+        name_kind_text("\"double quoted key\""),
+        Some("double_quote_scalar"),
+        "double-quoted block key must capture as double_quote_scalar, full: {full:?}"
+    );
+    assert_eq!(
+        name_kind_text("'single quoted key'"),
+        Some("single_quote_scalar"),
+        "single-quoted block key must capture as single_quote_scalar, full: {full:?}"
+    );
+    // Anchor/tag-prefixed keys still resolve to the plain scalar name —
+    // the anchor/tag is a sibling within the same flow_node, not a wrapper.
+    assert_eq!(
+        name_kind_text("anchored_key"),
+        Some("string_scalar"),
+        "anchor-prefixed key must still capture the plain scalar name, full: {full:?}"
+    );
+    assert_eq!(
+        name_kind_text("tagged_key"),
+        Some("string_scalar"),
+        "tag-prefixed key must still capture the plain scalar name, full: {full:?}"
+    );
+
+    // flow_pair.key variants (all three scalar kinds inside a flow_mapping).
+    assert_eq!(
+        name_kind_text("flow_plain"),
+        Some("string_scalar"),
+        "flow_pair plain key must capture as string_scalar, full: {full:?}"
+    );
+    assert_eq!(
+        name_kind_text("\"flow double quoted\""),
+        Some("double_quote_scalar"),
+        "flow_pair double-quoted key must capture as double_quote_scalar, full: {full:?}"
+    );
+    assert_eq!(
+        name_kind_text("'flow single quoted'"),
+        Some("single_quote_scalar"),
+        "flow_pair single-quoted key must capture as single_quote_scalar, full: {full:?}"
+    );
+
+    // Multi-document stream: a key in the second document must be found
+    // too — tags matching is structural, not document-scoped.
+    assert_eq!(
+        name_kind_text("doc2_key"),
+        Some("string_scalar"),
+        "key in second document of a multi-document stream must still be captured, full: {full:?}"
+    );
+}
+
+/// `node_name`/`refine_kind`/`container_body` (Rust-side symbol
+/// reconstruction) are covered directly in `crates/normalize-languages/src/yaml.rs`'s
+/// own unit tests, since they operate on `tree_sitter::Node` rather than
+/// producing query captures — this test only asserts the raw query's
+/// container-key captures (both nesting paths: a block key with an inline
+/// flow-mapping value, and a flow pair nested inside another flow mapping).
+#[test]
+fn yaml_tags_completeness_container_nesting() {
+    let Some((_loader, lang, tags)) = yaml_lang_and_tags() else {
+        eprintln!("Skipping yaml_tags_container_nesting: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let names = collect_captures(&lang, YAML_VARIANTS, &tags, "name");
+
+    // block_mapping_pair value = block_node > block_mapping.
+    assert!(names.iter().any(|n| n == "block_container"));
+    assert!(names.iter().any(|n| n == "nested_key"));
+
+    // block_mapping_pair value = flow_node > flow_mapping (inline flow
+    // value on a block-style key).
+    assert!(names.iter().any(|n| n == "inline_flow_container"));
+    assert!(names.iter().any(|n| n == "a"));
+    assert!(names.iter().any(|n| n == "b"));
+
+    // flow_pair value = flow_node > flow_mapping (flow mapping nested
+    // inside another flow mapping).
+    assert!(names.iter().any(|n| n == "nested_flow_container"));
+    assert!(names.iter().any(|n| n == "outer"));
+    assert!(names.iter().any(|n| n == "inner"));
+}
+
+/// Negative cases: constructs that must NOT produce a `@name` capture.
+/// Asserts the exact total count on `variants.yaml` so a stray extra match
+/// (e.g. a sequence item accidentally matched) can't hide behind a
+/// `.any()`-only check.
+#[test]
+fn yaml_tags_negative_sequences_and_complex_keys() {
+    let Some((_loader, lang, tags)) = yaml_lang_and_tags() else {
+        eprintln!("Skipping yaml_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let names = collect_captures(&lang, YAML_VARIANTS, &tags, "name");
+
+    // Sequence items themselves are never named symbols — only the key
+    // that holds the sequence is.
+    assert!(
+        !names.iter().any(|n| n == "item1" || n == "item2"),
+        "block sequence items must not be captured as symbols, got: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n == "1" || n == "2" || n == "3"),
+        "flow sequence items must not be captured as symbols, got: {names:?}"
+    );
+
+    // Explicit complex key (`? [a, b]`) — a flow_sequence key has no single
+    // scalar name to extract; must not match.
+    assert!(
+        !names.iter().any(|n| n.contains('[') || n.contains(']')),
+        "complex flow-sequence key must not be captured, got: {names:?}"
+    );
+
+    // Explicit block-scalar key (`? |`) — multi-line blob, must not match.
+    assert!(
+        !names.iter().any(|n| n.contains("block scalar key")),
+        "explicit block-scalar key must not be captured, got: {names:?}"
+    );
+
+    // Anchors/aliases: `alias_source`/`alias_use` are ordinary block-mapping
+    // keys (captured normally); the anchor definition (`&shared_anchor`)
+    // and alias reference (`*shared_anchor`) themselves must not produce
+    // separate captures — this codebase's tags pipeline has no
+    // definition/reference convention for them (see yaml.tags.scm).
+    assert!(
+        names.iter().any(|n| n == "alias_source"),
+        "expected 'alias_source' key itself to be captured, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "alias_use"),
+        "expected 'alias_use' key itself to be captured, got: {names:?}"
+    );
+    assert!(
+        !names
+            .iter()
+            .any(|n| n == "shared_anchor" || n == "&shared_anchor" || n == "*shared_anchor"),
+        "anchor/alias names themselves must not be captured as symbols, got: {names:?}"
+    );
+
+    // Exact total count on variants.yaml: pins the full set of matches so
+    // any future regression (extra or missing match) is caught precisely.
+    assert_eq!(
+        names.len(),
+        22,
+        "expected exactly 22 @name captures in variants.yaml, got {}: {names:?}",
+        names.len()
+    );
 }
