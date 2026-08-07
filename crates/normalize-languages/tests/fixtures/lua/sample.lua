@@ -64,3 +64,26 @@ s:push(1)
 s:push(2)
 print(classify(-3))
 print(sum_evens({1, 2, 3, 4, 5}))
+
+-- Event dispatch table: extremely common Lua idiom (command/handler tables,
+-- state machines). Exercises both function-expression-as-value definitions
+-- (identifier and dot-index assignment forms) and computed/bracket calls.
+local handlers = {}
+
+handlers.on_push = function(item)
+    print("pushed", item)
+end
+
+handlers["on_pop"] = function()
+    print("popped")
+end
+
+local function dispatch(event, ...)
+    local handler = handlers[event]
+    if handler then
+        return handler(...)
+    end
+end
+
+dispatch("on_push", 42)
+handlers["on_pop"]()

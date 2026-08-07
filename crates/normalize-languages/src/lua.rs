@@ -325,9 +325,9 @@ mod tests {
     fn unused_node_kinds_audit() {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[ "binary_expression", "block",
-            "bracket_index_expression", "else_statement",
+            "else_statement",
             "empty_statement", "for_generic_clause",
-            "for_numeric_clause", "identifier", "label_statement", "parenthesized_expression", "table_constructor",
+            "for_numeric_clause", "label_statement", "parenthesized_expression", "table_constructor",
             "unary_expression", "vararg_expression", "variable_declaration",
             // control flow — not extracted as symbols
             "return_statement",
@@ -339,7 +339,6 @@ mod tests {
             "if_statement",
             "break_statement",
             "repeat_statement",
-            "function_call",
         ];
         validate_unused_kinds_audit(&Lua, documented_unused)
             .expect("Lua unused node kinds audit failed");
