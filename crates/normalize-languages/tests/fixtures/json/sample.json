@@ -1,0 +1,32 @@
+{
+  "name": "normalize-fixture-sample",
+  "version": "0.3.2",
+  "private": true,
+  "description": "A package.json-shaped sample exercising real-world JSON idioms: nested objects (container nesting), arrays of scalars, arrays of objects, and every JSON scalar value kind.",
+  "scripts": {
+    "build": "cargo build",
+    "test": "cargo test -q"
+  },
+  "dependencies": {
+    "tree-sitter": "0.22.0",
+    "serde": {
+      "version": "1.0",
+      "features": ["derive"]
+    }
+  },
+  "keywords": ["parsing", "tree-sitter", "cli"],
+  "contributors": [
+    { "name": "Ada", "role": "maintainer" },
+    { "name": "Grace", "role": "reviewer" }
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "config": {
+    "retries": 3,
+    "timeout": 30.5,
+    "verbose": false,
+    "strict": true,
+    "fallback": null
+  }
+}

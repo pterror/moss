@@ -38,15 +38,30 @@ impl Language for Json {
     }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
-        // For pair nodes, extract the key string content
+        // For pair nodes, extract the key string content by slicing between
+        // the key `string` node's own opening/closing quotes rather than
+        // reading its `string_content` child(ren) directly. Iterating
+        // children breaks on two grammar shapes (verified via
+        // `normalize syntax ast`):
+        //   - Empty-string keys (`"": value`) parse as a `string` node with
+        //     NO `string_content` child at all -- the key is legitimately
+        //     "", not absent, but a child-search would find nothing and
+        //     return None, silently dropping the pair from extraction.
+        //   - Keys containing an escape sequence (`"a\nb"`) parse as a
+        //     `string` node with *multiple* `string_content` children (one
+        //     per literal run around each `escape_sequence`) -- returning
+        //     just the first child would silently truncate the name to "a".
+        // Byte-slicing between the node's own start/end quotes handles both
+        // uniformly and matches what json.tags.scm's `@name` capture (the
+        // whole `string` node) actually matches on.
         if node.kind() == "pair"
             && let Some(key) = node.child_by_field_name("key")
+            && key.kind() == "string"
         {
-            let mut cursor = key.walk();
-            for child in key.children(&mut cursor) {
-                if child.kind() == "string_content" {
-                    return Some(&content[child.byte_range()]);
-                }
+            let start = key.start_byte() + 1;
+            let end = key.end_byte().saturating_sub(1);
+            if start <= end && end <= content.len() {
+                return Some(&content[start..end]);
             }
         }
         None

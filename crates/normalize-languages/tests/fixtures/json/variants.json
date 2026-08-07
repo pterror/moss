@@ -1,0 +1,49 @@
+{
+  // Completeness fixture for json.tags.scm, cross-referenced against
+  // arborium-json 2.17.0's node-types.json.
+  //
+  // node-types.json declares `pair.key` as a single-variant field: only
+  // `string` is allowed. But the *internal shape* of that `string` node
+  // varies at runtime in ways node-types.json's `types` list does not
+  // surface (it only lists node kinds a field allows, not their internal
+  // child structure) -- verified against real parse output via
+  // `normalize syntax ast`/`normalize syntax query`:
+  //   - non-empty, no-escape key   -> string > string_content (single child)
+  //   - empty-string key ("")      -> string with NO string_content child
+  //   - key with an escape run     -> string > string_content, escape_sequence, string_content, ...
+  //   - key that's pure escape(s)  -> string > escape_sequence (no string_content child at all)
+  // json.tags.scm captures the whole `string` node as @name (not its
+  // `string_content` child) specifically so it does not need to special-case
+  // any of these shapes.
+  //
+  // `pair.value` allows 7 variants per node-types.json's `_value` supertype:
+  // array, false, null, number, object, string, true. None of them are
+  // captured directly by json.tags.scm, but json.rs's refine_kind()/
+  // container_body() only treat `object` as a container -- the other 6 must
+  // remain plain @definition.var (SymbolKind::Variable), not Module.
+
+  // --- pair.value variants (7 of 7) -----------------------------------------
+  "valueString": "text",     // value: string
+  "valueNumber": 42,         // value: number
+  "valueTrue": true,         // value: true
+  "valueFalse": false,       // value: false
+  "valueNull": null,         // value: null
+  "valueArray": [1, 2, 3],   // value: array (not a container: array elements aren't pairs)
+  "valueObject": {           // value: object (IS a container: refine_kind -> Module)
+    "nested": 1
+  },
+
+  // --- pair.key structural shapes --------------------------------------------
+  "": "emptyKeyValue",           // key: string with NO string_content child
+  "a\nb": "escapeRunKeyValue",   // key: string > string_content("a"), escape_sequence, string_content("b")
+  "\n": "pureEscapeKeyValue",    // key: string > escape_sequence only, no string_content child
+  "plainKey": "plainKeyValue",   // key: string > string_content (the common case)
+
+  // --- nested container chain: object-in-array-in-object --------------------
+  // Exercises container nesting through a value kind (array) that is itself
+  // NOT a container -- the object nested inside the array element must still
+  // be found and its own pairs still nested under it as a Module.
+  "wrapper": [
+    { "innerKey": "innerValue" }
+  ]
+}
