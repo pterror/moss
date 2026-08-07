@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Pre-push hook: full-workspace format/clippy/test gate.
+#
+# Auto-installed via `nix develop` shellHook. To install manually:
+#   cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#
+# Why this exists: scripts/pre-commit (since 05a0610a) only checks the cargo
+# package(s) touched by staged files, not the whole workspace — deliberately,
+# so one agent's unrelated broken WIP can't block another's commit in this
+# multi-agent checkout. That means pre-commit can't catch a public-API change
+# in crate X breaking a downstream consumer crate Y; only CI does, and only
+# after the push. This hook closes that window locally by running the same
+# full-workspace checks CI runs (.github/workflows/ci.yml: fmt, clippy,
+# test), before the push leaves the machine.
+#
+# What it checks and why it matches CI exactly:
+#   - cargo fmt --all --check          (ci.yml `fmt` job)
+#   - cargo clippy --workspace --all-features -- -D warnings
+#                                       (ci.yml `clippy` job — note: NOT
+#                                        --all-targets. CI's clippy job omits
+#                                        it, so this does too; a hook stricter
+#                                        than CI would block pushes CI itself
+#                                        would accept.)
+#   - cargo test --workspace           (ci.yml `test` job)
+# `cargo check --workspace --all-features` (ci.yml `check` job) is subsumed
+# by clippy, which check-compiles everything clippy lints plus more.
+#
+# Grammars: several tests only exercise real behavior when tree-sitter
+# grammars are built (target/grammars/); otherwise they silently skip, which
+# would make this gate pass while missing exactly the kind of breakage it
+# exists to catch. CI builds grammars (cached) before `cargo test --workspace`
+# and points NORMALIZE_GRAMMAR_PATH at them. This hook requires
+# target/grammars/ to already exist (via `cargo xtask build-grammars`) rather
+# than building it on every push — that build takes many minutes cold, which
+# would make every push slow. If grammars are missing, this hook fails loudly
+# with instructions, rather than silently running a weaker test suite.
+# NORMALIZE_REQUIRE_GRAMMARS=1 is set during the test run so any
+# grammar-dependent test that would otherwise skip panics instead.
+#
+# Scope: this validates the WORKING TREE, not the exact commit range being
+# pushed. In this repo, uncommitted WIP alongside committed work is routine
+# (shared checkout across agents), so a stricter "check out the pushed range
+# into a temp worktree and test that" was considered — it is more correct
+# but costs a second checkout and, worse, a second *cold* build (Cargo's
+# target dir is keyed by absolute path, so a temp worktree cannot reuse this
+# tree's incremental-compilation cache; see CLAUDE.md's worktree-isolation
+# note). That would turn a warm ~20s push gate into a multi-minute one on
+# every push. Given this hook runs locally and CI re-validates the actual
+# pushed commits authoritatively right after, the working-tree check (fast,
+# catches the common case) was chosen over the temp-worktree check (correct,
+# slow). Limitation: it is possible for this hook to pass with dirty
+# uncommitted changes that aren't part of the push, or fail because of
+# unrelated uncommitted breakage sitting in the tree. Commit or stash
+# unrelated WIP before pushing if that matters to you.
+#
+# No bypass env var is provided. "No --no-verify. Fix the issue or fix the
+# hook" (CLAUDE.md) — an env-var escape hatch becomes the default habit in a
+# multi-agent checkout faster than it stays an emergency-only tool. If the
+# hook itself is wrong for a legitimate case, fix scripts/pre-push.
+
+set -euo pipefail
+
+remote_name="${1:-}"
+remote_url="${2:-}"
+
+zero_sha="0000000000000000000000000000000000000000"
+has_update=false
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" = "$zero_sha" ]; then
+        # Deleting a remote ref — nothing to build or test.
+        continue
+    fi
+    if [ "$local_sha" = "$remote_sha" ]; then
+        # Nothing new for this ref (already up to date).
+        continue
+    fi
+    has_update=true
+done
+
+if [ "$has_update" = false ]; then
+    echo "pre-push: no ref updates to check (delete-only or up to date)."
+    exit 0
+fi
+
+echo "pre-push: running full-workspace checks (fmt, clippy, test) before push to ${remote_name:-remote}..."
+
+echo "==> cargo fmt --all --check"
+cargo fmt --all --check
+
+echo "==> cargo clippy --workspace --all-features -- -D warnings"
+cargo clippy --workspace --all-features -- -D warnings
+
+GRAMMAR_DIR="$(git rev-parse --show-toplevel)/target/grammars"
+if [ ! -d "$GRAMMAR_DIR" ] || [ -z "$(ls -A "$GRAMMAR_DIR" 2>/dev/null)" ]; then
+    echo "error: target/grammars/ not found or empty." >&2
+    echo "  Several tests only exercise real behavior with grammars built;" >&2
+    echo "  running the test suite without them would silently weaken this gate." >&2
+    echo "  Run: cargo xtask build-grammars" >&2
+    exit 1
+fi
+
+echo "==> cargo test --workspace (NORMALIZE_GRAMMAR_PATH=$GRAMMAR_DIR, NORMALIZE_REQUIRE_GRAMMARS=1)"
+NORMALIZE_GRAMMAR_PATH="$GRAMMAR_DIR" NORMALIZE_REQUIRE_GRAMMARS=1 cargo test --workspace
+
+echo "pre-push checks passed!"

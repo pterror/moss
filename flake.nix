@@ -110,6 +110,10 @@
                 cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
                 echo "[devShell] installed/updated .git/hooks/pre-commit"
               fi
+              if [ -f scripts/pre-push ] && { [ ! -f .git/hooks/pre-push ] || ! diff -q scripts/pre-push .git/hooks/pre-push >/dev/null 2>&1; }; then
+                cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+                echo "[devShell] installed/updated .git/hooks/pre-push"
+              fi
             '';
           };
       }

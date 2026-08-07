@@ -458,6 +458,7 @@ fn collect_binding_identifiers(
 mod tests {
     use super::*;
 
+    #[allow(dead_code, reason = "debug helper kept for ad-hoc test debugging")]
     fn print_tree(lang: &str, src: &str, loader: &GrammarLoader) {
         let Some(grammar) = loader.get(lang).ok() else {
             eprintln!("no grammar for {lang}");

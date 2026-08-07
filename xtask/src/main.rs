@@ -90,10 +90,7 @@ fn lint_rank_verbs() {
             }
             for line in content.lines() {
                 if let Some(name) = line.trim().strip_prefix("pub struct ") {
-                    let name = name
-                        .split(|c: char| c == ' ' || c == '{' || c == '(' || c == '<')
-                        .next()
-                        .unwrap_or("");
+                    let name = name.split([' ', '{', '(', '<']).next().unwrap_or("");
                     if name.ends_with("Report") {
                         metric_reports.push(name.to_string());
                     }

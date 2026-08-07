@@ -74,10 +74,10 @@ where
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn xdg_data_home() -> PathBuf {
-    if let Ok(v) = std::env::var("XDG_DATA_HOME") {
-        if !v.is_empty() {
-            return PathBuf::from(v);
-        }
+    if let Ok(v) = std::env::var("XDG_DATA_HOME")
+        && !v.is_empty()
+    {
+        return PathBuf::from(v);
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
     PathBuf::from(home).join(".local").join("share")

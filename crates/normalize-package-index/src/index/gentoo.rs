@@ -171,7 +171,7 @@ impl Gentoo {
 
         let latest = versions
             .iter()
-            .filter(|v| {
+            .rfind(|v| {
                 v["keywords"]
                     .as_array()
                     .map(|kw| {
@@ -180,7 +180,6 @@ impl Gentoo {
                     })
                     .unwrap_or(false)
             })
-            .next_back()
             .or_else(|| versions.last())
             .ok_or_else(|| IndexError::NotFound(name.to_string()))?;
 
