@@ -65,3 +65,30 @@ normalize view src/lib.rs/MyStruct
 4. Submit a pull request
 
 See `CONTRIBUTING.md` for details.
+
+## Roadmap
+
+- [x] Ship the CLI
+- [x] Publish to crates.io
+- [ ] Add an LSP server
+  - [ ] Hover support
+  - [ ] Go-to-definition
+- [ ] Add a VS Code extension
+
+> **Note:** roadmap items are tracked in `TODO.md`, not here — this list is
+> illustrative only.
+
+## Support
+
+Questions and bug reports go to the [issue tracker](https://github.com/example/normalize/issues)
+or the [`#normalize` channel][chat]. You can also email <support@example.com>
+directly, or browse <https://rhi.zone/normalize/> for the full docs.
+
+See the ![project logo](logo.png "normalize") in the repo root.
+
+[chat]: https://chat.example.com/normalize "Project chat"
+
+License
+=======
+
+Distributed under the MIT license. See `LICENSE` for the full text.

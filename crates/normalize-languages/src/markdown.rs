@@ -53,14 +53,55 @@ impl Language for Markdown {
     }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
-        // section → atx_heading → inline
-        let heading = node.child(0).filter(|c| c.kind() == "atx_heading")?;
-        let mut cursor = heading.walk();
-        let inline = heading
-            .children(&mut cursor)
-            .find(|c| c.kind() == "inline")?;
-        Some(content[inline.byte_range()].trim())
+        // Two entry points, mirroring the two `@definition.heading` anchors
+        // in markdown.tags.scm:
+        //
+        // - ATX headings (`# Heading`) are anchored to the enclosing
+        //   `section`, since this grammar always gives an ATX heading its
+        //   own dedicated `section`. Accept a `section` whose first child
+        //   is `atx_heading`.
+        // - Setext headings (`Heading\n===`) are anchored to the
+        //   `setext_heading` node itself, since — unlike ATX — they don't
+        //   reliably get their own `section` (only when the setext heading
+        //   happens to be the first block in that section; see the comment
+        //   in markdown.tags.scm). Accept `setext_heading` directly so a
+        //   caller that walks raw nodes (not just `@definition.heading`
+        //   captures) still resolves every setext heading's name, not just
+        //   ones lucky enough to start their own `section`.
+        if node.kind() == "setext_heading" {
+            return setext_heading_name(node, content);
+        }
+        if node.kind() != "section" {
+            return None;
+        }
+        let heading = node.child(0)?;
+        match heading.kind() {
+            "atx_heading" => {
+                // section → atx_heading → inline
+                let mut cursor = heading.walk();
+                let inline = heading
+                    .children(&mut cursor)
+                    .find(|c| c.kind() == "inline")?;
+                Some(content[inline.byte_range()].trim())
+            }
+            "setext_heading" => setext_heading_name(&heading, content),
+            _ => None,
+        }
     }
+}
+
+/// Extract the heading text from a `setext_heading` node: `setext_heading` →
+/// `paragraph` → `inline`.
+fn setext_heading_name<'a>(setext_heading: &Node, content: &'a str) -> Option<&'a str> {
+    let mut cursor = setext_heading.walk();
+    let paragraph = setext_heading
+        .children(&mut cursor)
+        .find(|c| c.kind() == "paragraph")?;
+    let mut pcursor = paragraph.walk();
+    let inline = paragraph
+        .children(&mut pcursor)
+        .find(|c| c.kind() == "inline")?;
+    Some(content[inline.byte_range()].trim())
 }
 
 impl LanguageSymbols for Markdown {}
