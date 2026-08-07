@@ -74,4 +74,78 @@ scan() {
     return 0
 }
 
+# `function` keyword syntax (the other of Bash's two function-definition
+# forms; `classify`/`sum_array`/etc. above use the bare `name() { }` form).
+function cleanup {
+    local dir="$1"
+    rm -rf "$dir"
+}
+
+function build_report() {
+    local -a lines=()
+    lines+=("start")
+    lines+=("end")
+    printf '%s\n' "${lines[@]}"
+}
+
+# Pipelines and subshells.
+count_lines() {
+    grep -c "^" "$1" | tr -d ' '
+}
+
+with_subshell() {
+    (
+        cd /tmp || return 1
+        pwd
+    )
+}
+
+# Here-doc.
+print_usage() {
+    cat <<EOF
+Usage: $0 [options]
+  -h  show help
+EOF
+}
+
+# case/esac with fallthrough and multi-pattern arms.
+classify_ext() {
+    local file="$1"
+    case "$file" in
+        *.sh|*.bash)
+            echo "shell"
+            ;;
+        *.md)
+            echo "markdown"
+            ;&
+        *.txt)
+            echo "text"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
+
+# C-style for loop, short-circuit &&/||, arithmetic ternary.
+retry() {
+    local attempts="$1"
+    local -i i
+    if [[ -n "$attempts" && "$attempts" -gt 0 ]]; then
+        for (( i = 0; i < attempts; i++ )); do
+            run_step "$i" && echo "ok" || echo "retrying"
+        done
+    fi
+    local -i level=$(( attempts > 3 ? 2 : 1 ))
+    echo "level=$level"
+}
+
+run_step() {
+    return 0
+}
+
+# trap handler.
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+
 main "$@"
