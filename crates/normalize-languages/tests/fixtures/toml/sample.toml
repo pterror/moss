@@ -1,0 +1,57 @@
+# Real-world-shaped TOML sample (Cargo.toml-flavored): dotted table headers,
+# array-of-tables, inline tables, nested arrays, and quoted keys are all
+# idioms this ecosystem leans on heavily, not just the toy `[section]` case.
+
+[package]
+name = "widget"
+version = "0.3.2"
+edition = "2024"
+
+# Dotted table header: workspace.dependencies, not a bare `workspace` table.
+[workspace.dependencies]
+serde = "1"
+
+# Multi-segment dotted table header with a build-override-style leaf.
+[profile.dev.build-override]
+opt-level = 0
+
+# Quoted-key table header (key contains characters bare_key disallows).
+["cfg(unix)".dependencies]
+libc = "0.2"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", default-features = false, features = ["rt", "macros"] }
+
+# Array of tables: repeated [[bin]] headers become sibling entries.
+[[bin]]
+name = "widget"
+path = "src/main.rs"
+
+[[bin]]
+name = "widget-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "widget-daemon"
+path = "src/bin/daemon.rs"
+
+# Dotted pair keys directly under a table (no nested [table] needed).
+[lints.rust]
+unsafe-code = "forbid"
+rust.unused = "warn"
+
+[metadata]
+build.target = "x86_64-unknown-linux-gnu"
+"ci.badge-url" = "https://example.com/badge.svg"
+
+# Nested arrays and array-of-inline-tables, common in lockfile-shaped TOML.
+[[metadata.matrix]]
+os = "linux"
+targets = ["x86_64", "aarch64"]
+
+[[metadata.matrix]]
+os = "macos"
+targets = ["x86_64", "aarch64"]
+
+matrix-grid = [[1, 2], [3, 4]]

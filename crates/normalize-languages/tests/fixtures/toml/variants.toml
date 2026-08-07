@@ -1,0 +1,84 @@
+# Completeness fixture: one construct per grammar-legal variant of the key
+# node that heads a `table`, `table_array_element`, or `pair` in
+# arborium-toml 2.17.0's grammar (node-types.json shows no named fields at
+# all — the key is whichever of bare_key/quoted_key/dotted_key appears as a
+# direct child). Every construct here is *expected to be captured* by
+# toml.tags.scm; see query_fixtures.rs `toml_tags_completeness_*` tests.
+#
+# This file also carries a NEGATIVE section with deliberate near-miss
+# constructs that must NOT be captured, to guard against over-broad
+# patterns (comments, scalar array elements, key-like text inside values).
+
+# --- table header key variants -----------------------------------------
+
+# table: bare_key header
+[bare_table]
+x = 1
+
+# table: quoted_key header (key text contains characters bare_key forbids)
+["quoted table header"]
+x = 1
+
+# table: dotted_key header, all-bare segments
+[dotted.table.header]
+x = 1
+
+# table: dotted_key header with a quoted segment in the middle
+[dotted."quoted segment".header]
+x = 1
+
+# --- table_array_element header key variants ----------------------------
+
+# table_array_element: bare_key header
+[[bare_array_table]]
+x = 1
+
+# table_array_element: quoted_key header
+[["quoted array table header"]]
+x = 1
+
+# table_array_element: dotted_key header
+[[dotted.array.table]]
+x = 1
+
+# --- pair key variants (top-level, outside any explicit [table]) --------
+
+# pair: bare_key
+bare_pair = 1
+
+# pair: quoted_key
+"quoted pair key" = 2
+
+# pair: dotted_key, all-bare segments
+dotted.pair.key = 3
+
+# pair: dotted_key with a quoted segment
+dotted."quoted segment".key = 4
+
+# --- pair key variants nested inside an explicit table -------------------
+
+[nested]
+bare_pair = 1
+"quoted pair key" = 2
+dotted.pair.key = 3
+
+# =========================================================================
+# NEGATIVE: constructs that must NOT produce a tags capture
+# =========================================================================
+
+# A comment mentioning `[fake.table]` and `fake.pair = 1` must never match —
+# tree-sitter's `comment` node has no bare_key/quoted_key/dotted_key
+# children, but this guards against a hypothetical text-based regression.
+
+[negative]
+# String value whose *text* looks like a dotted/bare key must not itself
+# produce a @name capture — only the pair's own key position should.
+value_looks_like_key = "not.a.real.key"
+# Scalar array elements are never keys, even though the array is the value
+# of a pair whose own key legitimately matches.
+plain_array = [1, 2, 3]
+# Inline table: its own node is `inline_table`, not `table`/
+# `table_array_element`, so the inline_table node itself must never be
+# captured as a container definition (only its own key, `inline`, should
+# match as a @definition.var, same as any other pair).
+inline = { a = 1, b = 2 }

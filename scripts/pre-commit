@@ -115,7 +115,15 @@ if [ -x "./target/debug/normalize" ] || [ -x "./target/release/normalize" ]; the
         # Scoped to staged files so unrelated uncommitted content elsewhere
         # in the workspace can't block this commit.
         echo "Running normalize rules on staged files..."
-        $NORMALIZE rules run --files "${STAGED[@]}"
+        # `--files` takes exactly one value per occurrence (clap
+        # ArgAction::Append, not a multi-value list) despite the command's
+        # own --help example implying space-separated values work in one
+        # `--files a b` — repeat the flag once per staged file instead.
+        FILE_ARGS=()
+        for f in "${STAGED[@]}"; do
+            FILE_ARGS+=(--files "$f")
+        done
+        $NORMALIZE rules run "${FILE_ARGS[@]}"
     fi
 fi
 
