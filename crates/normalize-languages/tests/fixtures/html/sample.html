@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sample Page</title>
+  <!-- stylesheet, quoted href -->
+  <link href="styles.css" rel="stylesheet">
+  <!-- stylesheet, unquoted href (legal HTML5) -->
+  <link href=print.css rel=stylesheet media=print>
+  <!-- preconnect: still has an href, so it IS a legitimate @import — the
+       query doesn't (and shouldn't) discriminate by `rel` -->
+  <link rel="preconnect" href="https://fonts.example.com">
+  <script src="app.js"></script>
+  <script src=vendor.js></script>
+</head>
+<body>
+  <header id="top" class="site-header">
+    <nav>
+      <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h1>Welcome</h1>
+      <p>Some text with an entity: &amp; and a <br> line break.</p>
+      <img src="hero.png" alt="Hero image">
+      <img src=thumb.png alt="Thumbnail">
+      <img src="icon.svg" alt="icon" />
+      <!-- boolean attribute, no value -->
+      <input type="text" name="q" disabled>
+      <!-- empty attribute value -->
+      <div class="" id="placeholder"></div>
+    </section>
+  </main>
+  <style>
+    body { color: red; }
+    .site-header { font-weight: bold; }
+  </style>
+  <script>
+    const x = 1;
+    console.log(x);
+  </script>
+  <script type="module">
+    import { init } from "./init.js";
+    init();
+  </script>
+  <footer>&copy; 2026</footer>
+</body>
+</html>

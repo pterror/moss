@@ -1,0 +1,109 @@
+<!-- Completeness matrix for html.tags.scm / html.imports.scm.
+     One construct per node-type variant found in arborium-html 2.17.0's
+     node-types.json (crate `element`/`start_tag`/`self_closing_tag`/
+     `script_element`/`style_element`/`attribute` entries), plus a NEGATIVE
+     section for constructs that must not match either query. -->
+
+<!-- doctype: `element`'s doctype child. Never a tags match (documented
+     unused in html.rs's unused_node_kinds_audit). -->
+<!DOCTYPE html>
+
+<!-- element > start_tag ... end_tag: plain leaf element -->
+<span>leaf</span>
+
+<!-- element > start_tag ... end_tag, with nested child elements: still a
+     plain @definition.var from the query's point of view; refine_kind
+     (Rust, not query-driven) is what promotes it to Module -->
+<div><span>nested</span></div>
+
+<!-- element > self_closing_tag: void element written with trailing slash -->
+<br/>
+
+<!-- element > start_tag only, no end_tag, no self_closing_tag: void
+     element written without a trailing slash (legal HTML5; grammar does
+     not synthesize a self_closing_tag or end_tag for it) -->
+<input type="text">
+
+<!-- script_element > start_tag ... raw_text ... end_tag -->
+<script>const a = 1;</script>
+
+<!-- script_element with type="module": still script_element at the
+     grammar level; module-ness is an html.rs concern (detect_script_type),
+     not a tags.scm concern -->
+<script type="module">const b = 2;</script>
+
+<!-- style_element > start_tag ... raw_text ... end_tag -->
+<style>a { color: blue; }</style>
+
+<!-- attribute_name/quoted_attribute_value: quoted src -->
+<script src="quoted.js"></script>
+
+<!-- attribute_name/attribute_value: unquoted src (legal HTML5, distinct
+     node kind from quoted_attribute_value) -->
+<script src=unquoted.js></script>
+
+<!-- link href, quoted, void element without self-closing slash -->
+<link href="quoted.css" rel="stylesheet">
+
+<!-- link href, unquoted, void element without self-closing slash -->
+<link href=unquoted.css rel=stylesheet>
+
+<!-- link href, quoted, self-closing slash -->
+<link href="quoted-sc.css" rel="stylesheet" />
+
+<!-- link href, unquoted, self-closing slash -->
+<link href=unquoted-sc.css rel=stylesheet />
+
+<!-- img src, quoted, void element without self-closing slash -->
+<img src="quoted.png">
+
+<!-- img src, unquoted, void element without self-closing slash -->
+<img src=unquoted.png>
+
+<!-- img src, quoted, self-closing slash -->
+<img src="quoted-sc.png" />
+
+<!-- img src, unquoted, self-closing slash -->
+<img src=unquoted-sc.png />
+
+<!-- case-insensitive tag/attribute names: HTML tag and attribute names
+     are case-insensitive per spec; grammar preserves source casing
+     verbatim so the query must fold case itself -->
+<LINK HREF="upper-link.css" REL="stylesheet">
+<IMG SRC="upper-img.png">
+<SCRIPT SRC="upper-script.js"></SCRIPT>
+<Link Href="mixed-case.css">
+
+<!-- ============================= NEGATIVE ============================= -->
+
+<!-- comment: `extra: true` node, never a tags or imports match -->
+<!-- this is a comment, not a tag -->
+
+<!-- entity: never a tags or imports match -->
+<p>&amp;</p>
+
+<!-- erroneous_end_tag: a stray closing tag with no matching open tag.
+     Never a tags or imports match. -->
+<section>
+</bogus-close>
+</section>
+
+<!-- script with no src attribute: inline script, must not produce an
+     @import (no path to extract) -->
+<script>console.log("inline, no src");</script>
+
+<!-- link with no href attribute: must not produce an @import -->
+<link rel="preconnect">
+
+<!-- img with no src attribute: must not produce an @import -->
+<img alt="no src">
+
+<!-- <a href> is a navigation link, not a resource import: html.imports.scm
+     intentionally only covers link/script[src]/img[src] per its documented
+     scope. Must not produce an @import. -->
+<a href="https://example.com">external link</a>
+
+<!-- <iframe src> is a resource-loading attribute but outside the current
+     documented scope of html.imports.scm (link/script/img only). Must not
+     produce an @import — this asserts the boundary, not a bug. -->
+<iframe src="frame.html"></iframe>
