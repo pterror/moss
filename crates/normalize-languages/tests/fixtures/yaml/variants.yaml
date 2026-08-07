@@ -1,0 +1,80 @@
+# Completeness-matrix fixture for yaml.tags.scm.
+#
+# One small, commented construct per node-type variant found by cross-
+# referencing arborium-yaml 2.17.0's node-types.json field-by-field for
+# block_mapping_pair.key and flow_pair.key (both allow flow_node's full
+# child set: alias, anchor, double_quote_scalar, flow_mapping,
+# flow_sequence, plain_scalar, single_quote_scalar, tag), plus a NEGATIVE
+# section for constructs that must NOT produce a @name capture.
+
+# --- block_mapping_pair.key variants -----------------------------------
+
+# plain_scalar > string_scalar
+plain_key: value
+
+# double_quote_scalar
+"double quoted key": value
+
+# single_quote_scalar
+'single quoted key': value
+
+# anchor prefixing a plain_scalar key — anchor is a sibling within the same
+# flow_node, not a wrapper, so the plain_scalar clause still matches through
+# it.
+&anchor_on_key anchored_key: value
+
+# tag prefixing a plain_scalar key — same sibling relationship as anchor.
+!!str tagged_key: value
+
+# --- flow_pair.key variants (inside a flow_mapping) ---------------------
+
+flow_map: { flow_plain: 1, "flow double quoted": 2, 'flow single quoted': 3 }
+
+# --- container nesting ---------------------------------------------------
+
+# block_mapping_pair value = block_node > block_mapping (nested container)
+block_container:
+  nested_key: 1
+
+# block_mapping_pair value = flow_node > flow_mapping (inline flow value on
+# a block-style key — still a container)
+inline_flow_container: { a: 1, b: 2 }
+
+# flow_pair value = flow_node > flow_mapping (flow mapping nested inside
+# another flow mapping)
+nested_flow_container: { outer: { inner: 1 } }
+
+# --- multi-document stream ------------------------------------------------
+---
+doc2_key: value
+...
+
+# --- NEGATIVE: constructs that must NOT produce a @name capture ---------
+
+# block_sequence / block_sequence_item — list entries are not named symbols.
+negative_sequence:
+  - item1
+  - item2
+
+# flow_sequence — same reasoning, flow-style.
+negative_flow_sequence: [1, 2, 3]
+
+# Explicit complex key: flow_sequence as the key itself (`? [a, b]`) — no
+# single scalar name to extract. Verified via `normalize syntax query` that
+# this is valid, distinct YAML the grammar accepts but genuinely has no
+# nameable symbol.
+? [a, b]
+: complex key value
+
+# Explicit block-scalar key (`? |`) — multi-line blob, not a nameable
+# symbol. Verified valid via `normalize syntax query`; zero real-world
+# occurrences found in this repo's own YAML files.
+? |
+  block scalar key
+: block scalar key value
+
+# Anchor-only and alias-only lines (no enclosing mapping pair on that line)
+# — anchors/aliases are deliberately not captured (see yaml.tags.scm's
+# header comment for why); these values are aliased back, not redefined.
+alias_source: &shared_anchor shared value
+alias_use: *shared_anchor

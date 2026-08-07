@@ -1,0 +1,53 @@
+# Real-world-shaped YAML: a CI-pipeline-style config exercising the idioms
+# YAML's own ecosystem leans on heavily (nested mappings, block sequences of
+# mappings, flow-style inline collections, anchors/aliases for shared
+# defaults, quoted keys, multi-line block scalars).
+
+name: build-and-test
+
+defaults: &defaults
+  timeout: 300
+  retries: 3
+
+env:
+  CI: "true"
+  NODE_ENV: production
+
+jobs:
+  build:
+    <<: *defaults
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: install
+        run: npm install
+      - name: build
+        run: npm run build
+
+  test:
+    <<: *defaults
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - name: test
+        run: npm test
+
+matrix_include:
+  - { os: ubuntu-latest, arch: x64 }
+  - { os: macos-latest, arch: arm64 }
+
+notify:
+  slack:
+    channel: "#builds"
+    on_failure: true
+
+description: |
+  Multi-line build description.
+  Spans several lines and is not itself
+  a mapping key.
+
+"quoted top-level key": value
+'single quoted top-level key': value
