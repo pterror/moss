@@ -41,3 +41,79 @@ body {
         padding: 0 8px;
     }
 }
+
+/* Real-world idioms: selector combinators, attribute/pseudo selectors,
+   nesting, custom-property fallback, calc(), and modern at-rules. */
+
+@font-face {
+    font-family: "Brand Sans";
+    src: url("brand-sans.woff2") format("woff2"),
+         url("brand-sans.woff") format("woff");
+    font-weight: 400 700;
+    font-display: swap;
+}
+
+@layer reset, base, components, utilities;
+
+@layer base {
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+    }
+}
+
+@container (min-width: 400px) {
+    .card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+nav > ul {
+    list-style: none;
+}
+
+nav > ul > li + li {
+    margin-left: 8px;
+}
+
+.card ~ .card {
+    margin-top: 16px;
+}
+
+a[href^="https://"] {
+    color: var(--primary-color);
+}
+
+a[target="_blank"]::after {
+    content: "↗";
+}
+
+input:not([disabled]):focus {
+    outline: 2px solid var(--primary-color);
+}
+
+li:nth-child(2n+1) {
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+.card {
+    padding: calc(1rem + 2px);
+    width: calc(100% - var(--gutter, 16px));
+
+    /* CSS Nesting: `&` combined with descendant/compound selectors. */
+    & .title {
+        font-weight: bold;
+    }
+
+    &:hover {
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    & > .body {
+        color: #333;
+    }
+}

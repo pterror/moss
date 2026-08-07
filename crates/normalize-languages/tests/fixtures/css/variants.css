@@ -1,0 +1,161 @@
+/* Completeness-matrix fixture for css.tags.scm / css.imports.scm.
+ *
+ * arborium-css 2.17.0's node-types.json declares NO `fields` at all (every
+ * node type's "fields" object is `{}`), unlike field-based grammars (Rust,
+ * C#, SQL). So there is no per-field variant list to exhaust here — instead
+ * completeness means "every distinct at-rule/declaration node type the
+ * grammar can produce is either captured by a query or explicitly
+ * documented as intentionally unhandled". Each construct below is commented
+ * with which query/capture it exercises. Verified against real parse output
+ * (`normalize syntax ast` / `normalize syntax query`), not node-types.json
+ * alone — node-types.json's declared child list for `scope_statement`
+ * does not even include the `to` node that a real `@scope ... to ...`
+ * parse produces, confirming the methodology's warning that the schema
+ * alone cannot be trusted.
+ */
+
+/* --- @definition.module: dedicated at-rule node types --- */
+
+@media (min-width: 900px) {
+    .x { color: red; }
+}
+
+@supports (display: grid) {
+    .y { color: red; }
+}
+
+/* @scope — CSS Scoping; `scope_statement`, distinct from the generic
+   `at_rule` fallback below. */
+@scope (.card) to (.content) {
+    p { color: red; }
+}
+
+/* --- @definition.module: generic `at_rule` fallback ---
+   @font-face, @layer, @property, @container, @page all parse as the same
+   `at_rule` node (an `at_keyword` child + optional `block`) — the grammar
+   has no dedicated node type for any of them. */
+
+@font-face {
+    font-family: "Variants Test";
+    src: url("variants.woff2");
+}
+
+/* Blockless statement form of `at_rule` — no ` { … }` suffix should be
+   synthesized since there is no block. */
+@layer utilities, base;
+
+/* Block form of `at_rule`. */
+@layer base {
+    .z { color: blue; }
+}
+
+@property --accent {
+    syntax: '<color>';
+    inherits: false;
+    initial-value: #000;
+}
+
+@container (min-width: 200px) {
+    .card { color: red; }
+}
+
+@page {
+    margin: 1in;
+}
+
+/* --- @definition.function: keyframes_statement --- */
+
+@keyframes fade-variant {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* --- @definition.class: rule_set, across every selector node type this
+   grammar's `selectors` list allows (verified via real parse) --- */
+
+.class-selector { color: red; }              /* class_selector */
+#id-selector { color: red; }                  /* id_selector */
+tag-selector { color: red; }                  /* tag_name (bare element) */
+* { color: red; }                              /* universal_selector */
+a[data-x] { color: red; }                      /* attribute_selector, no value */
+a[data-x="y"] { color: red; }                  /* attribute_selector, = */
+a[data-x^="y"] { color: red; }                 /* attribute_selector, ^= */
+a[data-x$="y"] { color: red; }                 /* attribute_selector, $= */
+a[data-x*="y"] { color: red; }                 /* attribute_selector, *= */
+a[data-x~="y"] { color: red; }                 /* attribute_selector, ~= */
+a[data-x|="y"] { color: red; }                 /* attribute_selector, |= */
+.parent > .child { color: red; }               /* child_selector */
+.a + .b { color: red; }                        /* adjacent_sibling_selector */
+.a ~ .b { color: red; }                        /* sibling_selector */
+.a .b { color: red; }                          /* descendant_selector */
+svg|circle { color: red; }                     /* namespace_selector */
+:hover { color: red; }                         /* pseudo_class_selector, no args */
+:nth-child(2n+1) { color: red; }               /* pseudo_class_selector, with arguments */
+::before { content: ""; }                      /* pseudo_element_selector, :: form */
+.scope-root {
+    /* nesting_selector (`&`) — only legal nested inside a rule_set's block. */
+    & .nested { color: red; }
+    &:hover { color: red; }
+    & > .direct-child { color: red; }
+}
+
+/* --- @definition.var: declaration, both custom and standard properties --- */
+
+:root {
+    --custom-prop: 1px;              /* custom property: property_name "--custom-prop" */
+}
+.standard-prop { color: red; }        /* standard property: property_name "color" */
+
+/* --- @import: every clean-parsing import.path variant --- */
+
+@import "bare-string.css";                                  /* string_value directly */
+@import url("url-string.css");                               /* call_expression → arguments → string_value */
+@import url(bare-url.css);                                    /* call_expression → arguments → plain_value */
+@import "with-media.css" screen and (max-width: 100px);       /* string_value + binary_query condition */
+
+/* =========================================================================
+ * NEGATIVE cases — constructs that must NOT produce the captures above.
+ * ========================================================================= */
+
+/* Not an @import: this is a value reference, not an import statement. The
+   URL text must never leak into @import.path captures. */
+.not-an-import {
+    background: url("not-an-import.png");
+}
+
+/* Not an @import: a comment mentioning @import text must not match — the
+   grammar's `comment` node is opaque text, not a statement. */
+/* @import "inside-a-comment.css"; */
+
+/* Not a definition.module: @charset has its own dedicated `charset_statement`
+   node type, deliberately undocumented/unhandled (a bare encoding directive
+   carries no meaningful "module" identity) — must not be picked up by the
+   generic `(at_rule)` pattern, which only matches nodes actually typed
+   `at_rule`. */
+@charset "UTF-8";
+
+/* Not a definition.module: @namespace likewise has its own dedicated
+   `namespace_statement` node type, deliberately undocumented/unhandled. */
+@namespace svg url(http://www.w3.org/2000/svg);
+
+/* GRAMMAR LIMITATION (documented, not a query bug): `@page :first { ... }`
+ * produces a real ERROR node in arborium-css 2.17.0 — page-selector pseudo
+ * classes aren't supported by this grammar version's `at_rule` query slot.
+ * Included here to document the limitation and confirm it degrades
+ * gracefully (a `@page :first` name is still recoverable from raw text; no
+ * panic, no false symbol elsewhere).
+ */
+@page :first {
+    margin: 2in;
+}
+
+/* GRAMMAR LIMITATION (documented, not a query bug): named containers
+ * (`@container <name> (query) { ... }`, CSS Containment Level 3) also
+ * produce a real ERROR node wrapping the name — confirmed via
+ * `normalize syntax ast`: the name parses as `ERROR > keyword_query`
+ * instead of a plain sibling of the feature query. Unnamed `@container`
+ * (used above) parses cleanly.
+ */
+@container sidebar (min-width: 250px) {
+    .panel { color: red; }
+}

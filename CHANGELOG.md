@@ -86,6 +86,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **HTML import extraction silently dropped every unquoted `src`/`href` and all `<img
+  src>` references.** Applying the query-testing methodology to `html.imports.scm`
+  found that the query only matched the `quoted_attribute_value` node kind; unquoted
+  attribute values (`<script src=app.js>`, `<link href=styles.css>` — legal HTML5,
+  verified via `normalize syntax query`) parse as the distinct `attribute_value` node
+  kind and were never matched at all. `<img src="...">` — a reference-bearing attribute
+  as common as `<link href>`/`<script src>` — had no query pattern whatsoever. Also
+  fixed: tag/attribute name matching used `#eq?` (case-sensitive), so `<LINK HREF=...>`/
+  `<IMG SRC=...>` (legal per HTML's case-insensitive tag/attribute names, confirmed the
+  grammar preserves source casing verbatim) silently produced no import. All three now
+  use `#match? "(?i)..."` and match both attribute-value node kinds. Added
+  `crates/normalize-languages/tests/fixtures/html/{sample,variants}.html` and six
+  `html_*` tests in `query_fixtures.rs` covering the completeness matrix and negative
+  cases (inline scripts, href/src-less tags, and `<a href>`/`<iframe src>` which remain
+  intentionally out of scope for this query).
 - **CSS symbol extraction had zero representation for @font-face, @layer,
   @property, @container, @page, and @scope.** Applying the query-testing
   methodology to `css.{tags,imports}.scm`/`css.rs` found that
