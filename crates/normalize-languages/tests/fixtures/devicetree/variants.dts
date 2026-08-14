@@ -1,0 +1,30 @@
+// Completeness matrix for devicetree.imports.scm's `preproc_include.path`
+// field — one construct per node-types.json variant — plus a NEGATIVE
+// section of constructs that must NOT produce an @import capture.
+
+// Variant 1: path: (string_literal) — the common quoted relative include.
+#include "relative-file.dtsi"
+
+// Variant 2: path: (system_lib_string) — angle-bracket system include.
+#include <dt-bindings/gpio/gpio.h>
+
+// Variant 3: path: (identifier) — macro-expanded include target. The actual
+// filename depends on preprocessor macro expansion (not resolvable
+// statically), but the directive itself is a real import edge and
+// node-types.json lists `identifier` as a legal `path` field type for
+// `preproc_include` alongside the two string forms above.
+#include SOC_DTS_HEADER
+
+// --- NEGATIVE: must not match @import / @import.path ---
+
+/ {
+	// A property assignment is not an include, even though it contains a
+	// quoted string that superficially resembles a #include path.
+	compatible = "example,board";
+
+	// A phandle reference (`&label`) is a distinct `reference` node type,
+	// not `preproc_include` — must not be captured as an import.
+	some-node {
+		interrupt-parent = <&gpio0>;
+	};
+};

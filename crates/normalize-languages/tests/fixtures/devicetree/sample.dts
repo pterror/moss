@@ -1,0 +1,45 @@
+// Real-world-shaped Device Tree source (Zephyr/Linux-kernel idiom): board
+// overlay pulling in a base board file, a vendor binding header via the
+// system-include form, and referencing labelled nodes/phandles by `&label`.
+/dts-v1/;
+
+#include "board-base.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/nrf-pinctrl.h>
+
+/ {
+	model = "Example Board";
+	compatible = "example,board";
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,sram = &sram0;
+	};
+
+	aliases {
+		led0 = &led_0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led_0: led_0 {
+			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+			label = "Green LED";
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+};
+
+&i2c0 {
+	status = "okay";
+	sensor@1c {
+		compatible = "vendor,sensor";
+		reg = <0x1c>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <5 0>;
+	};
+};
