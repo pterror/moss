@@ -11,7 +11,8 @@
 ; if_then_else has NO named fields — condition/then/else are flat,
 ; unnamed children interleaved with the literal "if"/"then"/"else"
 ; keyword tokens, matched positionally here. match has "value"
-; (scrutinee) and "patterns" (match_alt arms) fields. for_in has
+; (scrutinee) and "patterns" (match_alt arms) fields (patterns is
+; `multiple: true` — a match can have any number of arms). for_in has
 ; "iterable" and "body" fields (body is always a (do) block).
 ;
 ; Grammar has no while-loop node type at all (no "while" anywhere in
@@ -19,6 +20,18 @@
 ; in this grammar) and no break/continue/throw node types either;
 ; do-notation only models `do_return`. These are correctly left
 ; unimplemented rather than fabricated.
+;
+; NOTE: the match-arm pattern below deliberately does NOT use
+; `patterns: (match_alt) @cfg.match.arm` (a fielded constraint on a
+; `multiple: true` field). Verified via `normalize syntax query`: a
+; fielded reference to a repeated field only ever matches the FIRST
+; occurrence of that field, not every one — `match n with | 0 => ... |
+; 1 => ... | _ => ...` produced exactly one `@cfg.match.arm` capture
+; (the `0` arm), silently dropping every arm after the first. Dropping
+; the field name and matching `(match_alt)` positionally (still scoped
+; to being a direct child of `match`, so it can't accidentally match an
+; arm belonging to a different, nested match) fixes this — confirmed to
+; capture all three arms in the same probe.
 
 ; ---------------------------------------------------------------------------
 ; if / else (branch expression — if_then_else)
@@ -39,7 +52,7 @@
 
 (match
   value: (_) @cfg.match.scrutinee
-  patterns: (match_alt) @cfg.match.arm
+  (match_alt) @cfg.match.arm
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
