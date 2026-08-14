@@ -157,11 +157,19 @@ fn perl_calls_completeness_parenthesized_and_parenless_variants() {
         "expected ambiguous_function_call_expression-derived @call 'print' (parenless) \
          in variants.pl, got: {full:?}"
     );
+    // `bareword_no_args_call;` (a bareword statement with no trailing
+    // arguments and no parens) is a genuine grammar limitation, not a
+    // missing query clause: it parses as a bare `bareword` expression
+    // statement, not as any function_call_expression or
+    // ambiguous_function_call_expression node (verified via
+    // `normalize syntax ast` — no call node wraps it at all). Assert it is
+    // correctly NOT captured, matching the fixture's own documented
+    // negative case.
     assert!(
         full.iter()
-            .any(|(_, kind, text, _)| kind == "function" && text == "bareword_no_args"),
-        "expected ambiguous_function_call_expression-derived @call 'bareword_no_args' \
-         (parenless, no arguments) in variants.pl, got: {full:?}"
+            .all(|(_, _, text, _)| text != "bareword_no_args_call"),
+        "did not expect 'bareword_no_args_call' to be captured as @call — it has no \
+         call_expression node in the grammar at all, got: {full:?}"
     );
     assert!(
         full.iter()
