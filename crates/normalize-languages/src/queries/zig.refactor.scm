@@ -6,9 +6,24 @@
 ; the `FnProto` (which directly contains `ParamDeclList`).
 (FnProto (ParamDeclList) @refactor.param_list) @refactor.function_def
 
-; Call expressions and their argument list. A call is `SuffixExpr(IDENTIFIER,
-; FnCallArguments)`.
+; Call expressions and their argument list.
+;
+; Out of the methodology's core four dimensions (tags/calls/imports/
+; complexity/types), but the plain-call pattern below shares the exact
+; node-type gap `zig.calls.scm` had (see that file's comment): a dotted
+; call (`obj.method()`) is NOT `SuffixExpr(IDENTIFIER, FnCallArguments)` —
+; `FnCallArguments` lives inside a `FieldOrFnCall` sibling, not as a direct
+; `SuffixExpr` child, for any dotted call. Verified via `normalize syntax
+; query`: the plain-call-only pattern below matched `foo()`/`@import(...)`
+; but 0 times against `obj.method()`/`std.debug.print(...)`, silently
+; dropping method calls' arg lists from the refactor engine. Fixed the same
+; way as `zig.calls.scm`.
 (SuffixExpr (FnCallArguments) @refactor.arg_list) @refactor.call
+
+(SuffixExpr
+  (FieldOrFnCall
+    function_call: (IDENTIFIER)
+    (FnCallArguments) @refactor.arg_list)) @refactor.call
 
 ; Variable declarations (inline-variable). `var`/`const` bindings are `VarDecl`.
 (VarDecl) @refactor.var_decl

@@ -1,5 +1,28 @@
+//! Sample module exercising Zig's real-world idioms: PascalCase grammar
+//! nodes, error unions, generics-as-functions, and dotted method chains.
+
 const std = @import("std");
 const math = @import("math_utils.zig");
+
+pub const Color = enum {
+    red,
+    green,
+    blue,
+};
+
+/// Generic container type. Zig generics are ordinary comptime functions
+/// that return a type — `List(Point)` parses identically to any other
+/// function call, so it has no dedicated "generic type" node.
+pub fn List(comptime T: type) type {
+    return struct {
+        items: []const T,
+        allocator: std.mem.Allocator,
+
+        pub fn count(self: @This()) usize {
+            return self.items.len;
+        }
+    };
+}
 
 pub const Point = struct {
     x: f64,
