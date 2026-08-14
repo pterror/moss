@@ -1,5 +1,14 @@
+using namespace System.Collections.Generic
+
 Import-Module PSReadLine
 Import-Module Microsoft.PowerShell.Utility
+. "$PSScriptRoot/helpers.ps1"
+
+enum Severity {
+    Low
+    Medium
+    High
+}
 
 class Calculator {
     [int]$Precision
@@ -50,8 +59,38 @@ function Get-Factorial {
     return $result
 }
 
+function Get-Retries {
+    [List[int]]$attempts = [List[int]]::new()
+    $i = 0
+    do {
+        $attempts.Add($i)
+        $i++
+    } while ($i -lt 3)
+    return $attempts
+}
+
+function Get-SeverityLabel {
+    param([Severity]$level)
+    switch ($level) {
+        ([Severity]::Low) { return "low" }
+        ([Severity]::High) { return "high" }
+        default { return "medium" }
+    }
+}
+
 $calc = [Calculator]::new(2)
 Write-Host "Add: $($calc.Add(3.5, 2.1))"
 Write-Host "Classify: $(Invoke-Classify -Number -5)"
 Write-Host "Sum: $(Get-Sum -Numbers 1,2,3,4,5)"
 Write-Host "Factorial: $(Get-Factorial -N 5)"
+
+$cmdName = "Write-Host"
+& $cmdName "Dynamic call"
+
+try {
+    Get-Factorial -N -1
+} catch {
+    Write-Host "Error: $_"
+} finally {
+    Write-Host "Done"
+}
