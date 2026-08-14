@@ -23,3 +23,23 @@
 ; Qualified constructor: Module.Foo x
 (exp_name
   (qualified_caname) @call)
+
+; Operator used as a value / passed as a function argument: foldr (+) 0 xs
+; `exp_name` also allows `operator`/`qualified_operator` children (confirmed
+; via `normalize syntax query` against a probe file — `foldr (+) 0 xs`
+; produces `(exp_name (operator))`) and `Prelude.(+) 1 2` produces
+; `(exp_name (qualified_operator))`. Passing an operator as a first-class
+; function value is a pervasive functional-programming idiom (foldr/foldl
+; with `(+)`/`(::)`/etc.), not a rare edge case.
+(exp_name
+  (operator) @call)
+
+(exp_name
+  (qualified_operator) @call)
+
+; NOTE: `exp_name` also allows `dot_operator`/`qualified_dot_operators`
+; children per node-types.json, but no real-world or synthetic probe source
+; was found that actually produces either shape nested inside `exp_name`
+; (the bare `.` composition operator parses as a plain `operator` token
+; directly, not wrapped in `exp_name`/`dot_operator`) — left unhandled per
+; "verify against real parse output, not node-types.json alone."
