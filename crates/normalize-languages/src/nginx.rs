@@ -97,7 +97,7 @@ mod tests {
     fn unused_node_kinds_audit() {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[
-            "lua_block", "lua_block_directive", "modifier",
+            "lua_block", "modifier",
             // structural node, not extracted as symbols
             "block",
         ];

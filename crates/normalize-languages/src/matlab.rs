@@ -213,7 +213,7 @@ mod tests {
             "class_property", "enum", "enumeration", "superclass", "superclasses",
             // Function-related
             "block", "field_expression", "formatting_sequence", "function_arguments",
-            "function_call", "function_output", "function_signature", "identifier", "lambda",
+            "function_call", "function_output", "identifier", "lambda",
             "parfor_options", "validation_functions",
             // control flow — not extracted as symbols
             "if_statement",

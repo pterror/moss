@@ -96,8 +96,8 @@ mod tests {
             // Type-related
             "type_signature", "type_parens", "type_braces", "type_var", "forall",
             // Body nodes
-            "parameters_body", "namespace_body", "mutual_body", "data_body",
-            "record_body", "interface_body", "implementation_body",
+            "parameters_body", "namespace_body", "mutual_body",
+            "implementation_body",
             // Interface and module
             "interface_name", "module",
             // Function body — used in complexity.scm, not tags.scm
@@ -108,7 +108,7 @@ mod tests {
             // Qualified names
             "qualified_loname", "qualified_caname",
             // Other constructs
-            "constructor", "statement", "declarations",
+            "statement", "declarations",
             "with", "with_pat", "with_arg",
             // Pragmas
             "pragma_export", "pragma_foreign", "pragma_foreign_impl", "pragma_transform",

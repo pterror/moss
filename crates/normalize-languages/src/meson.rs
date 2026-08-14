@@ -81,10 +81,9 @@ mod tests {
             // Control flow commands
             "else_command", "elseif_command",
             // Expression-related
-            "formatunit", "identifier", "operatorunit", "ternaryoperator",
+            "formatunit", "ternaryoperator",
             // control flow — not extracted as symbols
             "expression_statement",
-            "foreach_command",
             "if_condition",
             "if_command",
         ];

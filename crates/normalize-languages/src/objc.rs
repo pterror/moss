@@ -192,7 +192,7 @@ mod tests {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[
             // Preprocessor
-            "preproc_if", "preproc_elif", "preproc_elifdef", "preproc_function_def",
+            "preproc_if", "preproc_elif", "preproc_elifdef",
             // Statement types
             "expression_statement", "return_statement", "break_statement", "continue_statement",
             "goto_statement", "case_statement", "labeled_statement", "attributed_statement",
@@ -214,9 +214,9 @@ mod tests {
             // Type system
             "type_name", "type_identifier", "type_qualifier",
             "sized_type_specifier", "array_type_specifier", "macro_type_specifier",
-            "typedefed_specifier", "union_specifier", "generic_specifier",
+            "typedefed_specifier", "generic_specifier",
             // Method-related
-            "method_definition", "method_identifier", "method_type",
+            "method_identifier", "method_type",
             // Identifiers
             "field_identifier", "statement_identifier",
             // Attributes and specifiers
@@ -231,8 +231,14 @@ mod tests {
             // GNU extensions
             "gnu_asm_expression", "va_arg_expression", "offsetof_expression",
             // Other
-            "function_declarator", "enumerator", "enumerator_list", "else_clause",
+            "enumerator", "enumerator_list", "else_clause",
             "module_import", "abstract_block_pointer_declarator",
+            // `function_definition` itself is never referenced directly — it's
+            // covered indirectly because objc.tags.scm's `function_declarator`
+            // pattern fires regardless of whether its parent is a full
+            // function_definition or a bare prototype declaration. See
+            // objc.tags.scm's comment on that pattern.
+            "function_definition",
             // Additional expression types
             "extension_expression", "pointer_expression", "parenthesized_expression",
             "sizeof_expression", "range_expression", "field_expression", "block_literal",
@@ -243,12 +249,11 @@ mod tests {
             // Type-related
             "typeof_specifier", "type_descriptor", "primitive_type",
             // Preprocessor
-            "preproc_else", "preproc_ifdef",
+            "preproc_else",
             // Other
             "method_parameter", "block_pointer_declarator", "abstract_function_declarator",
             "bitfield_clause", "struct_declarator", "gnu_asm_qualifier",
             // covered by tags.scm
-            "method_declaration",
             "while_statement",
             "for_statement",
             "switch_statement",

@@ -99,7 +99,7 @@ mod tests {
             "attribute_declaration", "attribute_specifier", "attributed_statement",
             "base_class_clause", "binary_expression", "bitfield_clause", "break_statement",
             "call_expression", "cast_expression", "catch_clause",
-            "class_specifier", "co_await_expression", "co_return_statement", "co_yield_statement",
+            "co_await_expression", "co_return_statement", "co_yield_statement",
             "comma_expression", "compound_literal_expression", "concept_definition",
             "condition_clause", "consteval_block_declaration", "continue_statement",
             "declaration", "declaration_list", "decltype", "default_method_clause",

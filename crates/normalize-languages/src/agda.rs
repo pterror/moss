@@ -127,6 +127,11 @@ mod tests {
             // Function and lambda definitions
             "catchall_pragma", "forall", "lambda",
             "lambda_clause_absurd", "type_signature",
+            // The `lhs` name is now matched via an anchored wildcard `(_) @name`
+            // (see agda.tags.scm's header comment) rather than an explicit
+            // `(function_name)` pattern, so this wrapper node type is never
+            // referenced by name even though the query still captures its content.
+            "function_name",
             // Module-related
             "import_directive", "module_application", "module_assignment", "module_macro",
             // Record definitions

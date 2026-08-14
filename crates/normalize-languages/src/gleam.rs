@@ -256,7 +256,7 @@ mod tests {
             "case_clause_guard", "case_clause_pattern", "case_clause_patterns", "case_clauses",
             "case_subjects",
             // Function-related nodes
-            "binary_expression", "constructor_name", "external_function", "external_function_body",
+            "binary_expression", "constructor_name", "external_function_body",
             "function_call", "remote_constructor_name",
             // Import-related nodes
             "unqualified_import", "unqualified_imports",

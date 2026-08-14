@@ -37,18 +37,22 @@
 ; query-file-only fix.
 
 (node
-  . (identifier) @name
+  .
+  (identifier) @name
   children: (node_children)) @definition.class
 
 (node
-  . (identifier) @name
+  .
+  (identifier) @name
   !children) @definition.var
 
 ; Typed variants: `(u8)my-node { ... }` / `(u8)my-node 5`
 (node
-  . (type) . (identifier) @name
+  . (type) .
+  (identifier) @name
   children: (node_children)) @definition.class
 
 (node
-  . (type) . (identifier) @name
+  . (type) .
+  (identifier) @name
   !children) @definition.var

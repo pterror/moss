@@ -126,7 +126,13 @@ mod tests {
             "formal_abstract_subprogram_declaration", "formal_complete_type_declaration",
             "formal_concrete_subprogram_declaration", "formal_incomplete_type_declaration",
             "formal_object_declaration", "formal_package_declaration", "formal_subprogram_declaration",
-            "generic_formal_part", "generic_renaming_declaration", "generic_subprogram_declaration",
+            "generic_formal_part", "generic_renaming_declaration",
+            // `generic_package_declaration` wraps a nested `package_declaration`, which
+            // ada.tags.scm's plain `package_declaration` pattern already matches
+            // regardless of parent (tree-sitter matches by node type, not by parent) —
+            // see the NOTE in ada.tags.scm. So the wrapper node itself is intentionally
+            // never referenced directly.
+            "generic_package_declaration",
             "null_procedure_declaration", "number_declaration", "object_declaration",
             "object_renaming_declaration", "package_renaming_declaration", "parameter_specification",
             "private_extension_declaration", "single_protected_declaration", "single_task_declaration",
