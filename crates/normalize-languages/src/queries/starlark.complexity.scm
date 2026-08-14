@@ -12,6 +12,15 @@
 (conditional_expression) @complexity
 "and" @complexity
 "or" @complexity
+; List/dict comprehensions carry an implicit for + optional if (per
+; arborium-starlark's node-types.json: `for_in_clause` and `if_clause`
+; children), the same implicit control flow python.complexity.scm already
+; counts for Python's equivalent comprehension nodes. Verified via
+; `normalize syntax ast` that Starlark's grammar has no separate
+; set_comprehension/generator_expression node types (Starlark has neither
+; sets nor generators), so only these two apply.
+(list_comprehension) @complexity
+(dictionary_comprehension) @complexity
 
 ; Nesting nodes
 (if_statement) @nesting
