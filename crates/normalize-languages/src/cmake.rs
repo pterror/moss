@@ -74,14 +74,31 @@ impl Language for CMake {
     }
 
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
-        // function(name args...) - name is first argument
+        // `node` is the @definition.function capture: a `function_def`/`macro_def`
+        // node whose DIRECT children are only `function_command`/`macro_command`,
+        // `body`, `endfunction_command`/`endmacro_command` (confirmed against
+        // arborium-cmake 2.17.0's node-types.json — `function_def`'s `children`
+        // list contains no `argument`). The function/macro NAME lives two levels
+        // deeper: `function_def` -> `function_command` -> `argument_list` ->
+        // (first) `argument`. The previous single-level `node.children()` scan
+        // for an `argument` child could therefore never find one — confirmed via
+        // `normalize view <file>.cmake --types-only` against a file with three
+        // functions/macros returning zero symbols. Walk into the leading
+        // `function_command`/`macro_command` child first, then take its first
+        // `argument`.
         let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if child.kind() == "argument" {
-                return Some(&content[child.byte_range()]);
-            }
-        }
-        None
+        let command = node
+            .children(&mut cursor)
+            .find(|child| child.kind() == "function_command" || child.kind() == "macro_command")?;
+        let mut cmd_cursor = command.walk();
+        let argument_list = command
+            .children(&mut cmd_cursor)
+            .find(|child| child.kind() == "argument_list")?;
+        let mut arg_cursor = argument_list.walk();
+        let name_arg = argument_list
+            .children(&mut arg_cursor)
+            .find(|child| child.kind() == "argument")?;
+        Some(&content[name_arg.byte_range()])
     }
 }
 
