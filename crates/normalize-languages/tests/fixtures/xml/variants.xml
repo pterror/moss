@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE root [
+  <!ELEMENT root (child*)>
+  <!ATTLIST root attr-on-root CDATA #IMPLIED>
+  <!ENTITY greeting "Hello, world!">
+]>
+<!-- Completeness matrix for xml.tags.scm: (element (STag (Name) @name))
+     and (element (EmptyElemTag (Name) @name)), each @definition.var.
+     Cross-referenced against arborium-xml's node-types.json (see
+     docs/query-testing-methodology.md). A dedicated NEGATIVE section below
+     holds attribute names and non-element constructs that must never
+     surface as an element @name. -->
+<root attr-on-root="value" xmlns:ns="http://example.com/ns">
+  <!-- element (STag ... ETag): paired open/close tag -->
+  <child>text content</child>
+
+  <!-- element (EmptyElemTag): self-closing leaf -->
+  <leaf/>
+
+  <!-- namespaced paired element: STag Name includes the prefix verbatim -->
+  <ns:paired ns:attr-on-leaf="x">namespaced text</ns:paired>
+
+  <!-- namespaced self-closing element -->
+  <ns:selfclosing/>
+
+  <!-- deep nesting: every level must surface, not just the outermost -->
+  <depth1>
+    <depth2>
+      <depth3/>
+    </depth2>
+  </depth1>
+
+  <!-- mixed content: element interleaved with a comment, an entity
+       reference, and a CDATA section — none of these are elements and
+       must not affect the surrounding element's own capture -->
+  <mixed>
+    before
+    <!-- inline comment -->
+    &greeting;
+    <![CDATA[ <raw> not markup ]]>
+    after
+    <inner/>
+  </mixed>
+
+  <!-- a processing instruction between elements -->
+  <?target some-pi-data?>
+</root>

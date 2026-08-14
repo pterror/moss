@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- A real-world-shaped SVG document: namespaces, nested groups, self-closing
+     shape elements, and mixed text/element content — the idioms XML-based
+     formats (SVG, Maven POMs, Android layouts, RSS feeds) actually lean on. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 100 100"
+     width="100"
+     height="100">
+  <title>Sample Icon</title>
+  <metadata>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+             xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <rdf:Description>
+        <dc:title>Sample Icon</dc:title>
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="red"/>
+      <stop offset="100%" stop-color="blue"/>
+    </linearGradient>
+  </defs>
+  <g id="icon-group" transform="translate(10,10)">
+    <circle cx="50" cy="50" r="40" fill="url(#grad1)"/>
+    <rect x="10" y="10" width="20" height="20"/>
+    <path d="M10 10 H 90 V 90 H 10 Z"/>
+    <use xlink:href="#icon-group"/>
+  </g>
+  <text x="10" y="90">Label &amp; more</text>
+  <![CDATA[ raw, unescaped <content> that must not parse as markup ]]>
+</svg>
