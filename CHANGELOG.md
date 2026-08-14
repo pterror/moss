@@ -86,6 +86,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Gleam pipe-target calls (`x |> f`, `x |> module.func`) were entirely absent
+  from call extraction.** Applying the query-testing methodology to
+  `gleam.calls.scm` found the query only matched `function_call` nodes; the
+  pipe operator's right-hand side, when written point-free (no call parens —
+  idiomatic Gleam pipeline style, e.g. `values |> list.map(double)` immediately
+  followed by `|> double`), parses as `binary_expression(operator: "|>",
+  right: identifier)` or `binary_expression(operator: "|>", right:
+  field_access)` with no wrapping `function_call` node at all — verified via
+  `normalize syntax ast`. Both bare-identifier and qualified point-free pipe
+  targets are now captured. Also fixed: `gleam.imports.scm` never captured
+  `unqualified_import`'s own `alias:` field (`Some as MySome`, `type Request
+  as HttpRequest` — common in real Gleam; the wisp.gleam sample's own imports
+  use this form), only the whole-module `import ... as alias` form;
+  `gleam.tags.scm` never captured `external_function` (the legacy `external
+  fn` FFI-binding node, a distinct node type from `function`) as a
+  `@definition.function`, and only handled the `type_identifier` variant of
+  `type_name.name`, not the grammar-legal (if semantically invalid)
+  `remote_type_identifier` variant; `gleam.decorations.scm` never captured
+  `attribute` nodes (`@deprecated(...)`, `@external(...)`, `@target(...)`) —
+  Gleam's equivalent of Rust's `#[attr]`/Python's `@decorator`. Added
+  `crates/normalize-languages/tests/fixtures/gleam/variants.gleam` and seven
+  `gleam_*` completeness/negative tests in `query_fixtures.rs`.
+
+- **KDL tag extraction silently promoted slash-dash-disabled (`/- node`)
+  config nodes to real symbols.** Applying the query-testing methodology to
+  the newly-authored `kdl.tags.scm` found KDL's "slash-dash" whole-node
+  comment syntax (`/- disabled-node "x"` — the entire node is meant to be
+  ignored) still parses as a live `node` (not an ERROR, not omitted from the
+  tree — verified via `normalize syntax ast`), with only a `node_comment`
+  child marking it; the query's unanchored `(node (identifier) @name ...)`
+  pattern matched disabled and live nodes identically. Anchoring `.`
+  immediately before `(identifier)` excludes the disabled case (a leading
+  `node_comment` breaks the anchor) while a second, separately anchored
+  `(type) . (identifier)` pair of patterns preserves support for typed node
+  names (`(u8)my-node`). Known remaining limitation, documented in the `.scm`
+  file: nodes nested inside a slash-dashed *container* are not themselves
+  excluded, since the query-predicate engine has no ancestor-check predicate
+  to express "an ancestor carries a node_comment". Added
+  `crates/normalize-languages/tests/fixtures/kdl/{sample,variants}.kdl` and
+  three `kdl_tags_*` tests in `query_fixtures.rs` covering real-world shape,
+  the quoted/typed-name completeness matrix, and the slash-dash negative
+  case.
+
+- **AsciiDoc `include::` import extraction was broken for every form.** Applying the
+  query-testing methodology to `asciidoc.imports.scm` found the query required a
+  `block_macro_attr` child to match at all, so the common bare form
+  `include::path/to/file.adoc[]` (no bracketed attributes) produced zero captures.
+  When attributes were present (`include::file.adoc[lines=1..10]`), the query captured
+  `block_macro_attr`'s text — the attribute list itself (e.g. `"lines=1..10"`) — as
+  `@import.path`, instead of the actual file path. The path lives in the `target` node,
+  a required, always-present child of `block_macro` per `node-types.json`, independent
+  of whether any attributes follow; verified via `normalize syntax ast`/`normalize
+  syntax query`. Added `crates/normalize-languages/tests/fixtures/asciidoc/{sample,
+  variants}.adoc` and three `asciidoc_imports_*` tests in `query_fixtures.rs` covering
+  the completeness matrix (bare/single-attr/multi-attr/relative/`{docdir}`-prefixed/
+  nested paths) and negative cases (`image::`, prose mentioning `include::`).
+
 - **HTML import extraction silently dropped every unquoted `src`/`href` and all `<img
   src>` references.** Applying the query-testing methodology to `html.imports.scm`
   found that the query only matched the `quoted_attribute_value` node kind; unquoted
