@@ -35,3 +35,19 @@
   base: (_) @call.qualifier
   field: (long_identifier_or_op
     (identifier) @call))
+
+; Method call where the grammar's dot-chain split leaves the field itself
+; as a multi-component `long_identifier` — e.g. a 4-component static path
+; like `System.Collections.Generic.List<int>()` parses as `dot_expression`
+; with base `System.Collections` and field `Generic.List` (verified via
+; `normalize syntax ast`: the grammar splits an ambiguous n-component
+; dotted chain 2-and-2 rather than nesting one dot_expression per
+; component), so `field` is `(long_identifier_or_op (long_identifier ...))`
+; here, not a bare `(identifier)` — the pattern above alone missed this
+; call entirely. Anchor on the LAST identifier in the nested
+; `long_identifier` to get the actual member/type name being invoked.
+(dot_expression
+  base: (_) @call.qualifier
+  field: (long_identifier_or_op
+    (long_identifier
+      (identifier) @call .)))

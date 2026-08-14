@@ -12,6 +12,15 @@ type Shape =
 // Record type
 type Point = { X: float; Y: float }
 
+// Class with instance methods, an instance property, and a static factory
+type Accumulator(initial: int) =
+    let mutable total = initial
+    member this.Add(x: int) =
+        total <- total + x
+        total
+    member this.Total = total
+    static member Create() = Accumulator(0)
+
 // Compute area of a shape
 let area shape =
     match shape with
@@ -96,4 +105,7 @@ let main _ =
     printfn "%d" (safeDivide 4 2)
     withCleanup ()
     printfn "%d" (validate 5)
+    let acc = Accumulator.Create()
+    printfn "%d" (acc.Add(10))
+    printfn "%d" acc.Total
     0
