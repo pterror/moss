@@ -29,3 +29,11 @@
 ; e.g., route /docs/* { file_server }
 (directive_route
   (matcher_token) @name) @definition.function
+
+; Handle_path directives: like handle, but strips the matched prefix
+; e.g., handle_path /api/* { reverse_proxy ... }
+; Same shape as directive_handle/directive_route (matcher_token child,
+; sibling of an optional directive_block) — a distinct node type
+; (directive_handle_path) that the query previously omitted.
+(directive_handle_path
+  (matcher_token) @name) @definition.function
