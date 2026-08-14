@@ -1,0 +1,27 @@
+## Real-world-shaped ninja build file: variables, rules, build edges, a pool,
+## a default target, and both import-like directives (`include` pulls
+## definitions into the current scope; `subninja` pulls in a scoped
+## sub-build) — both must surface as imports.
+
+cxx = g++
+cflags = -Wall -O2
+
+include rules.ninja
+subninja subdir/build.ninja
+
+pool link_pool
+  depth = 4
+
+rule cc
+  command = $cxx $cflags -c $in -o $out
+  description = CC $out
+
+rule link
+  command = $cxx $in -o $out
+  pool = link_pool
+
+build build/main.o: cc src/main.cc
+build build/util.o: cc src/util.cc
+build build/app: link build/main.o build/util.o
+
+default build/app

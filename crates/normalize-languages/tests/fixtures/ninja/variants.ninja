@@ -1,0 +1,25 @@
+## Completeness matrix for ninja.imports.scm — `include` and `subninja` are
+## structurally identical in node-types.json (an unfielded `path` child,
+## `multiple: false`, `required: true`), so there is exactly one shape per
+## directive to exercise, plus a NEGATIVE section of near-miss constructs
+## that must not be captured as imports.
+
+# Variant 1: `include` — pulls target/rule/variable definitions into the
+# current scope.
+include rules.ninja
+
+# Variant 2: `subninja` — pulls in a separate scoped sub-build.
+subninja subdir/build.ninja
+
+# --- NEGATIVE: must not match @import / @import.path ---
+
+# A variable whose value merely contains the words "include"/"subninja" as
+# text must not be mistaken for the directives above.
+description = include the subninja outputs
+
+# A build edge referencing a file literally named `include.ninja` as an
+# input is not itself an include directive.
+rule cp
+  command = cp $in $out
+
+build out/include.ninja: cp templates/include.ninja
