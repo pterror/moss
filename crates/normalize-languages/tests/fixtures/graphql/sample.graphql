@@ -65,3 +65,68 @@ type Mutation {
   updatePost(id: ID!, input: UpdatePostInput!): Post!
   deletePost(id: ID!): Boolean!
 }
+
+type Subscription {
+  userUpdated(id: ID!): User!
+}
+
+# Custom directive definition: declares `@auth` as an attachable annotation,
+# distinct from a directive *application* like `@deprecated` below.
+directive @auth(role: UserRole = VIEWER) on FIELD_DEFINITION | OBJECT
+
+extend type User {
+  """Fields the requester is allowed to see, gated by role."""
+  isAdmin: Boolean! @auth(role: ADMIN)
+}
+
+fragment UserSummary on User {
+  id
+  name
+  role
+}
+
+# Idiomatic real-world client operations, co-located with the schema (as in
+# a codegen-driven repo where .graphql operation documents ship alongside
+# the SDL). Exercises variables, fragment spreads, inline fragments,
+# directive applications with arguments, aliases, and nested selections.
+query GetUser($id: ID!, $withPosts: Boolean = false) {
+  user(id: $id) {
+    ...UserSummary
+    email
+    posts @include(if: $withPosts) {
+      id
+      title
+      author {
+        name
+      }
+    }
+  }
+}
+
+query SearchAll($term: String!) {
+  search(query: $term) {
+    ... on User {
+      name
+      email
+    }
+    ... on Post {
+      title
+      author {
+        name
+      }
+    }
+  }
+}
+
+mutation CreateNewUser($input: CreateUserInput!) {
+  createUser(input: $input) {
+    ...UserSummary
+  }
+}
+
+subscription WatchUser($id: ID!) {
+  userUpdated(id: $id) {
+    id
+    name
+  }
+}

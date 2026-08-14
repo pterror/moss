@@ -1,0 +1,159 @@
+# Completeness matrix for graphql.{tags,calls,complexity,decorations,types}.scm.
+#
+# One small, commented construct per node-type variant identified by
+# cross-referencing the query files against arborium-graphql 2.17.0's
+# node-types.json (docs/query-testing-methodology.md, step 2). Node type
+# names in comments come straight from node-types.json.
+#
+# NOTE: this grammar has no `imports.scm` — confirmed by grepping
+# node-types.json for anything import/include/module/path/file-shaped: the
+# only hit is the root `source_file` node. There is no node type that
+# carries a file/module path, so there is nothing import-shaped to extract.
+
+# --- tags.scm: base type-system definitions --------------------------------
+
+"""Doc comment on an object type: description child of object_type_definition."""
+type VType {
+  # field_definition.name
+  f: String
+}
+
+interface VInterface {
+  f: String
+}
+
+enum VEnum {
+  A
+  B
+}
+
+union VUnion = VType
+
+input VInput {
+  f: String
+}
+
+scalar VScalar
+
+# directive_definition.name -- distinct node type from a directive
+# *application*; declares a new attachable annotation.
+directive @vDirective(arg: String) on FIELD_DEFINITION
+
+# --- tags.scm: type extensions (siblings of *_definition, not variants of
+# it -- object_type_extension etc. are each their own top-level node type) --
+
+extend type VType {
+  g: String
+}
+
+extend interface VInterface {
+  g: String
+}
+
+extend enum VEnum {
+  C
+}
+
+extend union VUnion = VScalar
+
+extend input VInput {
+  g: String
+}
+
+extend scalar VScalar @vDirective(arg: "x")
+
+# schema_definition / schema_extension: NEGATIVE for tags.scm below -- these
+# node types have no `name` child at all (verified against node-types.json:
+# their only children are description/directives/root_operation_type_definition),
+# so they are correctly never matched by any @definition.* pattern.
+schema {
+  query: VType
+}
+
+extend schema {
+  mutation: VType
+}
+
+# --- tags.scm: operation_definition / fragment_definition -------------------
+
+query VOperation {
+  __typename
+}
+
+fragment VFragment on VType {
+  f
+}
+
+# --- calls.scm: field selection, directive application, fragment spread ----
+
+query VCalls {
+  # field(name) -- plain field selection
+  f
+  # aliased field: field.name is still a plain (name) child regardless of
+  # the alias child being present
+  aliased: f
+  # directive(name) applied to a field, with arguments
+  f @vDirective(arg: "y")
+  # fragment_spread(fragment_name(name))
+  ...VFragment
+  # inline_fragment: NOT a calls.scm target (no fragment_name to reference);
+  # its type_condition's named_type is a types.scm concern, see below
+  ... on VType {
+    f
+  }
+}
+
+# --- types.scm: named_type in every type position ---------------------------
+
+type VTypesDemo {
+  # named_type: bare reference
+  plain: VType
+  # named_type wrapped in non_null_type
+  required: VType!
+  # named_type wrapped in list_type
+  list: [VType]
+  # named_type wrapped in list_type + non_null_type (both directions)
+  listOfRequired: [VType!]!
+  requiredList: [VType]!
+}
+
+# --- decorations.scm: description + comment ---------------------------------
+
+"""Block description on a field-bearing definition."""
+type VDescribed {
+  f: String
+}
+
+# Line comment (extra node, appears anywhere) -- also decorations.scm target
+
+# =============================================================================
+# NEGATIVE cases: constructs that must NOT match the patterns above.
+# =============================================================================
+
+# NEGATIVE(tags): schema_definition/schema_extension have no name (checked
+# above at file scope) -- already exercised, zero @definition.* matches
+# expected from those two blocks.
+
+# NEGATIVE(calls): a field *definition* name (schema-side) is a
+# field_definition.name, not a field.name -- calls.scm's `(field (name))`
+# pattern targets *selections* (query/mutation bodies), not schema field
+# declarations, so this must NOT be picked up as a "call".
+type VNegativeFieldDef {
+  notACall: String
+}
+
+# NEGATIVE(calls): an argument *name* inside field arguments is
+# `argument.name`, not `field.name` or `directive.name` -- must not match.
+query VNegativeArgumentName {
+  f(notACallEither: "value")
+}
+
+# NEGATIVE(tags): enum values (enum_value_definition) are intentionally NOT
+# tagged as individual @definition.* entries, matching the convention used
+# for enum variants/members in every other language's tags.scm in this repo
+# (e.g. rust.tags.scm, typescript.tags.scm do not tag individual enum
+# members either) -- they are documentation content of their parent enum,
+# not top-level named definitions.
+enum VNegativeEnumMembers {
+  NOT_TAGGED_INDIVIDUALLY
+}

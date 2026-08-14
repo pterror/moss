@@ -122,11 +122,10 @@ mod tests {
             "input_value_definition", "named_type", "type", "type_condition",
             "type_definition", "type_extension", "type_system_definition",
             "type_system_extension", "union_member_types", "variable_definition",
-            "arguments_definition", "definition", "directive_definition", "list_type",
-            "non_null_type", "object_type_extension", "operation_type",
-            "root_operation_type_definition", "scalar_type_extension", "schema_definition",
-            "enum_type_extension", "input_object_type_extension", "interface_type_extension",
-            "type_system_directive_location", "union_type_extension", "variable_definitions",
+            "arguments_definition", "definition", "list_type",
+            "non_null_type", "operation_type",
+            "root_operation_type_definition", "schema_definition",
+            "type_system_directive_location", "variable_definitions",
         ];
         validate_unused_kinds_audit(&GraphQL, documented_unused)
             .expect("GraphQL unused node kinds audit failed");
