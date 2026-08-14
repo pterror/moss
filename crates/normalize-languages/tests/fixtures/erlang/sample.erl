@@ -8,6 +8,10 @@
 
 -type coordinate() :: {integer(), integer()}.
 
+-type handler() :: fun((coordinate()) -> ok | error).
+
+-callback handle(Msg :: term()) -> ok | {error, atom()}.
+
 -spec classify(integer()) -> negative | zero | positive.
 %% Classify a number as negative, zero, or positive
 classify(N) when N < 0 ->
@@ -74,3 +78,54 @@ safe_call() ->
 %% Explicit throw via the erlang module
 fail(Reason) ->
     erlang:throw(Reason).
+
+%% Bare throw/exit/error (auto-imported BIFs, no `erlang:` prefix — the
+%% common real-world form)
+bare_fail(bad) ->
+    error(badarg);
+bare_fail(stop) ->
+    exit(normal);
+bare_fail(Reason) ->
+    throw(Reason).
+
+%% Invoke a callback held in a variable (higher-order function idiom)
+apply_callback(Fun, Arg) ->
+    Fun(Arg).
+
+%% Dynamic dispatch: module and/or function resolved at runtime
+dispatch(Mod, Fun, Args) ->
+    Mod:Fun(Args).
+
+%% Dynamic dispatch with a literal function name
+dispatch_module(Mod, Arg) ->
+    Mod:handle(Arg).
+
+%% try ... of ... after ... end (pattern-match the result, no catch)
+try_of_after(List) ->
+    try lists:sort(List) of
+        [] -> empty;
+        Sorted -> Sorted
+    after
+        cleanup()
+    end.
+
+%% try ... catch Class:Reason -> ... end (variable class — catches any
+%% exception class, the far more common form than a literal atom class)
+try_catch_any_class() ->
+    try do_something() catch
+        Class:Reason -> {Class, Reason}
+    end.
+
+%% try ... catch Pattern -> ... end (bare pattern, no explicit class —
+%% implicitly catches `throw` only)
+try_catch_bare_pattern() ->
+    try do_something() catch
+        Reason -> {caught, Reason}
+    end.
+
+%% receive with only a timeout arm (non-blocking mailbox drain idiom)
+flush() ->
+    receive
+    after 0 ->
+        ok
+    end.
