@@ -67,3 +67,10 @@ validate_positive(N) :-
     -> true
     ;  throw(error(not_positive(N), _))
     ).
+
+% DCG rule: a tiny grammar for greetings.
+greeting --> [hello], [world].
+
+% Negation as failure (\+) and findall/3.
+childless(X) :- \+ parent(X, _).
+all_children(X, Children) :- findall(Y, parent(X, Y), Children).
