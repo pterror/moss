@@ -19,3 +19,16 @@
   imports: (unqualified_imports
     (unqualified_import
       name: (_) @import.name))) @import
+
+; import module/path.{Type as Alias, function as alias} — unqualified_import
+; has its own optional `alias` field (constructor_name/identifier/
+; type_identifier, same variants as `name`), distinct from the whole-import
+; `alias:` field above. Verified common in real Gleam: the wisp.gleam sample
+; itself imports `type Response as HttpResponse` and
+; `type Request as HttpRequest`.
+(import
+  module: (module) @import.path
+  imports: (unqualified_imports
+    (unqualified_import
+      name: (_) @import.name
+      alias: (_) @import.alias))) @import

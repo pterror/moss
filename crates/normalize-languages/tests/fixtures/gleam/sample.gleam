@@ -1,6 +1,7 @@
 import gleam/io
 import gleam/list
 import gleam/int
+import gleam/option.{type Option, Some as MySome}
 
 // Type definition: a custom type
 pub type Shape {
@@ -28,6 +29,35 @@ pub fn sum_evens(values: List(Int)) -> Int {
   values
   |> list.filter(fn(x) { int.remainder(x, 2) == Ok(0) })
   |> list.fold(0, fn(acc, x) { acc + x })
+}
+
+// Point-free pipe target: `double` is invoked via the pipe operator with no
+// parens/call syntax — idiomatic Gleam pipeline style.
+pub fn double_all(values: List(Int)) -> List(Int) {
+  values
+  |> list.map(double)
+}
+
+fn double(x: Int) -> Int {
+  x * 2
+}
+
+// Deprecation attribute on a public function.
+@deprecated("use double instead")
+pub fn old_double(x: Int) -> Int {
+  x * 2
+}
+
+// Legacy FFI binding via `external fn`.
+pub external fn native_abs(x: Int) -> Int =
+  "erlang" "abs"
+
+// Optional import usage exercising the aliased unqualified import above.
+pub fn first_or_none(values: List(Int)) -> Option {
+  case values {
+    [x, ..] -> MySome(x)
+    [] -> option.None
+  }
 }
 
 // Compute factorial
