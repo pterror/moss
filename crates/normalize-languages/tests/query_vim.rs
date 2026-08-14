@@ -221,11 +221,17 @@ fn vim_tags_completeness_function_declaration_name_variants() {
             .any(|(_, kind, text, _)| kind == "scoped_identifier" && text == "s:ScopedFunc"),
         "expected scoped_identifier-kind @name 's:ScopedFunc' in variants.vim, got: {names:?}"
     );
+    // The autoload-namespaced form (`foo#bar#AutoloadFunc`) is NOT a
+    // scoped_identifier — the `#` separators are part of a plain
+    // `identifier` token (verified via `normalize syntax ast`: the
+    // function_declaration's name field is `(identifier)`, not
+    // `(scoped_identifier)`), matching vim.tags.scm's own documented
+    // rationale for relying on the plain-identifier clause here.
     assert!(
-        names.iter().any(|(_, kind, text, _)| kind
-            == "scoped_identifier"
-            && text == "foo#bar#AutoloadFunc"),
-        "expected scoped_identifier-kind @name 'foo#bar#AutoloadFunc' in variants.vim, \
+        names
+            .iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "foo#bar#AutoloadFunc"),
+        "expected identifier-kind @name 'foo#bar#AutoloadFunc' in variants.vim, \
          got: {names:?}"
     );
     assert!(
