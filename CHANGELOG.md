@@ -86,6 +86,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed (internal)
 
+- **Clojure import extraction silently dropped every `:as` alias.** `clojure.imports.scm`'s
+  duplicate-matching (a "with alias" and a "without alias" pattern both matching the same
+  aliased `[ns :as alias]` vector, since the grammar has no way to express "no `:as` follows"
+  as a pure structural anchor without also breaking `:refer` extraction) meant two matches
+  fired per aliased import; the generic dedup in `normalize-facts::symbols` (keyed on
+  module/name/line, not alias) always kept whichever duplicate tree-sitter enumerated first —
+  which was the alias-less one, discarding the alias every time. Fixed generically in
+  `collect_imports_with_compiled_query`'s dedup: when merging duplicate matches for the same
+  import, now also fills in `alias` from any duplicate that captured one, not just
+  `is_reexport`. This unmasked three further stale `extract_fixtures` expectations recorded
+  before their respective languages' 2026-08-14 query-completeness sweeps landed (`hcl` went
+  from 0 symbols to full block/attribute extraction after `node_name` stopped returning `None`
+  for every HCL node; `objc` function names changed from including the full C parameter-list
+  signature to bare names, consistent with every other C-family fixture, once `@definition
+  .function` started anchoring on `function_declarator` instead of `function_definition`; `prolog`
+  stopped reporting every `use_module`/`initialization` directive as a bogus `Module` symbol
+  once the query was restricted to actual `:- module(...)` directives) — all three verified
+  against real parse output before accepting.
+- **`jinja2_cfg::test_jinja2_loop` snapshot was stale.** `jinja2.cfg.scm`'s `for_statement`
+  pattern previously captured `@cfg.loop.condition` twice by accident and never captured
+  `@cfg.loop.body` at all (fixed in the 2026-08-14 Jinja2 query-completeness sweep), so the
+  CFG builder had no body boundary to work from — `LoopBody` wrongly swallowed the `endfor`
+  line, and the `LoopHead` → `LoopExit` false-branch edge was never emitted (leaving
+  `LoopExit` an orphaned node in the rendered graph). The recorded snapshot predated that
+  query fix. New output correctly emits `true`/`false`-labeled edges from `LoopHead` to
+  `LoopBody`/`LoopExit`, matching the already-verified `typescript_cfg` loop shape (`go_cfg`'s
+  recorded loop snapshot still has the unlabeled-edge/orphaned-`LoopExit` shape and was left
+  untouched — out of scope here, flagged in TODO.md).
 - **`.git/hooks/pre-commit`/`pre-push` were stale copies, not live hooks.** They were
   refreshed only by `flake.nix`'s devShell `shellHook`, so editing `scripts/pre-commit`
   or `scripts/pre-push` had no effect until the next `nix develop`. The installed hook

@@ -191,9 +191,14 @@ impl SymbolParser {
             return None;
         }
 
-        // Dedup: when both a plain and a re-export pattern match the same use_declaration
-        // (e.g. `pub use` matches both the generic pattern and the reexport pattern),
-        // keep one entry per (module, name, line) and prefer is_reexport=true.
+        // Dedup: when multiple query patterns match the same logical import (e.g. `pub use`
+        // matching both the generic pattern and the reexport pattern, or a language's
+        // "with alias" and "without alias" patterns both matching an aliased import because
+        // the grammar can't express "no :as follows" as a pure structural anchor — see
+        // clojure.imports.scm's `:refer`-vs-`:as` patterns for a concrete case), keep one
+        // entry per (module, name, line) and merge in whichever fields the duplicate matches
+        // provide: prefer is_reexport=true, and fill in alias from any duplicate that
+        // captured one (the first match to fire isn't guaranteed to be the most complete).
         let mut seen: std::collections::HashMap<(Option<String>, String, usize), usize> =
             std::collections::HashMap::new();
         let mut deduped: Vec<FlatImport> = Vec::with_capacity(results.len());
@@ -203,6 +208,10 @@ impl SymbolParser {
                 // Prefer the reexport variant
                 if imp.is_reexport && !deduped[existing_idx].is_reexport {
                     deduped[existing_idx].is_reexport = true;
+                }
+                // Prefer whichever duplicate match captured an alias
+                if imp.alias.is_some() && deduped[existing_idx].alias.is_none() {
+                    deduped[existing_idx].alias = imp.alias;
                 }
             } else {
                 seen.insert(key, deduped.len());

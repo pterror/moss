@@ -16,14 +16,14 @@
   {
     "file": "MathUtils.m",
     "kind": "Function",
-    "name": "add(int a, int b)",
+    "name": "add",
     "parent": null,
     "start_line": 3
   },
   {
     "file": "MathUtils.m",
     "kind": "Function",
-    "name": "multiply(int a, int b)",
+    "name": "multiply",
     "parent": null,
     "start_line": 7
   },
@@ -33,5 +33,19 @@
     "name": "MathUtils",
     "parent": null,
     "start_line": 11
+  },
+  {
+    "file": "MathUtils.m",
+    "kind": "Method",
+    "name": "addA",
+    "parent": "MathUtils",
+    "start_line": 13
+  },
+  {
+    "file": "MathUtils.m",
+    "kind": "Method",
+    "name": "multiplyA",
+    "parent": "MathUtils",
+    "start_line": 17
   }
 ]

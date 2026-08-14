@@ -1,1 +1,191 @@
-[]
+[
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "locals",
+    "parent": null,
+    "start_line": 1
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "sum",
+    "parent": null,
+    "start_line": 2
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "product",
+    "parent": null,
+    "start_line": 3
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "compute",
+    "parent": null,
+    "start_line": 6
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "triggers",
+    "parent": null,
+    "start_line": 7
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "sum",
+    "parent": null,
+    "start_line": 13
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 14
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "value",
+    "parent": null,
+    "start_line": 15
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "product",
+    "parent": null,
+    "start_line": 18
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 19
+  },
+  {
+    "file": "main.tf",
+    "kind": "Variable",
+    "name": "value",
+    "parent": null,
+    "start_line": 20
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "base_number",
+    "parent": null,
+    "start_line": 1
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 2
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "type",
+    "parent": null,
+    "start_line": 3
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "default",
+    "parent": null,
+    "start_line": 4
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "addend",
+    "parent": null,
+    "start_line": 7
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 8
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "type",
+    "parent": null,
+    "start_line": 9
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "default",
+    "parent": null,
+    "start_line": 10
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "multiplier",
+    "parent": null,
+    "start_line": 13
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 14
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "type",
+    "parent": null,
+    "start_line": 15
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "default",
+    "parent": null,
+    "start_line": 16
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "environment",
+    "parent": null,
+    "start_line": 19
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "description",
+    "parent": null,
+    "start_line": 20
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "type",
+    "parent": null,
+    "start_line": 21
+  },
+  {
+    "file": "variables.tf",
+    "kind": "Variable",
+    "name": "default",
+    "parent": null,
+    "start_line": 22
+  }
+]
