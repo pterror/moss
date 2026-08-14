@@ -95,7 +95,7 @@ if [ "${#scm_files[@]}" -gt 0 ]; then
           | grep -v "^[[:space:]]*;" \
           | grep -oh "@[A-Za-z0-9_.]*" \
           | grep -oP "@\K.*" \
-          | grep -vxE "call|call\.write|call\.qualifier" \
+          | grep -vxE "call|call\.write|call\.qualifier|_.*" \
           | sort -u) || true
     if [ -n "$bad" ]; then
         echo "error: invalid capture names in staged .calls.scm files:"

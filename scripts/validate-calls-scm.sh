@@ -2,6 +2,16 @@
 # Validate capture names in .calls.scm query files and output SARIF 2.1.0.
 #
 # Valid capture names: @call, @call.write, @call.qualifier
+#
+# Also valid: any capture whose name begins with an underscore (@_op, @_pfx, …).
+# That is the standard tree-sitter convention for a capture that exists only so a
+# predicate can refer to it — e.g. `operator: (binary_operator) @_op (#eq? @_op ":-")`
+# binds the operator solely to constrain the pattern. Such captures are never
+# emitted as call results, so they are not part of this file's output contract and
+# must not be flagged. Prolog needs them because its grammar is a generic term
+# reader: a clause head and a real goal are structurally identical, and only the
+# surrounding operator distinguishes them.
+#
 # Any other capture name is flagged as a warning.
 #
 # Usage:
@@ -41,6 +51,10 @@ for scm_file in $(find "$ROOT" -name "*.calls.scm" 2>/dev/null | sort); do
             if [ -n "$name" ]; then
                 col=$((col_offset + ${#before} + 1))  # 1-based column of '@' in full line
                 valid=0
+                # Predicate-only captures (@_op, @_pfx, …) are never emitted.
+                case "$name" in
+                    _*) valid=1 ;;
+                esac
                 for v in $VALID; do
                     if [ "$name" = "$v" ]; then
                         valid=1
