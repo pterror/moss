@@ -154,6 +154,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   restart-case/unwind-protect/with-simple-restart/and/or), plus a dedicated
   `(loop_macro) @complexity`/`@nesting` pattern for CL's `loop` macro, which parses
   as its own grammar node rather than a `list_lit`-headed form like everything else.
+- **Common Lisp `loop` never appeared in CFGs.** `commonlisp.cfg.scm`'s loop pattern
+  matched `list_lit`-headed forms via `#match? "^(do|do\\*|dolist|dotimes|loop)$"`,
+  but CL's `loop` macro parses as its own dedicated `loop_macro` grammar node, never
+  as a `list_lit` — confirmed via `normalize syntax query` against a real `loop`
+  form, which matched zero nodes under the old pattern. `loop` forms produced no CFG
+  loop node at all. Fixed by adding a dedicated `(loop_macro) @cfg.loop` pattern
+  (same fix already applied to `commonlisp.complexity.scm`) and removing the dead
+  `loop` alternative from the `list_lit` regex. `loop_macro` has no single boolean
+  condition to expose as `@cfg.loop.condition`, so it renders with the same
+  unconditional-loop shape the builder already uses for Rust's `loop` (head falls
+  through to body; exit only reachable via a break-like exit) — verified against
+  `dolist`'s pre-existing conditional-loop shape and TypeScript's labeled-edge loop
+  snapshot as references for what each shape should look like.
 - **`go_cfg`'s loop snapshot had an orphaned `LoopExit` with no labeled edges from
   `LoopHead`.** `go.cfg.scm`'s `for_statement` pattern captured `@cfg.loop.body` but
   never `@cfg.loop.condition`, so the CFG builder treated every Go `for` (range,
