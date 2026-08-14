@@ -1,0 +1,60 @@
+package example:variants@1.0.0;
+
+// POSITIVE (decorations): plain line comment.
+/// POSITIVE (decorations): doc line comment — nested doc_comment field inside
+/// line_comment; must be counted once via the line_comment wrapper, not twice.
+
+/* POSITIVE (decorations): plain block comment — has no nested doc_comment
+   field at all; this is the shape that was silently dropped before the fix. */
+/** POSITIVE (decorations): doc block comment — nested doc_comment field
+    inside block_comment; must be counted once via the block_comment wrapper. */
+
+// POSITIVE (imports): toplevel_use_item, bare form (no alias).
+use pkg:dep/iface-a;
+
+// POSITIVE (imports): toplevel_use_item with an alias.
+use pkg:dep/iface-b as renamed-b;
+
+interface types {
+  type resource-handle = u32;
+  enum status {
+    ok,
+    error,
+  }
+}
+
+interface consumer {
+  // POSITIVE (imports): use_item — interface-scoped `.{...}` name list, two
+  // names to confirm each produces its own @import.name without disturbing
+  // the shared @import/@import.path anchor.
+  use types.{resource-handle, status};
+
+  open: func(name: string) -> resource-handle;
+}
+
+world sample-world {
+  // POSITIVE (imports): import_item wrapping a use_path — a real reference
+  // to an already-declared interface.
+  import consumer;
+
+  // NEGATIVE (imports): import_item wrapping an inline extern_type (a local
+  // function signature, not a reference to another module). Must NOT
+  // contribute an @import/@import.path capture — there is no external path.
+  import direct-fn: func(x: u32) -> u32;
+
+  // POSITIVE (imports): include_item, bare form (no `with { ... }`).
+  include pkg:dep/other-world;
+
+  // NEGATIVE (imports): export_item. Exporting a locally-defined interface
+  // is not a dependency on external code (no import path exists); must NOT
+  // contribute an @import/@import.path capture.
+  export consumer;
+}
+
+world renaming-world {
+  // POSITIVE (imports): include_item with a `with { ... }` rename clause —
+  // exercises the (optional) `include_names_item` @import.name capture.
+  // NOTE: unlike `include X;`, `include X with { ... }` takes no trailing
+  // semicolon in this grammar (verified via `normalize syntax ast`).
+  include pkg:dep/other-world with { thing as renamed-thing }
+}
