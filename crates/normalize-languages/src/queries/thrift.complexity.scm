@@ -11,4 +11,5 @@
 
 ; Nesting nodes
 (service_definition) @nesting
+(interaction_definition) @nesting
 (function_definition) @nesting

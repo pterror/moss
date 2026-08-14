@@ -71,9 +71,6 @@ mod tests {
             "type", "container_type", "definition_type",
             // Identifiers
             "annotation_identifier",
-            // Definitions
-            "senum_definition", "interaction_definition", "annotation_definition",
-            "fb_annotation_definition",
             // Declarations
             "namespace_declaration", "package_declaration",
             // Modifiers
@@ -82,6 +79,9 @@ mod tests {
             "throws", "struct_literal",
             // covered by imports.scm
             "include_statement",
+            // covered by decorations.scm (not tags.scm, so still "unused"
+            // per this audit's tags.scm-only check)
+            "annotation_definition", "fb_annotation_definition",
         ];
         validate_unused_kinds_audit(&Thrift, documented_unused)
             .expect("Thrift unused node kinds audit failed");
