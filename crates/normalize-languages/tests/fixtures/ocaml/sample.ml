@@ -49,3 +49,79 @@ let () =
   Stack.push s 2;
   printf "%s\n" (classify 5);
   printf "%d\n" (sum_evens [1; 2; 3; 4; 5])
+
+(* Exception raised when a queue is drained empty. *)
+exception Empty_queue
+
+(* Record type with a deriving attribute (ppx_deriving) and a
+   first-class-function field. *)
+type 'a queue = { mutable front : 'a list; run_hook : unit -> unit }
+[@@deriving show]
+
+let make_queue () = { front = []; run_hook = (fun () -> ()) }
+
+(* Field-function call: q.run_hook () — record field holding a function. *)
+let notify q = q.run_hook ()
+
+let dequeue q =
+  match q.front with
+  | [] -> raise Empty_queue
+  | x :: rest ->
+      q.front <- rest;
+      x
+
+let try_dequeue q = try Some (dequeue q) with Empty_queue -> None
+
+(* Operator definition: idiomatic option-monad bind. *)
+let ( >>= ) opt f = match opt with None -> None | Some x -> f x
+
+let chained = Some 1 >>= (fun x -> Some (x + 1)) >>= fun y -> Some (y * 2)
+
+(* Module type (signature) for a comparable element. *)
+module type COMPARABLE = sig
+  type t
+
+  val compare : t -> t -> int
+end
+
+(* Functor parameterized over a COMPARABLE module. *)
+module Make_set (Ord : COMPARABLE) = struct
+  type elt = Ord.t
+
+  let is_sorted lst =
+    let rec go = function
+      | a :: (b :: _ as rest) -> Ord.compare a b <= 0 && go rest
+      | _ -> true
+    in
+    go lst
+end
+
+module IntCompare = struct
+  type t = int
+
+  let compare = Stdlib.compare
+end
+
+module IntSet = Make_set (IntCompare)
+
+(* Re-export List's interface under a local module, plus a local addition. *)
+module ListExt = struct
+  include List
+
+  let last lst = List.nth lst (List.length lst - 1)
+end
+
+(* for/while loops — real-world control-flow idioms not otherwise exercised. *)
+let sum_to n =
+  let total = ref 0 in
+  for i = 1 to n do
+    total := !total + i
+  done;
+  !total
+
+let count_down n =
+  let i = ref n in
+  while !i > 0 do
+    i := !i - 1
+  done;
+  !i
