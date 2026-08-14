@@ -12,6 +12,32 @@
 ; then-branch is an unnamed (block) child, with optional unnamed
 ; (elseif_clause)/(else_clause) siblings. for_statement has no fields
 ; at all: its unnamed children are (iterator) and (block).
+;
+; KNOWN LIMITATION (documented, not silently accepted): MATLAB's
+; `elseif`/`else` clauses are FLAT siblings of `if_statement`, not nested
+; recursively (unlike e.g. Python, where each `elif` is itself a nested
+; `if_statement` in the `alternative` field). Because of this flat shape,
+; an `if` with 2+ `elseif_clause` children (with or without a trailing
+; `else_clause`) makes multiple of the three patterns below match the SAME
+; `if_statement` node — once per elseif/else arm. `normalize-cfg`'s builder
+; (`crates/normalize-cfg/src/builder.rs`) deduplicates structural matches by
+; the primary node's start byte (`structural_nodes.dedup_by_key(|n|
+; n.byte_range.start)`), since it assumes at most one `@cfg.branch` match per
+; branch node. For a flat elseif chain this silently KEEPS ONLY THE FIRST
+; matching arm and DROPS every later `elseif`/`else` arm's statements from
+; the CFG entirely (verified: `if n>0 ... elseif n==0 ... elseif n<-10 ...
+; else ... end` produces 3 overlapping `@cfg.branch` matches for the one
+; `if_statement`, each with a different `@cfg.branch.else`; only the first,
+; `elseif n==0 ...`, survives dedup — the `elseif n<-10` and `else` arms are
+; never visited by the builder). A single `elseif` with no further
+; elseif/else, or a single `else` with no elseif, is unaffected (only one
+; pattern matches). This is a `normalize-cfg` builder limitation, not a
+; grammar or query-completeness gap — the query correctly captures every
+; arm's condition/then/else; the builder's singular `branch_else: Option<_>`
+; field has no representation for a 3+-way branch chain. The same class of
+; grammar (flat elseif children) affects `bash.cfg.scm`. Fixing this
+; requires builder-level support for multi-arm branches, not a per-language
+; query change — see TODO.md.
 
 ; ---------------------------------------------------------------------------
 ; if / elseif / else (branch)

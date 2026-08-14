@@ -21,6 +21,30 @@ classdef Shape < handle
             fprintf('Shape: color=%s, area=%g\n', obj.Color, obj.computeArea());
         end
     end
+
+    methods (Abstract)
+        % Abstract method declaration: signature only, no body.
+        area = describe(obj)
+    end
+end
+
+classdef Circle < Shape & matlab.mixin.Copyable
+    % Multi-superclass subclass; exercises a Circle object built on top of
+    % Shape's superclass-qualified constructor call.
+    properties
+        Radius
+    end
+
+    methods
+        function obj = Circle(radius)
+            obj = obj@Shape('red');
+            obj.Radius = radius;
+        end
+
+        function area = computeArea(obj)
+            area = pi * obj.Radius ^ 2;
+        end
+    end
 end
 
 function result = factorial(n)
@@ -61,5 +85,24 @@ function result = classifyNumber(n)
             result = 'zero';
         otherwise
             result = 'positive';
+    end
+end
+
+function results = describeShapes(shapes)
+% Real-world idioms: cell arrays, structs, anonymous functions, while,
+% try/catch, and a dynamic-field ("indirect access") call dispatch.
+    results = {};
+    handlers = struct('circle', @(s) s.computeArea(), 'shape', @(s) s.computeArea());
+    i = 1;
+    while i <= length(shapes)
+        shape = shapes{i};
+        try
+            kind = 'shape';
+            area = handlers.(kind)(shape);
+            results{end + 1} = sprintf('%s: %g', class(shape), area);
+        catch err
+            warning('describeShapes:failed', 'skipping shape: %s', err.message);
+        end
+        i = i + 1;
     end
 end
