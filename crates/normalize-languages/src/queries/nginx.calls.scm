@@ -14,3 +14,20 @@
 ; Block directive: server { ... }, location /api { ... }
 (block_directive
   name: (directive) @call)
+
+; Lua block directive (OpenResty/lua-nginx-module): access_by_lua_block { ... },
+; content_by_lua_block { ... }, etc. Unlike simple_directive/block_directive, the
+; grammar does not expose the directive keyword via a `name: (directive)` field —
+; node-types.json shows lua_block_directive's only child field is the opaque
+; `lua_block` body; the keyword is an anonymous literal token, one of the 7
+; variants below (confirmed via node-types.json and `normalize syntax ast`).
+(lua_block_directive
+  [
+    "access_by_lua_block"
+    "balancer_by_lua_block"
+    "body_filter_by_lua_block"
+    "content_by_lua_block"
+    "header_filter_by_lua_block"
+    "log_by_lua_block"
+    "rewrite_by_lua_block"
+  ] @call)
