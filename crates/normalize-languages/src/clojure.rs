@@ -65,6 +65,31 @@ impl Language for Clojure {
     }
 
     fn get_visibility(&self, node: &Node, content: &str) -> Visibility {
+        // `defn-`/`defmacro-` (trailing `-` on the form keyword) is the classic
+        // private-def convention, but idiomatic Clojure at least as commonly marks
+        // privacy via `^:private` reader metadata on the *name* symbol instead:
+        // `(defn ^:private foo [...])`. `sym_lit` has an optional `meta:` field
+        // (a `meta_lit` node) for exactly this — confirmed via `normalize syntax
+        // ast` on that construct. Previously only the `defn-` convention was
+        // checked, so `^:private`-marked vars were misreported as Public.
+        if node.kind() == "list_lit" {
+            let mut cursor = node.walk();
+            let mut seen_form = false;
+            for child in node.children(&mut cursor) {
+                if child.kind() == "sym_lit" {
+                    if !seen_form {
+                        seen_form = true;
+                    } else {
+                        if let Some(meta) = child.child_by_field_name("meta")
+                            && content[meta.byte_range()].contains(":private")
+                        {
+                            return Visibility::Private;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
         if let Some((form, _)) = self.extract_def_form(node, content) {
             if form.ends_with('-') {
                 Visibility::Private
@@ -105,6 +130,15 @@ impl Language for Clojure {
     fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
         // list_lit captured by @definition.* — the name is in the second sym_lit child
         // (first sym_lit is the form: defn, defrecord, ns, etc.)
+        //
+        // The second sym_lit's own byte range can include a leading `^:private`/
+        // `^{:doc "..."}` reader-metadata prefix — `sym_lit` has an optional
+        // `meta:` field whose presence extends the *whole* sym_lit node's span
+        // to cover the metadata text (verified via `normalize syntax ast` on
+        // `(defn ^:private foo ...)`: the sym_lit node's text is `^:private
+        // foo`, not `foo`). Reading `child.byte_range()` directly (as this used
+        // to) leaked that prefix into the extracted symbol name. Read the
+        // sym_lit's `name:` field (always a bare `sym_name` node) instead.
         if node.kind() != "list_lit" {
             return node
                 .child_by_field_name("name")
@@ -117,7 +151,8 @@ impl Language for Clojure {
                 if !seen_form {
                     seen_form = true;
                 } else {
-                    return Some(&content[child.byte_range()]);
+                    let name_field = child.child_by_field_name("name").unwrap_or(child);
+                    return Some(&content[name_field.byte_range()]);
                 }
             }
         }
