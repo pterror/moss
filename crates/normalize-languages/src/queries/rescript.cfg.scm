@@ -61,6 +61,39 @@
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
+; for / while (loops) and try/catch — entirely unhandled before this fix.
+; Like if_expression/switch_expression, for_expression/while_expression/
+; try_expression have NO named fields at all (verified against
+; node-types.json: `"fields": {}` for all three) — every child is an
+; unnamed positional node, so these follow the same anchored-`.` pattern
+; already used above for if_expression/switch_expression.
+; ---------------------------------------------------------------------------
+
+; for i in <from> to|downto <to> { body }
+(for_expression
+  (value_identifier)
+  .
+  (_) @cfg.loop.condition
+  (block) @cfg.loop.body
+) @cfg.loop
+
+; while <condition> { body }
+(while_expression
+  .
+  (_) @cfg.loop.condition
+  (block) @cfg.loop.body
+) @cfg.loop
+
+; try { body } catch { arms }. Catch arms parse as ordinary `switch_match`
+; nodes (verified via `normalize syntax ast`) — same node type
+; cfg.match.arm above uses for switch_expression.
+(try_expression
+  .
+  (_) @cfg.try.body
+  (switch_match) @cfg.try.catch
+) @cfg.try
+
+; ---------------------------------------------------------------------------
 ; Exits
 ; ---------------------------------------------------------------------------
 
