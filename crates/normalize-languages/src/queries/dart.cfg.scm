@@ -43,6 +43,15 @@
   )
 ) @cfg.match
 
+; Dart 3 pattern-matching switch expression: `switch (n) { 0 => ..., _ => ... }`
+; — distinct node type from switch_statement (an expression, not a
+; statement), with switch_expression_case children directly under the
+; repeated `body` field (no intermediate switch_block wrapper).
+(switch_expression
+  condition: (_) @cfg.match.scrutinee
+  body: (switch_expression_case) @cfg.match.arm
+) @cfg.match
+
 ; ---------------------------------------------------------------------------
 ; for (C-style loop)
 ; ---------------------------------------------------------------------------

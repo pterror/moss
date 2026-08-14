@@ -4,6 +4,24 @@
 ; `function_signature`; both expose `formal_parameter_list`.
 (function_signature (formal_parameter_list) @refactor.param_list) @refactor.function_def
 
+; Constructors and operator overloads are separate node kinds from
+; function_signature (see dart.tags.scm for the full completeness note) and
+; were entirely absent here too — no @refactor.function_def meant
+; extract-function/add-parameter/etc. couldn't operate on any Dart
+; constructor. constructor_signature is the only one of the four with a
+; named `parameters:` field; the rest are unfielded, matched positionally
+; like the plain function_signature pattern above.
+(constructor_signature
+  parameters: (formal_parameter_list) @refactor.param_list) @refactor.function_def
+
+(factory_constructor_signature (formal_parameter_list) @refactor.param_list) @refactor.function_def
+
+(constant_constructor_signature (formal_parameter_list) @refactor.param_list) @refactor.function_def
+
+(redirecting_factory_constructor_signature (formal_parameter_list) @refactor.param_list) @refactor.function_def
+
+(operator_signature (formal_parameter_list) @refactor.param_list) @refactor.function_def
+
 ; NOTE: the Dart tree-sitter grammar has no dedicated call-expression node — a
 ; call is an `identifier` followed by a sibling `selector (argument_part
 ; (arguments))` inside an `expression_statement`, with no node grouping the

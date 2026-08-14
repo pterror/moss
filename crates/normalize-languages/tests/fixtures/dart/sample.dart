@@ -35,6 +35,46 @@ class Stack<T> {
   int get length => _items.length;
 }
 
+class Rectangle {
+  final double width;
+  final double height;
+
+  Rectangle(this.width, this.height);
+
+  Rectangle.square(double side) : width = side, height = side;
+
+  factory Rectangle.fromPoints(Point a, Point b) {
+    return Rectangle((b.x - a.x).abs(), (b.y - a.y).abs());
+  }
+
+  double get area => width * height;
+
+  Rectangle operator +(Rectangle other) =>
+      Rectangle(width + other.width, height + other.height);
+}
+
+mixin Loggable {
+  void log(String message) {
+    print(message);
+  }
+}
+
+extension StringExtras on String {
+  String shout() => toUpperCase();
+}
+
+String describeSize(double area) {
+  return switch (area) {
+    0 => 'empty',
+    < 10 => 'small',
+    _ => 'large',
+  };
+}
+
+int firstOrDefault(List<int>? values) {
+  return values?.first ?? -1;
+}
+
 /// Classify a number as negative, zero, or positive.
 @pragma('vm:prefer-inline')
 String classify(int n) {
@@ -101,4 +141,11 @@ void main() {
   final p1 = Point(0.0, 0.0);
   final p2 = Point(3.0, 4.0);
   print(p1.distanceTo(p2));
+
+  final rect = Rectangle.fromPoints(p1, p2);
+  print(rect.area);
+  print(describeSize(rect.area));
+  print(firstOrDefault([1, 2, 3]));
+  print('shout'.shout());
+  print([3, 1, 2].map((x) => x * 2).toList());
 }
