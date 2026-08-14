@@ -6,6 +6,7 @@
 (if_statement) @complexity
 (for_statement) @complexity
 (while_statement) @complexity
+(do_statement) @complexity
 (switch_statement) @complexity
 (case_statement) @complexity
 (conditional_expression) @complexity
@@ -15,5 +16,6 @@
 (if_statement) @nesting
 (for_statement) @nesting
 (while_statement) @nesting
+(do_statement) @nesting
 (switch_statement) @nesting
 (function_definition) @nesting

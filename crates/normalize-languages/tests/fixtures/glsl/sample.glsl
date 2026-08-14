@@ -13,6 +13,18 @@ uniform vec3 u_CameraPos;
 uniform sampler2D u_AlbedoMap;
 uniform sampler2D u_NormalMap;
 
+// Interface block: UBO with layout qualifiers
+layout(std140, binding = 0) uniform SceneData {
+    mat4 u_ViewProj;
+    vec4 u_FogColor;
+} sceneData;
+
+// Interface block: SSBO with a flexible array member
+layout(std430, binding = 1) buffer LightBuffer {
+    int lightCount;
+    vec4 lightPositions[];
+} lights;
+
 // Input/output
 in vec3 v_Position;
 in vec3 v_Normal;
@@ -112,6 +124,10 @@ void main() {
     vec3 result = (vec3(0.1) + diffuse + specular) * albedo.rgb;
     float depth = length(u_CameraPos - v_Position);
     result = applyFog(result, depth);
+
+    // Array .length() method call on an SSBO flexible array member
+    // (field_expression call: lights.lightPositions.length())
+    int activeLights = min(lights.lightCount, lights.lightPositions.length());
 
     // Discard fully transparent fragments
     if (albedo.a < 0.01) {
