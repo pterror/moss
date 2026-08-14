@@ -219,7 +219,12 @@ mod tests {
     fn unused_node_kinds_audit() {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[
-            // Loop-related clauses
+            // Loop-related clauses. `loop_macro` itself is referenced by
+            // commonlisp.complexity.scm's `(loop_macro) @complexity`/
+            // `@nesting` patterns, but this audit (validate_unused_kinds_audit)
+            // only scans tags.scm for usage, not complexity.scm/cfg.scm — so
+            // it stays documented here as "unused" from tags.scm's
+            // perspective, matching the audit's own scope.
             "accumulation_clause", "condition_clause", "do_clause", "for_clause",
             "for_clause_word", "loop_clause", "loop_macro", "repeat_clause",
             "termination_clause", "while_clause", "with_clause",

@@ -284,6 +284,105 @@ fn commonlisp_calls_negative_special_forms_are_not_calls() {
 }
 
 #[test]
+fn commonlisp_complexity_negative_ordinary_lists_are_not_complexity() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping commonlisp_complexity_negative: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_complexity_negative: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("commonlisp")
+        .expect("commonlisp complexity query missing");
+    // The original bug: a bare `(list_lit) @complexity` counted every
+    // parenthesized expression, so a zero-branch function like
+    // `(defun add-two (a b) (+ a b))` produced false @complexity hits for
+    // its parameter list `(a b)` and its call `(+ a b)`. Isolate that one
+    // function's source and assert zero @complexity captures survive.
+    let zero_branch_src = "(defun add-two (a b)\n  (+ a b))\n";
+    let complexity = collect_captures(&lang, zero_branch_src, &query_str, "complexity");
+    assert_eq!(
+        complexity,
+        Vec::<String>::new(),
+        "a zero-branch function must produce zero @complexity captures, got: {complexity:?}"
+    );
+}
+
+#[test]
+fn commonlisp_complexity_completeness_branch_match_loop_exception_forms() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping commonlisp_complexity_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_complexity_completeness: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("commonlisp")
+        .expect("commonlisp complexity query missing");
+    let complexity = collect_captures(&lang, COMMONLISP_VARIANTS, &query_str, "complexity");
+    for prefix in [
+        "(if (> x 0)",
+        "(when (> x 0)",
+        "(unless (> x 0)",
+        "(cond ((> x 0)",
+        "(case x",
+        "(ccase x",
+        "(typecase x",
+        "(etypecase x",
+        "(ctypecase x",
+        "(do ((i 0",
+        "(dolist (i lst)",
+        "(dotimes (i n)",
+        "(handler-case (foo)",
+        "(handler-bind ((error",
+        "(restart-case (error \"x\")",
+        "(unwind-protect (foo)",
+        "(and x (or y",
+    ] {
+        assert!(
+            complexity.iter().any(|c| c.starts_with(prefix)),
+            "expected an @complexity capture starting with {prefix:?}, got: {complexity:?}"
+        );
+    }
+
+    // `loop` is a dedicated `loop_macro` node, not a list_lit-headed
+    // `sym_lit`, so it can't be captured via the same #match? pattern as
+    // the forms above; verify it via full node text on @complexity nodes.
+    let query = Query::new(&lang, &query_str).expect("query compilation failed");
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser
+        .parse(COMMONLISP_VARIANTS, None)
+        .expect("parse failed");
+    let mut qcursor = QueryCursor::new();
+    let source_bytes = COMMONLISP_VARIANTS.as_bytes();
+    let mut found_loop_macro = false;
+    let mut matches = qcursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            if cap_name == "complexity" && cap.node.kind() == "loop_macro" {
+                found_loop_macro = true;
+            }
+        }
+    }
+    assert!(
+        found_loop_macro,
+        "expected a loop_macro node to produce an @complexity capture"
+    );
+}
+
+#[test]
 fn commonlisp_node_name_finds_all_definition_shapes() {
     // node_name() in commonlisp.rs previously ALWAYS returned None — this is
     // the function the actual symbol-extraction pipeline uses for a

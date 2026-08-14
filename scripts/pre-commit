@@ -141,6 +141,47 @@ elif [ "${#PKGS[@]}" -gt 0 ]; then
         done
     done
 
+    # A materialized file's `mod X;` declarations need X.rs / X/mod.rs to
+    # physically exist in the scratch dir too, or rustfmt fails with
+    # "failed to resolve mod" before it ever gets to check formatting —
+    # even when X itself has no staged changes (e.g. a test file's `mod
+    # common;` pointing at an untouched `tests/common/mod.rs` shared
+    # helper). Pull in any such sibling module files from the working
+    # tree (not the index — they're only present to satisfy module
+    # resolution, not to be format-checked themselves) and repeat until
+    # nothing new is added, since a pulled-in file can itself declare
+    # further `mod` children.
+    # These pulled-in files are deliberately NOT added to EDITION_FILES —
+    # rustfmt already recurses into every `mod`-reachable file starting
+    # from each root passed on the command line, so an untouched, already-
+    # formatted helper module gets checked as a side effect of resolving
+    # the staged file that references it. Adding it a second time as its
+    # own root would report false-positive violations for files this
+    # commit never touched.
+    if [ "$fmt_file_count" -gt 0 ]; then
+        shopt -s globstar nullglob
+        added=true
+        while [ "$added" = true ]; do
+            added=false
+            for f in "$fmt_tmp"/**/*.rs; do
+                [ -f "$f" ] || continue
+                rel="${f#"$fmt_tmp"/}"
+                dir="$(dirname "$rel")"
+                while IFS= read -r modname; do
+                    [ -n "$modname" ] || continue
+                    for cand in "$dir/$modname.rs" "$dir/$modname/mod.rs"; do
+                        if [ -f "$cand" ] && [ ! -f "$fmt_tmp/$cand" ]; then
+                            mkdir -p "$fmt_tmp/$(dirname "$cand")"
+                            cp "$cand" "$fmt_tmp/$cand"
+                            added=true
+                        fi
+                    done
+                done < <(sed -n 's/^[[:space:]]*mod[[:space:]]\+\([a-zA-Z_][a-zA-Z0-9_]*\)[[:space:]]*;.*/\1/p' "$f")
+            done
+        done
+        shopt -u globstar nullglob
+    fi
+
     # NB: can't test `${#EDITION_FILES[@]}` directly under `set -u` — bash
     # (as of 5.3) treats a `declare -A` array with zero elements ever
     # assigned as unset for nounset purposes, even though the declaration

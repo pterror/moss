@@ -87,6 +87,73 @@
         y)
       0))
 
+;; --- complexity.scm / cfg.scm: branch/match/exception/boolean forms -------
+;; All list_lit-headed forms except `loop`, which parses as its own
+;; dedicated `loop_macro` node (see commonlisp.complexity.scm's header).
+
+(defun variant-if (x)
+  (if (> x 0) 'pos 'neg))
+
+(defun variant-when (x)
+  (when (> x 0) x))
+
+(defun variant-unless (x)
+  (unless (> x 0) x))
+
+(defun variant-cond (x)
+  (cond ((> x 0) 'pos) ((< x 0) 'neg) (t 'zero)))
+
+(defun variant-case (x)
+  (case x (1 'one) (2 'two) (t 'other)))
+
+(defun variant-ccase (x)
+  (ccase x (1 'one) (2 'two)))
+
+(defun variant-typecase (x)
+  (typecase x (integer 'int) (string 'str)))
+
+(defun variant-etypecase (x)
+  (etypecase x (integer 'int) (string 'str)))
+
+(defun variant-ctypecase (x)
+  (ctypecase x (integer 'int) (string 'str)))
+
+(defun variant-do (n)
+  (do ((i 0 (+ i 1))) ((= i n)) (print i)))
+
+(defun variant-dolist (lst)
+  (dolist (i lst) (print i)))
+
+(defun variant-dotimes (n)
+  (dotimes (i n) (print i)))
+
+;; `loop` — dedicated `loop_macro` grammar node, not a list_lit-headed
+;; `sym_lit` form like every other construct above.
+(defun variant-loop (n)
+  (loop for i from 1 to n collect i))
+
+(defun variant-handler-case ()
+  (handler-case (foo) (error (e) (print e))))
+
+(defun variant-handler-bind ()
+  (handler-bind ((error (lambda (c) (print c)))) (foo)))
+
+(defun variant-restart-case ()
+  (restart-case (error "x") (use-value (v) v)))
+
+(defun variant-unwind-protect ()
+  (unwind-protect (foo) (bar)))
+
+(defun variant-and-or (x y)
+  (and x (or y (not x))))
+
+;; --- complexity.scm: nesting via lambda/let/let*/flet/labels ---------------
+(defun variant-nesting (x)
+  (let* ((a (lambda (n) (* n n))))
+    (flet ((sq (n) (* n n)))
+      (labels ((rec (n) (if (= n 0) 1 (* n (rec (- n 1))))))
+        (+ (a x) (sq x) (rec x))))))
+
 ;; --- NEGATIVE: must NOT match as tags definitions --------------------------
 
 ;; a plain function call is not a definition

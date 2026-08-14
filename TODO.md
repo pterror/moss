@@ -30,19 +30,21 @@ deleted.
 
 ## Active open threads (advisory)
 
-- **`go_cfg`'s recorded loop snapshot likely has the same missing-false-branch CFG bug
-  jinja2's did, unverified/unfixed (2026-08-14).** While fixing `normalize-cfg`'s
-  `jinja2_cfg::test_jinja2_loop` stale snapshot (root cause: `jinja2.cfg.scm` never captured
-  `@cfg.loop.body`, a real query bug fixed in the same-day Jinja2 query-completeness sweep),
-  cross-checked the new correct shape against `go_cfg`'s and `typescript_cfg`'s already-
-  "verified" loop snapshots for structural sanity. `typescript_cfg__typescript_loop.snap` has
-  the expected `LoopHead -->|"true"| LoopBody` / `LoopHead -->|"false"| LoopExit` edges.
-  `go_cfg__go_loop.snap` does not — it has an unlabeled `LoopHead --> LoopBody` edge and no
-  edge into `LoopExit` at all (`LoopExit` only has an outgoing `-->|"return"| exit` edge, same
-  orphaned-node shape the stale jinja2 snapshot had). Not investigated further or touched —
-  out of scope for the jinja2 fix — but worth checking whether `go.cfg.scm` has the same class
-  of "loop body/false-branch never captured" bug, or whether Go's CFG builder path genuinely
-  differs from TypeScript's for a structural reason.
+- ✅ **DONE (2026-08-14): `go_cfg`'s orphaned-`LoopExit` bug confirmed and fixed — same
+  class as jinja2's.** `go.cfg.scm`'s `for_statement` pattern captured `@cfg.loop.body`
+  but never `@cfg.loop.condition`, so `normalize-cfg`'s builder (`loop_condition.is_some()`
+  gate in `build_loop`) treated every Go `for` as unconditional: `LoopHead` fell straight
+  to `LoopBody` with no `true`/`false` edges, and `LoopExit` was reachable only via
+  `break`. Go's `for_statement` has no `condition:` field at all (confirmed "Impossible
+  pattern" via `normalize syntax query`) — its shape varies by which node (`for_clause`,
+  `range_clause`, a plain boolean expression, or nothing) precedes `block`. Two
+  mutually-exclusive patterns now capture `@cfg.loop.condition` for the first three forms
+  and leave it absent only for bare `for { }`; verified via `normalize syntax query`
+  against all four forms and via the updated `go_cfg__go_loop.snap` (now matches
+  `typescript_cfg`'s labeled-edge shape). Checked every other language's loop snapshot for
+  the same orphaned shape (`javascript`, `lua`, `java` [including `java_labeled_break`],
+  `python`, `rust` [`rust_loop`/`rust_nested`]) — all already correct; go was the only
+  remaining instance.
 
 - **Query-testing methodology sweep — incomplete, 73 of 99 grammars remaining** (verify this count against the "Remaining for future batches" list further down before continuing — it was accurate as of batch 3). `docs/query-testing-methodology.md` was validated on Rust, then applied in three batches (batch 1: python/typescript/javascript/go/java/c/cpp/ruby; batch 2: c-sharp/php/swift/kotlin/scala/haskell/elixir/sql; batch 3: json/yaml/toml/html/css/bash/lua/markdown/dockerfile). Why it matters: every single language examined so far had real, previously-silent extraction bugs, several severe (C#'s `@type.reference` matching every identifier in the file; Haskell/Elixir complexity wildly inflated or wrong for every function; Python's `@definition.constant` matching nothing at all; JSON dropping every empty-string-keyed pair; CSS's `@font-face`/`@layer`/`@property`/`@container`/`@page`/`@scope` all invisible to symbol extraction). Open question: whether to continue a full sweep across all 99 grammars or stop at a high-value subset — the user chose "full sweep" earlier, but that predates knowing each batch costs roughly 3-4M tokens (3 batches of 8-9 languages each have been run so far). Next session should confirm this tradeoff is still the user's preference before committing to more batches.
 

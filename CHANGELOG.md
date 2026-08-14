@@ -112,8 +112,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `LoopExit` an orphaned node in the rendered graph). The recorded snapshot predated that
   query fix. New output correctly emits `true`/`false`-labeled edges from `LoopHead` to
   `LoopBody`/`LoopExit`, matching the already-verified `typescript_cfg` loop shape (`go_cfg`'s
-  recorded loop snapshot still has the unlabeled-edge/orphaned-`LoopExit` shape and was left
-  untouched — out of scope here, flagged in TODO.md).
+  recorded loop snapshot had the same unlabeled-edge/orphaned-`LoopExit` shape — since fixed,
+  see below).
 - **`.git/hooks/pre-commit`/`pre-push` were stale copies, not live hooks.** They were
   refreshed only by `flake.nix`'s devShell `shellHook`, so editing `scripts/pre-commit`
   or `scripts/pre-push` had no effect until the next `nix develop`. The installed hook
@@ -126,6 +126,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Common Lisp complexity/nesting metrics counted every parenthesized expression.**
+  `commonlisp.complexity.scm` was a bare `(list_lit) @complexity` / `(list_lit)
+  @nesting` — since every Common Lisp form (call, data literal, control flow) is a
+  `list_lit` node, a zero-branch function like `(defun add (a b) (+ a b))` scored
+  non-zero complexity, the same defect previously found and fixed in
+  `elisp.complexity.scm`/`scheme.complexity.scm`. Now discriminates on the leading
+  symbol via `#match?`/`#eq?` (if/when/unless/cond/case/ecase/ccase/typecase/
+  etypecase/ctypecase/do/do*/dolist/dotimes/handler-case/handler-bind/ignore-errors/
+  restart-case/unwind-protect/with-simple-restart/and/or), plus a dedicated
+  `(loop_macro) @complexity`/`@nesting` pattern for CL's `loop` macro, which parses
+  as its own grammar node rather than a `list_lit`-headed form like everything else.
+- **`go_cfg`'s loop snapshot had an orphaned `LoopExit` with no labeled edges from
+  `LoopHead`.** `go.cfg.scm`'s `for_statement` pattern captured `@cfg.loop.body` but
+  never `@cfg.loop.condition`, so the CFG builder treated every Go `for` (range,
+  condition-only, three-clause) as unconditional — `LoopHead` fell straight through
+  to `LoopBody` with no `true`/`false` edges, and `LoopExit` was reachable only via
+  `break`. Same class of bug as the `jinja2_cfg` snapshot fix above, flagged there as
+  an open follow-up. Go's `for_statement` has no `condition:` field (unlike
+  TypeScript/JS); its shape instead varies by which node — `for_clause`,
+  `range_clause`, a plain boolean expression, or nothing — precedes the `block`. Two
+  mutually-exclusive patterns now capture `@cfg.loop.condition` for the first three
+  forms and leave it absent only for bare `for { }`, producing the same labeled-edge
+  shape as every other language's loop snapshot.
 - **Gleam pipe-target calls (`x |> f`, `x |> module.func`) were entirely absent
   from call extraction.** Applying the query-testing methodology to
   `gleam.calls.scm` found the query only matched `function_call` nodes; the
