@@ -1,4 +1,6 @@
-#!/usr/bin/awk -f
+#!/usr/bin/gawk -f
+
+@include "helpers.awk"
 
 BEGIN {
     FS = ","
@@ -34,6 +36,21 @@ function sum_fields(    i, s) {
     return s
 }
 
+# gawk switch/case: another dispatch idiom alongside classify()'s if-chain.
+function describe(n,    result) {
+    switch (n) {
+        case 0:
+            result = "zero"
+            break
+        case 1:
+            result = "one"
+            break
+        default:
+            result = "many"
+    }
+    return result
+}
+
 /^#/ {
     next
 }
@@ -54,5 +71,6 @@ END {
         print "count:", count
         print "avg:", avg
         print "max tested:", max(total, count)
+        print "count describes as:", describe(count)
     }
 }

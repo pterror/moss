@@ -58,6 +58,30 @@
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
+; switch (match) — gawk extension
+; ---------------------------------------------------------------------------
+
+; `switch_statement` has no field at all (per node-types.json, not just an
+; unfielded body like if/while/for) — the scrutinee expression is a bare
+; positional first child before `switch_body`, matched with `.` anchoring
+; rather than a field name. Verified via `normalize syntax ast`/
+; `normalize syntax query --show-source` against a real gawk switch.
+
+(switch_statement
+  .
+  (_) @cfg.match.scrutinee
+  (switch_body
+    (switch_case) @cfg.match.arm)
+) @cfg.match
+
+(switch_statement
+  .
+  (_) @cfg.match.scrutinee
+  (switch_body
+    (switch_default) @cfg.match.arm)
+) @cfg.match
+
+; ---------------------------------------------------------------------------
 ; Exits
 ; ---------------------------------------------------------------------------
 
