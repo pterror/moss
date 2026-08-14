@@ -15,12 +15,20 @@
       {{ loading ? 'Loading...' : 'Load more' }}
     </button>
 
-    <slot name="footer" />
+    <input v-model="searchTerm" placeholder="Search…" />
+
+    <!-- v-if on a self-closing tag: a structurally distinct node
+         (self_closing_tag, not start_tag) from every other v-if above. -->
+    <UserAvatar v-if="user.avatarUrl" :src="user.avatarUrl" />
+
+    <template v-slot:footer>
+      <slot name="footer" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import type { User, Post } from '@/types';
 import { fetchUser, fetchPosts } from '@/api';
@@ -39,6 +47,8 @@ const user = ref<User | null>(null);
 const posts = ref<Post[]>([]);
 const loading = ref(false);
 const page = ref(1);
+const searchTerm = ref('');
+const filters = reactive({ sortBy: 'date', ascending: true });
 
 const hasMore = computed(() => posts.value.length % 10 === 0);
 

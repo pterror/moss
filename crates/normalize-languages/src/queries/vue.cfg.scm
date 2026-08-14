@@ -16,12 +16,23 @@
 ; expression inside `v-if="..."` as JS/TS. `v-else`/`v-else-if` are
 ; identified by the directive name text via `#match?`, since the grammar
 ; does not give them distinct node types from a plain `v-if` directive.
+;
+; A directive can sit on either of two structurally distinct tag node
+; types — `start_tag` (an element with a body, `<div v-if="x">...</div>`)
+; or `self_closing_tag` (`<Component v-if="x" />` — confirmed via
+; node-types.json that both allow the identical
+; attribute/directive_attribute/tag_name children, and both were verified
+; empty of any built-in relationship: matching only `start_tag` silently
+; dropped every directive on a self-closing element, which — since Vue
+; components and void-like elements (`<slot>`, custom components) are
+; conventionally self-closing — is a common, not a rare, real-world shape.
+; Every pattern below is therefore duplicated for both tag kinds.
 
 ; ---------------------------------------------------------------------------
 ; v-if / v-else-if / v-else (branch via directives)
 ; ---------------------------------------------------------------------------
 
-; v-if directive on an element
+; v-if directive on an element with a body
 (element
   (start_tag
     (directive_attribute
@@ -31,7 +42,17 @@
       (#match? @_d "^v-if$")))
 ) @cfg.branch
 
-; v-else-if directive on an element
+; v-if directive on a self-closing element
+(element
+  (self_closing_tag
+    (directive_attribute
+      (directive_name) @_d
+      (quoted_attribute_value
+        (attribute_value) @cfg.branch.condition)
+      (#match? @_d "^v-if$")))
+) @cfg.branch
+
+; v-else-if directive on an element with a body
 (element
   (start_tag
     (directive_attribute
@@ -41,9 +62,27 @@
       (#match? @_d "^v-else-if$")))
 ) @cfg.branch
 
-; v-else directive on an element (no condition)
+; v-else-if directive on a self-closing element
+(element
+  (self_closing_tag
+    (directive_attribute
+      (directive_name) @_d
+      (quoted_attribute_value
+        (attribute_value) @cfg.branch.condition)
+      (#match? @_d "^v-else-if$")))
+) @cfg.branch
+
+; v-else directive on an element with a body (no condition)
 (element
   (start_tag
+    (directive_attribute
+      (directive_name) @_d
+      (#match? @_d "^v-else$")))
+) @cfg.branch
+
+; v-else directive on a self-closing element (no condition)
+(element
+  (self_closing_tag
     (directive_attribute
       (directive_name) @_d
       (#match? @_d "^v-else$")))
@@ -55,6 +94,15 @@
 
 (element
   (start_tag
+    (directive_attribute
+      (directive_name) @_d
+      (quoted_attribute_value
+        (attribute_value) @cfg.loop.condition)
+      (#match? @_d "^v-for$")))
+) @cfg.loop
+
+(element
+  (self_closing_tag
     (directive_attribute
       (directive_name) @_d
       (quoted_attribute_value
