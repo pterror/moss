@@ -25,3 +25,5 @@ pub enum BudgetError {
     #[error("git operation failed: {0}")]
     GitFailed(String),
 }
+
+fn   badly_formatted( )  {  let x=1;let _=x; }

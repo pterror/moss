@@ -280,24 +280,47 @@ fn update_mode() -> bool {
     std::env::var("UPDATE_FIXTURES").is_ok()
 }
 
-fn assert_json_eq(actual: &Value, expected_path: &Path, label: &str) {
+/// Compares `actual` against the JSON in `expected_path`. Returns `Err` with a
+/// formatted diff instead of panicking, so callers can collect mismatches
+/// across every fixture case and report them together (see `extract_fixtures`).
+fn diff_json(actual: &Value, expected_path: &Path, label: &str) -> Result<(), String> {
     let expected_str = std::fs::read_to_string(expected_path)
-        .unwrap_or_else(|_| panic!("{label}: expected file not found: {expected_path:?}"));
+        .map_err(|_| format!("{label}: expected file not found: {expected_path:?}"))?;
     let expected: Value = serde_json::from_str(&expected_str)
-        .unwrap_or_else(|e| panic!("{label}: invalid JSON in {expected_path:?}: {e}"));
+        .map_err(|e| format!("{label}: invalid JSON in {expected_path:?}: {e}"))?;
 
     if actual != &expected {
-        eprintln!("\n=== FAIL: {label} ===");
-        eprintln!("--- expected ---");
-        eprintln!("{}", serde_json::to_string_pretty(&expected).unwrap());
-        eprintln!("--- actual ---");
-        eprintln!("{}", serde_json::to_string_pretty(actual).unwrap());
-        eprintln!("=================\n");
-        panic!("{label}: output mismatch. Run UPDATE_FIXTURES=1 cargo test to regenerate.");
+        return Err(format!(
+            "\n=== FAIL: {label} ===\n\
+             --- expected ---\n{}\n\
+             --- actual ---\n{}\n\
+             =================\n\
+             {label}: output mismatch. Run UPDATE_FIXTURES=1 cargo test to regenerate.",
+            serde_json::to_string_pretty(&expected).unwrap(),
+            serde_json::to_string_pretty(actual).unwrap(),
+        ));
     }
+    Ok(())
 }
 
-fn write_or_compare_json(actual: &Value, expected_path: &Path, label: &str) {
+/// Compares `actual` against the text in `expected_path`. Same contract as
+/// `diff_json`: returns the failure instead of panicking.
+fn diff_text(actual: &str, expected_path: &Path, label: &str) -> Result<(), String> {
+    let expected = std::fs::read_to_string(expected_path)
+        .map_err(|_| format!("{label}: expected file not found: {expected_path:?}"))?;
+    if actual != expected {
+        return Err(format!(
+            "\n=== FAIL: {label} ===\n\
+             --- expected ---\n{expected}--- actual ---\n{actual}=================\n\
+             {label}: stdout mismatch. Run UPDATE_FIXTURES=1 cargo test to regenerate."
+        ));
+    }
+    Ok(())
+}
+
+/// Writes `actual` (update mode) or compares it (normal mode). On mismatch in
+/// normal mode, returns the diff instead of panicking — see `extract_fixtures`.
+fn write_or_compare_json(actual: &Value, expected_path: &Path, label: &str) -> Result<(), String> {
     if update_mode() {
         if let Some(parent) = expected_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -306,12 +329,14 @@ fn write_or_compare_json(actual: &Value, expected_path: &Path, label: &str) {
         std::fs::write(expected_path, json)
             .unwrap_or_else(|e| panic!("Failed to write {expected_path:?}: {e}"));
         eprintln!("UPDATED: {expected_path:?}");
+        Ok(())
     } else {
-        assert_json_eq(actual, expected_path, label);
+        diff_json(actual, expected_path, label)
     }
 }
 
-fn write_or_compare_text(actual: &str, expected_path: &Path, label: &str) {
+/// Text counterpart of `write_or_compare_json`.
+fn write_or_compare_text(actual: &str, expected_path: &Path, label: &str) -> Result<(), String> {
     if update_mode() {
         if let Some(parent) = expected_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -319,14 +344,9 @@ fn write_or_compare_text(actual: &str, expected_path: &Path, label: &str) {
         std::fs::write(expected_path, actual)
             .unwrap_or_else(|e| panic!("Failed to write {expected_path:?}: {e}"));
         eprintln!("UPDATED: {expected_path:?}");
+        Ok(())
     } else {
-        let expected = std::fs::read_to_string(expected_path)
-            .unwrap_or_else(|_| panic!("{label}: expected file not found: {expected_path:?}"));
-        if actual != expected {
-            eprintln!("\n=== FAIL: {label} ===");
-            eprintln!("--- expected ---\n{expected}--- actual ---\n{actual}=================\n");
-            panic!("{label}: stdout mismatch. Run UPDATE_FIXTURES=1 cargo test to regenerate.");
-        }
+        diff_text(actual, expected_path, label)
     }
 }
 
@@ -351,6 +371,15 @@ fn extract_fixtures() {
     let mut passed = 0;
     let mut skipped_exec = 0;
 
+    // Collect mismatches across *all* cases instead of failing fast on the
+    // first one. A single stale-expectation regeneration (e.g. deleting
+    // SUMMARY.md repo-wide) can invalidate many fixtures at once; failing
+    // fast reports only the alphabetically-first one and hides the rest,
+    // turning what should be one investigate-fix-rerun cycle into N.
+    let mut check_failures: Vec<String> = Vec::new();
+    let mut failed_cases: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut failed_langs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
     for case_dir in &cases {
         let lang = lang_from_case(case_dir);
         let case_name = case_dir.file_name().unwrap().to_str().unwrap();
@@ -360,18 +389,35 @@ fn extract_fixtures() {
         let label = format!("{lang}/{case_name}");
         eprintln!("Testing {label}...");
 
+        let mut record = |result: Result<(), String>| {
+            if let Err(diff) = result {
+                eprintln!("{diff}");
+                check_failures.push(diff);
+                failed_cases.insert(label.clone());
+                failed_langs.insert(lang.clone());
+            }
+        };
+
         // --- symbols ---
         let symbols_expected = expected_dir.join("symbols.json");
         if symbols_expected.exists() || update_mode() {
             let actual = extract_symbols_json(&project_dir);
-            write_or_compare_json(&actual, &symbols_expected, &format!("{label} symbols"));
+            record(write_or_compare_json(
+                &actual,
+                &symbols_expected,
+                &format!("{label} symbols"),
+            ));
         }
 
         // --- imports ---
         let imports_expected = expected_dir.join("imports.json");
         if imports_expected.exists() || update_mode() {
             let actual = extract_imports_json(&project_dir);
-            write_or_compare_json(&actual, &imports_expected, &format!("{label} imports"));
+            record(write_or_compare_json(
+                &actual,
+                &imports_expected,
+                &format!("{label} imports"),
+            ));
         }
 
         // --- manifest ---
@@ -379,14 +425,22 @@ fn extract_fixtures() {
         if (manifest_expected.exists() || update_mode())
             && let Some(manifest) = extract_manifest_json(&project_dir)
         {
-            write_or_compare_json(&manifest, &manifest_expected, &format!("{label} manifest"));
+            record(write_or_compare_json(
+                &manifest,
+                &manifest_expected,
+                &format!("{label} manifest"),
+            ));
         }
 
         // --- execution ---
         let stdout_expected = expected_dir.join("stdout.txt");
         if stdout_expected.exists() || update_mode() {
             if let Some(stdout) = run_project(&project_dir, &lang) {
-                write_or_compare_text(&stdout, &stdout_expected, &format!("{label} stdout"));
+                record(write_or_compare_text(
+                    &stdout,
+                    &stdout_expected,
+                    &format!("{label} stdout"),
+                ));
             } else {
                 eprintln!("  SKIP execution: {lang} runtime not available");
                 skipped_exec += 1;
@@ -400,6 +454,28 @@ fn extract_fixtures() {
         "\nextract_fixtures: {passed} cases, \
          {skipped_exec} execution tests skipped (missing runtime)"
     );
+
+    if !check_failures.is_empty() {
+        if failed_cases.len() == 1 {
+            // Common case: a single case failed. The diff was already
+            // printed above; keep the panic message short.
+            panic!(
+                "extract_fixtures: 1 case failed ({}). See diff above.",
+                failed_cases.iter().next().unwrap()
+            );
+        }
+        panic!(
+            "extract_fixtures: {} case(s) failed across {} language(s) ({} check(s) mismatched).\n\
+             Failed languages: {}\n\
+             Failed cases: {}\n\
+             See per-case diffs above.",
+            failed_cases.len(),
+            failed_langs.len(),
+            check_failures.len(),
+            failed_langs.iter().cloned().collect::<Vec<_>>().join(", "),
+            failed_cases.iter().cloned().collect::<Vec<_>>().join(", "),
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
