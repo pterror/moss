@@ -95,7 +95,51 @@ impl Language for CommonLisp {
         crate::body::analyze_paren_body(body_node, content, inner_indent)
     }
 
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        // Previously always returned `None` — this is the function the actual
+        // symbol-extraction pipeline uses for a definition's name (not the
+        // tags query's own @name capture text; see
+        // `normalize_facts::extract::build_symbol_from_def`), so EVERY Common
+        // Lisp definition was silently dropped from `normalize view`/symbol
+        // extraction regardless of how correct commonlisp.tags.scm was.
+        // Verified live via `normalize view <file>.lisp` returning zero
+        // symbols for a file with 9+ definitions, before and after this fix.
+        //
+        // Two structurally different definition shapes exist in this grammar
+        // (confirmed via node-types.json + `normalize syntax ast`):
+        // - `defun`/`defgeneric`/`defmethod`/`defmacro` all parse as a single
+        //   unified `defun` grammar node with a `defun_header` child whose
+        //   `function_name:` field holds the name (a `sym_lit`, or a
+        //   `list_lit` for setf-expander forms like `(defun (setf foo) ...)`
+        //   — the pre-existing tags query's `(defun_header function_name:
+        //   (sym_lit) @name)` pattern already only handled the sym_lit case,
+        //   silently dropping setf-form names, but that only affected the
+        //   query capture's OWN text, not this always-None node_name bug).
+        // - `defclass`/`defstruct`/`defpackage`/`deftype`/`defconstant`/
+        //   `defparameter` all still use plain `list_lit` with a leading
+        //   `sym_lit` keyword followed by the name (a `sym_lit` for most, but
+        //   a `kwd_lit` for `defpackage`, e.g. `(defpackage :my-pkg ...)`).
+        if node.kind() == "defun" {
+            let mut cursor = node.walk();
+            let header = node
+                .children(&mut cursor)
+                .find(|child| child.kind() == "defun_header")?;
+            let name = header.child_by_field_name("function_name")?;
+            return Some(&content[name.byte_range()]);
+        }
+        if node.kind() == "list_lit" {
+            let mut cursor = node.walk();
+            let mut seen_keyword = false;
+            for child in node.children(&mut cursor) {
+                match child.kind() {
+                    "sym_lit" if !seen_keyword => seen_keyword = true,
+                    "sym_lit" | "kwd_lit" if seen_keyword => {
+                        return Some(&content[child.byte_range()]);
+                    }
+                    _ => {}
+                }
+            }
+        }
         None
     }
 

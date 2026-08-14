@@ -12746,6 +12746,261 @@ fn commonlisp_imports_finds_require() {
     );
 }
 
+const COMMONLISP_VARIANTS: &str = include_str!("fixtures/commonlisp/variants.lisp");
+
+#[test]
+fn commonlisp_tags_completeness_unified_defun_node_kinds() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping commonlisp_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_tags_completeness: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("commonlisp")
+        .expect("commonlisp tags query missing");
+    let pairs = collect_tag_pairs(&lang, COMMONLISP_VARIANTS, &query_str);
+
+    // defun/defgeneric/defmethod/defmacro all parse as the SAME unified
+    // `defun` grammar node, discriminated only by defun_header.keyword's
+    // text — the actual bug this test guards: defmethod/defmacro were
+    // previously misclassified as @definition.function.
+    let expected: &[(&str, &str)] = &[
+        ("definition.function", "plain-defun"),
+        ("definition.function", "generic-op"), // defgeneric
+        ("definition.method", "generic-op"),   // defmethod
+        ("definition.macro", "plain-defmacro"),
+        ("definition.class", "plain-class"),
+        ("definition.class", "plain-struct"),
+        ("definition.module", ":plain-package"),
+        ("definition.type", "plain-type"),
+        ("definition.constant", "+plain-constant+"),
+        ("definition.constant", "*plain-parameter*"),
+    ];
+    for (kind, name) in expected {
+        assert!(
+            pairs.iter().any(|(k, n)| k == kind && n == name),
+            "expected ({kind}, {name}) in commonlisp tags variants, got: {pairs:?}"
+        );
+    }
+    // defmethod with a qualifier (:before) must still resolve to the same
+    // definition.method/generic-op pair, not get confused by the qualifier.
+    let method_count = pairs
+        .iter()
+        .filter(|(k, n)| k == "definition.method" && n == "generic-op")
+        .count();
+    assert_eq!(
+        method_count, 2,
+        "expected 2 definition.method 'generic-op' entries (plain + :before-qualified), got: {pairs:?}"
+    );
+    // setf-expander names — function_name: (list_lit), previously
+    // uncaptured entirely.
+    let setf_count = pairs
+        .iter()
+        .filter(|(_, n)| *n == "(setf setter-target)")
+        .count();
+    assert_eq!(
+        setf_count, 2,
+        "expected 2 setf-expander definitions '(setf setter-target)' (defun + defmethod \
+         forms), got: {pairs:?}"
+    );
+}
+
+#[test]
+fn commonlisp_tags_negative_calls_and_locals_are_not_definitions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping commonlisp_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_tags_negative: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_tags("commonlisp")
+        .expect("commonlisp tags query missing");
+    let pairs = collect_tag_pairs(&lang, COMMONLISP_VARIANTS, &query_str);
+    let bad_name = "local-not-a-def";
+    assert!(
+        !pairs.iter().any(|(_, n)| n == bad_name),
+        "'{bad_name}' must not appear as a tags definition, got: {pairs:?}"
+    );
+}
+
+#[test]
+fn commonlisp_imports_completeness_all_forms() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!(
+            "Skipping commonlisp_imports_completeness: run `cargo xtask build-grammars` first"
+        );
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_imports_completeness: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("commonlisp")
+        .expect("commonlisp imports query missing");
+    let paths = collect_captures(&lang, COMMONLISP_VARIANTS, &query_str, "import.path");
+    assert!(
+        paths.iter().any(|p| p.contains("variants-quoted-dep")),
+        "expected quoted require path, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("variants-string-dep")),
+        "expected string require path, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("variants-used-pkg")),
+        "expected use-package path, got: {paths:?}"
+    );
+    // ql:quickload parses as a `package_lit` node, not `sym_lit` — the
+    // previous query required node kind sym_lit and so never matched any
+    // ql:quickload form at all.
+    assert!(
+        paths.iter().any(|p| p.contains("variants-quickloaded-pkg")),
+        "expected ql:quickload path (package_lit node, not sym_lit), got: {paths:?}"
+    );
+}
+
+#[test]
+fn commonlisp_calls_negative_special_forms_are_not_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping commonlisp_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_calls_negative: commonlisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_calls("commonlisp")
+        .expect("commonlisp calls query missing");
+    let calls = collect_captures(&lang, COMMONLISP_VARIANTS, &query_str, "call");
+    for special_form in [
+        "defun",
+        "defgeneric",
+        "defmethod",
+        "defmacro",
+        "defclass",
+        "defstruct",
+        "defpackage",
+        "deftype",
+        "defconstant",
+        "defparameter",
+        "let",
+        "dolist",
+        "when",
+        "if",
+        "use-package",
+        "require",
+    ] {
+        assert!(
+            !calls.contains(&special_form.to_string()),
+            "'{special_form}' is a special form/definition macro, must not appear as \
+             @call, got: {calls:?}"
+        );
+    }
+    for real_call in ["format", "print", "slot-value"] {
+        assert!(
+            calls.contains(&real_call.to_string()),
+            "expected real call '{real_call}' still present, got: {calls:?}"
+        );
+    }
+}
+
+#[test]
+fn commonlisp_node_name_finds_all_definition_shapes() {
+    // node_name() in commonlisp.rs previously ALWAYS returned None — this is
+    // the function the actual symbol-extraction pipeline uses for a
+    // definition's name (not the tags query's own @name capture text; see
+    // normalize_facts::extract::build_symbol_from_def), so every Common
+    // Lisp definition was silently dropped from `normalize view`/symbol
+    // extraction regardless of query correctness. Verified live via
+    // `normalize view <file>.lisp` before and after the fix.
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping commonlisp_node_name: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("commonlisp").ok() else {
+        eprintln!("Skipping commonlisp_node_name: commonlisp grammar .so not found");
+        return;
+    };
+    let mut parser = Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser
+        .parse(COMMONLISP_VARIANTS, None)
+        .expect("parse failed");
+    let support = normalize_languages::CommonLisp;
+    let query_str = loader
+        .get_tags("commonlisp")
+        .expect("commonlisp tags query missing");
+    let query = Query::new(&lang, &query_str).expect("query compilation failed");
+    let mut qcursor = QueryCursor::new();
+    let source_bytes = COMMONLISP_VARIANTS.as_bytes();
+
+    // Mirror real production usage (normalize_facts::extract::
+    // collect_symbols_from_tags): node_name() is called on the node bound to
+    // the query's @definition.* capture, NOT on a node found by scanning
+    // `source`'s direct children — `defun`/`defgeneric`/`defmethod`/
+    // `defmacro` forms are nested one level inside an outer `list_lit`
+    // wrapper that shares the exact same byte span (confirmed via
+    // `normalize syntax query -p ... "(list_lit (defun) @x)"`), so
+    // `root.children()` reports their kind as "list_lit", not "defun" — only
+    // the tags query's own descendant-matching correctly reaches the inner
+    // `defun` node the way the real pipeline does.
+    let mut found_defun = false;
+    let mut found_setf_defun = false;
+    let mut found_defclass = false;
+    let mut found_defpackage = false;
+    let mut matches = qcursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        if !normalize_languages::satisfies_predicates(&query, m, source_bytes) {
+            continue;
+        }
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            if !cap_name.starts_with("definition.") {
+                continue;
+            }
+            let node = cap.node;
+            let name =
+                normalize_languages::Language::node_name(&support, &node, COMMONLISP_VARIANTS);
+            match (node.kind(), name) {
+                ("defun", Some("plain-defun")) => found_defun = true,
+                ("defun", Some("(setf setter-target)")) => found_setf_defun = true,
+                ("list_lit", Some("plain-class")) => found_defclass = true,
+                ("list_lit", Some(":plain-package")) => found_defpackage = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        found_defun,
+        "node_name did not find 'plain-defun' via defun_header.function_name"
+    );
+    assert!(
+        found_setf_defun,
+        "node_name did not find the setf-expander name '(setf setter-target)'"
+    );
+    assert!(
+        found_defclass,
+        "node_name did not find 'plain-class' via the plain list_lit path"
+    );
+    assert!(
+        found_defpackage,
+        "node_name did not find ':plain-package' (a kwd_lit name, not sym_lit)"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Emacs Lisp
 // ---------------------------------------------------------------------------
@@ -12840,6 +13095,240 @@ fn elisp_imports_finds_require() {
             .iter()
             .any(|p| p.contains("cl-lib") || p.contains("subr-x")),
         "expected 'cl-lib' or 'subr-x' in elisp import paths, got: {paths:?}"
+    );
+}
+
+const ELISP_VARIANTS: &str = include_str!("fixtures/elisp/variants.el");
+
+#[test]
+fn elisp_complexity_negative_ordinary_lists_are_not_complexity() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_complexity_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_complexity_negative: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("elisp")
+        .expect("elisp complexity query missing");
+    // The original bug: a bare `(list) @complexity` counted every
+    // parenthesized expression, so a zero-branch function like
+    // `(defun variants-zero-branch-body (a b) (+ a b))` produced false
+    // @complexity hits for its parameter list `(a b)` and its call
+    // `(+ a b)`. Isolate that one function's source and assert zero
+    // @complexity captures survive.
+    let zero_branch_src = "(defun add-two (a b)\n  (+ a b))\n";
+    let complexity = collect_captures(&lang, zero_branch_src, &query_str, "complexity");
+    assert_eq!(
+        complexity,
+        Vec::<String>::new(),
+        "a zero-branch function must produce zero @complexity captures, got: {complexity:?}"
+    );
+}
+
+#[test]
+fn elisp_complexity_completeness_special_form_and_list_headed_branches() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_complexity_completeness: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("elisp")
+        .expect("elisp complexity query missing");
+    let captures = collect_captures_full(&lang, ELISP_VARIANTS, &query_str);
+
+    // special_form-headed forms (if/cond/while/and/or/condition-case): the
+    // previous query only matched `(list . (symbol) @_fn ...)`, so these
+    // five — all special_form-headed, not list-headed — were entirely
+    // invisible to complexity counting.
+    for kind_text in [
+        ("special_form", "(if (> n 0)"),
+        ("special_form", "(cond ((= n 0)"),
+        ("special_form", "(while (> n 0)"),
+        ("special_form", "(and a (or b nil))"),
+        ("special_form", "(condition-case e (error \"x\")"),
+    ] {
+        assert!(
+            captures
+                .iter()
+                .any(|(cap, kind, text, _)| cap == "complexity"
+                    && kind == kind_text.0
+                    && text.starts_with(kind_text.1)),
+            "expected @complexity capture starting with {:?} of kind {}, got: {captures:?}",
+            kind_text.1,
+            kind_text.0
+        );
+    }
+
+    // list-headed forms (when/unless/dolist/dotimes/until/case/pcase/
+    // cl-loop/ignore-errors): these already worked before the fix and must
+    // keep working.
+    for text_prefix in [
+        "(when a",
+        "(unless b",
+        "(dolist (x lst)",
+        "(dotimes (i n)",
+        "(until (<= n 0)",
+        "(case n",
+        "(pcase n",
+        "(cl-loop for x in lst",
+        "(ignore-errors",
+    ] {
+        assert!(
+            captures
+                .iter()
+                .any(|(cap, kind, text, _)| cap == "complexity"
+                    && kind == "list"
+                    && text.starts_with(text_prefix)),
+            "expected list-headed @complexity capture starting with {text_prefix:?}, got: {captures:?}"
+        );
+    }
+}
+
+#[test]
+fn elisp_cfg_completeness_special_form_headed_constructs() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_cfg_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_cfg_completeness: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_cfg("elisp").expect("elisp cfg query missing");
+    let captures = collect_captures_full(&lang, ELISP_VARIANTS, &query_str);
+
+    // Before the fix, `while` (the single most fundamental Lisp loop
+    // construct) produced zero @cfg.loop matches because it is
+    // special_form-headed, not list-headed like the pre-existing pattern
+    // required.
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "cfg.loop"
+            && kind == "special_form"
+            && text.starts_with("(while")),
+        "expected special_form-headed `while` to produce @cfg.loop, got: {captures:?}"
+    );
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, text, _)| cap == "cfg.branch"
+                && kind == "special_form"
+                && text.starts_with("(if")),
+        "expected special_form-headed `if` to produce @cfg.branch, got: {captures:?}"
+    );
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, text, _)| cap == "cfg.match"
+                && kind == "special_form"
+                && text.starts_with("(cond")),
+        "expected special_form-headed `cond` to produce @cfg.match, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "cfg.try"
+            && kind == "special_form"
+            && text.starts_with("(condition-case")),
+        "expected special_form-headed `condition-case` to produce @cfg.try, got: {captures:?}"
+    );
+}
+
+#[test]
+fn elisp_tags_negative_special_form_internals_are_not_definitions() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_tags_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_tags_negative: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("elisp").expect("elisp tags query missing");
+    let pairs = collect_tag_pairs(&lang, ELISP_VARIANTS, &query_str);
+
+    // The original bug: `(special_form . (symbol) @name)` anchored to the
+    // first named child of ANY special_form, not just defvar/defconst —
+    // fabricating @definition.constant tags for setq's target, a
+    // condition-case exception variable, and and/or's leading operand.
+    for bogus_name in ["total", "caught-var", "'not-a-definition"] {
+        assert!(
+            !pairs
+                .iter()
+                .any(|(kind, name)| kind == "definition.constant" && name == bogus_name),
+            "'{bogus_name}' must not be tagged as @definition.constant, got: {pairs:?}"
+        );
+    }
+}
+
+#[test]
+fn elisp_tags_completeness_defcustom_and_defclass() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_tags_completeness: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("elisp").expect("elisp tags query missing");
+    let pairs = collect_tag_pairs(&lang, ELISP_VARIANTS, &query_str);
+
+    // defvar/defconst (special_form-headed) still work after re-anchoring.
+    assert!(pairs.contains(&(
+        "definition.constant".to_string(),
+        "variants-var".to_string()
+    )));
+    assert!(pairs.contains(&(
+        "definition.constant".to_string(),
+        "variants-const".to_string()
+    )));
+    // defcustom (list-headed) was entirely absent before this fix — the
+    // single most common "user-facing config variable" idiom in real Emacs
+    // Lisp packages.
+    assert!(pairs.contains(&(
+        "definition.constant".to_string(),
+        "variants-custom".to_string()
+    )));
+    // defclass (EIEIO) alongside cl-defstruct.
+    assert!(pairs.contains(&("definition.class".to_string(), "variants-class".to_string())));
+    assert!(pairs.contains(&("definition.class".to_string(), "variants-point".to_string())));
+}
+
+#[test]
+fn elisp_imports_completeness_require_theme() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping elisp_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("elisp").ok() else {
+        eprintln!("Skipping elisp_imports_completeness: elisp grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("elisp")
+        .expect("elisp imports query missing");
+    let paths = collect_captures(&lang, ELISP_VARIANTS, &query_str, "import.path");
+    // The comment in elisp.imports.scm documented `require-theme` but the
+    // code matched "load-theme" instead — require-theme was entirely
+    // unmatched. Both forms must now work.
+    assert!(
+        paths.iter().any(|p| p.contains("modus-themes")),
+        "expected require-theme's path in elisp imports, got: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("modus-vivendi")),
+        "expected load-theme's path to still work, got: {paths:?}"
     );
 }
 
@@ -19608,5 +20097,1143 @@ fn yaml_tags_negative_sequences_and_complex_keys() {
         22,
         "expected exactly 22 @name captures in variants.yaml, got {}: {names:?}",
         names.len()
+    );
+}
+
+// ==================== vim / perl query tests ====================
+// Query-completeness sweep per docs/query-testing-methodology.md, applied
+// to vim.{tags,calls,imports,complexity}.scm and
+// perl.{tags,calls,imports,complexity}.scm. Field constraints were
+// cross-referenced against arborium-vim-2.17.0 and arborium-perl-2.17.0's
+// node-types.json, then every candidate gap was verified against real
+// parse output via `normalize syntax query`/`normalize syntax ast` before
+// being treated as a bug. See vim.{calls,tags,imports}.scm and
+// perl.{calls,imports,complexity}.scm for the per-fix rationale comments.
+
+const VIM_VARIANTS: &str = include_str!("fixtures/vim/variants.vim");
+
+/// `call_expression.function` allows a large set of expression node types
+/// in node-types.json, but only `identifier`, `scoped_identifier`,
+/// `field_expression` (dict-bound method calls), and `index_expression`
+/// (dynamic dispatch-table calls) were ever verified to actually occur as
+/// a call target. This asserts each of the four handled variants produces
+/// a capture of the expected node kind.
+#[test]
+fn vim_calls_completeness_function_field_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping vim_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("vim").ok() else {
+        eprintln!("Skipping vim_calls_completeness: vim grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("vim").expect("vim calls query missing");
+    let full = collect_captures_full(&lang, VIM_VARIANTS, &query_str);
+
+    // identifier: plain call
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "PlainFunc"),
+        "expected identifier-kind @call 'PlainFunc' in variants.vim, got: {full:?}"
+    );
+    // scoped_identifier's nested identifier: scoped call
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "ScopedFunc"),
+        "expected identifier-kind @call 'ScopedFunc' (from scoped_identifier) in \
+         variants.vim, got: {full:?}"
+    );
+    // field_expression: dict-bound method call
+    assert!(
+        full.iter().any(
+            |(_, kind, text, _)| kind == "field_expression" && text == "s:obj.FieldFunc"
+        ),
+        "expected field_expression-kind @call 's:obj.FieldFunc' in variants.vim, got: {full:?}"
+    );
+    // index_expression: dynamic dispatch-table call
+    assert!(
+        full.iter().any(|(_, kind, text, _)| kind
+            == "index_expression"
+            && text == "s:dispatch['go']"),
+        "expected index_expression-kind @call \"s:dispatch['go']\" in variants.vim, \
+         got: {full:?}"
+    );
+    // `->` method-chain calls still resolve through the plain identifier
+    // clause (each link is a nested call_expression whose function is an
+    // ordinary identifier, not the method_expression wrapper itself).
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "filter"),
+        "expected identifier-kind @call 'filter' from the -> chain in variants.vim, \
+         got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "join"),
+        "expected identifier-kind @call 'join' from the -> chain in variants.vim, \
+         got: {full:?}"
+    );
+}
+
+/// `function_declaration.name` allows `field_expression` in addition to
+/// `identifier`/`scoped_identifier` — the dict-bound-method function
+/// definition pattern (`function! obj.Method() dict`). Assert all three
+/// produce a `@definition.function` capture with the expected `@name` kind.
+#[test]
+fn vim_tags_completeness_function_declaration_name_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping vim_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("vim").ok() else {
+        eprintln!("Skipping vim_tags_completeness: vim grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("vim").expect("vim tags query missing");
+    let full = collect_captures_full(&lang, VIM_VARIANTS, &query_str);
+    let names: Vec<_> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "name")
+        .cloned()
+        .collect();
+
+    assert!(
+        names
+            .iter()
+            .any(|(_, kind, text, _)| kind == "identifier" && text == "PlainFunc"),
+        "expected identifier-kind @name 'PlainFunc' in variants.vim, got: {names:?}"
+    );
+    assert!(
+        names
+            .iter()
+            .any(|(_, kind, text, _)| kind == "scoped_identifier" && text == "s:ScopedFunc"),
+        "expected scoped_identifier-kind @name 's:ScopedFunc' in variants.vim, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|(_, kind, text, _)| kind
+            == "scoped_identifier"
+            && text == "foo#bar#AutoloadFunc"),
+        "expected scoped_identifier-kind @name 'foo#bar#AutoloadFunc' in variants.vim, \
+         got: {names:?}"
+    );
+    assert!(
+        names
+            .iter()
+            .any(|(_, kind, text, _)| kind == "field_expression" && text == "s:obj.FieldFunc"),
+        "expected field_expression-kind @name 's:obj.FieldFunc' in variants.vim, \
+         got: {names:?}"
+    );
+}
+
+/// Regression test for the bang (`source!`/`runtime!`) false-positive:
+/// before the fix, an unconstrained `(_)` child pattern captured the
+/// `bang` node too, producing a spurious `@import.path` whose text was
+/// literally `"!"`. Also asserts the real paths on both bang and
+/// non-bang forms are still captured.
+#[test]
+fn vim_imports_negative_bang_not_captured_and_all_paths_found() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping vim_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("vim").ok() else {
+        eprintln!("Skipping vim_imports_negative: vim grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("vim")
+        .expect("vim imports query missing");
+    let paths = collect_captures(&lang, VIM_VARIANTS, &query_str, "import.path");
+
+    assert!(
+        !paths.iter().any(|p| p == "!"),
+        "bang must never be captured as @import.path, got: {paths:?}"
+    );
+    for expected in [
+        "~/.vim/plain.vim",
+        "~/.vim/optional.vim",
+        "plugin/single.vim",
+        "plugin/*.vim",
+    ] {
+        assert!(
+            paths.iter().any(|p| p == expected),
+            "expected '{expected}' as @import.path in variants.vim, got: {paths:?}"
+        );
+    }
+}
+
+/// Negative cases: a lambda assignment is not a function definition, and a
+/// bare identifier reference (not the `function` field of a
+/// call_expression) is not a call.
+#[test]
+fn vim_negative_lambda_not_definition_and_bare_ref_not_call() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping vim_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("vim").ok() else {
+        eprintln!("Skipping vim_negative: vim grammar .so not found");
+        return;
+    };
+    let tags_query = loader.get_tags("vim").expect("vim tags query missing");
+    let tags_names = collect_captures(&lang, VIM_VARIANTS, &tags_query, "name");
+    assert!(
+        !tags_names.iter().any(|n| n.contains("Lambda")),
+        "lambda assignment must not be captured as a function definition, got: {tags_names:?}"
+    );
+
+    let calls_query = loader.get_calls("vim").expect("vim calls query missing");
+    let calls = collect_captures(&lang, VIM_VARIANTS, &calls_query, "call");
+    // "PlainFunc" is a legitimate call target once (`call PlainFunc()`);
+    // the later bare-reference assignment (`let s:not_a_call = PlainFunc`)
+    // must not add a second occurrence.
+    let plain_func_count = calls.iter().filter(|c| *c == "PlainFunc").count();
+    assert_eq!(
+        plain_func_count, 1,
+        "expected exactly 1 @call 'PlainFunc' (the bare-reference assignment must not \
+         also match), got {plain_func_count}: {calls:?}"
+    );
+}
+
+const PERL_VARIANTS: &str = include_str!("fixtures/perl/variants.pl");
+
+/// `perl.calls.scm` previously only matched `function_call_expression`
+/// (parenthesized calls). `ambiguous_function_call_expression` — the node
+/// type for parenless calls (`print "x"`, any bareword sub invocation
+/// without parens) — was entirely unmatched, silently dropping one of the
+/// two most common Perl call forms. Assert both node kinds are captured.
+#[test]
+fn perl_calls_completeness_parenthesized_and_parenless_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping perl_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("perl").ok() else {
+        eprintln!("Skipping perl_calls_completeness: perl grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("perl").expect("perl calls query missing");
+    let full = collect_captures_full(&lang, PERL_VARIANTS, &query_str);
+
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "function" && text == "plain_func"),
+        "expected function_call_expression-derived @call 'plain_func' in variants.pl, \
+         got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "function" && text == "print"),
+        "expected ambiguous_function_call_expression-derived @call 'print' (parenless) \
+         in variants.pl, got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "function" && text == "bareword_no_args"),
+        "expected ambiguous_function_call_expression-derived @call 'bareword_no_args' \
+         (parenless, no arguments) in variants.pl, got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "method" && text == "new"),
+        "expected method_call_expression @call 'new' in variants.pl, got: {full:?}"
+    );
+    assert!(
+        full.iter()
+            .any(|(_, kind, text, _)| kind == "method" && text == "render"),
+        "expected method_call_expression @call 'render' in variants.pl, got: {full:?}"
+    );
+}
+
+/// `require_expression` has no named field for its argument; the module
+/// name (`bareword`) and file-path (`string_literal`) forms are
+/// structurally distinct child node types. Before the fix, neither was
+/// captured as `@import.path` at all (only the whole-statement `@import`
+/// was). Assert both are now captured with the expected node kind.
+#[test]
+fn perl_imports_completeness_require_bareword_and_string_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping perl_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("perl").ok() else {
+        eprintln!("Skipping perl_imports_completeness: perl grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_imports("perl")
+        .expect("perl imports query missing");
+    let full = collect_captures_full(&lang, PERL_VARIANTS, &query_str);
+    let paths: Vec<_> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "import.path")
+        .cloned()
+        .collect();
+
+    assert!(
+        paths
+            .iter()
+            .any(|(_, kind, text, _)| kind == "bareword" && text == "Scalar::Util"),
+        "expected bareword-kind @import.path 'Scalar::Util' (require Module::Name) in \
+         variants.pl, got: {paths:?}"
+    );
+    assert!(
+        paths
+            .iter()
+            .any(|(_, kind, text, _)| kind == "string_literal" && text == "'legacy_helpers.pl'"),
+        "expected string_literal-kind @import.path \"'legacy_helpers.pl'\" (require \
+         'file.pl') in variants.pl, got: {paths:?}"
+    );
+    assert!(
+        paths
+            .iter()
+            .any(|(_, kind, text, _)| kind == "package" && text == "List::Util"),
+        "expected package-kind @import.path 'List::Util' (use Module::Name) in \
+         variants.pl, got: {paths:?}"
+    );
+}
+
+/// `for_statement` (foreach form) and `cstyle_for_statement` (C-style
+/// `for (init; cond; step)`) are structurally distinct node types.
+/// `perl.complexity.scm` previously only matched `for_statement`, so every
+/// C-style for-loop contributed zero complexity/nesting. Assert both loop
+/// forms are now counted.
+#[test]
+fn perl_complexity_completeness_foreach_and_cstyle_for_variants() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping perl_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("perl").ok() else {
+        eprintln!("Skipping perl_complexity_completeness: perl grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("perl")
+        .expect("perl complexity query missing");
+    let full = collect_captures_full(&lang, PERL_VARIANTS, &query_str);
+    let complexity_kinds: Vec<_> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "complexity")
+        .map(|(_, kind, ..)| kind.as_str())
+        .collect();
+
+    assert!(
+        complexity_kinds.contains(&"for_statement"),
+        "expected a for_statement (foreach form) @complexity node in variants.pl, \
+         got: {complexity_kinds:?}"
+    );
+    assert!(
+        complexity_kinds.contains(&"cstyle_for_statement"),
+        "expected a cstyle_for_statement (C-style for) @complexity node in variants.pl, \
+         got: {complexity_kinds:?}"
+    );
+
+    let nesting_kinds: Vec<_> = full
+        .iter()
+        .filter(|(cap, ..)| cap == "nesting")
+        .map(|(_, kind, ..)| kind.as_str())
+        .collect();
+    assert!(
+        nesting_kinds.contains(&"cstyle_for_statement"),
+        "expected a cstyle_for_statement @nesting node in variants.pl, got: {nesting_kinds:?}"
+    );
+}
+
+/// Negative case: `func1op_call_expression` (a builtin operator with fixed
+/// arity, e.g. `shift`) is a structurally distinct node type whose
+/// `function` field is a closed set of builtin-keyword tokens — never the
+/// generic `function` bareword node either @call clause matches. Confirm
+/// `shift` is not swept in as a call.
+#[test]
+fn perl_calls_negative_builtin_operator_not_captured() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping perl_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("perl").ok() else {
+        eprintln!("Skipping perl_calls_negative: perl grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("perl").expect("perl calls query missing");
+    let calls = collect_captures(&lang, PERL_VARIANTS, &query_str, "call");
+    assert!(
+        !calls.iter().any(|c| c == "shift"),
+        "the func1op builtin 'shift' must not be captured as @call, got: {calls:?}"
+    );
+}
+
+/// Real-world sample regression check: sample.pl already leans heavily on
+/// parenless calls (`print "...", ...`) and now also exercises `require`
+/// and a C-style for-loop. Assert the parenless calls and the new
+/// constructs are captured end-to-end (not just on the synthetic
+/// variants fixture).
+#[test]
+fn perl_calls_finds_parenless_print_in_real_world_sample() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping perl_calls_sample: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("perl").ok() else {
+        eprintln!("Skipping perl_calls_sample: perl grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("perl").expect("perl calls query missing");
+    const PERL_SAMPLE: &str = include_str!("fixtures/perl/sample.pl");
+    let calls = collect_captures(&lang, PERL_SAMPLE, &query_str, "call");
+    assert!(
+        calls.iter().any(|c| c == "print"),
+        "expected parenless 'print' calls captured in sample.pl, got: {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|c| c == "log_message"),
+        "expected parenless user-sub call 'log_message' captured in sample.pl, \
+         got: {calls:?}"
+    );
+}
+
+// ==================== jinja2 query tests ====================
+// Query-completeness sweep per docs/query-testing-methodology.md.
+// Covers: jinja2.{tags,calls,complexity,imports,cfg}.scm field-constraint
+// completeness against grammars/jinja2/src/node-types.json, verified via
+// `normalize syntax ast` / `normalize syntax query` (not from memory).
+
+const JINJA2_VARIANTS: &str = include_str!("fixtures/jinja2/variants.jinja2");
+
+#[test]
+fn jinja2_sample_finds_real_world_idioms() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_sample_finds_real_world_idioms: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_sample_finds_real_world_idioms: jinja2 grammar .so not found");
+        return;
+    };
+
+    // Macro with multiple defaulted parameters, macro caller-block
+    // ({% call %}), filter chains ({% filter %} and value|filter|filter),
+    // for/else, "if not loop.last", "and"/"or" in conditions, ternary
+    // expression, set-with-filter, dynamic default() filter call.
+    let calls_query = loader.get_calls("jinja2").expect("jinja2 calls query missing");
+    let calls = collect_captures(&lang, JINJA2_SAMPLE, &calls_query, "call");
+    assert!(
+        calls.contains(&"default".to_string()),
+        "expected 'default' filter call in jinja2 sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"sort".to_string()),
+        "expected 'sort' filter call (items|sort) in jinja2 sample, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"upper".to_string()),
+        "expected 'upper' filter call ({{% filter upper %}}) in jinja2 sample, got: {calls:?}"
+    );
+
+    let imports_query = loader.get_imports("jinja2").expect("jinja2 imports query missing");
+    let paths = collect_captures(&lang, JINJA2_SAMPLE, &imports_query, "import.path");
+    assert!(
+        paths.iter().any(|p| p.contains("optional.html")),
+        "expected 'optional.html' (include ... ignore missing) in jinja2 sample imports, got: {paths:?}"
+    );
+
+    let complexity_query = loader
+        .get_complexity("jinja2")
+        .expect("jinja2 complexity query missing");
+    let complexity = collect_captures(&lang, JINJA2_SAMPLE, &complexity_query, "complexity");
+    assert!(
+        complexity.len() >= 6,
+        "expected several complexity nodes (for/if/elif/and/or/ternary) in jinja2 sample, got {} ({complexity:?})",
+        complexity.len()
+    );
+}
+
+#[test]
+fn jinja2_calls_completeness_all_call_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_calls_completeness: jinja2 grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("jinja2").expect("jinja2 calls query missing");
+    let captures = collect_captures_full(&lang, JINJA2_VARIANTS, &query_str);
+
+    // function: (identifier) -- plain call
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, text, _)| cap == "call" && kind == "identifier" && text == "call_plain_func"),
+        "expected plain function call, got: {captures:?}"
+    );
+    // function: (attribute_expression) -- single-hop method call
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, text, _)| cap == "call" && kind == "identifier" && text == "call_method"),
+        "expected method call, got: {captures:?}"
+    );
+    // function: (attribute_expression) nested -- chained attribute access
+    // before the call; object: (_) is unconstrained so the whole chain's
+    // qualifier must come through as call.qualifier regardless of depth.
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "call.qualifier"
+            && kind == "attribute_expression"
+            && text == "call_a.call_b"),
+        "expected chained attribute qualifier 'call_a.call_b', got: {captures:?}"
+    );
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, text, _)| cap == "call" && kind == "identifier" && text == "call_c"),
+        "expected chained attribute call 'call_c', got: {captures:?}"
+    );
+    // filter_item.name, reached via filter_expression's filter_chain
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_filter_name"),
+        "expected filter call, got: {captures:?}"
+    );
+    // filter_item.name, reached via filter_block_statement's filter_chain
+    // (structurally distinct parent from filter_expression -- no parent
+    // constraint in the query, so both must match identically)
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_filter_via_block"),
+        "expected {{% filter %}}-block filter call, got: {captures:?}"
+    );
+    // filter_item.name, reached via set_block_statement's filter_chain
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_filter_via_set"),
+        "expected {{% set ... | filter %}}-block filter call, got: {captures:?}"
+    );
+    // test_expression.test
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_test_name"),
+        "expected test call, got: {captures:?}"
+    );
+    // call_statement.callee -- call_expression wrapping identifier
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_stmt_macro"),
+        "expected {{% call %}}-statement macro call, got: {captures:?}"
+    );
+    // call_statement.callee -- call_expression wrapping attribute_expression
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call.qualifier"
+            && kind == "identifier"
+            && text == "call_stmt_obj"),
+        "expected {{% call %}}-statement method qualifier, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap == "call"
+            && kind == "identifier"
+            && text == "call_stmt_method"),
+        "expected {{% call %}}-statement method call, got: {captures:?}"
+    );
+
+    // Negative: bare attribute access (no call_expression) must not appear
+    // as a @call capture.
+    assert!(
+        !captures
+            .iter()
+            .any(|(cap, _, text, _)| cap == "call" && text.contains("neg_attr")),
+        "bare attribute access must not match @call, got: {captures:?}"
+    );
+    // Negative: a bare identifier reference must not appear as a @call.
+    assert!(
+        !captures
+            .iter()
+            .any(|(cap, _, text, _)| cap == "call" && text == "neg_bare_identifier"),
+        "bare identifier reference must not match @call, got: {captures:?}"
+    );
+}
+
+#[test]
+fn jinja2_imports_completeness_dynamic_paths() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_imports_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_imports_completeness: jinja2 grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_imports("jinja2").expect("jinja2 imports query missing");
+    let captures = collect_captures_full(&lang, JINJA2_VARIANTS, &query_str);
+
+    // BUG FIXED: path: (string) alone silently dropped every dynamic
+    // template path. All four statement types must now capture non-string
+    // path expressions with the correct node kind.
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "import.path"
+            && kind == "string"
+            && text.contains("variant_base.html")),
+        "expected string extends path, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "import.path"
+            && kind == "identifier"
+            && text == "variant_include_var"),
+        "expected identifier (dynamic) include path, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, _, _)| cap
+            == "import.path"
+            && kind == "concat_expression"),
+        "expected concat_expression include path, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "import.path"
+            && kind == "identifier"
+            && text == "variant_module_var"),
+        "expected identifier path on 'from' statement, got: {captures:?}"
+    );
+
+    // Negative: a plain string expression outside an
+    // extends/import/from/include statement must not match @import.path.
+    assert!(
+        !captures
+            .iter()
+            .any(|(cap, _, text, _)| cap == "import.path" && text.contains("not_a_template_path")),
+        "plain string expression must not match @import.path, got: {captures:?}"
+    );
+}
+
+#[test]
+fn jinja2_complexity_completeness_boolean_and_ternary() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_complexity_completeness: jinja2 grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("jinja2")
+        .expect("jinja2 complexity query missing");
+    let captures = collect_captures_full(&lang, JINJA2_VARIANTS, &query_str);
+
+    for (kind, text) in [
+        ("and_expression", "variant_a and variant_b"),
+        ("or_expression", "variant_a or variant_b"),
+        ("ternary_expression", "variant_a if variant_cond_a else variant_b"),
+    ] {
+        assert!(
+            captures
+                .iter()
+                .any(|(cap, k, t, _)| cap == "complexity" && k == kind && t == text),
+            "expected {kind} to produce @complexity, got: {captures:?}"
+        );
+    }
+
+    // Negative: a plain identifier with no boolean/ternary operator must
+    // not itself add a complexity point.
+    assert!(
+        !captures.iter().any(|(cap, kind, text, _)| cap == "complexity"
+            && kind == "identifier"
+            && text == "neg_plain_boolean"),
+        "bare identifier must not match @complexity, got: {captures:?}"
+    );
+}
+
+#[test]
+fn jinja2_cfg_completeness_for_loop_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_cfg_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_cfg_completeness: jinja2 grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_cfg("jinja2").expect("jinja2 cfg query missing");
+    let captures = collect_captures_full(&lang, JINJA2_VARIANTS, &query_str);
+
+    // BUG FIXED: the old pattern positionally captured the loop target and
+    // the iterable as two `@cfg.loop.condition` captures and never captured
+    // `@cfg.loop.body` at all; it also only worked when the iterable was a
+    // bare identifier. Non-identifier iterables (filter chains, calls) must
+    // now produce a correctly-kinded @cfg.loop.condition.
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "cfg.loop.condition"
+            && kind == "filter_expression"
+            && text == "variant_items|sort"),
+        "expected filter_expression iterable to produce @cfg.loop.condition, got: {captures:?}"
+    );
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "cfg.loop.condition"
+            && kind == "call_expression"
+            && text == "variant_get_items()"),
+        "expected call_expression iterable to produce @cfg.loop.condition, got: {captures:?}"
+    );
+    // Tuple-unpacking target must still parse and yield a @cfg.loop with a
+    // plain-identifier iterable (`target` isn't captured by this query at
+    // all -- only `iterable`/`body` are -- so this just confirms the tuple
+    // target doesn't break the surrounding match).
+    assert!(
+        captures.iter().any(|(cap, kind, text, _)| cap
+            == "cfg.loop.condition"
+            && kind == "attribute_expression"
+            && text == "variant_pairs.items()"
+            || (cap == "cfg.loop.condition" && kind == "call_expression" && text == "variant_pairs.items()")),
+        "expected iterable of the tuple-target loop to produce @cfg.loop.condition, got: {captures:?}"
+    );
+
+    // BUG FIXED: `body: (_)` alone drops the whole @cfg.loop match for an
+    // empty loop body. The field-absence fallback (`!body`) must still
+    // produce a @cfg.loop with @cfg.loop.condition and no @cfg.loop.body.
+    let loop_matches_without_body = captures
+        .iter()
+        .filter(|(cap, _, text, _)| {
+            cap == "cfg.loop" && text.starts_with("{% for variant_x in variant_items %}{% endfor %}")
+        })
+        .count();
+    assert!(
+        loop_matches_without_body >= 1,
+        "expected empty-body for-loop to still produce @cfg.loop, got: {captures:?}"
+    );
+    assert!(
+        !captures.iter().any(|(cap, _, text, _)| cap == "cfg.loop.body"
+            && text.is_empty()),
+        "empty-body loop must not produce a spurious empty @cfg.loop.body capture, got: {captures:?}"
+    );
+
+    // Non-empty loops must produce a real @cfg.loop.body.
+    assert!(
+        captures.iter().any(|(cap, _, text, _)| cap == "cfg.loop.body"
+            && text.contains("{{ variant_x }}")),
+        "expected non-empty for-loop to produce @cfg.loop.body, got: {captures:?}"
+    );
+}
+
+#[test]
+fn jinja2_cfg_completeness_if_branch_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping jinja2_cfg_completeness_if: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("jinja2").ok() else {
+        eprintln!("Skipping jinja2_cfg_completeness_if: jinja2 grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_cfg("jinja2").expect("jinja2 cfg query missing");
+    let captures = collect_captures_full(&lang, JINJA2_VARIANTS, &query_str);
+
+    // elif_clause as @cfg.branch.else
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, _, _)| cap == "cfg.branch.else" && kind == "elif_clause"),
+        "expected elif_clause to produce @cfg.branch.else, got: {captures:?}"
+    );
+    // else_clause as @cfg.branch.else
+    assert!(
+        captures
+            .iter()
+            .any(|(cap, kind, _, _)| cap == "cfg.branch.else" && kind == "else_clause"),
+        "expected else_clause to produce @cfg.branch.else, got: {captures:?}"
+    );
+    // Bare if with neither elif nor else must still produce @cfg.branch
+    // (the anchored "condition is last child" pattern), but with no
+    // @cfg.branch.else in that specific match.
+    let bare_if_matches: Vec<_> = captures
+        .iter()
+        .filter(|(cap, _, text, _)| {
+            cap == "cfg.branch" && text.starts_with("{% if neg_only_condition %}")
+        })
+        .collect();
+    assert!(
+        !bare_if_matches.is_empty(),
+        "expected bare if (no elif/else) to produce @cfg.branch, got: {captures:?}"
+    );
+}
+// ==================== r query tests ====================
+
+const R_VARIANTS: &str = include_str!("fixtures/r/variants.r");
+
+#[test]
+fn r_tags_finds_dollar_assigned_and_right_assigned_functions() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping r_tags_dollar_right: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_tags_dollar_right: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("r").expect("r tags query missing");
+    let pairs = collect_tag_pairs(&lang, R_SAMPLE, &query_str);
+    // Environment/`$`-based method definitions inside make_stack() (the
+    // pre-R6-package OOP idiom: self$push <- function(...) {...}).
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "push"),
+        "expected 'push' (self$push <- function...) as definition.function, got: {pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "pop"),
+        "expected 'pop' (self$pop <- function...) as definition.function, got: {pairs:?}"
+    );
+    // Right-assignment: (function(x) x * x) -> square.
+    assert!(
+        pairs
+            .iter()
+            .any(|(k, n)| k == "definition.function" && n == "square"),
+        "expected 'square' (right-assigned function) as definition.function, got: {pairs:?}"
+    );
+}
+
+#[test]
+fn r_tags_completeness_all_assignment_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_tags_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_tags_completeness: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_tags("r").expect("r tags query missing");
+    let pairs = collect_tag_pairs(&lang, R_VARIANTS, &query_str);
+    for name in [
+        "left_arrow_fn",           // lhs: identifier, operator "<-"
+        "equals_fn",               // lhs: identifier, operator "="
+        "inner",                   // lhs: identifier, operator "<<-"
+        "method_dollar",           // lhs: extract_operator ($), operator "<-"
+        "method_dollar_eq",        // lhs: extract_operator ($), operator "="
+        "right_arrow_fn",          // lhs: parenthesized function, operator "->"
+        "right_arrow_global_fn",   // lhs: parenthesized function, operator "->>"
+        "lambda_fn",               // rhs: function_definition with `\` name form
+    ] {
+        assert!(
+            pairs
+                .iter()
+                .any(|(k, n)| k == "definition.function" && n == name),
+            "expected '{name}' as definition.function in variants.r, got: {pairs:?}"
+        );
+    }
+}
+
+#[test]
+fn r_calls_finds_method_and_bracket_style_calls() {
+    let Some(gdir) = grammar_dir() else {
+        eprintln!("Skipping r_calls_method_bracket: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_calls_method_bracket: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("r").expect("r calls query missing");
+    let calls = collect_captures(&lang, R_SAMPLE, &query_str, "call");
+    // stack$push(42) / stack$pop() — extract_operator ($) call form.
+    assert!(
+        calls.contains(&"push".to_string()),
+        "expected 'push' method-style call (stack$push(...)) in r calls, got: {calls:?}"
+    );
+    assert!(
+        calls.contains(&"pop".to_string()),
+        "expected 'pop' method-style call (stack$pop()) in r calls, got: {calls:?}"
+    );
+    let qualifiers = collect_captures(&lang, R_SAMPLE, &query_str, "call.qualifier");
+    assert!(
+        qualifiers.contains(&"stack".to_string()),
+        "expected 'stack' qualifier for stack$push/stack$pop, got: {qualifiers:?}"
+    );
+}
+
+#[test]
+fn r_calls_completeness_all_function_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_calls_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_calls_completeness: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("r").expect("r calls query missing");
+    let caps = collect_captures_full(&lang, R_VARIANTS, &query_str);
+
+    let calls: Vec<(&str, &str)> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call")
+        .map(|(_, k, t, _)| (k.as_str(), t.as_str()))
+        .collect();
+
+    // function: (identifier) — plain call
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "identifier" && *t == "plain_call_target"),
+        "expected plain identifier call 'plain_call_target', got: {calls:?}"
+    );
+    // function: (namespace_operator) — pkg::fn()
+    assert!(
+        calls.iter().any(|(k, t)| *k == "identifier" && *t == "median"),
+        "expected namespace-qualified call 'median' (stats::median), got: {calls:?}"
+    );
+    // function: (extract_operator) via `$` — method-style call
+    assert!(
+        calls.iter().any(|(k, t)| *k == "identifier" && *t == "run"),
+        "expected dollar method-style call 'run' (receiver_env$run()), got: {calls:?}"
+    );
+    // function: (subset2) — obj[["name"]]() call, whole node captured (no
+    // resolvable static name, so kind must be 'subset2', not 'identifier').
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "subset2" && t.contains("bracket2_holder")),
+        "expected subset2 call-site capture for bracket2_holder[[\"fn\"]](), got: {calls:?}"
+    );
+    // function: (subset) — obj["name"]() call, same rationale.
+    assert!(
+        calls
+            .iter()
+            .any(|(k, t)| *k == "subset" && t.contains("bracket1_holder")),
+        "expected subset call-site capture for bracket1_holder[\"fn\"](), got: {calls:?}"
+    );
+
+    let qualifiers: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "call.qualifier")
+        .map(|(_, _, t, _)| t.as_str())
+        .collect();
+    assert!(
+        qualifiers.contains(&"stats"),
+        "expected 'stats' namespace qualifier, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"receiver_env"),
+        "expected 'receiver_env' dollar-call qualifier, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"bracket2_holder"),
+        "expected 'bracket2_holder' subset2-call qualifier, got: {qualifiers:?}"
+    );
+    assert!(
+        qualifiers.contains(&"bracket1_holder"),
+        "expected 'bracket1_holder' subset-call qualifier, got: {qualifiers:?}"
+    );
+}
+
+#[test]
+fn r_calls_negative_field_and_bracket_reads_not_captured() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_calls_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_calls_negative: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_calls("r").expect("r calls query missing");
+    let calls = collect_captures(&lang, R_VARIANTS, &query_str, "call");
+    // `receiver_env$run` (bare field read, not `receiver_env$run()`) must
+    // never surface as a call. The only "run" call comes from the earlier
+    // `receiver_env$run()` call-site above the negative section.
+    assert_eq!(
+        calls.iter().filter(|c| c.as_str() == "run").count(),
+        1,
+        "expected exactly 1 'run' call (the actual call site, not the bare \
+         field read negative_field_read <- receiver_env$run), got: {calls:?}"
+    );
+    // Bracket-subscript reads (not calls) must not add extra subset/subset2
+    // call-site captures beyond the two real call sites above.
+    let full = collect_captures_full(&lang, R_VARIANTS, &query_str);
+    let subset2_calls = full
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "call" && k == "subset2")
+        .count();
+    assert_eq!(
+        subset2_calls, 1,
+        "expected exactly 1 subset2 @call (bracket2_holder[[\"fn\"]]()), \
+         negative_bracket_read <- bracket2_holder[[\"fn\"]] must not count, got {subset2_calls}"
+    );
+    let subset_calls = full
+        .iter()
+        .filter(|(cn, k, _, _)| cn == "call" && k == "subset")
+        .count();
+    assert_eq!(
+        subset_calls, 1,
+        "expected exactly 1 subset @call (bracket1_holder[\"fn\"]()), \
+         negative_bracket1_read <- bracket1_holder[\"fn\"] must not count, got {subset_calls}"
+    );
+}
+
+#[test]
+fn r_imports_finds_all_library_require_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_imports_variants: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_imports_variants: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_imports("r").expect("r imports query missing");
+    let paths = collect_captures(&lang, R_VARIANTS, &query_str, "import.path");
+    for expected in [
+        "utils",      // library(pkg) bareword
+        "\"tools\"",  // library("pkg") quoted
+        "\"methods\"", // library(package = "pkg") named argument
+        "grDevices",  // require(pkg)
+        "\"grid\"",   // requireNamespace("pkg")
+    ] {
+        assert!(
+            paths.iter().any(|p| p == expected),
+            "expected import.path {expected:?} in variants.r, got: {paths:?}"
+        );
+    }
+}
+
+#[test]
+fn r_imports_negative_named_option_and_non_import_calls_not_captured() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_imports_negative: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_imports_negative: r grammar .so not found");
+        return;
+    };
+    let query_str = loader.get_imports("r").expect("r imports query missing");
+    let paths = collect_captures(&lang, R_VARIANTS, &query_str, "import.path");
+    // library(utils, character.only = TRUE) must contribute exactly ONE
+    // import.path ("utils"), never "character.only = TRUE" or the bare
+    // comma token that separates the arguments (both were real bugs before
+    // the `arguments: (arguments . (argument value: (_) @import.path))`
+    // fix — an unanchored `(_)` matched every child of `arguments`,
+    // including the named-option argument and the comma node, since R's
+    // grammar marks `comma` as a *named* node type).
+    assert!(
+        !paths.iter().any(|p| p.contains("character.only")),
+        "named option argument must never be captured as import.path, got: {paths:?}"
+    );
+    assert!(
+        !paths.iter().any(|p| p == ","),
+        "comma separator token must never be captured as import.path, got: {paths:?}"
+    );
+    assert_eq!(
+        paths.iter().filter(|p| p.as_str() == "utils").count(),
+        2,
+        "expected exactly 2 'utils' import.path captures (bareword library(utils) \
+         and library(utils, character.only = TRUE)), got: {paths:?}"
+    );
+    // `library` used as a bare value (not called), and `loadNamespace(...)`
+    // (a real but different R import mechanism the query intentionally
+    // doesn't special-case), must not contribute any import.path captures:
+    // the total stays at exactly the 6 accounted for above (utils x2,
+    // "tools", "methods", grDevices, "grid").
+    assert_eq!(
+        paths.len(),
+        6,
+        "expected exactly 6 import.path captures in variants.r (library_as_value \
+         and loadNamespace(...) must not contribute any), got: {paths:?}"
+    );
+}
+
+#[test]
+fn r_complexity_completeness_all_branch_loop_and_logical_variants() {
+    let Some(gdir) = require_grammar_dir() else {
+        eprintln!("Skipping r_complexity_completeness: run `cargo xtask build-grammars` first");
+        return;
+    };
+    let loader = GrammarLoader::with_paths(vec![gdir]);
+    let Some(lang) = loader.get("r").ok() else {
+        eprintln!("Skipping r_complexity_completeness: r grammar .so not found");
+        return;
+    };
+    let query_str = loader
+        .get_complexity("r")
+        .expect("r complexity query missing");
+    let caps = collect_captures_full(&lang, R_VARIANTS, &query_str);
+
+    let complexity_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "complexity")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    for kind in [
+        "if_statement",
+        "for_statement",
+        "while_statement",
+        "repeat_statement",
+        "&&",
+        "||",
+    ] {
+        assert!(
+            complexity_kinds.contains(&kind),
+            "expected a @complexity capture of kind '{kind}' in variants.r, \
+             got kinds: {complexity_kinds:?}"
+        );
+    }
+
+    let nesting_kinds: Vec<&str> = caps
+        .iter()
+        .filter(|(cn, _, _, _)| cn == "nesting")
+        .map(|(_, k, _, _)| k.as_str())
+        .collect();
+    for kind in [
+        "if_statement",
+        "for_statement",
+        "while_statement",
+        "repeat_statement",
+        "function_definition",
+    ] {
+        assert!(
+            nesting_kinds.contains(&kind),
+            "expected a @nesting capture of kind '{kind}' in variants.r, got kinds: \
+             {nesting_kinds:?}"
+        );
+    }
+    // "&&" / "||" must never appear as @nesting (only if/for/while/repeat/
+    // function_definition nest; logical operators only add complexity).
+    assert!(
+        !nesting_kinds.contains(&"&&") && !nesting_kinds.contains(&"||"),
+        "logical operators must not contribute @nesting, got: {nesting_kinds:?}"
     );
 }
