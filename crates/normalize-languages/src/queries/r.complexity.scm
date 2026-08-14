@@ -6,9 +6,13 @@
 (if_statement) @complexity
 (for_statement) @complexity
 (while_statement) @complexity
+(repeat_statement) @complexity
+"&&" @complexity
+"||" @complexity
 
 ; Nesting nodes
 (if_statement) @nesting
 (for_statement) @nesting
 (while_statement) @nesting
+(repeat_statement) @nesting
 (function_definition) @nesting
