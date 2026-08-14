@@ -350,6 +350,26 @@ fn format_node_line(node: &ViewNode, options: &FormatOptions) -> String {
 }
 
 /// Elide visibility and declaration keywords for minimal output.
+///
+/// Only strips a keyword when it is a genuine *leading* token of the (remaining)
+/// signature — `strip_prefix`, not `replacen`. `replacen(kw, "", 1)` matches the
+/// keyword as a substring anywhere in the string, so e.g. an HCL attribute named
+/// `instance_type` (idiomatic Terraform: `instance_type = "t3.micro"`) had its
+/// own name corrupted to `instance_ = "t3.micro"` because `"type "` occurs inside
+/// `"instance_type "`, not just as a leading declaration keyword. Any identifier
+/// containing a keyword substring (`prototype`, `datatype`, `filetype`, `mod_name`,
+/// `const_ptr`, …) was silently corrupted the same way, in any language.
+///
+/// A second, narrower case: this list is a single global set of keywords with no
+/// per-language awareness, so a word like `type` is ambiguous between "Rust type
+/// alias keyword" (`type Foo = Bar` — stripping is correct, `Foo` is the name) and
+/// "attribute/key literally named `type`" (HCL's `type = string` inside a
+/// `variable` block — far and away the most common Terraform variable attribute;
+/// stripping destroys the only name the attribute has, leaving `    = string`).
+/// The two are distinguished by what follows: a declaration keyword is always
+/// followed by an identifier, while a bare key-value pair is followed by `=`. Skip
+/// the strip when the remainder (after trimming leading whitespace) starts with
+/// `=`, since that shape can only be "the stripped word was itself the name."
 fn elide_keywords(sig: &str) -> String {
     let mut s = sig.to_string();
     // Visibility
@@ -360,7 +380,11 @@ fn elide_keywords(sig: &str) -> String {
         "pub(self) ",
         "private ",
     ] {
-        s = s.replacen(kw, "", 1);
+        if let Some(rest) = s.strip_prefix(kw)
+            && !rest.trim_start().starts_with('=')
+        {
+            s = rest.to_string();
+        }
     }
     // Declaration keywords (keep the name/signature, remove the keyword)
     for kw in [
@@ -380,7 +404,12 @@ fn elide_keywords(sig: &str) -> String {
         "def ",
         "async def ",
     ] {
-        s = s.replacen(kw, "", 1);
+        if let Some(rest) = s.strip_prefix(kw)
+            && !rest.trim_start().starts_with('=')
+        {
+            s = rest.to_string();
+            break;
+        }
     }
     s
 }
@@ -1458,5 +1487,41 @@ mod tests {
 
         // Should return a ViewNode structure
         assert_eq!(result.kind, ViewNodeKind::Directory);
+    }
+
+    #[test]
+    fn elide_keywords_strips_leading_keyword_only() {
+        // Leading keyword: stripped.
+        assert_eq!(elide_keywords("fn foo()"), "foo()");
+        assert_eq!(elide_keywords("pub fn foo()"), "foo()");
+        assert_eq!(elide_keywords("type Foo = Bar"), "Foo = Bar");
+        assert_eq!(elide_keywords("async fn foo()"), "foo()");
+    }
+
+    #[test]
+    fn elide_keywords_does_not_corrupt_identifiers_containing_a_keyword_substring() {
+        // Regression: `replacen("type ", "", 1)` used to strip the first
+        // occurrence of "type " *anywhere* in the string, corrupting HCL's
+        // `instance_type = "t3.micro"` into `instance_ = "t3.micro"` since
+        // "type " occurs inside "instance_type ", not as a leading keyword.
+        assert_eq!(
+            elide_keywords("instance_type = \"t3.micro\""),
+            "instance_type = \"t3.micro\""
+        );
+        assert_eq!(elide_keywords("prototype = {}"), "prototype = {}");
+        assert_eq!(elide_keywords("mod_name = 1"), "mod_name = 1");
+        assert_eq!(elide_keywords("const_ptr = 1"), "const_ptr = 1");
+    }
+
+    #[test]
+    fn elide_keywords_does_not_strip_a_bare_key_named_after_a_keyword() {
+        // HCL `variable` blocks idiomatically contain `type = string` — "type" here
+        // is the attribute's own name, not a Rust-style `type Foo = Bar` alias
+        // keyword. Distinguish by what follows: a real declaration keyword is
+        // followed by an identifier, a bare key-value pair is followed by `=`.
+        assert_eq!(elide_keywords("type    = string"), "type    = string");
+        assert_eq!(elide_keywords("type = list(string)"), "type = list(string)");
+        // Genuine declaration keyword usage still elides correctly.
+        assert_eq!(elide_keywords("type Foo = Bar"), "Foo = Bar");
     }
 }
