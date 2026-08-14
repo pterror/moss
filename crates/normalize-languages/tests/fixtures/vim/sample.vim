@@ -1,6 +1,8 @@
 " Sample Vim script with functions, commands, and autocommands
 source ~/.vim/utils.vim
 runtime plugin/defaults.vim
+source! ~/.vim/optional.vim
+runtime! plugin/*.vim
 
 let g:my_plugin_enabled = 1
 let g:my_plugin_width = 80
@@ -86,6 +88,23 @@ function! s:ProcessList(items)
 
     return l:total
 endfunction
+
+" Dict-bound methods: the plugin-OO pattern of attaching a function to a
+" dictionary as a bound method (function_declaration.name = field_expression).
+let s:widget = {}
+
+function! s:widget.Render() dict
+    return 'rendered'
+endfunction
+
+function! s:widget.Dispatch(key) dict
+    " Dynamic dispatch-table call: call_expression.function = index_expression.
+    let l:handlers = {'render': function('s:widget.Render')}
+    return l:handlers[a:key]()
+endfunction
+
+" Dict-bound method call: call_expression.function = field_expression.
+call s:widget.Render()
 
 augroup MyPlugin
     autocmd!
