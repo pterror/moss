@@ -74,3 +74,35 @@ $border-radius: 4px;
     padding: rem(16px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+// Placeholder selector (%foo) — a real-world idiom distinct from a plain
+// class/mixin, meant to be pulled in via @extend rather than emitted
+// directly. NOTE: `@extend %btn-reset;` (extending a placeholder) is not
+// exercised here — arborium-scss 2.17.0's `extend_statement` grammar rule
+// does not accept a `placeholder` node as its target (confirmed via
+// `normalize syntax ast`: it produces an ERROR), even though extending
+// placeholders is the primary real-world use of the feature. See
+// scss.tags.scm's header comment.
+%btn-reset {
+    border: none;
+    background: none;
+}
+
+.link-button {
+    @extend .card;
+    color: $primary;
+}
+
+// Interpolation (#{...}) in a selector and in a property name — common for
+// generating utility-class families from a variable/list.
+$directions: top, right, bottom, left;
+
+@each $side in $directions {
+    .m-#{$side} {
+        margin-#{$side}: 8px;
+    }
+}
+
+// @import url(...) — the CSS-compatible form of @import, distinct from the
+// SCSS-native quoted-path form already used at the top of this file.
+@import url("https://fonts.example.com/font.css");

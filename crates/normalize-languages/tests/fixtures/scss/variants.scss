@@ -1,0 +1,176 @@
+// Completeness matrix for scss.{tags,calls,imports,complexity}.scm.
+//
+// One small, clearly commented construct per node-type variant found while
+// cross-referencing the query files against arborium-scss 2.17.0's
+// node-types.json (verified via `normalize syntax ast` / `normalize syntax
+// query`, not node-types.json alone — see each comment). A dedicated
+// NEGATIVE section at the bottom covers near-miss constructs that must NOT
+// match. Grammar limitations discovered along the way (constructs that
+// produce ERROR nodes in this grammar version) are intentionally NOT
+// included here — they're documented in the relevant .scm file's header
+// comment instead, per docs/query-testing-methodology.md step 8. This file
+// must parse with zero (ERROR) nodes.
+
+// --- definition.function: mixin_statement / function_statement --------
+
+@mixin no-params {
+  color: red;
+}
+
+@mixin with-params($a, $b: 10px) {
+  width: $a;
+  height: $b;
+}
+
+@function double($n) {
+  @return $n * 2;
+}
+
+// --- @call: call_expression (function_name field-free child) ----------
+
+.call-variant {
+  width: double(5px);
+}
+
+// --- @call / @reference.call: include_statement (mixin invocation) ----
+
+.include-bare {
+  @include no-params;
+}
+
+.include-args {
+  @include with-params(1px, 2px);
+}
+
+.include-block {
+  @include with-params(1px) {
+    color: blue;
+  }
+}
+
+// --- import/use/forward: string_value vs call_expression(url) ---------
+
+@import "plain-path";
+@import url("quoted-url-path.css");
+@import url(bare-url-path.css);
+@use "sass:math";
+@forward "src/list";
+
+// --- definition.class: rule_set / selectors — one construct per selector
+// node type `selectors`' children field allows (verified via
+// `normalize syntax ast`, not node-types.json alone: several of these,
+// e.g. bare comma-lists in @each, are declared-but-unparseable elsewhere in
+// this grammar, but all forms below were individually confirmed clean).
+
+.class-selector { color: red; }
+#id-selector { color: red; }
+tag-selector { color: red; }
+[data-x] { color: red; }
+a[data-x="y"] { color: red; }
+.parent > .child { color: red; }
+.a + .b { color: red; }
+.a ~ .b { color: red; }
+.a .b { color: red; }
+svg|circle { color: red; }
+:hover { color: red; }
+::before { content: ""; }
+* { color: red; }
+%placeholder-selector { color: red; }
+
+.nesting-parent {
+  & .nested-descendant { color: red; }
+  &:hover { color: red; }
+  &--modifier { color: red; }
+}
+
+// --- definition.module: media_statement / supports_statement / ---------
+// keyframes_statement / generic at_rule fallback
+
+@media (max-width: 768px) {
+  .responsive { color: red; }
+}
+
+@supports (display: grid) {
+  .grid { display: grid; }
+}
+
+@keyframes fade-variant {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+// Generic `at_rule` fallback — same node shape as css.tags.scm's fallback
+// (@font-face/@page/@property/@layer all confirmed via `normalize syntax
+// ast` to parse as this same generic node in arborium-scss; @container is
+// NOT included — see scss.tags.scm's header comment, it's grammar-broken).
+@font-face {
+  font-family: "AtRuleVariant";
+}
+
+@page {
+  margin: 1in;
+}
+
+@property --at-rule-property {
+  syntax: "<color>";
+}
+
+@layer at-rule-layer, at-rule-base;
+
+// --- definition.variable: declaration > property_name ------------------
+
+.property-variants {
+  --custom-prop: blue;
+  color: red;
+}
+
+$top-level-variable: #333;
+
+// --- complexity / nesting: if_statement / else_if_clause / else_clause /
+// for_statement / each_statement / while_statement
+
+$each-source: a b c;
+$while-counter: 3;
+
+@mixin branch-variants($x) {
+  @if $x == 1 {
+    color: red;
+  } @else if $x == 2 {
+    color: blue;
+  } @else {
+    color: green;
+  }
+
+  @for $i from 1 through 3 {
+    .col-#{$i} { width: $i * 10%; }
+  }
+
+  @each $item in $each-source {
+    .item-#{$item} { color: red; }
+  }
+
+  @while $while-counter > 0 {
+    .while-item { color: red; }
+  }
+}
+
+// =========================================================================
+// NEGATIVE cases — must NOT match
+// =========================================================================
+
+// @charset has its own dedicated node type (`charset_statement`), never
+// swept in by the generic `(at_rule) @definition.module` fallback (it's a
+// structurally distinct node, confirmed via `normalize syntax ast`).
+@charset "UTF-8";
+
+// A plain property declaration (not @include) must never be captured as a
+// @call / @reference.call.
+.negative-declaration {
+  width: double-not-a-call;
+}
+
+// A bare identifier used as a value (not inside call_expression's
+// arguments and not an @include target) must never be captured as @call.
+.negative-bare-identifier {
+  display: flex;
+}
