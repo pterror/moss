@@ -1,5 +1,4 @@
 //! Pure graph algorithms for dependency analysis.
-//! (hooktest: trivial doc comment addition, to be reverted)
 //!
 //! Operates on abstract graphs represented as adjacency lists
 //! (`HashMap<String, HashSet<String>>`). No filesystem, CLI, or
