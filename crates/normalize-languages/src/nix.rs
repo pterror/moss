@@ -153,10 +153,10 @@ mod tests {
         let documented_unused: &[&str] = &[
             "assert_expression", "binary_expression", "float_expression",
             "formal", "formals", "has_attr_expression", "hpath_expression",
-            "identifier", "indented_string_expression", "integer_expression",
+            "indented_string_expression", "integer_expression",
             "list_expression", "let_attrset_expression", "parenthesized_expression",
             "path_expression", "select_expression", "spath_expression",
-            "string_expression", "unary_expression", "uri_expression",
+            "unary_expression", "uri_expression",
             "variable_expression",
             // Control flow / application — not definition constructs
             "apply_expression", "if_expression", "with_expression",
