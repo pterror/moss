@@ -11,6 +11,15 @@
 ;
 ; Function definitions (labels starting with :) are the only structural
 ; containers — captured as @nesting for nesting depth.
+;
+; KNOWN FALSE POSITIVE (see batch.cfg.scm for the full explanation, verified
+; via `normalize syntax ast`): `goto :label` and `call :label` each emit a
+; spurious extra `function_definition` node for the target, indistinguishable
+; at the query level from a genuine label definition. Not fixable via a
+; `.scm` predicate — tree-sitter queries have no "not preceded by sibling of
+; kind X" negation, and `call` isn't even a recognized keyword in this
+; grammar (it parses inside an `ERROR` node), so there's no stable anchor to
+; filter on for that case either.
 
 ; Nesting nodes
 (function_definition) @nesting
