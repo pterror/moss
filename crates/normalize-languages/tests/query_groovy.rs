@@ -106,6 +106,76 @@ fn groovy_types_live() {
     );
 }
 
+/// Regression test for the `normalize view` display bug where an annotated
+/// definition's signature was the annotation text instead of the declaration
+/// (e.g. `@Immutable class Point { ... }` rendered as `@Immutable`, with
+/// `Point` never appearing — see TODO.md's 2026-08-14 entry). Runs the real
+/// tags query to find the `@definition.class`/`@definition.method` node for
+/// each annotated symbol, then calls `Language::build_signature` on it
+/// directly — the same call `normalize-facts::extract` makes when building a
+/// `Symbol`.
+#[test]
+fn groovy_build_signature_skips_leading_annotation() {
+    let loader = normalize_languages::GrammarLoader::new();
+    let Some(lang) = loader.get("groovy").ok() else {
+        eprintln!(
+            "Skipping groovy_build_signature_skips_leading_annotation: groovy grammar not found"
+        );
+        return;
+    };
+    let query_str = loader
+        .get_tags("groovy")
+        .expect("groovy tags query missing");
+
+    use normalize_languages::Language;
+    use tree_sitter::StreamingIterator;
+
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&lang).expect("set_language failed");
+    let tree = parser.parse(GROOVY_SAMPLE, None).expect("parse failed");
+    let query = tree_sitter::Query::new(&lang, &query_str).expect("query compilation failed");
+    let mut cursor = tree_sitter::QueryCursor::new();
+    let source_bytes = GROOVY_SAMPLE.as_bytes();
+
+    let mut signature_for_name: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        let mut name = None;
+        let mut def_node = None;
+        for cap in m.captures {
+            let cap_name = query.capture_names()[cap.index as usize];
+            if cap_name == "name" {
+                name = Some(cap.node.utf8_text(source_bytes).unwrap_or("").to_string());
+            } else if cap_name.starts_with("definition.") {
+                def_node = Some(cap.node);
+            }
+        }
+        if let (Some(n), Some(node)) = (name, def_node) {
+            signature_for_name.insert(
+                n,
+                normalize_languages::Groovy.build_signature(&node, GROOVY_SAMPLE),
+            );
+        }
+    }
+
+    let point_sig = signature_for_name
+        .get("Point")
+        .unwrap_or_else(|| panic!("no 'Point' definition found, got: {signature_for_name:?}"));
+    assert_eq!(
+        point_sig, "class Point {",
+        "Point's signature should be its declaration, not its leading @Immutable annotation"
+    );
+
+    let distance_to_sig = signature_for_name
+        .get("distanceTo")
+        .unwrap_or_else(|| panic!("no 'distanceTo' definition found, got: {signature_for_name:?}"));
+    assert_eq!(
+        distance_to_sig, "double distanceTo(Point other) {",
+        "distanceTo's signature should be its declaration, not its leading @Override annotation"
+    );
+}
+
 #[test]
 fn groovy_decorations_finds_annotation_and_comment() {
     let Some(gdir) = require_grammar_dir() else {

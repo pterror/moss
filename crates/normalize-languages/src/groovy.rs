@@ -38,6 +38,26 @@ impl Language for Groovy {
             .map(|n| &content[n.byte_range()])
     }
 
+    fn build_signature(&self, node: &Node, content: &str) -> String {
+        // Default signature building takes the definition node's first source line.
+        // Groovy annotations (`@Immutable`, `@Override`, ...) are leading siblings
+        // inside the definition node itself, each on their own line — so the
+        // unadjusted first line is the annotation text, not the declaration
+        // (e.g. `@Immutable` instead of `class Point {`). Skip past any leading
+        // `annotation` children before taking the first line.
+        let mut start = node.start_byte();
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "annotation" {
+                continue;
+            }
+            start = child.start_byte();
+            break;
+        }
+        let text = &content[start..node.end_byte()];
+        text.lines().next().unwrap_or(text).trim().to_string()
+    }
+
     fn extract_docstring(&self, node: &Node, content: &str) -> Option<String> {
         extract_groovydoc(node, content)
     }

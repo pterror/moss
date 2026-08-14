@@ -126,6 +126,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`normalize view` showed an annotated Groovy class/method's signature as just
+  its leading annotation** (e.g. `@Immutable class Point { ... }` rendered as
+  `@Immutable: L17-26`, with `Point` never appearing). Root cause was in the
+  shared `Language::build_signature` default (`crates/normalize-languages/src/
+  traits.rs`), which takes the definition node's first source line verbatim;
+  Groovy models a leading `annotation` as a child of the definition node itself
+  (unlike every other language checked — Java, Python, TypeScript, C#, Rust all
+  compute their signature from the extracted name rather than raw first-line
+  text), so the unadjusted first line was the annotation, not the declaration.
+  Groovy's symbol *name* was always correct (`node_name` uses the `name`/
+  `function` field, unaffected) — only the displayed signature was wrong.
+  Fixed with a Groovy-specific `build_signature` override that skips leading
+  `annotation` children before taking the first line. Also bumped the
+  persistent symbol-cache version (`normalize-facts`' `extract.rs`) since this
+  is a per-language Rust logic change the cache's query-fingerprint doesn't
+  cover — without the bump, machines with a populated cache would keep serving
+  the old wrong signature until the entry naturally aged out.
 - **Common Lisp complexity/nesting metrics counted every parenthesized expression.**
   `commonlisp.complexity.scm` was a bare `(list_lit) @complexity` / `(list_lit)
   @nesting` — since every Common Lisp form (call, data literal, control flow) is a

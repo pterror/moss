@@ -30,6 +30,41 @@ deleted.
 
 ## Active open threads (advisory)
 
+- ✅ **DONE (2026-08-14): `normalize view` display bug — annotated Groovy symbol showed
+  its annotation instead of its name/signature — confirmed and fixed.** Reported instance:
+  `@Immutable class Point {...}` rendered as `@Immutable: L17-26`, with `Point` never
+  appearing. Traced to the shared `Language::build_signature` default
+  (`crates/normalize-languages/src/traits.rs`): "first line of the node's source text,
+  trimmed." Groovy models a leading `annotation` as a *child of the definition node
+  itself* — unlike every other language checked for the same class of bug (Java
+  `@Override`, Python `@decorator`, TypeScript `@Component`, C# `[Attribute]`, Rust
+  `#[derive]` — all confirmed unaffected: they either compute signatures from the
+  extracted name rather than raw first-line text, or their grammar keeps the
+  attribute/decorator as a sibling outside the definition node's span, not a child
+  inside it), so the unadjusted first line was the annotation text, not the
+  declaration. The symbol's *name* was always correct (`node_name` reads the `name`/
+  `function` field, unaffected by the leading annotation) — only the displayed
+  `signature` was wrong, and `view`'s renderer (`crates/normalize/src/tree.rs`
+  `format_node_line`) prefers `signature` over `name` when present, which is why the
+  name never showed. Fixed with a Groovy-specific `build_signature` override
+  (`crates/normalize-languages/src/groovy.rs`) that skips leading `annotation`
+  children before taking the first line — `@Override` methods (e.g. `distanceTo`)
+  had the identical bug, same fix. Also bumped `normalize-facts`' persistent
+  symbol-cache version (`extract.rs`, `symbols-v2-*` → `symbols-v3-*`): this is a
+  per-language Rust logic change, not a `.scm` query change, so the cache's
+  query-fingerprint suffix doesn't see it — without the bump, a machine with a
+  populated `~/.config/normalize/ca-cache.sqlite` (as this session's dev machine
+  was) keeps serving the old wrong signature indefinitely, which is what actually
+  caused most of the debugging time on this task: the fix was correct and verified
+  by unit test long before the CLI's output changed, because the CLI was reading a
+  stale cache entry, not re-parsing. Regression coverage added in
+  `crates/normalize-languages/tests/query_groovy.rs`. Breadth was checked, not
+  assumed: grepped every `.tags.scm` for decorator/annotation/attribute node types
+  and cross-checked which language `.rs` files lack their own `build_signature`
+  override — Groovy is the only language in the workspace with both a leading
+  annotation-as-child grammar shape and no override, so this is believed to be a
+  single-language fix, not a shared-path fix.
+
 - ✅ **DONE (2026-08-14): `go_cfg`'s orphaned-`LoopExit` bug confirmed and fixed — same
   class as jinja2's.** `go.cfg.scm`'s `for_statement` pattern captured `@cfg.loop.body`
   but never `@cfg.loop.condition`, so `normalize-cfg`'s builder (`loop_condition.is_some()`

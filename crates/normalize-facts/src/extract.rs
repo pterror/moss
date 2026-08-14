@@ -315,10 +315,16 @@ impl Extractor {
         // itself change, so no manual bump is needed for either case.
         // Cross-file resolver results are not cached (resolver.is_none() guard below).
         // v2 (2026-07-15): Symbol gained a `complexity` field.
+        // v3 (2026-08-14): Groovy's `build_signature` was fixed to skip leading
+        // `annotation` children (`@Immutable class Point` was rendering its signature
+        // as `@Immutable` instead of `class Point {`). Per-language Rust logic changes
+        // like this are not covered by the query-fingerprint suffix below (that only
+        // tracks `.scm` file content and the grammar `.so`), so a manual bump is
+        // required to invalidate previously cached (wrong) signatures.
         let base_cache_ver = if self.options.include_private {
-            "symbols-v2-all"
+            "symbols-v3-all"
         } else {
-            "symbols-v2-public"
+            "symbols-v3-public"
         };
         // `None` means the grammar's `.so` carries no embedded version symbol (see
         // `ca_cache::cache_version_suffix`) — we cannot prove two builds of it behave
