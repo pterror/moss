@@ -1,0 +1,23 @@
+= Book Title
+
+An introductory paragraph, not an include.
+
+== Chapter 1
+
+include::chapters/chapter1.adoc[]
+
+== Chapter 2
+
+// Include with an attribute list — must still extract the path, not the
+// attribute text.
+include::chapters/chapter2.adoc[leveloffset=+1]
+
+== Appendix
+
+// Path built from a document attribute reference — the whole target text
+// (including the unexpanded {docdir} reference) is what we extract; we do
+// not attempt attribute expansion.
+include::{docdir}/appendix/notes.adoc[]
+
+// A non-include block macro must NOT be treated as an import.
+image::diagrams/architecture.png[Architecture diagram]

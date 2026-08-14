@@ -1,0 +1,35 @@
+// Completeness matrix for asciidoc.imports.scm.
+// Each construct below is commented with which target-field variant (or
+// negative case) it exercises. `target` is the only node type node-types.json
+// lists as a child of `block_macro` for the path (required, exactly one);
+// `block_macro_attr` is optional and, when present, holds only the
+// bracketed attribute list — never the path.
+
+// --- bare include, no attributes: target present, block_macro_attr absent ---
+include::bare.adoc[]
+
+// --- include with a single attribute ---
+include::single-attr.adoc[lines=1..10]
+
+// --- include with multiple comma-separated attributes (multiple
+// block_macro_attr siblings under one block_macro) ---
+include::multi-attr.adoc[lines=1..10,tag=foo]
+
+// --- relative path with parent-directory segments ---
+include::../shared/common.adoc[]
+
+// --- path containing a document-attribute reference ({docdir}, {includedir}) ---
+include::{includedir}/generated.adoc[]
+
+// --- nested relative path ---
+include::sub/nested/deep.adoc[leveloffset=+1]
+
+// ==== NEGATIVE: must NOT be captured as an import ====
+
+// image:: is a block macro but not "include" — must not match @import.
+image::diagrams/architecture.png[Architecture]
+
+// A plain paragraph mentioning "include::" as prose text, not at macro
+// position (indented so it doesn't parse as a block macro line) — must not
+// match.
+ This paragraph talks about include::not-a-macro.adoc[] in prose form.
