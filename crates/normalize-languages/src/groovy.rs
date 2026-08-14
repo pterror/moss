@@ -320,19 +320,29 @@ impl ModuleResolver for GroovyModuleResolver {
 
 /// Extract a GroovyDoc comment from a node.
 ///
-/// The Groovy tree-sitter grammar wraps documented declarations in a `groovy_doc`
-/// parent node rather than making the doc comment a sibling. This function checks
-/// the parent node for `groovy_doc` and extracts the doc text from `first_line`
-/// and `tag_value` children.
+/// The Groovy tree-sitter grammar (arborium-groovy 2.17.0) attaches `groovy_doc`
+/// as an `extra` node immediately *preceding* the documented declaration as a
+/// sibling — not as its parent (verified via `normalize syntax ast` against a
+/// `/** ... */`-documented method; `groovy_doc` and the following
+/// `function_definition` are both direct children of the same enclosing node).
+/// This function therefore checks the node's previous sibling, not its parent.
+///
+/// The grammar's `groovy_doc` production only models the doc comment's first
+/// body line (`first_line`) plus structured tags (`groovy_doc_param`,
+/// `groovy_doc_throws`, `groovy_doc_tag`, `groovy_doc_at_text`) — free-form
+/// prose on subsequent lines before the first tag is not captured by any node
+/// and is unavoidably lost (e.g. a "More details here." continuation line
+/// produces no node at all). There is no `tag_value` node in this grammar;
+/// each tag node's own text already includes its argument (e.g. `@param x`).
 fn extract_groovydoc(node: &Node, content: &str) -> Option<String> {
-    let parent = node.parent()?;
-    if parent.kind() != "groovy_doc" {
+    let doc = node.prev_sibling()?;
+    if doc.kind() != "groovy_doc" {
         return None;
     }
 
     let mut doc_parts: Vec<String> = Vec::new();
-    let mut cursor = parent.walk();
-    for child in parent.children(&mut cursor) {
+    let mut cursor = doc.walk();
+    for child in doc.children(&mut cursor) {
         match child.kind() {
             "first_line" => {
                 let text = content[child.byte_range()].trim();
@@ -342,7 +352,7 @@ fn extract_groovydoc(node: &Node, content: &str) -> Option<String> {
                     doc_parts.push(text.to_string());
                 }
             }
-            "tag_value" => {
+            "groovy_doc_param" | "groovy_doc_throws" | "groovy_doc_tag" | "groovy_doc_at_text" => {
                 let text = content[child.byte_range()].trim();
                 if !text.is_empty() {
                     doc_parts.push(text.to_string());
@@ -383,10 +393,10 @@ mod tests {
     fn unused_node_kinds_audit() {
         #[rustfmt::skip]
         let documented_unused: &[&str] = &[
-            "access_modifier", "array_type", "builtintype", "declaration",
+            "access_modifier", "array_type", "builtintype",
             "do_while_loop", "dotted_identifier", "for_parameters",
-            "function_call", "function_declaration", "groovy_doc_throws",
-            "identifier", "juxt_function_call", "modifier",
+            "groovy_doc_throws",
+            "modifier",
             "parenthesized_expression", "qualified_name", "return", "switch_block",
             "type_with_generics", "wildcard_import",
             // control flow — not extracted as symbols

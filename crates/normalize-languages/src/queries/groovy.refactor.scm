@@ -6,6 +6,9 @@
 ; Call expressions and their argument list.
 (function_call (argument_list) @refactor.arg_list) @refactor.call
 
+; Juxtaposition (no-parens) calls also have an argument_list child.
+(juxt_function_call (argument_list) @refactor.arg_list) @refactor.call
+
 ; Variable declarations (inline-variable). `declaration` is `def x = ...` /
 ; `Type x = ...`; a bare `assignment` is reassignment.
 (declaration) @refactor.var_decl
@@ -22,6 +25,7 @@
 (if_statement) @refactor.statement
 (while_loop) @refactor.statement
 (do_while_loop) @refactor.statement
+(for_loop) @refactor.statement
 (for_in_loop) @refactor.statement
 (switch_statement) @refactor.statement
 (try_statement) @refactor.statement
