@@ -1,0 +1,52 @@
+// Completeness fixture: one construct per grammar-legal variant of `node`'s
+// children the kdl.tags.scm query constrains, cross-referenced against
+// arborium-kdl 2.17.0's node-types.json (KDL v1 grammar: bare `true`/`false`,
+// not `#true`/`#false`).
+//
+// This file also carries a NEGATIVE section (near-miss constructs that must
+// NOT be captured) to guard against over-broad patterns — most importantly
+// KDL's "slash-dash" (`/-`) whole-node comment syntax, which still parses as
+// a live `node` node (not omitted, not ERROR) and was silently extracted as
+// a real symbol before the anchor fix.
+
+// --- bare-word node name, with children: @definition.class -----------------
+container {
+  leaf-value 1
+}
+
+// --- bare-word node name, no children: @definition.var ----------------------
+plain-leaf "value"
+
+// --- quoted node name (identifier wraps a nested `string`) ------------------
+"quoted node name" 1
+
+container-quoted {
+  "quoted-child" 2
+}
+
+// --- typed node name: (type)identifier — both class and var forms ----------
+(u8)typed-container {
+  x 1
+}
+
+(i64)typed-leaf 42
+
+// --- trailing same-line comment must not break the anchor -------------------
+trailing-comment-leaf "a" // this must not stop `name` from being captured
+
+(u8)trailing-comment-typed 1 // same, for the typed variant
+
+// --- NEGATIVE: slash-dash disabled nodes must NOT be captured ---------------
+container {
+  /- disabled-leaf "should not appear"
+  /- (u8)disabled-typed-leaf 5
+  live-sibling "should appear"
+}
+
+/- disabled-top-level-container {
+  inner "should not appear either — whole node is commented out"
+}
+
+/- (i32)disabled-typed-container {
+  inner "should not appear"
+}
