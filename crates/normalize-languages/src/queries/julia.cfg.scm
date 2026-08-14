@@ -17,10 +17,30 @@
 ; if / elseif / else (branch)
 ; ---------------------------------------------------------------------------
 
+; alternative: is a "multiple: true" field (if_statement can carry several
+; elseif_clause siblings followed by an optional final else_clause, all
+; flattened directly under if_statement rather than nested inside each
+; other — confirmed via `normalize syntax ast`). The `.` anchor between
+; (block) and `alternative:` requires the alternative to be the *first*
+; sibling immediately following the then-block, so this fires exactly once
+; per if_statement regardless of whether that first alternative is an
+; elseif_clause or an else_clause — verified via `normalize syntax query`
+; against an elseif+elseif+else chain (single match, first alternative only)
+; and an elseif-only chain with no final else (previously unmatched: see
+; below).
+;
+; PRIOR BUG (fixed here): the old query only matched `alternative:
+; (else_clause)`, so `if a ... elseif b ... end` (no trailing else) never
+; produced a @cfg.branch for the outer if's own condition/then at all —
+; confirmed via `normalize syntax query` returning 0 matches for that shape
+; under both of the old patterns. The elseif_clause itself still got its own
+; @cfg.branch via the separate (elseif_clause ...) pattern below, but the
+; outer if's initial branch was invisible to CFG construction.
 (if_statement
   condition: (_) @cfg.branch.condition
   (block) @cfg.branch.then
-  alternative: (else_clause) @cfg.branch.else
+  .
+  alternative: (_) @cfg.branch.else
 ) @cfg.branch
 
 (if_statement

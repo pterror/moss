@@ -31,6 +31,28 @@ impl Language for Julia {
         if let Some(name_node) = node.child_by_field_name("name") {
             return Some(&content[name_node.byte_range()]);
         }
+        // const_statement wraps an assignment; the name is the assignment's LHS
+        // identifier, possibly wrapped in a typed_expression (`const X::Int = 1`).
+        if node.kind() == "const_statement" {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                if child.kind() != "assignment" {
+                    continue;
+                }
+                let Some(mut lhs) = child.named_child(0) else {
+                    continue;
+                };
+                if lhs.kind() == "typed_expression"
+                    && let Some(inner) = lhs.named_child(0)
+                {
+                    lhs = inner;
+                }
+                if lhs.kind() == "identifier" {
+                    return Some(&content[lhs.byte_range()]);
+                }
+            }
+            return None;
+        }
         // function_definition/macro_definition: name in signature (no named children)
         // struct_definition/abstract_definition: name in type_head
         let mut cursor = node.walk();
