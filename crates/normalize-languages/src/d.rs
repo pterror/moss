@@ -533,14 +533,13 @@ mod tests {
             // Declarations
             "anonymous_enum_declaration", "anonymous_enum_member",
             "anonymous_enum_members", "anon_struct_declaration", "anon_union_declaration",
-            "auto_func_declaration", "class_template_declaration",
             "conditional_declaration", "debug_specification", "destructor", "empty_declaration",
             "enum_body", "enum_member", "enum_member_attribute", "enum_member_attributes",
-            "enum_members", "interface_template_declaration", "mixin_declaration",
+            "enum_members", "mixin_declaration",
             "module", "shared_static_constructor", "shared_static_destructor", "static_constructor",
-            "static_destructor", "static_foreach_declaration", "struct_template_declaration",
-            "template_declaration", "template_mixin_declaration", "union_declaration",
-            "union_template_declaration", "var_declarations", "version_specification",
+            "static_destructor", "static_foreach_declaration",
+            "template_declaration", "template_mixin_declaration",
+            "var_declarations", "version_specification",
             // Foreach-related
             "aggregate_foreach", "foreach", "foreach_aggregate", "foreach_type",
             "foreach_type_attribute", "foreach_type_attributes", "foreach_type_list",

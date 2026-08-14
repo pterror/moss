@@ -1,6 +1,43 @@
 import std.stdio;
 import std.math : sqrt, pow;
 import std.algorithm : filter, reduce;
+import io = std.stdio;
+
+interface Drawable {
+    void draw();
+}
+
+class Stack(T) : Drawable {
+    private T[] items;
+
+    void push(T item) {
+        items ~= item;
+    }
+
+    T pop() {
+        auto last = items[$ - 1];
+        items = items[0 .. $ - 1];
+        return last;
+    }
+
+    override void draw() {
+        writeln(items);
+    }
+}
+
+struct Pair(K, V) {
+    K key;
+    V value;
+}
+
+union Variant(T) {
+    T value;
+    ubyte[T.sizeof] bytes;
+}
+
+auto square(int x) {
+    return x * x;
+}
 
 struct Point {
     double x;
@@ -58,6 +95,17 @@ int sumEvens(int[] values) {
     return total;
 }
 
+enum Direction { North, South, East, West }
+
+int describeDirection(Direction d) {
+    final switch (d) {
+        case Direction.North: return 0;
+        case Direction.South: return 1;
+        case Direction.East: return 2;
+        case Direction.West: return 3;
+    }
+}
+
 int describe(int n) {
     switch (n) {
         case 0:
@@ -103,4 +151,15 @@ void main() {
     writeln(c.area());
     writeln(classify(-3));
     writeln(sumEvens([1, 2, 3, 4, 5, 6]));
+    writeln(square(4));
+    writeln(describeDirection(Direction.East));
+
+    auto stack = new Stack!int();
+    stack.push(1);
+    stack.push(2);
+    stack.draw();
+
+    Pair!(string, int) pair;
+    pair.key = "answer";
+    pair.value = 42;
 }

@@ -36,6 +36,15 @@
       (case_statement) @cfg.match.arm))
 ) @cfg.match
 
+; final switch — same shape as switch_statement, but a distinct node type
+; (D requires exhaustive enum coverage). Verified via `normalize syntax ast`.
+(final_switch_statement
+  (expression) @cfg.match.scrutinee
+  (block_statement
+    (statement_list
+      (case_statement) @cfg.match.arm))
+) @cfg.match
+
 ; ---------------------------------------------------------------------------
 ; for / foreach (loop)
 ; ---------------------------------------------------------------------------

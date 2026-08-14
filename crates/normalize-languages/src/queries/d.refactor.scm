@@ -31,6 +31,7 @@
 (for_statement) @refactor.statement
 (foreach_statement) @refactor.statement
 (switch_statement) @refactor.statement
+(final_switch_statement) @refactor.statement
 (do_statement) @refactor.statement
 (try_statement) @refactor.statement
 (break_statement) @refactor.statement
