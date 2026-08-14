@@ -1,6 +1,24 @@
 #!/usr/bin/env fish
 
 source ~/.config/fish/functions/utils.fish
+. ~/.config/fish/functions/legacy.fish
+source ~/.config/fish/conf.d/local.fish first_arg second_arg
+
+function open_in_editor --description "open a file in the user's editor" --argument-names path
+    set -q EDITOR
+    or set EDITOR vim
+    $EDITOR $path
+end
+
+function parse_args
+    argparse 'h/help' 'v/verbose' -- $argv
+    or return 1
+    if set -q _flag_help
+        echo "usage: parse_args [-h] [-v]"
+        return 0
+    end
+    echo "verbose: "(set -q _flag_verbose; and echo yes; or echo no)
+end
 
 function classify
     set n $argv[1]
@@ -78,6 +96,8 @@ function early_exit
 end
 
 greet "Fish"
+open_in_editor /tmp/notes.txt
+parse_args -v
 classify -3
 classify 0
 classify 5
