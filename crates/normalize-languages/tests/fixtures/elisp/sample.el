@@ -56,5 +56,34 @@
         (dy (- (sample-point-y p2) (sample-point-y p1))))
     (sqrt (+ (* dx dx) (* dy dy)))))
 
+;;; Control flow idioms
+
+(defun sample-classify (n)
+  "Classify N as negative, zero, or positive."
+  (cond
+   ((< n 0) "negative")
+   ((= n 0) "zero")
+   (t "positive")))
+
+(defun sample-wait-until-ready (get-status)
+  "Loop with WHILE until GET-STATUS returns non-nil."
+  (while (not (funcall get-status))
+    (sit-for 0.1))
+  t)
+
+(defun sample-safe-divide (a b)
+  "Divide A by B, returning nil on error via CONDITION-CASE."
+  (condition-case err
+      (/ a b)
+    (arith-error (message "division error: %s" err) nil)))
+
+(defun sample-both-set (a b)
+  "Return non-nil only when both A and B are set (AND/OR short-circuit)."
+  (and a (or b nil)))
+
+(defun sample-make-adder (n)
+  "Return a closure (LAMBDA) that adds N to its argument."
+  (lambda (x) (+ x n)))
+
 (provide 'sample)
 ;;; sample.el ends here
