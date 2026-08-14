@@ -84,6 +84,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   aliases are validated against the full clap `Command` tree — unknown subcommands and
   invalid flags are caught early with warnings.
 
+### Fixed (internal)
+
+- **`.git/hooks/pre-commit`/`pre-push` were stale copies, not live hooks.** They were
+  refreshed only by `flake.nix`'s devShell `shellHook`, so editing `scripts/pre-commit`
+  or `scripts/pre-push` had no effect until the next `nix develop`. The installed hook
+  is now a thin shim that `exec`s the tracked script by path; the shim's own content
+  never changes, so an edit to the tracked script takes effect on the very next
+  commit/push. Also collapsed the `.calls.scm` capture-name allowlist that `scripts/
+  pre-commit` had duplicated from `scripts/validate-calls-scm.sh` (6eedcbbb had to fix
+  the same bug in both copies) — `validate-calls-scm.sh` gained `--files <path>...` and
+  is now the single source of truth.
+
 ### Fixed
 
 - **Gleam pipe-target calls (`x |> f`, `x |> module.func`) were entirely absent

@@ -470,7 +470,12 @@ second look — none are blocking, none are strictly committed:
 - [x] **Toolchain drift: pinned via `rust-toolchain.toml` at `1.95.0`; clippy hard-gated in pre-commit; hook auto-installs via `nix develop` shellHook (2026-05-29).**
   `rust-toolchain.toml` pins `channel = "1.95.0"` with components and musl target matching `flake.nix`.
   The pre-commit clippy invocation is now a hard gate (was non-blocking with `|| { echo "non-critical" }`).
-  The flake's `shellHook` diff-guards and auto-installs `.git/hooks/pre-commit` on every `nix develop` entry.
+  The flake's `shellHook` installs `.git/hooks/pre-commit` on every `nix develop` entry. **Update (2026-08-14):**
+  the installed hook is now a thin shim that `exec`s the tracked `scripts/pre-commit`/`scripts/pre-push` by
+  path, not a copy of the script — editing the tracked script takes effect on the very next commit/push with
+  no reinstall step; see CLAUDE.md's "Hooks are shims" note. Also collapsed the `.calls.scm` capture-name
+  allowlist duplication between `scripts/pre-commit` and `scripts/validate-calls-scm.sh` (6eedcbbb had fixed
+  the same bug in both places) — `validate-calls-scm.sh --files <path>...` is now the single source of truth.
   **Residual:** `flake.nix` still uses `fenixPkgs.stable` rather than reading `rust-toolchain.toml` via
   `fromToolchainFile` (option declined — keep flake simple). If `nix flake update` advances fenix `stable`,
   the in-shell toolchain and `rust-toolchain.toml` channel will diverge. Keep them in sync manually when
