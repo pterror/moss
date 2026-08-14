@@ -85,8 +85,47 @@ impl Language for Hcl {
         crate::body::analyze_brace_body(body_node, content, inner_indent)
     }
 
-    fn node_name<'a>(&self, _node: &Node, _content: &'a str) -> Option<&'a str> {
-        None
+    /// `hcl.tags.scm` tags both `block` and top-level `attribute` nodes as
+    /// `@definition.var`. `collect_symbols_from_tags` (normalize-facts) ignores the
+    /// query's own `@name` capture text and calls this hook instead — so leaving it
+    /// stubbed to `None` silently drops every HCL symbol (`node_name` returning `None`
+    /// short-circuits `build_symbol_from_def` for that def), which is exactly what was
+    /// happening: `normalize view --types-only` on a `.tf` file produced zero symbols.
+    ///
+    /// `block` has no named fields at all (confirmed via arborium-hcl 2.17.0's
+    /// node-types.json: `fields: {}`) — the block type keyword and any labels are
+    /// unfielded `identifier`/`string_lit` children in positional order. We report the
+    /// *last* label (e.g. `example` for `resource "aws_instance" "example"`, matching
+    /// Terraform's own `type.name` addressing convention where the trailing label is
+    /// the locally-unique identifier) when one exists, falling back to the block-type
+    /// keyword itself for unlabeled blocks (`locals { ... }`, `terraform { ... }`).
+    fn node_name<'a>(&self, node: &Node, content: &'a str) -> Option<&'a str> {
+        match node.kind() {
+            "block" => {
+                let mut cursor = node.walk();
+                let mut block_type: Option<Node> = None;
+                let mut last_label: Option<Node> = None;
+                for child in node.children(&mut cursor) {
+                    match child.kind() {
+                        "identifier" if block_type.is_none() => block_type = Some(child),
+                        "string_lit" => last_label = Some(child),
+                        _ => {}
+                    }
+                }
+                if let Some(label) = last_label {
+                    Some(content[label.byte_range()].trim_matches('"'))
+                } else {
+                    block_type.map(|n| &content[n.byte_range()])
+                }
+            }
+            "attribute" => {
+                let mut cursor = node.walk();
+                node.children(&mut cursor)
+                    .find(|c| c.kind() == "identifier")
+                    .map(|n| &content[n.byte_range()])
+            }
+            _ => None,
+        }
     }
 }
 
