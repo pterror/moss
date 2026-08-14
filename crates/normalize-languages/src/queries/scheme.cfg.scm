@@ -43,7 +43,7 @@
 ) @cfg.match
 
 ; ---------------------------------------------------------------------------
-; do / for-each / named-let (loop constructs)
+; do / for-each (loop constructs)
 ; ---------------------------------------------------------------------------
 
 (list
@@ -52,6 +52,25 @@
   .
   (_) @cfg.loop.condition
   (#match? @_fn "^(do|for-each|string-for-each|vector-for-each)$")
+) @cfg.loop
+
+; ---------------------------------------------------------------------------
+; named let (the idiomatic Scheme loop: `(let loop ((var init) ...) body)`)
+; ---------------------------------------------------------------------------
+;
+; Distinguished from plain `let` by the extra leading `(symbol)` naming the
+; loop before the bindings list — a plain `let`'s second child is the
+; bindings list directly. Verified via `normalize syntax query` against
+; `sample.scm`'s `sum-evens`, which uses exactly this idiom and was
+; previously invisible to CFG construction entirely.
+
+(list
+  .
+  (symbol) @_fn (#eq? @_fn "let")
+  .
+  (symbol) @_loop_name
+  .
+  (list) @cfg.loop.condition
 ) @cfg.loop
 
 ; ---------------------------------------------------------------------------
