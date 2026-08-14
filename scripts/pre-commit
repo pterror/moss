@@ -20,6 +20,23 @@
 # and `cargo test --workspace` on every push/PR — that's the full-workspace
 # safety net. Cargo.toml/Cargo.lock/toolchain changes fall back to a
 # full-workspace check below since those affect every crate.
+#
+# fmt is checked against staged *blob content*, not the working tree: a
+# package-scoped `cargo fmt -p <pkg> --check` still walks every file in that
+# package's working tree, so an unrelated file mid-edit elsewhere in the
+# same package fails the check for everyone (this blocked real commits —
+# see the commit that added this comment). rustfmt is per-file and doesn't
+# need a compiling tree, so staged .rs files are materialized into a scratch
+# dir (same pattern as the .calls.scm validation below) and checked directly
+# with `rustfmt --check`, never touching the working tree.
+#
+# clippy does NOT get the same treatment: it needs a coherent, compiling
+# tree to mean anything, and staged-only content may reference unstaged
+# symbols. It stays scoped to `-p <pkg>` against the working tree, which
+# means it inherits the same limitation cargo fmt used to have — an
+# unrelated in-progress edit elsewhere in a touched package can still fail
+# clippy for a commit that didn't touch it. No cheap fix for that without
+# materializing (and compiling) a full staged tree.
 
 set -euo pipefail
 
@@ -32,9 +49,15 @@ if [ "${#STAGED[@]}" -eq 0 ]; then
     exit 0
 fi
 
+# Shared scratch dir for materializing staged blob content (fmt check,
+# .calls.scm validation). Never touches the working tree.
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
 # --- Determine which cargo packages are touched -----------------------
 workspace_wide=false
 declare -A PKG_SET
+declare -A PKG_DIR
 for f in "${STAGED[@]}"; do
     case "$f" in
         Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/*)
@@ -55,12 +78,29 @@ for f in "${STAGED[@]}"; do
     esac
     if [ -n "${dir:-}" ] && [ -f "$dir/Cargo.toml" ]; then
         pkg=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1)
-        [ -n "$pkg" ] && PKG_SET["$pkg"]=1
+        if [ -n "$pkg" ]; then
+            PKG_SET["$pkg"]=1
+            PKG_DIR["$pkg"]="$dir"
+        fi
     fi
     dir=""
 done
 
 PKGS=("${!PKG_SET[@]}")
+
+# Resolve the Rust edition a package's files should be formatted against
+# (needed since rustfmt is invoked directly, not via `cargo fmt`, which
+# would normally read this from Cargo.toml itself).
+edition_for_dir() {
+    local dir="$1" e
+    e=$(sed -n 's/^edition *= *"\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1)
+    if [ -n "$e" ]; then
+        echo "$e"
+        return
+    fi
+    # edition.workspace = true — fall back to the workspace default.
+    sed -n 's/^edition *= *"\(.*\)"/\1/p' Cargo.toml | head -1
+}
 
 if [ "$workspace_wide" = true ]; then
     echo "Workspace manifest/lockfile/toolchain staged — running full-workspace checks..."
@@ -73,8 +113,56 @@ elif [ "${#PKGS[@]}" -gt 0 ]; then
     for p in "${PKGS[@]}"; do
         PKG_ARGS+=(-p "$p")
     done
-    echo "Running cargo fmt check on: ${PKGS[*]}"
-    cargo fmt --check "${PKG_ARGS[@]}"
+
+    # fmt: check staged *content*, not the working tree (see header
+    # comment). Materialize each staged .rs file that belongs to a touched
+    # package into the scratch dir, then run rustfmt --check directly,
+    # grouped by edition.
+    fmt_tmp="$TMP_ROOT/fmt"
+    declare -A EDITION_FILES
+    fmt_file_count=0
+    for f in "${STAGED[@]}"; do
+        case "$f" in
+            *.rs) ;;
+            *) continue ;;
+        esac
+        for p in "${PKGS[@]}"; do
+            d="${PKG_DIR[$p]}"
+            case "$f" in
+                "$d"/*)
+                    mkdir -p "$fmt_tmp/$(dirname "$f")"
+                    git show ":$f" >"$fmt_tmp/$f"
+                    ed=$(edition_for_dir "$d")
+                    EDITION_FILES["$ed"]+="$fmt_tmp/$f "
+                    fmt_file_count=$((fmt_file_count + 1))
+                    break
+                    ;;
+            esac
+        done
+    done
+
+    # NB: can't test `${#EDITION_FILES[@]}` directly under `set -u` — bash
+    # (as of 5.3) treats a `declare -A` array with zero elements ever
+    # assigned as unset for nounset purposes, even though the declaration
+    # itself succeeded. Track the count separately instead.
+    if [ "$fmt_file_count" -gt 0 ]; then
+        echo "Running rustfmt check on staged files in: ${PKGS[*]}"
+        fmt_failed=false
+        fmt_output=""
+        for ed in "${!EDITION_FILES[@]}"; do
+            # shellcheck disable=SC2086 # intentional word-splitting of file list
+            if ! out=$(rustfmt --check --edition "$ed" ${EDITION_FILES[$ed]} 2>&1); then
+                fmt_failed=true
+                fmt_output+="$out"$'\n'
+            fi
+        done
+        if [ "$fmt_failed" = true ]; then
+            echo "error: staged file(s) are not rustfmt-formatted:"
+            echo "$fmt_output" | sed "s|$fmt_tmp/||g"
+            exit 1
+        fi
+    fi
+
     echo "Running cargo clippy on: ${PKGS[*]}"
     cargo clippy "${PKG_ARGS[@]}" --all-targets --all-features -- -D warnings
 else
@@ -95,9 +183,9 @@ if [ "${#scm_files[@]}" -gt 0 ]; then
     # partially staged. Materialize the staged blobs into a scratch dir
     # (preserving relative paths, so violation output matches real repo
     # paths) and delegate to validate-calls-scm.sh, the single source of
-    # truth for the capture-name allowlist (see 6eedcbbb).
-    scm_tmp="$(mktemp -d)"
-    trap 'rm -rf "$scm_tmp"' EXIT
+    # truth for the capture-name allowlist (see 6eedcbbb). Shares the same
+    # scratch dir (and cleanup trap) as the fmt check above.
+    scm_tmp="$TMP_ROOT/scm"
     for f in "${scm_files[@]}"; do
         mkdir -p "$scm_tmp/$(dirname "$f")"
         git show ":$f" > "$scm_tmp/$f"
@@ -109,12 +197,8 @@ if [ "${#scm_files[@]}" -gt 0 ]; then
     if ! scm_output=$(./scripts/validate-calls-scm.sh --files "${scm_args[@]}" 2>&1); then
         echo "error: invalid capture names in staged .calls.scm files:"
         echo "$scm_output" | sed "s|$scm_tmp/||g"
-        rm -rf "$scm_tmp"
-        trap - EXIT
         exit 1
     fi
-    rm -rf "$scm_tmp"
-    trap - EXIT
 fi
 
 # --- Run normalize checks against staged files, if the binary exists ---
