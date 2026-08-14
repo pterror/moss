@@ -1,25 +1,64 @@
 #import <Foundation/Foundation.h>
 #import "Shape.h"
+@import Contacts;
 
-@interface Point : NSObject
+@protocol Drawable <NSObject>
+- (void)draw;
+@optional
+- (NSString *)debugDescription;
+@end
+
+#pragma mark - Point
+
+@interface Point : NSObject <Drawable>
 @property (nonatomic) double x;
 @property (nonatomic) double y;
+@property (nonatomic, copy) NSString *label;
+@property (nonatomic, copy) void (^onChange)(double newX, double newY);
 - (instancetype)initWithX:(double)x y:(double)y;
++ (instancetype)origin;
 @end
 
 @implementation Point
+@synthesize label = _label;
 // Initializes a Point with x and y coordinates.
 - (instancetype)initWithX:(double)x y:(double)y {
     self = [super init];
     if (self) {
         _x = x;
         _y = y;
+        self.onChange = ^(double newX, double newY) {
+            NSLog(@"moved to %f,%f", newX, newY);
+        };
     }
     return self;
 }
+
++ (instancetype)origin {
+    return [[self alloc] initWithX:0.0 y:0.0];
+}
+
+- (void)draw {
+    NSLog(@"drawing point at %f,%f", _x, _y);
+}
 @end
 
-@interface Circle : NSObject
+#pragma mark - Point (Formatting)
+
+// Category: adds formatting behavior to Point without subclassing.
+@interface Point (Formatting)
+- (NSString *)formattedDescription;
+@end
+
+@implementation Point (Formatting)
+- (NSString *)formattedDescription {
+    return [NSString stringWithFormat:@"(%f, %f)", self.x, self.y];
+}
+@end
+
+#pragma mark - Circle
+
+@interface Circle : NSObject <Drawable, NSCopying>
 @property (nonatomic) double radius;
 - (instancetype)initWithRadius:(double)radius;
 - (double)area;
@@ -36,6 +75,14 @@
 
 - (double)area {
     return M_PI * _radius * _radius;
+}
+
+- (void)draw {
+    NSLog(@"drawing circle r=%f", _radius);
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    return [[Circle allocWithZone:zone] initWithRadius:_radius];
 }
 @end
 
