@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use List::Util qw(sum max min);
 use POSIX qw(floor ceil);
+require Scalar::Util;
 
 package Calculator;
 
@@ -62,9 +63,25 @@ sub factorial {
     return $result;
 }
 
+sub log_message {
+    my ($msg) = @_;
+    print "[log] $msg\n";
+}
+
+sub sum_cstyle {
+    my (@nums) = @_;
+    my $total = 0;
+    for (my $i = 0; $i < scalar(@nums); $i++) {
+        $total += $nums[$i];
+    }
+    return $total;
+}
+
 my $calc = Calculator->new(precision => 4);
 print "add: ", $calc->add(3, 4), "\n";
 print "classify(-5): ", classify(-5), "\n";
 print "sum: ", sum_array(1, 2, 3, 4, 5), "\n";
 print "factorial(5): ", factorial(5), "\n";
 print "max: ", max(1, 7, 3), "\n";
+print "sum_cstyle: ", sum_cstyle(1, 2, 3), "\n";
+log_message "startup complete";
