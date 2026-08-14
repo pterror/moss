@@ -39,3 +39,16 @@
     function: (attribute_expression
       object: (_) @call.qualifier
       attribute: (identifier) @call)))
+
+; `call_expression.function` and `call_statement.callee` are grammar-typed as
+; the full 23-variant expression union (node-types.json), not just
+; `identifier`/`attribute_expression`. The remaining 21 variants are all
+; computed-callable forms confirmed to actually parse this way — e.g.
+; `funcs["key"]()` is `function: (subscript_expression)`, `get_func()()` is
+; `function: (call_expression)` (verified via `normalize syntax query`). They
+; are deliberately not captured here: none of them carry an `identifier` a
+; @call capture could report as a call *name* — the "name" would be an
+; arbitrary sub-expression's source text, not a symbol, so a query clause for
+; them would produce a capture with no name-like content rather than
+; meaningful extraction. `object: (_)` above already covers arbitrarily deep
+; attribute chains (a.b.c()) since it is unconstrained.

@@ -2,9 +2,10 @@
 {% from "helpers.html" import render_field %}
 {% import "utils.html" as utils %}
 {% include "header.html" %}
+{% include "optional.html" ignore missing %}
 
-{% macro render_form(form, action="/submit") %}
-  <form action="{{ action }}" method="post">
+{% macro render_form(form, action="/submit", method="post") %}
+  <form action="{{ action }}" method="{{ method }}">
     {% for field in form.fields %}
       {% if field.visible %}
         {{ render_field(field) }}
@@ -21,11 +22,44 @@
   <nav>
     {% for item in items %}
       <a href="{{ item.url }}">{{ item.label }}</a>
+    {% else %}
+      <em>No items</em>
     {% endfor %}
   </nav>
 {% endmacro %}
 
+{% macro render_list(items, sep=", ") %}
+  {% for item in items|sort %}
+    {{ item }}{% if not loop.last %}{{ sep }}{% endif %}
+  {% endfor %}
+{% endmacro %}
+
 {% block content %}
+  {% set title = page_title | default("Untitled") %}
+  {% set greeting -%}
+    Hello, {{ user.name }}!
+  {%- endset %}
+
   {{ render_form(login_form) }}
   {{ utils.header("Welcome") }}
+
+  {% if user and user.is_admin %}
+    <p>Admin panel</p>
+  {% elif user or guest_allowed %}
+    <p>Welcome</p>
+  {% endif %}
+
+  {{ greeting if user else "Please log in" }}
+
+  {% call render_wrapper() %}
+    <p>Wrapped content</p>
+  {% endcall %}
+
+  {% filter upper %}
+    section heading
+  {% endfilter %}
+
+  {% for key, value in settings.items() if value is not none %}
+    <li>{{ key }}: {{ value }}</li>
+  {% endfor %}
 {% endblock %}

@@ -1,0 +1,122 @@
+{# ==========================================================================
+   Jinja2 completeness matrix.
+   One small, commented construct per node-type variant exercised by
+   jinja2.{tags,calls,complexity,imports,cfg}.scm, built by cross-referencing
+   every field constraint in those query files against every variant
+   grammars/jinja2/src/node-types.json allows for that field (verified via
+   `normalize syntax ast` / `normalize syntax query`, not from memory).
+   A dedicated NEGATIVE section at the bottom holds near-miss constructs
+   that must NOT match.
+   ========================================================================== #}
+
+{# --------------------------------------------------------------------------
+   tags.scm: @definition.function — macro_statement.name is single-variant
+   (identifier only), so one example covers the whole field.
+   -------------------------------------------------------------------------- #}
+{% macro tag_macro(x) %}{{ x }}{% endmacro %}
+
+{# --------------------------------------------------------------------------
+   calls.scm: call_expression.function
+   -------------------------------------------------------------------------- #}
+{# variant: function: (identifier) -- plain function call #}
+{{ call_plain_func(1) }}
+
+{# variant: function: (attribute_expression) -- method call, single hop #}
+{{ call_obj.call_method(1) }}
+
+{# variant: function: (attribute_expression) nested -- object: (attribute_expression), i.e. chained attribute access before the call #}
+{{ call_a.call_b.call_c() }}
+
+{# calls.scm: filter_item.name (single-variant field: identifier only) #}
+{{ call_value | call_filter_name }}
+{{ call_value | call_filter_with_args(1, 2) }}
+
+{# calls.scm: test_expression.test (single-variant field: identifier only) #}
+{% if call_value is call_test_name %}x{% endif %}
+{# negated form still uses the same `test:` field -- see NEGATIVE section for what must NOT double-count #}
+{% if call_value is not call_test_name %}x{% endif %}
+
+{# calls.scm: call_statement.callee -- call_expression wrapping identifier #}
+{% call call_stmt_macro() %}body{% endcall %}
+
+{# calls.scm: call_statement.callee -- call_expression wrapping attribute_expression #}
+{% call call_stmt_obj.call_stmt_method() %}body{% endcall %}
+
+{# filter_item reached through filter_block_statement's filter_chain (not filter_expression) -- structurally identical filter_item node, no parent constraint in the query #}
+{% filter call_filter_via_block %}text{% endfilter %}
+
+{# filter_item reached through set_block_statement's filter_chain #}
+{% set call_set_block_var | call_filter_via_set %}text{% endset %}
+
+{# --------------------------------------------------------------------------
+   imports.scm: path field on all four statement types is the full
+   23-variant expression union, not just `string`.
+   -------------------------------------------------------------------------- #}
+{# variant: path: (string) #}
+{% extends "variant_base.html" %}
+{# variant: path: (identifier) -- dynamic/computed template path #}
+{% include variant_include_var %}
+{# variant: path: (concat_expression) #}
+{% include "variant_" ~ variant_suffix %}
+{# from/import with identifier path #}
+{% from variant_module_var import variant_helper %}
+{% import variant_module_var as variant_alias %}
+
+{# --------------------------------------------------------------------------
+   complexity.scm
+   -------------------------------------------------------------------------- #}
+{# variant: (if_statement) / (elif_clause) #}
+{% if variant_cond_a %}x{% elif variant_cond_b %}y{% endif %}
+{# variant: (for_statement) #}
+{% for variant_item in variant_items %}{{ variant_item }}{% endfor %}
+{# variant: (and_expression) #}
+{{ variant_a and variant_b }}
+{# variant: (or_expression) #}
+{{ variant_a or variant_b }}
+{# variant: (ternary_expression) #}
+{{ variant_a if variant_cond_a else variant_b }}
+
+{# --------------------------------------------------------------------------
+   cfg.scm: for_statement iterable/body, including the field-presence split
+   -------------------------------------------------------------------------- #}
+{# variant: iterable: (identifier), body present #}
+{% for variant_x in variant_items %}{{ variant_x }}{% endfor %}
+{# variant: iterable: (filter_expression) -- non-identifier iterable, the exact shape the old positional-identifier pattern silently dropped #}
+{% for variant_x in variant_items|sort %}{{ variant_x }}{% endfor %}
+{# variant: iterable: (call_expression) #}
+{% for variant_x in variant_get_items() %}{{ variant_x }}{% endfor %}
+{# variant: target: (identifier_tuple) -- tuple unpacking target #}
+{% for variant_k, variant_v in variant_pairs.items() %}{{ variant_k }}{% endfor %}
+{# variant: !body -- empty loop body, must still match @cfg.loop via the field-absence pattern #}
+{% for variant_x in variant_items %}{% endfor %}
+{# variant: (elif_clause) as @cfg.branch.else #}
+{% if variant_cond_a %}x{% elif variant_cond_b %}y{% endif %}
+{# variant: (else_clause) as @cfg.branch.else #}
+{% if variant_cond_a %}x{% else %}y{% endif %}
+{# variant: bare if, no elif/else -- the anchored "condition is last child" pattern #}
+{% if variant_cond_a %}x{% endif %}
+
+{# ==========================================================================
+   NEGATIVE section: constructs that must NOT match the captures above.
+   ========================================================================== #}
+
+{# NOT a call: bare attribute access, no call_expression wrapping it #}
+{{ neg_obj.neg_attr }}
+
+{# NOT a call: bare identifier reference (no argument_list / call_expression) #}
+{{ neg_bare_identifier }}
+
+{# NOT a filter call: pipe used only in a string literal, not a real filter_item #}
+{{ "not | a | filter" }}
+
+{# NOT an import: a plain string used as an ordinary expression, not inside extends/import/from/include #}
+{{ "not_a_template_path.html" }}
+
+{# NOT a macro definition: a call to something merely named like a macro #}
+{{ neg_render_form(1) }}
+
+{# NOT elif/else: an if with only a body, no elif_clause/else_clause child at all -- must not spuriously produce a @cfg.branch.else #}
+{% if neg_only_condition %}x{% endif %}
+
+{# NOT and/or/ternary complexity: a plain boolean identifier with no operator #}
+{{ neg_plain_boolean }}
