@@ -2,6 +2,8 @@ module Sample where
 
 import Data.List
 import Data.Maybe
+open import Data.Nat using (ℕ)
+open Data.List
 
 -- A simple data type
 data Shape : Set where
@@ -43,3 +45,7 @@ double n = n + n
 sumList : List Int → Int
 sumList [] = 0
 sumList (x ∷ xs) = x + sumList xs
+
+-- Function: nested/higher-order application
+quadruple : Int → Int
+quadruple n = double (double n)
