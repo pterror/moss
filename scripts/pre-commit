@@ -91,17 +91,30 @@ done
 
 if [ "${#scm_files[@]}" -gt 0 ]; then
     echo "Validating .calls.scm capture names..."
-    bad=$( (for f in "${scm_files[@]}"; do git show ":$f"; done) \
-          | grep -v "^[[:space:]]*;" \
-          | grep -oh "@[A-Za-z0-9_.]*" \
-          | grep -oP "@\K.*" \
-          | grep -vxE "call|call\.write|call\.qualifier|_.*" \
-          | sort -u) || true
-    if [ -n "$bad" ]; then
+    # Validate staged *content*, not the working-tree file — a file can be
+    # partially staged. Materialize the staged blobs into a scratch dir
+    # (preserving relative paths, so violation output matches real repo
+    # paths) and delegate to validate-calls-scm.sh, the single source of
+    # truth for the capture-name allowlist (see 6eedcbbb).
+    scm_tmp="$(mktemp -d)"
+    trap 'rm -rf "$scm_tmp"' EXIT
+    for f in "${scm_files[@]}"; do
+        mkdir -p "$scm_tmp/$(dirname "$f")"
+        git show ":$f" > "$scm_tmp/$f"
+    done
+    scm_args=()
+    for f in "${scm_files[@]}"; do
+        scm_args+=("$scm_tmp/$f")
+    done
+    if ! scm_output=$(./scripts/validate-calls-scm.sh --files "${scm_args[@]}" 2>&1); then
         echo "error: invalid capture names in staged .calls.scm files:"
-        echo "$bad" | sed 's/^/  @/'
+        echo "$scm_output" | sed "s|$scm_tmp/||g"
+        rm -rf "$scm_tmp"
+        trap - EXIT
         exit 1
     fi
+    rm -rf "$scm_tmp"
+    trap - EXIT
 fi
 
 # --- Run normalize checks against staged files, if the binary exists ---

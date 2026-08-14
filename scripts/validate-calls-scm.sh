@@ -16,21 +16,36 @@
 #
 # Usage:
 #   ./scripts/validate-calls-scm.sh [<root>]
+#   ./scripts/validate-calls-scm.sh --files <file> [<file> ...]
 #   ./scripts/validate-calls-scm.sh | cat
+#
+# --files checks exactly the given paths (in the order given) instead of
+# walking <root> for *.calls.scm. This is what lets a caller (e.g. the
+# pre-commit hook) validate a specific, possibly-partial set of files —
+# such as staged content materialized into a scratch directory — as the
+# single source of truth for what counts as a valid capture name, instead
+# of re-implementing the allowlist inline.
 #
 # Exit code: 1 if violations found, 0 otherwise.
 
 set -eu
 
-ROOT="${1:-.}"
 VALID="call call.write call.qualifier"
+
+if [ "${1:-}" = "--files" ]; then
+    shift
+    SCM_FILES="$*"
+else
+    ROOT="${1:-.}"
+    SCM_FILES=$(find "$ROOT" -name "*.calls.scm" 2>/dev/null | sort)
+fi
 
 SARIF_SCHEMA="https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 
 # Collect violations as newline-separated "file:line:col:name" records
 violations=""
 
-for scm_file in $(find "$ROOT" -name "*.calls.scm" 2>/dev/null | sort); do
+for scm_file in $SCM_FILES; do
     lineno=0
     while IFS= read -r line; do
         lineno=$((lineno + 1))

@@ -106,14 +106,42 @@
             ];
             LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (with pkgs; [ stdenv.cc.cc sqlite ])}:$LD_LIBRARY_PATH";
             shellHook = ''
-              if [ -f scripts/pre-commit ] && { [ ! -f .git/hooks/pre-commit ] || ! diff -q scripts/pre-commit .git/hooks/pre-commit >/dev/null 2>&1; }; then
-                cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
-                echo "[devShell] installed/updated .git/hooks/pre-commit"
-              fi
-              if [ -f scripts/pre-push ] && { [ ! -f .git/hooks/pre-push ] || ! diff -q scripts/pre-push .git/hooks/pre-push >/dev/null 2>&1; }; then
-                cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
-                echo "[devShell] installed/updated .git/hooks/pre-push"
-              fi
+              # Install a thin shim at .git/hooks/<hook> that always execs
+              # the tracked scripts/<hook>, instead of copying the script's
+              # contents. This means editing scripts/pre-commit or
+              # scripts/pre-push takes effect on the very next commit/push
+              # with no re-copy step and no way to silently run a stale
+              # hook. The shim's own content never changes (it just execs
+              # the tracked script by path), so the untracked-hooks
+              # supply-chain surface stays a fixed one-time-written file
+              # rather than something that changes with every hook edit —
+              # `core.hooksPath` pointing straight at a tracked directory
+              # was considered and rejected: this repo accepts PRs, and a
+              # tracked hooks path would let a PR branch ship a hook that
+              # runs on checkout.
+              install_hook_shim() {
+                hook="$1"
+                target=".git/hooks/$hook"
+                if [ ! -f "$target" ] || ! grep -q "scripts/$hook" "$target" 2>/dev/null; then
+                  cat > "$target" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+repo_root="\$(git rev-parse --show-toplevel)"
+script="\$repo_root/scripts/$hook"
+if [ ! -x "\$script" ]; then
+  echo "error: \$script not found or not executable." >&2
+  echo "  .git/hooks/$hook is a shim that execs the tracked script." >&2
+  echo "  Re-run 'nix develop' to reinstall hooks, or check out scripts/$hook." >&2
+  exit 1
+fi
+exec "\$script" "\$@"
+EOF
+                  chmod +x "$target"
+                  echo "[devShell] installed .git/hooks/$hook shim"
+                fi
+              }
+              install_hook_shim pre-commit
+              install_hook_shim pre-push
             '';
           };
       }
