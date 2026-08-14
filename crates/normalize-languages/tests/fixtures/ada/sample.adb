@@ -57,3 +57,22 @@ package body Calculator is
    end Run_Demo;
 
 end Calculator;
+
+-- Child package (dotted name) with a package-qualified return type and
+-- generic subprograms — idioms real Ada codebases lean on heavily for
+-- library-unit hierarchies and reusable algorithms.
+with Ada.Text_IO;
+
+package Calculator.Utils is
+
+   function Get_Log_File return Ada.Text_IO.File_Type;
+
+   generic
+      type T is private;
+   function Generic_Identity (X : T) return T;
+
+   generic
+      type T is private;
+   procedure Generic_Swap (X, Y : in out T);
+
+end Calculator.Utils;
