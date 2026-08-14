@@ -197,6 +197,13 @@ non-zero code. Never silently return empty results.
   specifically, cargo/rustc's incremental-compilation cache bakes in the checkout path, so
   identical code built from two different worktrees can never share that cache: a
   structural, unfixable cost, not an inconvenience.
+- For concurrent agents sharing one checkout, stage a commit's files via
+  `git hash-object -w` + `git update-index --cacheinfo` against a private `GIT_INDEX_FILE`,
+  then `git commit` with that same `GIT_INDEX_FILE` — this touches neither the shared index
+  nor the working tree, avoiding both the index race and the worktree cache cost above.
+  `git add` under a private `GIT_INDEX_FILE` is NOT sufficient — it still reads the working
+  tree, which another agent can be mutating concurrently; only `hash-object`/`update-index`
+  avoids both.
 
 ## Disposition
 
