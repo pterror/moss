@@ -105,3 +105,18 @@
     constructor: (identifier) @cfg.exit.throw.type))
 
 ; TSX catch clauses are untyped — no cfg.try.catch.type capture here.
+; The catch block is conservative (catches all exceptions).
+
+; ---------------------------------------------------------------------------
+; Def/use sites
+; ---------------------------------------------------------------------------
+
+; ---------------------------------------------------------------------------
+; Effects
+; ---------------------------------------------------------------------------
+
+; await expressions — execution suspends until the Promise resolves
+(await_expression) @cfg.effect.await
+
+; yield expressions — generator yield point
+(yield_expression) @cfg.effect.yield
